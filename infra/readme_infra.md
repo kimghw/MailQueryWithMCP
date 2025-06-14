@@ -68,11 +68,9 @@ access_token = await token_service.get_valid_access_token(account_id)
 # 데이터베이스
 DATABASE_PATH=./data/iacsgraph.db
 
-# Azure AD OAuth
-AZURE_CLIENT_ID=your_client_id
-AZURE_CLIENT_SECRET=your_client_secret  
-AZURE_TENANT_ID=common
-AZURE_SCOPES=User.Read,Mail.Read,offline_access
+# OAuth Settings (애플리케이션 레벨)
+OAUTH_REDIRECT_PORT=5000
+OAUTH_REDIRECT_PATH=/auth/callback
 
 # Kafka
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
@@ -82,6 +80,8 @@ KAFKA_TOPIC_EMAIL_EVENTS=email-raw-data-events
 LOG_LEVEL=DEBUG
 OPENAI_API_KEY=your_openai_key
 ```
+
+**주의**: Azure AD 클라이언트 정보(CLIENT_ID, CLIENT_SECRET, TENANT_ID)는 개별 사용자 계정별로 데이터베이스에서 관리됩니다.
 
 ## 🔄 호출 스택
 
