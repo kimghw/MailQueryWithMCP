@@ -34,18 +34,23 @@ mkdir -p logs
 ## Phase 2: 인프라 레이어 구현 (2-3일)
 
 ### 2.1 Core 인프라 구현 (전역 서비스만)
-- [ ] `infra/core/config.py` - 환경설정 로드 (레이지 싱글톤)
-- [ ] `infra/core/database.py` - SQLite 연결 관리 (레이지 싱글톤)
-- [ ] `infra/core/kafka_client.py` - Kafka 연결 관리 (레이지 싱글톤)
-- [ ] `infra/core/exceptions.py` - 표준 예외 클래스 정의
+- [x] `infra/core/config.py` - 환경설정 로드 (레이지 싱글톤)
+- [x] `infra/core/database.py` - SQLite 연결 관리 (레이지 싱글톤)
+- [x] `infra/core/kafka_client.py` - Kafka 연결 관리 (레이지 싱글톤)
+- [x] `infra/core/exceptions.py` - 표준 예외 클래스 정의
 
 ### 2.2 OAuth 및 토큰 관리
-- [ ] `infra/core/oauth_client.py` - OAuth 클라이언트
-- [ ] `infra/core/token_service.py` - 토큰 관리 서비스 (레이지 싱글톤)
+- [x] `infra/core/oauth_client.py` - OAuth 클라이언트
+- [x] `infra/core/token_service.py` - 토큰 관리 서비스 (레이지 싱글톤)
 
 ### 2.3 기본 스키마 정의
-- [ ] 각 모듈별 `schema.py` 기본 구조 생성 (Pydantic v2 모델)
-- [ ] 모듈별 독립적인 스키마 정의 (상호 참조 없음)
+- [x] 각 모듈별 `schema.py` 기본 구조 생성 (Pydantic v2 모델)
+- [x] 모듈별 독립적인 스키마 정의 (상호 참조 없음)
+
+### 2.4 데이터베이스 초기화 및 로깅 (추가 작업)
+- [ ] `infra/core/logger.py` - 구조화된 로깅 시스템 구현
+- [ ] `infra/core/db_initializer.py` - 데이터베이스 초기화 스크립트 실행 기능
+- [ ] `main.py` (또는 진입점)에서 초기화 로직 호출
 
 ## Phase 3: Account 모듈 구현 (2일)
 

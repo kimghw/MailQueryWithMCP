@@ -1,0 +1,28 @@
+[project]
+name = "iacsgraph"
+version = "0.1.0"
+description = "IACSGraph project to process emails and extract keywords."
+authors = [{ name = "Cline", email = "cline@example.com" }]
+requires-python = ">=3.10"
+dependencies = [
+    "aiohttp>=3.9.5",
+    "pydantic>=2.0,<3.0",
+    "apscheduler>=3.10.4",
+    "python-dotenv>=1.0.1",
+    "kafka-python>=2.0.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "uv>=0.1.0",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "black",
+    "ruff",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["modules*", "infra*", "main*", "scheduler*"]
