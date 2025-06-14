@@ -3,18 +3,19 @@
 ## 1. 프로젝트 개요
 Microsoft Graph API를 통해 메일 데이터를 조회하고 처리하는 시스템으로, SQLite를 사용한 계정 및 히스토리 관리와 Kafka를 통한 이벤트 발행을 구현합니다.
 
-## 2. 아키텍처 구조
+## 2. 아키텍처 구조 (개선된 독립 모듈 구조)
 
 ```
 IACSGRAPH/
 ├── infra/
 │   ├── core/
 │   │   ├── __init__.py
-│   │   ├── config.py            # 환경 설정 관리
-│   │   ├── database.py          # SQLite 연결 관리 (레이지 싱글톤)
-│   │   ├── kafka_client.py      # Kafka 연결 관리 (레이지 싱글톤)
+│   │   ├── config.py            # 환경 설정 관리 (전역)
+│   │   ├── database.py          # SQLite 연결 관리 (전역, 레이지 싱글톤)
+│   │   ├── kafka_client.py      # Kafka 연결 관리 (전역, 레이지 싱글톤)
 │   │   ├── token_service.py     # 전역 토큰 관리 서비스
-│   │   └── oauth_client.py      # OAuth 인증 클라이언트
+│   │   ├── oauth_client.py      # OAuth 인증 클라이언트
+│   │   └── exceptions.py        # 표준 예외 클래스
 │   └── migrations/
 │       ├── __init__.py
 │       └── initial_schema.sql   # 초기 DB 스키마
@@ -22,50 +23,51 @@ IACSGRAPH/
 ├── modules/
 │   ├── account/                 # UC-1: 계정 관리
 │   │   ├── __init__.py
-│   │   ├── orchestrator.py      # 계정 관리 오케스트레이터 (DB 작업 포함)
-│   │   ├── schema.py            # Pydantic 모델
+│   │   ├── orchestrator.py      # 계정 관리 오케스트레이터 (독립적)
+│   │   ├── schema.py            # 계정 관련 Pydantic 모델
 │   │   ├── sync_service.py      # enrollment 동기화
 │   │   └── README.md
 │   │
 │   ├── auth/                    # UC-1.1, UC-1.2: 인증
 │   │   ├── __init__.py
-│   │   ├── orchestrator.py      # 인증 오케스트레이터 (인증 플로우 관리)
-│   │   ├── schema.py
+│   │   ├── orchestrator.py      # 인증 오케스트레이터 (독립적)
+│   │   ├── schema.py            # 인증 관련 Pydantic 모델
 │   │   ├── web_server.py        # 리디렉션 처리
 │   │   └── README.md
 │   │
 │   ├── mail_query/              # UC-2: 메일 조회
 │   │   ├── __init__.py
-│   │   ├── orchestrator.py      # 메일 조회 오케스트레이터 (DB 로깅 포함)
-│   │   ├── schema.py
-│   │   ├── graph_client.py      # Graph API 클라이언트
+│   │   ├── orchestrator.py      # 메일 조회 오케스트레이터 (독립적)
+│   │   ├── schema.py            # 메일 조회 관련 Pydantic 모델
+│   │   ├── graph_client.py      # Graph API 클라이언트 (모듈 내부)
 │   │   ├── filter_builder.py    # OData 필터 생성
 │   │   └── README.md
 │   │
 │   ├── mail_processor/          # UC-3: 메일 처리
 │   │   ├── __init__.py
-│   │   ├── orchestrator.py      # 메일 처리 오케스트레이터 (DB 저장, 이벤트 발행)
-│   │   ├── schema.py
+│   │   ├── orchestrator.py      # 메일 처리 오케스트레이터 (완전 독립적)
+│   │   ├── schema.py            # 메일 처리 관련 Pydantic 모델
 │   │   ├── filter_service.py    # 발신자 필터링
+│   │   ├── _helpers.py          # 헬퍼 함수 (350줄 제한 대응)
 │   │   └── README.md
 │   │
 │   ├── mail_history/            # UC-4: 히스토리 관리
 │   │   ├── __init__.py
-│   │   ├── orchestrator.py      # 히스토리 관리 오케스트레이터 (DB CRUD 포함)
-│   │   ├── schema.py
+│   │   ├── orchestrator.py      # 히스토리 관리 오케스트레이터 (독립적)
+│   │   ├── schema.py            # 히스토리 관련 Pydantic 모델
 │   │   ├── cleanup_service.py   # 자동 정리
 │   │   └── README.md
 │   │
 │   └── keyword_extractor/       # UC-5: 키워드 추출
 │       ├── __init__.py
-│       ├── orchestrator.py      # 키워드 추출 오케스트레이터
-│       ├── schema.py
-│       ├── openai_service.py    # OpenAI API 연동
+│       ├── orchestrator.py      # 키워드 추출 오케스트레이터 (독립적)
+│       ├── schema.py            # 키워드 관련 Pydantic 모델
+│       ├── openai_service.py    # OpenAI API 연동 (모듈 내부)
 │       └── README.md
 │
 ├── main/
 │   ├── __init__.py
-│   ├── api_gateway.py           # 모듈 간 호출 흐름 총괄
+│   ├── api_gateway.py           # 단순 라우팅만 담당
 │   ├── request_handler.py       # 요청 처리 및 라우팅
 │   └── response_formatter.py    # 응답 형식 통일
 │
@@ -78,6 +80,13 @@ IACSGRAPH/
 ├── README.md
 └── requirements.txt
 ```
+
+### 개선 핵심 원칙
+1. **모듈 완전 독립성**: 각 모듈이 필요한 기능을 자체 구현
+2. **전역 서비스 최소화**: config, database, kafka, token_service만 전역 유지
+3. **순환 참조 완전 제거**: 단방향 의존성만 허용
+4. **YAGNI 원칙 적용**: 현재 필요한 기능만 구현
+5. **350줄 제한**: 파일 크기 관리를 위한 헬퍼 클래스 분리
 
 ## 3. 모듈별 상세 설계
 
@@ -99,8 +108,8 @@ class Config:
     def _initialize(self):
         - SQLite DB 경로
         - Kafka 연결 정보
-        - OpenAI API 키
         - OAuth 설정 (client_id, redirect_uri 등)
+        - 로그 레벨 설정
     
 # infra/core/database.py
 class DatabaseManager:
@@ -183,6 +192,27 @@ class OAuthClient:
         """토큰 갱신"""
         # Azure AD에 refresh_token으로 새 토큰 요청
         pass
+
+# infra/core/exceptions.py
+class IacsGraphException(Exception):
+    """기본 예외 클래스"""
+    pass
+
+class AuthenticationError(IacsGraphException):
+    """인증 관련 예외"""
+    pass
+
+class TokenExpiredError(AuthenticationError):
+    """토큰 만료 예외"""
+    pass
+
+class DatabaseError(IacsGraphException):
+    """데이터베이스 관련 예외"""
+    pass
+
+class ExternalAPIError(IacsGraphException):
+    """외부 API 호출 예외"""
+    pass
 ```
 
 #### 3.1.2 SQLite 스키마
@@ -388,68 +418,151 @@ APIGateway.query_mails(email, filters)
         → MailQueryOrchestrator._log_query() (DB 직접 작업)
 ```
 
-#### 3.2.4 Mail Processor 모듈 (UC-3)
+#### 3.2.4 Mail Processor 모듈 (UC-3) - 완전 독립적 구현
 ```python
 # modules/mail_processor/orchestrator.py
 class MailProcessorOrchestrator:
     def __init__(self):
         self.db_manager = DatabaseManager()
         self.kafka_manager = KafkaManager()
+        self.token_service = TokenService()
         self.filter_service = MailFilterService()
     
-    async def process_new_mails(self, 
-                              get_active_accounts_func, 
-                              query_mails_func,
-                              extract_keywords_func):
-        """새 메일 처리 및 이벤트 발행
-        
-        Args:
-            get_active_accounts_func: 활성 계정 조회 함수 (APIGateway에서 주입)
-            query_mails_func: 메일 조회 함수 (APIGateway에서 주입)
-            extract_keywords_func: 키워드 추출 함수 (APIGateway에서 주입)
-        """
+    async def process_new_mails(self):
+        """독립적으로 새 메일 처리 및 이벤트 발행 - 함수 주입 없음"""
         conn = await self.db_manager.get_connection()
         producer = await self.kafka_manager.get_producer()
         
-        # 활성 계정 조회 (주입된 함수 사용)
-        active_accounts = await get_active_accounts_func()
+        # 1. DB에서 직접 활성 계정 조회
+        active_accounts = await self._get_active_accounts(conn)
         
         for account in active_accounts:
-            # 새 메일 조회 (주입된 함수 사용)
-            mails = await query_mails_func(account['email'], {
-                'since': account.get('last_sync_at')
-            })
-            
-            for mail in mails:
-                # 발신자 필터링
-                if not self.filter_service.should_process(mail['from']['emailAddress']['address']):
-                    continue
+            try:
+                # 2. Graph API 직접 호출로 메일 조회
+                mails = await self._fetch_mails_from_graph(account)
                 
-                # 중복 검사
-                if await self._is_duplicate(conn, mail['id'], mail['from']['emailAddress']['address']):
-                    continue
+                for mail in mails:
+                    # 발신자 필터링
+                    if not self.filter_service.should_process(mail['from']['emailAddress']['address']):
+                        continue
+                    
+                    # 중복 검사
+                    if await self._is_duplicate(conn, mail['id'], mail['from']['emailAddress']['address']):
+                        continue
+                    
+                    # 3. 간단한 키워드 추출 (자체 구현)
+                    keywords = await self._extract_keywords_simple(mail['body']['content'])
+                    
+                    # DB 저장
+                    await self._save_mail_history(conn, account['id'], mail, keywords)
+                    
+                    # Kafka 이벤트 발행
+                    event = self._create_mail_event(account['id'], mail)
+                    await producer.send('email-raw-data-events', event)
                 
-                # 키워드 추출 (주입된 함수 사용)
-                keywords = await extract_keywords_func(mail['body']['content'])
+                # 마지막 동기화 시간 업데이트
+                await self._update_last_sync_time(conn, account['id'])
                 
-                # DB 저장
-                await self._save_mail_history(conn, account['id'], mail, keywords)
-                
-                # Kafka 이벤트 발행
-                event = self._create_mail_event(account['id'], mail)
-                await producer.send('email-raw-data-events', event)
+            except Exception as e:
+                # 계정별 에러 처리
+                await self._handle_account_error(conn, account['id'], str(e))
+    
+    async def _get_active_accounts(self, conn):
+        """DB에서 직접 활성 계정 조회"""
+        query = "SELECT * FROM accounts WHERE status = 'ACTIVE'"
+        results = await conn.execute(query).fetchall()
+        return [dict(row) for row in results]
+    
+    async def _fetch_mails_from_graph(self, account):
+        """Graph API 직접 호출 - 자체 구현"""
+        import aiohttp
+        
+        # 토큰 획득
+        access_token = await self.token_service.get_valid_token(account['id'])
+        
+        # 마지막 동기화 이후 메일만 조회
+        since_filter = ""
+        if account.get('last_sync_at'):
+            since_filter = f"&$filter=receivedDateTime ge {account['last_sync_at']}"
+        
+        # Graph API 호출
+        url = f"https://graph.microsoft.com/v1.0/me/messages?$top=50{since_filter}"
+        headers = {'Authorization': f'Bearer {access_token}'}
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get('value', [])
+                else:
+                    raise Exception(f"Graph API 호출 실패: {response.status}")
+    
+    async def _extract_keywords_simple(self, text: str) -> List[str]:
+        """간단한 키워드 추출 - 자체 구현"""
+        import re
+        
+        # HTML 태그 제거
+        clean_text = re.sub('<[^<]+?>', '', text)
+        
+        # 너무 짧으면 빈 리스트 반환
+        if len(clean_text.strip()) < 10:
+            return []
+        
+        # 간단한 키워드 추출 (한국어 단어 추출)
+        korean_words = re.findall(r'[가-힣]{2,}', clean_text)
+        
+        # 빈도수 기준 상위 5개 반환
+        from collections import Counter
+        word_counts = Counter(korean_words)
+        return [word for word, count in word_counts.most_common(5)]
+    
+    async def _update_last_sync_time(self, conn, account_id: str):
+        """마지막 동기화 시간 업데이트"""
+        from datetime import datetime
+        query = "UPDATE accounts SET last_sync_at = ? WHERE id = ?"
+        await conn.execute(query, (datetime.now(), account_id))
+    
+    async def _handle_account_error(self, conn, account_id: str, error_msg: str):
+        """계정별 에러 처리"""
+        query = "UPDATE accounts SET error_message = ?, updated_at = ? WHERE id = ?"
+        await conn.execute(query, (error_msg, datetime.now(), account_id))
+
+# modules/mail_processor/_helpers.py (350줄 제한 대응)
+class MailProcessorHelpers:
+    """Mail Processor 헬퍼 함수들"""
+    
+    @staticmethod
+    def clean_email_content(html_content: str) -> str:
+        """이메일 본문 정제"""
+        import re
+        # HTML 태그 제거
+        clean = re.sub('<[^<]+?>', '', html_content)
+        # 과도한 공백 정리
+        clean = re.sub(r'\s+', ' ', clean)
+        return clean.strip()
+    
+    @staticmethod
+    def extract_sender_domain(email_address: str) -> str:
+        """발신자 도메인 추출"""
+        if '@' in email_address:
+            return email_address.split('@')[1].lower()
+        return ''
+    
+    @staticmethod
+    def create_mail_fingerprint(mail_id: str, sender: str) -> str:
+        """메일 고유 식별자 생성"""
+        import hashlib
+        content = f"{mail_id}_{sender}"
+        return hashlib.md5(content.encode()).hexdigest()
 ```
 
-**호출 스택:**
+**개선된 호출 스택:**
 ```
 Scheduler → APIGateway.process_all_accounts_mails()
-    → MailProcessorOrchestrator.process_new_mails(
-        get_active_accounts_func=APIGateway._get_active_accounts,
-        query_mails_func=APIGateway.query_mails,
-        extract_keywords_func=APIGateway.extract_keywords
-    )
-        → MailFilterService.should_process()
-        → MailProcessorOrchestrator._is_duplicate() (DB 직접 조회)
+    → MailProcessorOrchestrator.process_new_mails()
+        → MailProcessorOrchestrator._get_active_accounts() (DB 직접 조회)
+        → MailProcessorOrchestrator._fetch_mails_from_graph() (Graph API 직접 호출)
+        → MailProcessorOrchestrator._extract_keywords_simple() (자체 키워드 추출)
         → MailProcessorOrchestrator._save_mail_history() (DB 직접 작업)
         → KafkaProducer.send()
 ```
@@ -593,66 +706,60 @@ class KeywordExtractorOrchestrator:
         return clean.strip()
 ```
 
-### 3.3 API Gateway 구현
+### 3.3 API Gateway 구현 (단순 라우팅만 담당)
 ```python
 # main/api_gateway.py
 class APIGateway:
-    """모듈 간 호출 흐름 총괄"""
+    """단순 라우팅만 담당 - 비즈니스 로직 없음"""
     def __init__(self):
+        self.db_manager = DatabaseManager()
         self.account_orchestrator = AccountOrchestrator()
         self.auth_orchestrator = AuthOrchestrator()
         self.mail_query_orchestrator = MailQueryOrchestrator()
         self.mail_processor_orchestrator = MailProcessorOrchestrator()
         self.mail_history_orchestrator = MailHistoryOrchestrator()
+        self.keyword_extractor_orchestrator = KeywordExtractorOrchestrator()
     
     async def sync_accounts(self):
-        """계정 동기화"""
+        """계정 동기화 - 단순 위임"""
         return await self.account_orchestrator.sync_accounts()
     
     async def authenticate_account(self, email: str):
-        """계정 인증"""
+        """계정 인증 - 이메일로 계정 ID 조회 후 위임"""
         account = await self._get_account_by_email(email)
-        return await self.auth_orchestrator.authenticate_account(account.id)
+        if not account:
+            raise ValueError(f"계정을 찾을 수 없습니다: {email}")
+        return await self.auth_orchestrator.authenticate_account(account['id'])
     
     async def query_mails(self, email: str, filters: dict):
-        """메일 조회"""
+        """메일 조회 - 이메일로 계정 ID 조회 후 위임"""
         account = await self._get_account_by_email(email)
-        return await self.mail_query_orchestrator.query_mails(account.id, filters)
+        if not account:
+            raise ValueError(f"계정을 찾을 수 없습니다: {email}")
+        return await self.mail_query_orchestrator.query_mails(account['id'], filters)
     
     async def process_all_accounts_mails(self):
-        """모든 계정의 메일 처리"""
-        return await self.mail_processor_orchestrator.process_new_mails(
-            get_active_accounts_func=self._get_active_accounts,
-            query_mails_func=self._query_mails_for_processor,
-            extract_keywords_func=self.extract_keywords
-        )
-    
-    async def _get_active_accounts(self):
-        """활성 계정 조회 (MailProcessor에서 사용)"""
-        # account_orchestrator를 통해 활성 계정 조회
-        pass
-    
-    async def _query_mails_for_processor(self, email: str, filters: dict):
-        """메일 조회 (MailProcessor에서 사용)"""
-        account = await self._get_account_by_email(email)
-        return await self.mail_query_orchestrator.query_mails(account.id, filters)
+        """모든 계정의 메일 처리 - 함수 주입 없이 직접 호출"""
+        return await self.mail_processor_orchestrator.process_new_mails()
     
     async def extract_keywords(self, text: str):
-        """키워드 추출 (MailProcessor에서 사용)"""
+        """키워드 추출 - 단순 위임"""
         return await self.keyword_extractor_orchestrator.extract_keywords(text)
     
     async def search_mail_history(self, filters: dict):
-        """메일 히스토리 검색"""
+        """메일 히스토리 검색 - 단순 위임"""
         return await self.mail_history_orchestrator.search_history(filters)
     
     async def cleanup_old_history(self, retention_days: int = 90):
-        """오래된 히스토리 정리"""
+        """오래된 히스토리 정리 - 단순 위임"""
         return await self.mail_history_orchestrator.cleanup_old_data(retention_days)
     
     async def _get_account_by_email(self, email: str):
-        """이메일로 계정 조회"""
-        # AccountRepository를 직접 사용하여 계정 조회
-        pass
+        """이메일로 계정 조회 - 최소한의 DB 조회만"""
+        conn = await self.db_manager.get_connection()
+        query = "SELECT * FROM accounts WHERE email = ?"
+        result = await conn.execute(query, (email,)).fetchone()
+        return dict(result) if result else None
 
 # main/request_handler.py
 class RequestHandler:
@@ -740,43 +847,59 @@ class SchedulerService:
         await self.api_gateway.cleanup_old_history()
 ```
 
-## 4. 구현 순서 및 일정
+## 4. 개선된 구현 순서 및 일정
 
 ### Phase 1: 기반 구조 (1주)
-1. 프로젝트 구조 생성 및 설정
-2. infra/core 모듈 구현
+1. 프로젝트 구조 생성 및 설정 (uv 패키지 관리)
+2. infra/core 모듈 구현 (config, database, kafka, token_service, oauth_client, exceptions)
 3. SQLite 스키마 및 마이그레이션
-4. 기본 Repository 패턴 구현
+4. 단순 API Gateway 구현 (라우팅만)
 
 ### Phase 2: 계정 관리 (1주)
-1. Account 모듈 구현
+1. Account 모듈 구현 (완전 독립적)
 2. enrollment 파일 동기화
-3. API Gateway 계정 관리 통합
+3. API Gateway 계정 관리 라우팅 추가
 
 ### Phase 3: 인증 시스템 (1.5주)
-1. OAuth 2.0 인증 플로우
-2. 토큰 관리 시스템
-3. 자동 토큰 갱신
+1. Auth 모듈 구현 (완전 독립적)
+2. OAuth 2.0 인증 플로우 (자체 구현)
+3. TokenService와 연동 (토큰 자동 갱신)
 
 ### Phase 4: 메일 조회 (1주)
-1. Graph API 클라이언트
-2. OData 필터 빌더
-3. API Gateway 메일 조회 통합
+1. Mail Query 모듈 구현 (독립적)
+2. Graph API 클라이언트 (모듈 내부)
+3. OData 필터 빌더
+4. API Gateway 메일 조회 라우팅 추가
 
-### Phase 5: 메일 처리 및 이벤트 (1.5주)
-1. 메일 처리 오케스트레이터
-2. Kafka 이벤트 발행
-3. 스케줄러 구현
+### Phase 5: 키워드 추출 (1주) - 순서 변경
+1. Keyword Extractor 모듈 구현 (독립적)
+2. OpenAI API 연동 (모듈 내부)
+3. 복잡한 키워드 추출 로직
 
-### Phase 6: 부가 기능 (1주)
-1. 키워드 추출 (OpenAI)
-2. 히스토리 관리
+### Phase 6: 메일 처리 및 이벤트 (1.5주) - 순서 변경
+1. Mail Processor 모듈 구현 (완전 독립적)
+2. 자체 Graph API 호출 구현
+3. 간단한 키워드 추출 구현 (자체)
+4. Kafka 이벤트 발행
+5. 스케줄러 구현
+
+### Phase 7: 히스토리 관리 (1주)
+1. Mail History 모듈 구현 (독립적)
+2. 히스토리 검색 및 관리
 3. 자동 정리 기능
 
-### Phase 7: 테스트 및 문서화 (1주)
-1. 통합 테스트
+### Phase 8: 테스트 및 문서화 (1주)
+1. /test/scenario 기반 시나리오 테스트
 2. 성능 최적화
-3. 문서 작성
+3. 모듈별 README.md 작성
+4. 전체 문서 정리
+
+### 주요 개선 사항:
+- **Phase 5와 6 순서 변경**: Keyword Extractor를 먼저 구현하되, Mail Processor는 자체 간단 구현 사용
+- **완전 독립적 구현**: 각 Phase에서 모듈이 자체적으로 필요한 기능 구현
+- **함수 주입 제거**: 모듈 간 의존성 완전 제거
+- **API Gateway 단순화**: 각 Phase에서 라우팅만 추가
+- **시나리오 기반 테스트**: /test/scenario의 명시된 시나리오에 따라서만 테스트
 
 ## 5. 기술 스택
 
