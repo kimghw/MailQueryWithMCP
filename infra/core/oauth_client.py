@@ -46,7 +46,7 @@ class OAuthClient:
 
     def generate_auth_url(self, state: Optional[str] = None) -> str:
         """
-        Azure AD 인증 URL을 생성합니다.
+        Azure AD 인증 URL을 생성합니다. (공통 설정 사용)
         
         Args:
             state: CSRF 방지를 위한 상태값
@@ -73,6 +73,52 @@ class OAuthClient:
         auth_url = f"{self.config.azure_authority}/oauth2/v2.0/authorize?" + urllib.parse.urlencode(params)
         
         logger.info(f"인증 URL 생성됨: {auth_url[:100]}...")
+        return auth_url
+
+    def generate_auth_url_with_account_config(
+        self, 
+        client_id: str, 
+        tenant_id: str,
+        redirect_uri: Optional[str] = None,
+        state: Optional[str] = None
+    ) -> str:
+        """
+        계정별 OAuth 설정을 사용하여 Azure AD 인증 URL을 생성합니다.
+        
+        Args:
+            client_id: 계정별 Azure AD 클라이언트 ID
+            tenant_id: 계정별 Azure AD 테넌트 ID
+            redirect_uri: 계정별 리다이렉트 URI (선택사항)
+            state: CSRF 방지를 위한 상태값
+            
+        Returns:
+            인증 URL
+        """
+        if not client_id:
+            raise AuthenticationError(
+                "계정별 OAuth 설정이 완료되지 않았습니다. oauth_client_id를 확인하세요."
+            )
+
+        # 리다이렉트 URI 결정 (계정별 설정이 있으면 사용, 없으면 기본값)
+        redirect_uri = redirect_uri or self.config.oauth_redirect_uri
+        
+        # 테넌트별 authority 구성
+        authority = f"https://login.microsoftonline.com/{tenant_id or 'common'}"
+
+        params = {
+            "client_id": client_id,
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "scope": " ".join(self.config.azure_scopes),
+            "response_mode": "query",
+        }
+        
+        if state:
+            params["state"] = state
+            
+        auth_url = f"{authority}/oauth2/v2.0/authorize?" + urllib.parse.urlencode(params)
+        
+        logger.info(f"계정별 인증 URL 생성됨: client_id={client_id[:8]}..., tenant_id={tenant_id}")
         return auth_url
 
     async def exchange_code_for_tokens(self, authorization_code: str) -> Dict[str, Any]:
