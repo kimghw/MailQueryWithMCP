@@ -65,8 +65,17 @@ class TokenService:
             if isinstance(expiry_time, datetime):
                 expiry_time = expiry_time.isoformat()
 
-            # 유효한 토큰이 있으면 상태를 ACTIVE로, 없으면 INACTIVE로 설정
-            status = "ACTIVE" if access_token and refresh_token else "INACTIVE"
+            # 토큰 검증 및 상태 결정
+            if access_token:
+                if refresh_token:
+                    status = "ACTIVE"
+                    logger.info(f"✅ 인증 완료: access_token과 refresh_token 모두 수신됨 - user_id={user_id}")
+                else:
+                    status = "ACTIVE"  # access_token만 있어도 일단 ACTIVE
+                    logger.warning(f"⚠️ offline_access 권한 위임을 받지 못해 refresh_token을 받을 수 없습니다 - user_id={user_id}")
+            else:
+                status = "INACTIVE"
+                logger.error(f"❌ access_token을 받지 못했습니다 - user_id={user_id}")
 
             account_data = {
                 "user_id": user_id,
@@ -525,7 +534,7 @@ class TokenService:
     async def check_authentication_status(self, user_id: str) -> Dict[str, Any]:
         """
         계정의 인증 상태를 확인하고 재인증 필요 여부를 판단합니다.
-        refresh_token 유효성을 기반으로 status를 업데이트합니다.
+        access_token과 refresh_token 모두 무효/없는 경우 status를 INACTIVE로 변경합니다.
         
         Args:
             user_id: 사용자 ID
@@ -534,11 +543,11 @@ class TokenService:
             인증 상태 정보
         """
         try:
-            # 계정 정보 조회
+            # 계정 정보 조회 (OAuth 설정 포함)
             account = self.db.fetch_one(
                 """
-                SELECT id, user_id, user_name, refresh_token, token_expiry, 
-                       status, is_active, created_at
+                SELECT id, user_id, user_name, access_token, refresh_token, token_expiry, 
+                       status, is_active, created_at, oauth_client_id, oauth_client_secret, oauth_tenant_id
                 FROM accounts 
                 WHERE user_id = ?
                 """,
@@ -554,21 +563,81 @@ class TokenService:
                 }
 
             current_status = account["status"] if account["status"] else "INACTIVE"
+            access_token = account["access_token"]
             refresh_token = account["refresh_token"]
+            token_expiry = account["token_expiry"]
+            oauth_client_id = account["oauth_client_id"]
+            oauth_client_secret = account["oauth_client_secret"]
+            oauth_tenant_id = account["oauth_tenant_id"]
             
-            # refresh_token이 없는 경우
-            if not refresh_token:
+            # access_token과 refresh_token 모두 없는 경우
+            if not access_token and not refresh_token:
+                logger.warning(f"❌ access_token과 refresh_token 모두 무효/없음: status를 INACTIVE로 변경 - user_id={user_id}")
                 await self.update_account_status(user_id, "INACTIVE")
                 return {
                     "user_id": user_id,
                     "status": "INACTIVE",
                     "requires_reauth": True,
-                    "message": "refresh token이 없습니다. 최초 인증이 필요합니다."
+                    "message": "access_token과 refresh_token 모두 없습니다. 재인증이 필요합니다."
                 }
+            
+            # access_token 유효성 확인
+            access_token_valid = False
+            if access_token and token_expiry:
+                try:
+                    if isinstance(token_expiry, str):
+                        expiry_time = datetime.fromisoformat(token_expiry)
+                    else:
+                        expiry_time = token_expiry
+                    
+                    if datetime.utcnow() < expiry_time:
+                        access_token_valid = True
+                except Exception:
+                    pass
+            
+            # refresh_token이 없는 경우
+            if not refresh_token:
+                if access_token_valid:
+                    # access_token만 유효한 경우
+                    await self.update_account_status(user_id, "ACTIVE")
+                    return {
+                        "user_id": user_id,
+                        "status": "ACTIVE",
+                        "requires_reauth": False,
+                        "message": "access_token이 유효합니다 (refresh_token 없음)."
+                    }
+                else:
+                    # access_token도 무효한 경우
+                    logger.warning(f"❌ access_token과 refresh_token 모두 무효: status를 INACTIVE로 변경 - user_id={user_id}")
+                    await self.update_account_status(user_id, "INACTIVE")
+                    return {
+                        "user_id": user_id,
+                        "status": "INACTIVE",
+                        "requires_reauth": True,
+                        "message": "refresh_token이 없고 access_token도 만료되었습니다. 재인증이 필요합니다."
+                    }
+
+            # OAuth 설정 확인
+            if not oauth_client_id or not oauth_client_secret:
+                # 계정별 OAuth 설정이 없으면 공통 설정 사용 가능 여부 확인
+                if not self.config.is_oauth_configured():
+                    logger.warning(f"❌ OAuth 설정이 완료되지 않았습니다 - user_id={user_id}")
+                    await self.update_account_status(user_id, "REAUTH_REQUIRED")
+                    return {
+                        "user_id": user_id,
+                        "status": "ERROR",
+                        "requires_reauth": True,
+                        "message": "[AUTH_ERROR] OAuth 설정이 완료되지 않았습니다."
+                    }
 
             # refresh_token 유효성 확인
             try:
-                # OAuth 클라이언트를 통해 refresh_token 유효성 검증
+                # 계정별 OAuth 설정이 있으면 사용, 없으면 공통 설정 사용
+                if oauth_client_id and oauth_client_secret:
+                    # 계정별 OAuth 설정으로 토큰 갱신 (현재 OAuth 클라이언트는 공통 설정만 지원)
+                    # 임시로 공통 설정 사용하되, 향후 계정별 설정 지원 필요
+                    logger.info(f"계정별 OAuth 설정 발견하지만 공통 설정으로 토큰 갱신 시도: user_id={user_id}")
+                
                 new_token_info = await self.oauth_client.refresh_access_token(refresh_token)
                 
                 # refresh_token이 유효한 경우 - 상태를 ACTIVE로 업데이트
@@ -590,13 +659,25 @@ class TokenService:
                 
             except TokenExpiredError:
                 # refresh_token이 만료된 경우
-                await self.update_account_status(user_id, "REAUTH_REQUIRED")
-                return {
-                    "user_id": user_id,
-                    "status": "REAUTH_REQUIRED",
-                    "requires_reauth": True,
-                    "message": "refresh token이 만료되었습니다. 재인증이 필요합니다."
-                }
+                if access_token_valid:
+                    # access_token은 아직 유효한 경우
+                    await self.update_account_status(user_id, "REAUTH_REQUIRED")
+                    return {
+                        "user_id": user_id,
+                        "status": "REAUTH_REQUIRED",
+                        "requires_reauth": True,
+                        "message": "refresh_token이 만료되었습니다. 재인증이 필요합니다."
+                    }
+                else:
+                    # access_token과 refresh_token 모두 무효한 경우
+                    logger.warning(f"❌ access_token과 refresh_token 모두 무효: status를 INACTIVE로 변경 - user_id={user_id}")
+                    await self.update_account_status(user_id, "INACTIVE")
+                    return {
+                        "user_id": user_id,
+                        "status": "INACTIVE",
+                        "requires_reauth": True,
+                        "message": "access_token과 refresh_token 모두 만료되었습니다. 재인증이 필요합니다."
+                    }
                 
         except Exception as e:
             logger.error(f"인증 상태 확인 실패: user_id={user_id}, error={str(e)}")
