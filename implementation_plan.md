@@ -860,35 +860,35 @@ class SchedulerService:
 2. enrollment 파일 동기화
 3. API Gateway 계정 관리 라우팅 추가
 
-### Phase 3: 인증 시스템 (1.5주)
-1. Auth 모듈 구현 (완전 독립적)
-2. OAuth 2.0 인증 플로우 (자체 구현)
-3. TokenService와 연동 (토큰 자동 갱신)
+### Phase 3: 인증 시스템 (완료)
+- **[x] Auth 모듈 구현 완료**: `modules/auth`에 독립 모듈로 구현되었습니다.
+- **[x] OAuth 2.0 플로우 구현**: `auth_orchestrator`와 `auth_web_server`를 통해 인증 URL 생성, 콜백 처리, 토큰 교환 플로우가 완료되었습니다.
+- **[x] TokenService 연동**: `infra.core.token_service`와 연동하여 토큰을 저장하고, 유효성 검사 및 자동 갱신을 처리합니다.
 
-### Phase 4: 메일 조회 (1주)
+### Phase 4: 메일 조회 (진행 중)
 1. Mail Query 모듈 구현 (독립적)
 2. Graph API 클라이언트 (모듈 내부)
 3. OData 필터 빌더
 4. API Gateway 메일 조회 라우팅 추가
 
-### Phase 5: 키워드 추출 (1주) - 순서 변경
-1. Keyword Extractor 모듈 구현 (독립적)
-2. OpenAI API 연동 (모듈 내부)
-3. 복잡한 키워드 추출 로직
-
-### Phase 6: 메일 처리 및 이벤트 (1.5주) - 순서 변경
+### Phase 5: 메일 처리 및 이벤트 (진행 예정)
 1. Mail Processor 모듈 구현 (완전 독립적)
 2. 자체 Graph API 호출 구현
 3. 간단한 키워드 추출 구현 (자체)
 4. Kafka 이벤트 발행
 5. 스케줄러 구현
 
-### Phase 7: 히스토리 관리 (1주)
+### Phase 6: 키워드 추출 (진행 예정)
+1. Keyword Extractor 모듈 구현 (독립적)
+2. OpenAI API 연동 (모듈 내부)
+3. 복잡한 키워드 추출 로직
+
+### Phase 7: 히스토리 관리 (진행 예정)
 1. Mail History 모듈 구현 (독립적)
 2. 히스토리 검색 및 관리
 3. 자동 정리 기능
 
-### Phase 8: 테스트 및 문서화 (1주)
+### Phase 8: 테스트 및 문서화 (지속)
 1. /test/scenario 기반 시나리오 테스트
 2. 성능 최적화
 3. 모듈별 README.md 작성

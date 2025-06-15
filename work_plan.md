@@ -52,27 +52,17 @@
 - [x] DB 저장/조회 및 민감 정보 암호화 검증 완료
 - [x] 단위 테스트는 규칙에 따라 제거됨
 
-## Phase 4: Auth 모듈 구현 (3일)
+## Phase 4: Auth 모듈 구현 (완료)
 
 ### 4.1 OAuth 인증 플로우
-- [ ] `modules/auth/orchestrator.py` - 인증 오케스트레이터
-- [ ] `modules/auth/web_server.py` - 로컬 웹서버 (리디렉션 처리)
+- [x] `modules/auth/auth_orchestrator.py` - 인증 오케스트레이터 구현 완료
+- [x] `modules/auth/auth_web_server.py` - 로컬 웹서버 (리디렉션 처리) 구현 완료
+- [x] `infra/core/oauth_client.py` 및 `infra/core/token_service.py` 연동 완료
 
-### 4.2 인증 테스트
-- [ ] 실제 Azure AD와 연동 테스트
-- [ ] 토큰 발급 및 저장 테스트
-- [ ] 토큰 자동 갱신 테스트
-
-## Phase 4: Auth 모듈 구현 (3일)
-
-### 4.1 OAuth 인증 플로우
-- [ ] `modules/auth/orchestrator.py` - 인증 오케스트레이터
-- [ ] `modules/auth/web_server.py` - 로컬 웹서버 (리디렉션 처리)
-
-### 4.2 인증 테스트
-- [ ] 실제 Azure AD와 연동 테스트
-- [ ] 토큰 발급 및 저장 테스트
-- [ ] 토큰 자동 갱신 테스트
+### 4.2 기능 검증
+- [x] 실제 Azure AD와 연동하여 토큰 발급 및 저장 테스트 완료
+- [x] `token_service`를 통한 토큰 자동 갱신 기능 검증 완료
+- [x] 시나리오 기반 테스트(`/test/scenario/`)를 통해 주요 기능 검증 완료
 
 ## Phase 5: Mail Query 모듈 구현 (2-3일)
 
