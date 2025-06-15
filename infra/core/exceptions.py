@@ -247,3 +247,23 @@ class ValidationError(IACSGraphError):
             error_code=kwargs.get("error_code", "VALIDATION_ERROR"),
             details=details,
         )
+
+
+class BusinessLogicError(IACSGraphError):
+    """비즈니스 로직 관련 오류"""
+
+    def __init__(
+        self,
+        message: str,
+        operation: Optional[str] = None,
+        **kwargs
+    ):
+        details = kwargs.get("details", {})
+        if operation:
+            details["operation"] = operation
+            
+        super().__init__(
+            message=message,
+            error_code=kwargs.get("error_code", "BUSINESS_LOGIC_ERROR"),
+            details=details,
+        )

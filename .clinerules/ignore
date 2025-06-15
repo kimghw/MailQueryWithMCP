@@ -1,5 +1,2 @@
-# Cline ignore patterns
-# 이 파일은 Cline이 컨텍스트에서 제외할 파일/디렉터리를 지정합니다
-
 # Reference 문서들 (외부 API 가이드라인으로 필요시에만 참조)
 /home/kimghw/IACSGRAPH/infra/references/

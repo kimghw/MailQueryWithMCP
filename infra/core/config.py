@@ -39,6 +39,7 @@ class Config:
         required_settings = [
             "DATABASE_PATH",
             "KAFKA_BOOTSTRAP_SERVERS",
+            "ENCRYPTION_KEY",
         ]
         
         missing_settings = []
@@ -173,6 +174,21 @@ class Config:
         """Kafka 요청 타임아웃(초)"""
         return int(os.getenv("KAFKA_TIMEOUT", "10"))
 
+    # Account 모듈 설정
+    @property
+    def encryption_key(self) -> str:
+        """데이터 암호화 키 (Fernet 키)"""
+        key = os.getenv("ENCRYPTION_KEY")
+        if not key:
+            raise ConfigurationError("ENCRYPTION_KEY가 설정되지 않았습니다")
+        return key
+
+    @property
+    def enrollment_directory(self) -> str:
+        """Enrollment 파일들이 위치한 디렉터리"""
+        default_path = str(Path(__file__).parent.parent.parent / "enrollment")
+        return os.getenv("ENROLLMENT_DIRECTORY", default_path)
+
     # 검증 메서드
     def is_oauth_configured(self) -> bool:
         """OAuth 설정이 완료되었는지 확인"""
@@ -207,6 +223,7 @@ class Config:
             "environment": self.environment,
             "http_timeout": self.http_timeout,
             "kafka_timeout": self.kafka_timeout,
+            "enrollment_directory": self.enrollment_directory,
             "openai_configured": self.is_openai_configured(),
             "oauth_configured": self.is_oauth_configured(),
         }

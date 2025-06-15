@@ -6,7 +6,7 @@ OAuth 클라이언트와 함께 작동하여 안전한 토큰 라이프사이클
 """
 
 import asyncio
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta
 from functools import lru_cache
 

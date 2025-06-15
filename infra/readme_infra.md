@@ -1,130 +1,85 @@
 # IACSGRAPH Infra Module
 
-프로젝트의 핵심 인프라스트럭처를 제공하는 공통 서비스 모듈입니다.
+프로젝트의 모든 모듈이 공유하는 핵심 인프라스트럭처 서비스를 제공합니다.
 
 ## 🏗️ 주요 컴포넌트
 
-### Core Services
-- **Config**: 환경 변수 기반 설정 관리
-- **Database**: SQLite 연결 및 스키마 자동 초기화  
-- **KafkaClient**: Producer/Consumer 관리
-- **Logger**: 구조화된 로깅 시스템
-- **OAuthClient**: Azure AD 인증 처리
-- **TokenService**: 토큰 저장 및 자동 갱신
-- **Exceptions**: 표준 예외 계층
+### Core Services (`infra/core`)
+- **Config**: `.env` 파일 기반의 환경 변수 관리. `get_config()`로 접근.
+- **Database**: SQLite 연결 및 트랜잭션을 관리하고, 최초 실행 시 스키마를 자동 생성. `get_database_manager()`로 접근.
+- **Logger**: 구조화된 전역 로깅 시스템. `get_logger()`로 접근.
+- **Exceptions**: `DatabaseError`, `ValidationError` 등 표준 예외 클래스 정의.
+- **KafkaClient**: Kafka 메시징 시스템 연동 클라이언트 (향후 사용 예정).
+- **OAuthClient & TokenService**: OAuth 인증 및 토큰 관리 서비스 (향후 `auth` 모듈에서 사용 예정).
+
+### Migrations (`infra/migrations`)
+- **`initial_schema.sql`**: 애플리케이션의 전체 데이터베이스 스키마를 정의합니다. `database.py`에 의해 자동으로 실행됩니다.
 
 ## 📦 사용법
 
 ### 기본 Import 패턴
 ```python
-from infra.core import (
-    get_config, get_database, get_kafka_client, 
-    get_logger, get_oauth_client, get_token_service
-)
-```
+from infra.core import get_config, get_database_manager, get_logger
+from infra.core.exceptions import DatabaseError, ValidationError
 
-### 일반적인 사용 순서
-```python
-# 1. 설정 로드
+# 설정 가져오기
 config = get_config()
 
-# 2. 로거 초기화  
+# 로거 가져오기
 logger = get_logger(__name__)
 
-# 3. 데이터베이스 연결 (스키마 자동 생성됨)
-db = get_database()
-
-# 4. 필요시 Kafka/OAuth 클라이언트 사용
-kafka = get_kafka_client()
-oauth = get_oauth_client()
+# 데이터베이스 매니저 가져오기
+db_manager = get_database_manager()
 ```
 
-### 데이터베이스 사용
+### 데이터베이스 트랜잭션 사용
+`Account` 모듈과 같이 데이터의 원자적 연산이 필요할 때 사용합니다.
 ```python
-db = get_database()
-with db.get_connection() as conn:
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM accounts")
-    results = cursor.fetchall()
+db = get_database_manager()
+
+try:
+    with db.transaction() as conn:
+        # 이 블록 안의 모든 DB 작업은 하나의 트랜잭션으로 묶입니다.
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO ...")
+        cursor.execute("UPDATE ...")
+except DatabaseError as e:
+    logger.error(f"트랜잭션 실패: {e}")
 ```
 
-### Kafka 이벤트 발행
-```python
-kafka = get_kafka_client()
-await kafka.produce("email-raw-data-events", event_data)
-```
+## ⚙️ 필수 환경 설정 (`.env`)
 
-### 토큰 관리
-```python
-token_service = get_token_service()
-access_token = await token_service.get_valid_access_token(account_id)
-```
-
-## ⚙️ 필수 환경 설정
-
-`.env` 파일에 다음 설정이 필요합니다:
+애플리케이션이 정상적으로 동작하려면 프로젝트 루트에 `.env` 파일이 필요합니다.
 
 ```env
-# 데이터베이스
+# 데이터베이스 경로
 DATABASE_PATH=./data/iacsgraph.db
 
-# OAuth Settings (애플리케이션 레벨)
-OAUTH_REDIRECT_PORT=5000
-OAUTH_REDIRECT_PATH=/auth/callback
+# 데이터 암호화를 위한 32바이트 URL-safe base64 키
+# (예: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())")
+ENCRYPTION_KEY=your_32_byte_url_safe_base64_encryption_key
 
-# Kafka
+# 계정 설정 파일이 위치한 디렉터리
+ENROLLMENT_DIRECTORY=enrollment
+
+# 로깅 레벨 (DEBUG, INFO, WARNING, ERROR)
+LOG_LEVEL=DEBUG
+
+# Kafka (향후 사용)
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 KAFKA_TOPIC_EMAIL_EVENTS=email-raw-data-events
 
-# 기타
-LOG_LEVEL=DEBUG
+# OpenAI (향후 사용)
 OPENAI_API_KEY=your_openai_key
 ```
 
-**주의**: Azure AD 클라이언트 정보(CLIENT_ID, CLIENT_SECRET, TENANT_ID)는 개별 사용자 계정별로 데이터베이스에서 관리됩니다.
+## 🔄 호출 스택 및 의존성
 
-## 🔄 호출 스택
+- **단방향 의존성**: 모든 모듈(`account`, `auth` 등)은 `infra`에 의존하지만, `infra`는 다른 모듈에 의존하지 않습니다.
+- **초기화 순서**:
+  1. `get_config()`: 환경 변수 로드.
+  2. `get_logger()`: 로깅 시스템 초기화.
+  3. `get_database_manager()`: DB 연결 및 스키마 자동 생성.
+  4. 각 모듈에서 필요한 인프라 서비스를 가져와 사용.
 
-```
-Module Import
-    ↓
-get_config() - 환경 설정 로드
-    ↓  
-get_logger() - 로깅 시스템 초기화
-    ↓
-get_database() - DB 연결 및 스키마 생성
-    ↓
-[필요시] get_kafka_client() - 메시징 시스템
-    ↓
-[필요시] get_oauth_client() - 인증 시스템
-    ↓
-[필요시] get_token_service() - 토큰 관리
-```
-
-## 🚨 중요 사항
-
-- **모든 서비스는 레이지 싱글톤**: 첫 호출 시에만 초기화됨
-- **데이터베이스 스키마**: 첫 연결 시 자동으로 `initial_schema.sql` 실행
-- **비동기 지원**: OAuth, Kafka, TokenService는 비동기 메서드 제공
-- **예외 처리**: 모든 컴포넌트는 구조화된 예외 발생
-
-## 📁 디렉터리 구조
-
-```
-infra/
-├── core/               # 핵심 서비스들
-│   ├── __init__.py    # 통합 진입점
-│   ├── config.py      # 설정 관리
-│   ├── database.py    # DB 연결 관리  
-│   ├── kafka_client.py # Kafka 클라이언트
-│   ├── logger.py      # 로깅 시스템
-│   ├── oauth_client.py # OAuth 클라이언트
-│   ├── token_service.py # 토큰 서비스
-│   └── exceptions.py  # 예외 정의
-├── migrations/        # DB 스키마 파일
-└── references/        # 외부 API 가이드라인
-```
-
-## 🔧 모듈 의존성
-
-infra는 다른 모듈에 의존하지 않으며, 모든 모듈이 infra를 참조하는 단방향 의존성을 유지합니다.
+이 구조는 모듈 간의 결합도를 낮추고, 공통 기능의 유지보수성을 높입니다.
