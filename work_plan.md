@@ -5,60 +5,63 @@
 - [x] 환경설정 파일 (.env, .env.example)
 - [x] Git 저장소 설정 및 초기 커밋
 - [x] .gitignore 설정 (enrollment/ 제외)
+- [x] 디렉터리 구조 생성 완료
+- [x] `pyproject.toml` 및 uv 가상환경 설정 완료
+- [x] `infra/core` 및 `modules/account` 핵심 기능 구현 완료
 
-## Phase 1: 프로젝트 기반 구조 설정 (1-2일)
+## Phase 1: 프로젝트 기반 구조 설정 (완료)
 
 ### 1.1 디렉터리 구조 생성
-```bash
-mkdir -p infra/core
-mkdir -p infra/migrations
-mkdir -p modules/{account,auth,mail_query,mail_processor,mail_history,keyword_extractor}
-mkdir -p main
-mkdir -p scheduler
-mkdir -p data
-mkdir -p logs
-```
+- [x] 모든 프로젝트 디렉터리 구조 생성 완료
 
 ### 1.2 패키지 관리 설정 (uv)
-- [ ] `pyproject.toml` 생성
-- [ ] uv를 이용한 가상환경 생성
-- [ ] 기본 의존성 설치 (asyncio, aiohttp, pydantic, etc.)
+- [x] `pyproject.toml` 생성 및 의존성 정의 완료
+- [x] uv를 이용한 가상환경 설정 완료
 
 ### 1.3 기본 __init__.py 파일 생성
-- [ ] 모든 모듈 디렉터리에 `__init__.py` 생성
+- [x] 모든 모듈 디렉터리에 `__init__.py` 생성 완료
 
 ### 1.4 SQLite 스키마 생성
-- [ ] `infra/migrations/initial_schema.sql` 구현
-- [ ] 테이블 생성 스크립트 작성
+- [x] `infra/migrations/initial_schema.sql` 구현 완료
+- [x] `database.py`에서 자동 스키마 생성 기능 구현 완료
 
-## Phase 2: 인프라 레이어 구현 (2-3일)
+## Phase 2: 인프라 레이어 구현 (완료)
 
 ### 2.1 Core 인프라 구현
-- [ ] `infra/core/config.py` - 환경설정 로드
-- [ ] `infra/core/database.py` - SQLite 연결 관리
-- [ ] `infra/core/kafka_client.py` - Kafka 연결 관리
+- [x] `infra/core/config.py` - 환경설정 로드 기능 구현 완료
+- [x] `infra/core/database.py` - SQLite 연결 및 트랜잭션 관리 구현 완료
+- [x] `infra/core/logger.py` - 구조화된 로깅 시스템 구현 완료
+- [x] `infra/core/exceptions.py` - 표준 예외 클래스 정의 완료
+- [ ] `infra/core/kafka_client.py` - (향후 사용 예정)
 
 ### 2.2 OAuth 및 토큰 관리
-- [ ] `infra/core/oauth_client.py` - OAuth 클라이언트
-- [ ] `infra/core/token_service.py` - 토큰 관리 서비스
+- [ ] `infra/core/oauth_client.py` - (향후 `auth` 모듈에서 사용 예정)
+- [ ] `infra/core/token_service.py` - (향후 `auth` 모듈에서 사용 예정)
 
-### 2.3 기본 스키마 정의
-- [ ] 각 모듈별 `schema.py` 기본 구조 생성 (Pydantic 모델)
+## Phase 3: Account 모듈 구현 (완료)
 
-## Phase 3: Account 모듈 구현 (2일)
+### 3.1 Account 모듈 구현
+- [x] `modules/account/account_schema.py` - Account 관련 Pydantic 모델 전체 정의 완료
+- [x] `modules/account/account_repository.py` - DB CRUD 기능 구현 완료
+- [x] `modules/account/_account_helpers.py` - 암호화 및 파일 처리 유틸리티 구현 완료
+- [x] `modules/account/account_sync_service.py` - `enrollment` 파일 동기화 서비스 구현 완료
+- [x] `modules/account/account_orchestrator.py` - 계정 관리 비즈니스 로직 구현 완료
 
-### 3.1 Account 기본 구조
-- [ ] `modules/account/schema.py` - Account 모델 정의
-- [ ] `modules/account/sync_service.py` - enrollment 파일 스캔
+### 3.2 기능 검증
+- [x] `enrollment` 파일 기반 계정 생성/업데이트/비활성화 기능 수동 검증 완료
+- [x] DB 저장/조회 및 민감 정보 암호화 검증 완료
+- [x] 단위 테스트는 규칙에 따라 제거됨
 
-### 3.2 Account Orchestrator
-- [ ] `modules/account/orchestrator.py` - 계정 관리 로직
-- [ ] DB CRUD 기능 구현
-- [ ] enrollment 동기화 기능
+## Phase 4: Auth 모듈 구현 (3일)
 
-### 3.3 테스트 및 검증
-- [ ] enrollment 파일 읽기 테스트
-- [ ] DB 저장/조회 테스트
+### 4.1 OAuth 인증 플로우
+- [ ] `modules/auth/orchestrator.py` - 인증 오케스트레이터
+- [ ] `modules/auth/web_server.py` - 로컬 웹서버 (리디렉션 처리)
+
+### 4.2 인증 테스트
+- [ ] 실제 Azure AD와 연동 테스트
+- [ ] 토큰 발급 및 저장 테스트
+- [ ] 토큰 자동 갱신 테스트
 
 ## Phase 4: Auth 모듈 구현 (3일)
 

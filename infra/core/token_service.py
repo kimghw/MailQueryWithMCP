@@ -65,12 +65,16 @@ class TokenService:
             if isinstance(expiry_time, datetime):
                 expiry_time = expiry_time.isoformat()
 
+            # 유효한 토큰이 있으면 상태를 ACTIVE로, 없으면 INACTIVE로 설정
+            status = "ACTIVE" if access_token and refresh_token else "INACTIVE"
+
             account_data = {
                 "user_id": user_id,
                 "user_name": user_name or user_id,
                 "access_token": access_token,
                 "refresh_token": refresh_token,
                 "token_expiry": expiry_time,
+                "status": status,
                 "is_active": True,
                 "updated_at": datetime.utcnow().isoformat()
             }
@@ -84,12 +88,13 @@ class TokenService:
                     where_clause="id = ?",
                     where_params=(account_id,)
                 )
-                logger.info(f"기존 계정 토큰 업데이트: user_id={user_id}")
+                logger.info(f"기존 계정 토큰 업데이트: user_id={user_id}, status={status}")
             else:
-                # 새 계정 생성
+                # 새 계정 생성 - 최초 등록시 INACTIVE 상태로 설정
+                account_data["status"] = "INACTIVE"
                 account_data["created_at"] = datetime.utcnow().isoformat()
                 account_id = self.db.insert("accounts", account_data)
-                logger.info(f"새 계정 생성: user_id={user_id}, account_id={account_id}")
+                logger.info(f"새 계정 생성: user_id={user_id}, account_id={account_id}, status=INACTIVE")
 
             return account_id
 
@@ -112,11 +117,11 @@ class TokenService:
             유효한 액세스 토큰 또는 None
         """
         try:
-            # 계정 정보 조회
+            # 계정 정보 조회 (status 필드 포함)
             account = self.db.fetch_one(
                 """
                 SELECT id, user_id, user_name, access_token, refresh_token, 
-                       token_expiry, is_active
+                       token_expiry, is_active, status
                 FROM accounts 
                 WHERE user_id = ? AND is_active = 1
                 """,
@@ -135,6 +140,8 @@ class TokenService:
                 
                 # 토큰이 아직 유효한 경우
                 if datetime.utcnow() < expiry_time:
+                    # 계정 상태를 ACTIVE로 업데이트
+                    await self.update_account_status(user_id, "ACTIVE")
                     logger.debug(f"유효한 액세스 토큰 반환: user_id={user_id}")
                     return account["access_token"]
 
@@ -142,6 +149,7 @@ class TokenService:
             refresh_token = account["refresh_token"]
             if not refresh_token:
                 logger.warning(f"리프레시 토큰이 없음: user_id={user_id}")
+                await self.update_account_status(user_id, "INACTIVE")
                 return None
 
             logger.info(f"토큰 갱신 시도: user_id={user_id}")
@@ -154,12 +162,15 @@ class TokenService:
                 user_name=account["user_name"]
             )
 
+            # 계정 상태를 ACTIVE로 업데이트
+            await self.update_account_status(user_id, "ACTIVE")
             logger.info(f"토큰 갱신 성공: user_id={user_id}")
             return new_token_info["access_token"]
 
         except TokenExpiredError:
             # 리프레시 토큰도 만료된 경우
             logger.warning(f"리프레시 토큰 만료: user_id={user_id}")
+            await self.update_account_status(user_id, "REAUTH_REQUIRED")
             await self.deactivate_account(user_id)
             return None
             
@@ -459,6 +470,7 @@ class TokenService:
                     "access_token": None,
                     "refresh_token": None,
                     "token_expiry": None,
+                    "status": "INACTIVE",
                     "is_active": False,
                     "updated_at": datetime.utcnow().isoformat()
                 },
@@ -476,6 +488,186 @@ class TokenService:
         except Exception as e:
             logger.error(f"토큰 무효화 실패: user_id={user_id}, error={str(e)}")
             return False
+
+    async def update_account_status(self, user_id: str, status: str) -> bool:
+        """
+        계정 상태를 업데이트합니다.
+        
+        Args:
+            user_id: 사용자 ID
+            status: 새로운 상태 (ACTIVE, INACTIVE, LOCKED, REAUTH_REQUIRED)
+            
+        Returns:
+            업데이트 성공 여부
+        """
+        try:
+            rows_affected = self.db.update(
+                table="accounts",
+                data={
+                    "status": status,
+                    "updated_at": datetime.utcnow().isoformat()
+                },
+                where_clause="user_id = ?",
+                where_params=(user_id,)
+            )
+
+            if rows_affected > 0:
+                logger.debug(f"계정 상태 업데이트: user_id={user_id}, status={status}")
+                return True
+            else:
+                logger.warning(f"상태 업데이트할 계정을 찾을 수 없음: user_id={user_id}")
+                return False
+
+        except Exception as e:
+            logger.error(f"계정 상태 업데이트 실패: user_id={user_id}, error={str(e)}")
+            return False
+
+    async def check_authentication_status(self, user_id: str) -> Dict[str, Any]:
+        """
+        계정의 인증 상태를 확인하고 재인증 필요 여부를 판단합니다.
+        refresh_token 유효성을 기반으로 status를 업데이트합니다.
+        
+        Args:
+            user_id: 사용자 ID
+            
+        Returns:
+            인증 상태 정보
+        """
+        try:
+            # 계정 정보 조회
+            account = self.db.fetch_one(
+                """
+                SELECT id, user_id, user_name, refresh_token, token_expiry, 
+                       status, is_active, created_at
+                FROM accounts 
+                WHERE user_id = ?
+                """,
+                (user_id,)
+            )
+
+            if not account:
+                return {
+                    "user_id": user_id,
+                    "status": "NOT_FOUND",
+                    "requires_reauth": True,
+                    "message": "계정을 찾을 수 없습니다."
+                }
+
+            current_status = account["status"] if account["status"] else "INACTIVE"
+            refresh_token = account["refresh_token"]
+            
+            # refresh_token이 없는 경우
+            if not refresh_token:
+                await self.update_account_status(user_id, "INACTIVE")
+                return {
+                    "user_id": user_id,
+                    "status": "INACTIVE",
+                    "requires_reauth": True,
+                    "message": "refresh token이 없습니다. 최초 인증이 필요합니다."
+                }
+
+            # refresh_token 유효성 확인
+            try:
+                # OAuth 클라이언트를 통해 refresh_token 유효성 검증
+                new_token_info = await self.oauth_client.refresh_access_token(refresh_token)
+                
+                # refresh_token이 유효한 경우 - 상태를 ACTIVE로 업데이트
+                await self.update_account_status(user_id, "ACTIVE")
+                
+                # 새로운 토큰 정보 저장
+                await self.store_tokens(
+                    user_id=user_id,
+                    token_info=new_token_info,
+                    user_name=account["user_name"]
+                )
+                
+                return {
+                    "user_id": user_id,
+                    "status": "ACTIVE",
+                    "requires_reauth": False,
+                    "message": "인증이 유효합니다."
+                }
+                
+            except TokenExpiredError:
+                # refresh_token이 만료된 경우
+                await self.update_account_status(user_id, "REAUTH_REQUIRED")
+                return {
+                    "user_id": user_id,
+                    "status": "REAUTH_REQUIRED",
+                    "requires_reauth": True,
+                    "message": "refresh token이 만료되었습니다. 재인증이 필요합니다."
+                }
+                
+        except Exception as e:
+            logger.error(f"인증 상태 확인 실패: user_id={user_id}, error={str(e)}")
+            await self.update_account_status(user_id, "REAUTH_REQUIRED")
+            return {
+                "user_id": user_id,
+                "status": "ERROR",
+                "requires_reauth": True,
+                "message": f"인증 상태 확인 중 오류 발생: {str(e)}"
+            }
+
+    async def get_accounts_by_status(self, status: str) -> List[Dict[str, Any]]:
+        """
+        특정 상태의 계정들을 조회합니다.
+        
+        Args:
+            status: 조회할 계정 상태
+            
+        Returns:
+            해당 상태의 계정 목록
+        """
+        try:
+            accounts = self.db.fetch_all(
+                """
+                SELECT id, user_id, user_name, email, status, token_expiry, 
+                       last_sync_time, is_active, created_at, updated_at
+                FROM accounts 
+                WHERE status = ?
+                ORDER BY updated_at DESC
+                """,
+                (status,)
+            )
+
+            account_list = []
+            for account in accounts:
+                account_dict = dict(account)
+                
+                # 토큰 만료 상태 확인
+                expiry_time = account_dict.get("token_expiry")
+                if expiry_time:
+                    if isinstance(expiry_time, str):
+                        expiry_time = datetime.fromisoformat(expiry_time)
+                    account_dict["token_expired"] = datetime.utcnow() >= expiry_time
+                else:
+                    account_dict["token_expired"] = True
+                    
+                account_list.append(account_dict)
+
+            return account_list
+
+        except Exception as e:
+            logger.error(f"상태별 계정 조회 실패: status={status}, error={str(e)}")
+            return []
+
+    async def get_accounts_requiring_reauth(self) -> List[Dict[str, Any]]:
+        """
+        재인증이 필요한 계정들을 조회합니다.
+        
+        Returns:
+            재인증이 필요한 계정 목록
+        """
+        return await self.get_accounts_by_status("REAUTH_REQUIRED")
+
+    async def get_inactive_accounts(self) -> List[Dict[str, Any]]:
+        """
+        비활성 계정들을 조회합니다.
+        
+        Returns:
+            비활성 계정 목록
+        """
+        return await self.get_accounts_by_status("INACTIVE")
 
 
 @lru_cache(maxsize=1)

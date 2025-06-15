@@ -35,14 +35,15 @@
 - **역할**: Kafka Producer 및 Consumer를 관리하는 클라이언트.
 - **상태**: 현재 구현되어 있으나, Account 모듈에서는 직접 사용하지 않음. 향후 이벤트 기반 아키텍처에서 활용될 예정입니다.
 
-### 2.6 `oauth_client.py` 및 `token_service.py` (향후 사용 예정)
+### 2.6 `oauth_client.py` 및 `token_service.py`
 - **역할**: OAuth 인증 및 토큰 관리를 담당.
-- **상태**: 현재는 Account 모듈이 자체적으로 계정별 OAuth 정보를 관리하므로, 이 인프라 서비스들은 `auth` 모듈 구현 시 본격적으로 사용될 예정입니다.
+- **상태**: `token_service.py`는 토큰의 유효성을 검사하고 상태를 결정하는 로직을 포함하여 일부 구현되어 있습니다. `oauth_client.py`는 향후 `auth` 모듈 구현 시 본격적으로 사용될 예정입니다.
 
 ## 3. 데이터베이스 스키마 관리 (`infra/migrations`)
 
 - **`initial_schema.sql`**: 애플리케이션 실행 시 `database.py`에 의해 자동으로 실행되는 기본 스키마 파일입니다. `accounts`, `account_audit_logs` 등 모든 테이블 정의가 포함되어 있습니다.
-- **`account_schema_update.sql`**: 개발 과정에서 사용된 스키마 변경 기록용 파일입니다. (현재는 `initial_schema.sql`에 통합됨)
+- **`account_schema_update.sql`**: 개발 과정에서 사용된 스키마 변경 기록용 파일이며, 현재는 `initial_schema.sql`에 모든 내용이 통합되었습니다.
+>>>>>>> REPLACE
 
 ## 4. Account 모듈과의 상호작용
 

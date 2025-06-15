@@ -68,15 +68,17 @@ if success:
 | `user_name`             | `TEXT`    | 사용자 이름                        |
 | `email`                 | `TEXT`    | 이메일 (UNIQUE)                    |
 | `status`                | `TEXT`    | 계정 상태 (ACTIVE, INACTIVE 등)    |
-| `is_active`             | `BOOLEAN` | 활성화 여부                        |
 | `enrollment_file_path`  | `TEXT`    | 원본 enrollment 파일 경로          |
 | `enrollment_file_hash`  | `TEXT`    | 파일 내용 해시 (변경 감지용)       |
 | `oauth_client_id`       | `TEXT`    | OAuth 클라이언트 ID                |
 | `oauth_client_secret`   | `TEXT`    | **암호화된** 클라이언트 시크릿     |
 | `oauth_tenant_id`       | `TEXT`    | OAuth 테넌트 ID                    |
+| `auth_type`             | `TEXT`    | 인증 타입 (e.g., Authorization Code Flow) |
+| `delegated_permissions` | `TEXT`    | 위임된 권한 (JSON 문자열)          |
 | `access_token`          | `TEXT`    | **암호화된** 액세스 토큰           |
 | `refresh_token`         | `TEXT`    | **암호화된** 리프레시 토큰         |
 | `token_expiry`          | `TIMESTAMP`| 토큰 만료 시간                     |
+| `last_sync_time`        | `TIMESTAMP`| 마지막 동기화 시간                 |
 | `created_at`            | `TIMESTAMP`| 생성 시간                          |
 | `updated_at`            | `TIMESTAMP`| 마지막 수정 시간                   |
 
