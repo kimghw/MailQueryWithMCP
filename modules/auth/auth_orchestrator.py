@@ -83,17 +83,19 @@ class AuthOrchestrator:
             # OAuth 인증 URL 생성
             if oauth_config:
                 # 계정별 OAuth 설정 사용
+                scopes = self._parse_delegated_permissions(oauth_config.get("delegated_permissions"))
                 auth_url = self.oauth_client.generate_auth_url_with_account_config(
                     client_id=oauth_config["oauth_client_id"],
                     tenant_id=oauth_config["oauth_tenant_id"],
                     redirect_uri=oauth_config.get("oauth_redirect_uri"),
-                    state=state
+                    state=state,
+                    scopes=scopes
                 )
-                logger.info(f"계정별 OAuth 설정 사용: user_id={user_id}")
+                logger.info(f"계정별 OAuth 설정 사용: user_id={user_id}, scopes={scopes}")
             else:
-                # 공통 OAuth 설정 사용 (기존 방식)
-                auth_url = self.oauth_client.generate_auth_url(state)
-                logger.info(f"공통 OAuth 설정 사용: user_id={user_id}")
+                # 계정별 OAuth 설정이 없는 경우
+                logger.error(f"계정별 OAuth 설정이 없습니다: user_id={user_id}")
+                raise ValueError(f"계정 '{user_id}'에 대한 OAuth 설정이 없습니다. enrollment 파일을 확인하고 계정을 등록해주세요.")
             
             # 세션 객체 생성
             session = AuthSession(
@@ -389,6 +391,54 @@ class AuthOrchestrator:
             )
             del self.auth_sessions[state]
 
+    def _parse_delegated_permissions(self, delegated_permissions: Optional[str]) -> List[str]:
+        """
+        데이터베이스의 delegated_permissions 문자열을 파싱하여 스코프 리스트로 변환합니다.
+        
+        Args:
+            delegated_permissions: 데이터베이스의 delegated_permissions 문자열
+            
+        Returns:
+            스코프 리스트
+        """
+        if not delegated_permissions:
+            # 기본 스코프 반환 - 간단한 권한만 요청
+            return ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+        
+        try:
+            # JSON 형태로 저장된 경우
+            import json
+            if delegated_permissions.strip().startswith('['):
+                scopes = json.loads(delegated_permissions)
+                if isinstance(scopes, list):
+                    # offline_access가 없으면 추가
+                    if "offline_access" not in scopes:
+                        scopes.append("offline_access")
+                    return scopes
+            
+            # 쉼표로 구분된 문자열인 경우
+            if ',' in delegated_permissions:
+                scopes = [scope.strip() for scope in delegated_permissions.split(',')]
+                scopes = [scope for scope in scopes if scope]
+            # 공백으로 구분된 문자열인 경우
+            elif ' ' in delegated_permissions:
+                scopes = [scope.strip() for scope in delegated_permissions.split()]
+                scopes = [scope for scope in scopes if scope]
+            # 단일 스코프인 경우
+            else:
+                scopes = [delegated_permissions.strip()]
+            
+            # offline_access가 없으면 추가
+            if "offline_access" not in scopes:
+                scopes.append("offline_access")
+            
+            return scopes
+            
+        except Exception as e:
+            logger.warning(f"delegated_permissions 파싱 실패: {delegated_permissions}, error={str(e)}")
+            # 파싱 실패 시 기본 스코프 반환
+            return ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+
     async def _get_account_oauth_config(self, user_id: str) -> Optional[Dict[str, Any]]:
         """
         계정별 OAuth 설정을 데이터베이스에서 가져옵니다.
@@ -404,7 +454,7 @@ class AuthOrchestrator:
             
             account = self.db.fetch_one(
                 """
-                SELECT oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri
+                SELECT oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri, delegated_permissions
                 FROM accounts 
                 WHERE user_id = ? AND is_active = 1
                 """,

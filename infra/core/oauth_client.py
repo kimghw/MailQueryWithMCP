@@ -80,7 +80,8 @@ class OAuthClient:
         client_id: str, 
         tenant_id: str,
         redirect_uri: Optional[str] = None,
-        state: Optional[str] = None
+        state: Optional[str] = None,
+        scopes: Optional[List[str]] = None
     ) -> str:
         """
         계정별 OAuth 설정을 사용하여 Azure AD 인증 URL을 생성합니다.
@@ -90,6 +91,7 @@ class OAuthClient:
             tenant_id: 계정별 Azure AD 테넌트 ID
             redirect_uri: 계정별 리다이렉트 URI (선택사항)
             state: CSRF 방지를 위한 상태값
+            scopes: 계정별 스코프 리스트 (선택사항)
             
         Returns:
             인증 URL
@@ -102,6 +104,12 @@ class OAuthClient:
         # 리다이렉트 URI 결정 (계정별 설정이 있으면 사용, 없으면 기본값)
         redirect_uri = redirect_uri or self.config.oauth_redirect_uri
         
+        # 스코프 결정 (계정별 스코프가 있으면 사용, 없으면 기본값)
+        if scopes:
+            scope_string = " ".join(scopes)
+        else:
+            scope_string = " ".join(self.config.azure_scopes)
+        
         # 테넌트별 authority 구성
         authority = f"https://login.microsoftonline.com/{tenant_id or 'common'}"
 
@@ -109,7 +117,7 @@ class OAuthClient:
             "client_id": client_id,
             "response_type": "code",
             "redirect_uri": redirect_uri,
-            "scope": " ".join(self.config.azure_scopes),
+            "scope": scope_string,
             "response_mode": "query",
         }
         
@@ -118,7 +126,7 @@ class OAuthClient:
             
         auth_url = f"{authority}/oauth2/v2.0/authorize?" + urllib.parse.urlencode(params)
         
-        logger.info(f"계정별 인증 URL 생성됨: client_id={client_id[:8]}..., tenant_id={tenant_id}")
+        logger.info(f"계정별 인증 URL 생성됨: client_id={client_id[:8]}..., tenant_id={tenant_id}, scopes={scopes}")
         return auth_url
 
     async def exchange_code_for_tokens(self, authorization_code: str) -> Dict[str, Any]:

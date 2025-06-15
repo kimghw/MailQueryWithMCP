@@ -9,7 +9,7 @@ import asyncio
 import threading
 import json
 from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional, Dict, Any, Callable
+from typing import Optional, Dict, Any, Callable, List
 from datetime import datetime, timedelta
 from urllib.parse import urlparse, parse_qs
 import requests
@@ -215,9 +215,9 @@ class AuthWebServer:
             
             # 계정별 OAuth 설정 가져오기
             db = get_database_manager()
-            account = db.fetch_one(
+            account_row = db.fetch_one(
                 """
-                SELECT oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri
+                SELECT oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri, delegated_permissions
                 FROM accounts 
                 WHERE user_id = ? AND is_active = 1
                 """,
@@ -226,7 +226,10 @@ class AuthWebServer:
             
             token_info = None
             
-            if account and account['oauth_client_id']:
+            if account_row and account_row[0]:  # oauth_client_id가 첫 번째 컬럼
+                # sqlite3.Row를 딕셔너리로 변환
+                account = dict(account_row)
+                
                 # 계정별 OAuth 설정으로 토큰 교환
                 logger.info(f"계정별 OAuth 설정으로 토큰 교환: user_id={session.user_id}")
                 token_info = self._exchange_code_with_account_config(
@@ -234,7 +237,8 @@ class AuthWebServer:
                     account['oauth_client_id'],
                     account['oauth_client_secret'],
                     account['oauth_tenant_id'],
-                    account['oauth_redirect_uri'] or self.config.oauth_redirect_uri
+                    account['oauth_redirect_uri'] or self.config.oauth_redirect_uri,
+                    account.get('delegated_permissions')
                 )
             else:
                 # 전역 설정으로 토큰 교환 (fallback)
@@ -344,7 +348,8 @@ class AuthWebServer:
         client_id: str, 
         client_secret: str,
         tenant_id: str,
-        redirect_uri: str
+        redirect_uri: str,
+        delegated_permissions: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         계정별 OAuth 설정을 사용하여 인증 코드를 토큰으로 교환합니다.
@@ -355,6 +360,7 @@ class AuthWebServer:
             client_secret: OAuth 클라이언트 시크릿 (암호화된 값)
             tenant_id: Azure AD 테넌트 ID
             redirect_uri: 리다이렉트 URI
+            delegated_permissions: 계정별 스코프 설정
             
         Returns:
             토큰 정보 딕셔너리
@@ -376,6 +382,10 @@ class AuthWebServer:
             logger.error(f"클라이언트 시크릿 복호화 실패: {str(e)}")
             raise ValueError("클라이언트 시크릿 복호화 실패")
         
+        # 스코프 파싱 (auth_orchestrator와 동일한 로직)
+        scopes = self._parse_delegated_permissions(delegated_permissions)
+        scope_string = " ".join(scopes)
+        
         # 토큰 엔드포인트 URL
         token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
         
@@ -386,7 +396,7 @@ class AuthWebServer:
             "code": code,
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
-            "scope": "https://graph.microsoft.com/.default offline_access"
+            "scope": scope_string
         }
         
         headers = {
@@ -416,6 +426,55 @@ class AuthWebServer:
         
         logger.info(f"계정별 설정으로 토큰 교환 성공: client_id={client_id[:8]}...")
         return response_data
+
+    def _parse_delegated_permissions(self, delegated_permissions: Optional[str]) -> List[str]:
+        """
+        데이터베이스의 delegated_permissions 문자열을 파싱하여 스코프 리스트로 변환합니다.
+        
+        Args:
+            delegated_permissions: 데이터베이스의 delegated_permissions 문자열
+            
+        Returns:
+            스코프 리스트
+        """
+        if not delegated_permissions:
+            # 기본 스코프 반환 - 간단한 권한만 요청
+            return ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+        
+        try:
+            # JSON 형태로 저장된 경우
+            if delegated_permissions.strip().startswith('['):
+                scopes = json.loads(delegated_permissions)
+                if isinstance(scopes, list):
+                    # offline_access가 없으면 추가
+                    if "offline_access" not in scopes:
+                        scopes.append("offline_access")
+                    logger.debug(f"JSON 파싱된 스코프: {scopes}")
+                    return scopes
+            
+            # 쉼표로 구분된 문자열인 경우
+            if ',' in delegated_permissions:
+                scopes = [scope.strip() for scope in delegated_permissions.split(',')]
+                scopes = [scope for scope in scopes if scope]
+            # 공백으로 구분된 문자열인 경우
+            elif ' ' in delegated_permissions:
+                scopes = [scope.strip() for scope in delegated_permissions.split()]
+                scopes = [scope for scope in scopes if scope]
+            # 단일 스코프인 경우
+            else:
+                scopes = [delegated_permissions.strip()]
+            
+            # offline_access가 없으면 추가
+            if "offline_access" not in scopes:
+                scopes.append("offline_access")
+            
+            logger.debug(f"파싱된 스코프: {scopes}")
+            return scopes
+            
+        except Exception as e:
+            logger.warning(f"delegated_permissions 파싱 실패: {delegated_permissions}, error={str(e)}")
+            # 파싱 실패 시 기본 스코프 반환
+            return ["Mail.ReadWrite", "Mail.Send", "offline_access"]
 
     def _cleanup(self):
         """리소스 정리"""
