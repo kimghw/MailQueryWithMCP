@@ -21,7 +21,7 @@ async def test_auth_flow():
     try:
         # 1. 인증 시작
         print("\n1. 인증 시작...")
-        request = AuthStartRequest(user_id="krsdtp")
+        request = AuthStartRequest(user_id="kimghw")
         response = await orchestrator.auth_orchestrator_start_authentication(request)
         
         print(f"✅ 세션 ID: {response.session_id}")

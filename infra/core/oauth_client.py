@@ -260,30 +260,59 @@ class OAuthClient:
                 f"토큰 교환 중 예상치 못한 오류: {str(e)}"
             ) from e
 
-    async def refresh_access_token(self, refresh_token: str) -> Dict[str, Any]:
+    async def refresh_access_token(
+        self, 
+        refresh_token: str,
+        client_id: Optional[str] = None,
+        client_secret: Optional[str] = None,
+        tenant_id: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         리프레시 토큰을 사용하여 새로운 액세스 토큰을 발급받습니다.
+        계정별 OAuth 설정이 제공되면 해당 설정을 사용하고, 없으면 공통 설정을 사용합니다.
         
         Args:
             refresh_token: 리프레시 토큰
+            client_id: 계정별 클라이언트 ID (선택사항)
+            client_secret: 계정별 클라이언트 시크릿 (선택사항)
+            tenant_id: 계정별 테넌트 ID (선택사항)
             
         Returns:
             새로운 토큰 정보 딕셔너리
         """
-        if not self.config.is_oauth_configured():
-            raise AuthenticationError(
-                "OAuth 설정이 완료되지 않았습니다."
-            )
+        # 계정별 설정이 제공된 경우 사용, 없으면 공통 설정 사용
+        if client_id and client_secret:
+            # 계정별 설정으로 토큰 갱신
+            authority = f"https://login.microsoftonline.com/{tenant_id or 'common'}"
+            token_url = f"{authority}/oauth2/v2.0/token"
+            
+            data = {
+                "client_id": client_id,
+                "client_secret": client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+                "scope": " ".join(self.config.azure_scopes),
+            }
+            
+            logger.info(f"계정별 설정으로 토큰 갱신: client_id={client_id[:8]}..., tenant_id={tenant_id}")
+        else:
+            # 공통 설정으로 토큰 갱신 (기존 방식)
+            if not self.config.is_oauth_configured():
+                raise AuthenticationError(
+                    "OAuth 설정이 완료되지 않았습니다."
+                )
 
-        token_url = f"{self.config.azure_authority}/oauth2/v2.0/token"
-        
-        data = {
-            "client_id": self.config.azure_client_id,
-            "client_secret": self.config.azure_client_secret,
-            "refresh_token": refresh_token,
-            "grant_type": "refresh_token",
-            "scope": " ".join(self.config.azure_scopes),
-        }
+            token_url = f"{self.config.azure_authority}/oauth2/v2.0/token"
+            
+            data = {
+                "client_id": self.config.azure_client_id,
+                "client_secret": self.config.azure_client_secret,
+                "refresh_token": refresh_token,
+                "grant_type": "refresh_token",
+                "scope": " ".join(self.config.azure_scopes),
+            }
+            
+            logger.info("공통 설정으로 토큰 갱신")
 
         try:
             session = await self._get_session()
@@ -304,7 +333,8 @@ class OAuthClient:
                         details={
                             "status_code": response.status,
                             "error": response_data.get("error"),
-                            "error_description": response_data.get("error_description")
+                            "error_description": response_data.get("error_description"),
+                            "client_id": client_id[:8] + "..." if client_id else "공통설정"
                         }
                     )
 
@@ -315,7 +345,7 @@ class OAuthClient:
                 if not token_info.get("refresh_token"):
                     token_info["refresh_token"] = refresh_token
                 
-                logger.info("토큰 갱신 성공")
+                logger.info(f"토큰 갱신 성공: {'계정별' if client_id else '공통'} 설정 사용")
                 return token_info
 
         except aiohttp.ClientError as e:

@@ -126,11 +126,12 @@ class TokenService:
             유효한 액세스 토큰 또는 None
         """
         try:
-            # 계정 정보 조회 (status 필드 포함)
+            # 계정 정보 조회 (OAuth 설정 포함)
             account = self.db.fetch_one(
                 """
                 SELECT id, user_id, user_name, access_token, refresh_token, 
-                       token_expiry, is_active, status
+                       token_expiry, is_active, status, oauth_client_id, 
+                       oauth_client_secret, oauth_tenant_id
                 FROM accounts 
                 WHERE user_id = ? AND is_active = 1
                 """,
@@ -161,8 +162,34 @@ class TokenService:
                 await self.update_account_status(user_id, "INACTIVE")
                 return None
 
-            logger.info(f"토큰 갱신 시도: user_id={user_id}")
-            new_token_info = await self.oauth_client.refresh_access_token(refresh_token)
+            # 계정별 OAuth 설정 확인
+            oauth_client_id = account["oauth_client_id"]
+            oauth_client_secret = account["oauth_client_secret"]
+            oauth_tenant_id = account["oauth_tenant_id"]
+
+            # 계정별 OAuth 설정이 없으면 토큰 갱신 불가
+            if not oauth_client_id or not oauth_client_secret:
+                logger.error(f"계정별 OAuth 설정이 없어 토큰 갱신 불가: user_id={user_id}")
+                await self.update_account_status(user_id, "REAUTH_REQUIRED")
+                return None
+
+            # 암호화된 client_secret 복호화
+            from .config import get_config
+            config = get_config()
+            try:
+                decrypted_secret = config.decrypt_data(oauth_client_secret)
+            except Exception as e:
+                logger.error(f"OAuth 클라이언트 시크릿 복호화 실패: user_id={user_id}, error={str(e)}")
+                await self.update_account_status(user_id, "REAUTH_REQUIRED")
+                return None
+
+            logger.info(f"계정별 설정으로 토큰 갱신 시도: user_id={user_id}")
+            new_token_info = await self.oauth_client.refresh_access_token(
+                refresh_token,
+                client_id=oauth_client_id,
+                client_secret=decrypted_secret,
+                tenant_id=oauth_tenant_id
+            )
             
             # 갱신된 토큰 저장
             await self.store_tokens(
@@ -173,7 +200,7 @@ class TokenService:
 
             # 계정 상태를 ACTIVE로 업데이트
             await self.update_account_status(user_id, "ACTIVE")
-            logger.info(f"토큰 갱신 성공: user_id={user_id}")
+            logger.info(f"계정별 설정으로 토큰 갱신 성공: user_id={user_id}")
             return new_token_info["access_token"]
 
         except TokenExpiredError:
@@ -632,13 +659,38 @@ class TokenService:
 
             # refresh_token 유효성 확인
             try:
-                # 계정별 OAuth 설정이 있으면 사용, 없으면 공통 설정 사용
-                if oauth_client_id and oauth_client_secret:
-                    # 계정별 OAuth 설정으로 토큰 갱신 (현재 OAuth 클라이언트는 공통 설정만 지원)
-                    # 임시로 공통 설정 사용하되, 향후 계정별 설정 지원 필요
-                    logger.info(f"계정별 OAuth 설정 발견하지만 공통 설정으로 토큰 갱신 시도: user_id={user_id}")
-                
-                new_token_info = await self.oauth_client.refresh_access_token(refresh_token)
+                # 계정별 OAuth 설정이 없으면 토큰 갱신 불가
+                if not oauth_client_id or not oauth_client_secret:
+                    logger.error(f"계정별 OAuth 설정이 없어 토큰 갱신 불가: user_id={user_id}")
+                    await self.update_account_status(user_id, "REAUTH_REQUIRED")
+                    return {
+                        "user_id": user_id,
+                        "status": "REAUTH_REQUIRED",
+                        "requires_reauth": True,
+                        "message": "계정별 OAuth 설정이 필요합니다. 재인증이 필요합니다."
+                    }
+
+                # 암호화된 client_secret 복호화
+                try:
+                    decrypted_secret = self.config.decrypt_data(oauth_client_secret)
+                except Exception as e:
+                    logger.error(f"OAuth 클라이언트 시크릿 복호화 실패: user_id={user_id}, error={str(e)}")
+                    await self.update_account_status(user_id, "REAUTH_REQUIRED")
+                    return {
+                        "user_id": user_id,
+                        "status": "ERROR",
+                        "requires_reauth": True,
+                        "message": "OAuth 설정 복호화에 실패했습니다. 재인증이 필요합니다."
+                    }
+
+                # 계정별 설정으로 토큰 갱신
+                logger.info(f"계정별 OAuth 설정으로 토큰 갱신 시도: user_id={user_id}")
+                new_token_info = await self.oauth_client.refresh_access_token(
+                    refresh_token,
+                    client_id=oauth_client_id,
+                    client_secret=decrypted_secret,
+                    tenant_id=oauth_tenant_id
+                )
                 
                 # refresh_token이 유효한 경우 - 상태를 ACTIVE로 업데이트
                 await self.update_account_status(user_id, "ACTIVE")
