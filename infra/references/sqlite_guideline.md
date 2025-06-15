@@ -1,305 +1,108 @@
-You're looking for information on connecting to a SQLite database in Python and performing CRUD (Create, Read, Update, Delete) operations, with an emphasis on "latest" information.
+# IACSGraph 데이터베이스 가이드
 
-Python's built-in `sqlite3` module is the standard and most up-to-date way to interact with SQLite databases. It's part of the standard library, so no extra installation is needed.
+이 문서는 IACSGraph 프로젝트의 SQLite 데이터베이스 스키마와 사용법에 대한 가이드라인을 제공합니다. 신규 기능을 개발하거나 기존 기능을 수정할 때 반드시 이 문서를 참조하십시오.
 
-Here's a breakdown of SQLite connection settings and CRUD operations in Python, focusing on best practices and modern approaches:
+## 1. 데이터베이스 접속 및 사용법
 
----
+모든 데이터베이스 상호작용은 `infra.core.database`의 `DatabaseManager`를 통해 이루어져야 합니다. 이는 일관된 연결 관리와 트랜잭션 처리를 보장합니다.
 
-## Connecting to SQLite Databases in Python and Performing CRUD Operations
-
-SQLite is a lightweight, serverless, file-based relational database management system. It's ideal for local data storage, small-to-medium applications, and rapid prototyping in Python, as it requires no separate server process and is included in Python's standard library via the `sqlite3` module.
-
-### 1. Connection Settings (`sqlite3.connect()`)
-
-To interact with a SQLite database, you first need to establish a connection.
-
-* **Connecting to a File-based Database:**
-    The most common way is to connect to a `.db` file. If the file doesn't exist, SQLite will create it.
-
-    ```python
-    import sqlite3
-
-    try:
-        # Connect to a database file named 'my_database.db'
-        conn = sqlite3.connect('my_database.db')
-        print("Connected to my_database.db successfully!")
-    except sqlite3.Error as e:
-        print(f"Error connecting to database: {e}")
-    finally:
-        if conn:
-            conn.close() # Always close the connection when done
-    ```
-
-* **In-Memory Database:**
-    For temporary data storage (e.g., testing, short-lived data that doesn't need persistence), you can create an in-memory database. It exists only in RAM and is discarded when the connection is closed.
-
-    ```python
-    import sqlite3
-
-    conn = sqlite3.connect(':memory:')
-    print("Connected to in-memory database.")
-    # This database will be gone when 'conn' is closed or program ends.
-    ```
-
-* **Connection Objects and Cursors:**
-    * The `sqlite3.connect()` function returns a `Connection` object, which represents the connection to the database.
-    * To execute SQL queries, you need a `Cursor` object, created from the `Connection`: `cursor = conn.cursor()`. The cursor acts as an intermediary.
-
-* **Best Practice: Using `with` Statement (Context Manager):**
-    Using a `with` statement for your connection is highly recommended. It ensures that the connection is automatically closed even if errors occur, preventing resource leaks.
-
-    ```python
-    import sqlite3
-
-    try:
-        with sqlite3.connect('my_database.db') as conn:
-            cursor = conn.cursor()
-            print("Connection established and cursor created.")
-            # Perform CRUD operations here
-            # conn.commit() is also handled automatically on successful exit of 'with' block
-            # (unless auto-commit is enabled, which is not default for sqlite3 in Python)
-    except sqlite3.Error as e:
-        print(f"Database error: {e}")
-    # Connection is automatically closed here
-    ```
-
-* **Row Factories for Easier Data Access:**
-    By default, `cursor.fetchone()` or `cursor.fetchall()` return rows as tuples. For easier access by column name, you can set `conn.row_factory = sqlite3.Row`. This makes rows behave like dictionaries.
-
-    ```python
-    import sqlite3
-
-    with sqlite3.connect('my_database.db') as conn:
-        conn.row_factory = sqlite3.Row # Set row factory
-        cursor = conn.cursor()
-        # ... execute queries and fetch data ...
-        # For example, for a row 'user_data': print(user_data['name'])
-    ```
-
-* **Connection Parameters (Advanced):**
-    The `sqlite3.connect()` method also accepts optional parameters for fine-grained control, though for most basic use cases, the defaults are sufficient. Some examples include:
-    * `timeout`: How long to wait (in seconds) for the database connection to be established if it's locked.
-    * `isolation_level`: Controls transaction behavior (e.g., `'DEFERRED'`, `'IMMEDIATE'`, `'EXCLUSIVE'`, or `None` for autocommit). Default is `'DEFERRED'`.
-    * `uri`: If True, the `database` argument is interpreted as a URI (allowing for advanced connection strings).
-
-### 2. CRUD Operations (Create, Read, Update, Delete)
-
-Once connected, you use the cursor's `execute()` method to run SQL commands. Remember to `commit()` changes for `INSERT`, `UPDATE`, and `DELETE` operations.
-
-#### **C - Create (Table & Data)**
-
-* **Creating a Table:**
-    Use `CREATE TABLE` SQL statement. It's good practice to add `IF NOT EXISTS` to prevent errors if the table already exists.
-
-    ```python
-    # Inside the 'with sqlite3.connect(...) as conn:' block
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            age INTEGER
-        )
-    ''')
-    print("Table 'users' created (or already exists).")
-    conn.commit() # Commit the table creation (DDL)
-    ```
-
-* **Inserting Data:**
-    Use `INSERT INTO` SQL statement. **Always use parameterized queries (`?` as placeholders)** to prevent SQL injection vulnerabilities.
-
-    ```python
-    # Single record
-    user_data = ('Alice', 'alice@example.com', 30)
-    cursor.execute("INSERT INTO users (name, email, age) VALUES (?, ?, ?)", user_data)
-    print(f"Inserted user: {user_data[0]}")
-    conn.commit() # Commit the insertion (DML)
-
-    # Multiple records (using executemany)
-    new_users = [
-        ('Bob', 'bob@example.com', 25),
-        ('Charlie', 'charlie@example.com', 35),
-    ]
-    cursor.executemany("INSERT INTO users (name, email, age) VALUES (?, ?, ?)", new_users)
-    print(f"Inserted {len(new_users)} new users.")
-    conn.commit()
-    ```
-
-#### **R - Read**
-
-* **Selecting All Records:**
-    Use `SELECT * FROM table_name`. `fetchall()` retrieves all matching rows.
-
-    ```python
-    cursor.execute("SELECT id, name, email, age FROM users")
-    all_users = cursor.fetchall()
-    print("\nAll Users:")
-    for user in all_users:
-        if isinstance(user, sqlite3.Row): # Check if row_factory is set
-            print(f"ID: {user['id']}, Name: {user['name']}, Email: {user['email']}, Age: {user['age']}")
-        else:
-            print(f"ID: {user[0]}, Name: {user[1]}, Email: {user[2]}, Age: {user[3]}")
-    ```
-
-* **Selecting Specific Records (with WHERE clause):**
-    Use `SELECT ... WHERE`. Again, use placeholders. `fetchone()` retrieves the first matching row.
-
-    ```python
-    user_id_to_find = 2
-    cursor.execute("SELECT id, name, email FROM users WHERE id = ?", (user_id_to_find,))
-    specific_user = cursor.fetchone()
-    if specific_user:
-        print(f"\nUser with ID {user_id_to_find}: Name: {specific_user['name']}, Email: {specific_user['email']}")
-    else:
-        print(f"\nUser with ID {user_id_to_find} not found.")
-    ```
-
-#### **U - Update**
-
-* **Updating Records:**
-    Use `UPDATE table_name SET ... WHERE ...`.
-
-    ```python
-    new_age = 31
-    user_name_to_update = 'Alice'
-    cursor.execute("UPDATE users SET age = ? WHERE name = ?", (new_age, user_name_to_update))
-    print(f"\nUpdated age for {user_name_to_update} to {new_age}. Rows affected: {cursor.rowcount}")
-    conn.commit()
-    ```
-
-#### **D - Delete**
-
-* **Deleting Records:**
-    Use `DELETE FROM table_name WHERE ...`.
-
-    ```python
-    user_id_to_delete = 1
-    cursor.execute("DELETE FROM users WHERE id = ?", (user_id_to_delete,))
-    print(f"\nDeleted user with ID {user_id_to_delete}. Rows affected: {cursor.rowcount}")
-    conn.commit()
-    ```
-
-### Full Example Putting it Together
+### 1.1 기본 사용 패턴
 
 ```python
-import sqlite3
+from infra.core import get_database_manager, get_logger
+from infra.core.exceptions import DatabaseError
 
-def setup_database(db_name='my_application.db'):
-    """Connects to/creates DB and sets up a table."""
+logger = get_logger(__name__)
+db_manager = get_database_manager()
+
+def get_active_users():
     try:
-        with sqlite3.connect(db_name) as conn:
-            conn.row_factory = sqlite3.Row # Enable dict-like row access
+        with db_manager.connect() as conn:
             cursor = conn.cursor()
-            cursor.execute('''
-                CREATE TABLE IF NOT EXISTS products (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    name TEXT NOT NULL UNIQUE,
-                    price REAL NOT NULL,
-                    stock INTEGER DEFAULT 0
-                )
-            ''')
-            conn.commit()
-            print(f"Database '{db_name}' and table 'products' ready.")
-            return conn # Return the connection object for further use
-    except sqlite3.Error as e:
-        print(f"Database setup error: {e}")
-        return None
-
-def create_product(conn, name, price, stock=0):
-    """Inserts a new product into the database."""
-    try:
-        cursor = conn.cursor()
-        cursor.execute("INSERT INTO products (name, price, stock) VALUES (?, ?, ?)", (name, price, stock))
-        conn.commit()
-        print(f"Created product: {name}")
-        return cursor.lastrowid # Return the ID of the newly inserted row
-    except sqlite3.IntegrityError:
-        print(f"Error: Product '{name}' already exists.")
-        return None
-    except sqlite3.Error as e:
-        print(f"Error creating product: {e}")
-        conn.rollback() # Rollback changes if an error occurs
-        return None
-
-def read_products(conn, product_name=None):
-    """Reads products from the database. If product_name is None, reads all."""
-    cursor = conn.cursor()
-    if product_name:
-        cursor.execute("SELECT * FROM products WHERE name = ?", (product_name,))
-        products = cursor.fetchall()
-        print(f"\n--- Products matching '{product_name}' ---")
-    else:
-        cursor.execute("SELECT * FROM products")
-        products = cursor.fetchall()
-        print("\n--- All Products ---")
-
-    if products:
-        for product in products:
-            print(f"ID: {product['id']}, Name: {product['name']}, Price: ${product['price']:.2f}, Stock: {product['stock']}")
-    else:
-        print("No products found.")
-    return products
-
-def update_product_stock(conn, product_id, new_stock):
-    """Updates the stock of a product by its ID."""
-    try:
-        cursor = conn.cursor()
-        cursor.execute("UPDATE products SET stock = ? WHERE id = ?", (new_stock, product_id))
-        conn.commit()
-        if cursor.rowcount > 0:
-            print(f"Updated stock for product ID {product_id} to {new_stock}.")
-        else:
-            print(f"Product with ID {product_id} not found.")
-        return cursor.rowcount > 0
-    except sqlite3.Error as e:
-        print(f"Error updating product: {e}")
-        conn.rollback()
-        return False
-
-def delete_product(conn, product_id):
-    """Deletes a product by its ID."""
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM products WHERE id = ?", (product_id,))
-        conn.commit()
-        if cursor.rowcount > 0:
-            print(f"Deleted product with ID {product_id}.")
-        else:
-            print(f"Product with ID {product_id} not found.")
-        return cursor.rowcount > 0
-    except sqlite3.Error as e:
-        print(f"Error deleting product: {e}")
-        conn.rollback()
-        return False
-
-if __name__ == "__main__":
-    db_connection = setup_database()
-    if db_connection:
-        # Create
-        create_product(db_connection, "Laptop", 1200.50, 10)
-        create_product(db_connection, "Mouse", 25.99, 50)
-        create_product(db_connection, "Keyboard", 75.00, 20)
-        create_product(db_connection, "Laptop", 1300.00, 5) # This will show an error due to UNIQUE constraint
-
-        # Read
-        read_products(db_connection)
-        read_products(db_connection, "Mouse")
-        read_products(db_connection, "Monitor") # Not found
-
-        # Update
-        update_product_stock(db_connection, 1, 8) # Assuming Laptop is ID 1
-        read_products(db_connection, "Laptop")
-
-        # Delete
-        delete_product(db_connection, 3) # Assuming Keyboard is ID 3
-        read_products(db_connection)
-
-        # Close the connection when the program exits (or when the 'with' block ends if used for setup)
-        # In this script, setup_database returns the connection, so manually close it.
-        db_connection.close()
-        print("\nDatabase connection closed.")
-
+            cursor.execute("SELECT user_id, user_name FROM accounts WHERE is_active = ?", (True,))
+            return cursor.fetchall()
+    except DatabaseError as e:
+        logger.error(f"활성 사용자 조회 중 오류 발생: {e}", exc_info=True)
+        return []
 ```
 
-This comprehensive overview covers the essentials of connecting to SQLite in Python and performing all standard CRUD operations, incorporating modern best practices like context managers and parameterized queries.
+### 1.2 트랜잭션 사용법
+
+데이터의 원자성이 중요한 작업(예: 생성, 수정, 삭제)은 반드시 트랜잭션 내에서 처리해야 합니다.
+
+```python
+def update_user_status(user_id: str, is_active: bool):
+    try:
+        with db_manager.transaction() as conn:
+            # 이 블록 내의 모든 작업은 하나의 트랜잭션으로 처리됩니다.
+            conn.execute("UPDATE accounts SET is_active = ? WHERE user_id = ?", (is_active, user_id))
+            # 관련된 다른 테이블 업데이트 등...
+            logger.info(f"{user_id}의 상태를 {is_active}로 변경했습니다.")
+        return True
+    except DatabaseError as e:
+        logger.error(f"{user_id} 상태 업데이트 실패: {e}", exc_info=True)
+        return False
+```
+
+## 2. 데이터베이스 스키마 정보
+
+데이터베이스는 `iacsgraph.db` 파일에 저장되며, 다음 테이블들로 구성됩니다.
+
+### 2.1 `accounts` 테이블
+
+계정 정보를 저장하는 핵심 테이블입니다.
+
+| 필드명 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | `INTEGER` | **PK**, Auto-increment |
+| `user_id` | `TEXT` | 사용자 고유 ID (UNIQUE) |
+| `user_name` | `TEXT` | 사용자 이름 |
+| `access_token` | `TEXT` | **암호화된** 액세스 토큰 |
+| `refresh_token` | `TEXT` | **암호화된** 리프레시 토큰 |
+| `token_expiry` | `TIMESTAMP` | 토큰 만료 시간 |
+| `is_active` | `BOOLEAN` | 계정 활성화 여부 (기본값: `TRUE`) |
+| `last_sync_time` | `TIMESTAMP` | 마지막 동기화 시간 |
+| `created_at` | `TIMESTAMP` | 생성 시간 (기본값: `CURRENT_TIMESTAMP`) |
+| `updated_at` | `TIMESTAMP` | 마지막 수정 시간 (기본값: `CURRENT_TIMESTAMP`) |
+
+### 2.2 `mail_history` 테이블
+
+처리된 메일의 이력을 저장합니다.
+
+| 필드명 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | `INTEGER` | **PK**, Auto-increment |
+| `account_id` | `INTEGER` | `accounts.id` 외래 키 |
+| `message_id` | `TEXT` | 메일의 고유 ID (UNIQUE) |
+| `received_time` | `TIMESTAMP` | 메일 수신 시간 |
+| `subject` | `TEXT` | 메일 제목 |
+| `sender` | `TEXT` | 발신자 |
+| `keywords` | `TEXT` | 추출된 키워드 (JSON 형태의 텍스트) |
+| `processed_at` | `TIMESTAMP` | 처리 완료 시간 (기본값: `CURRENT_TIMESTAMP`) |
+
+### 2.3 `processing_logs` 테이블
+
+배치 작업 또는 특정 프로세스의 실행 로그를 기록합니다.
+
+| 필드명 | 타입 | 설명 |
+| --- | --- | --- |
+| `id` | `INTEGER` | **PK**, Auto-increment |
+| `run_id` | `TEXT` | 실행의 고유 ID (e.g., `uuid`) |
+| `account_id` | `INTEGER` | `accounts.id` 외래 키 (선택 사항) |
+| `log_level` | `TEXT` | 로그 레벨 (INFO, ERROR 등) |
+| `message` | `TEXT` | 로그 메시지 |
+| `timestamp` | `TIMESTAMP` | 로그 기록 시간 (기본값: `CURRENT_TIMESTAMP`) |
+
+## 3. 관련 모듈
+
+현재 다음 모듈들이 데이터베이스를 직접 사용하고 있습니다.
+
+- **`modules.account`**: `accounts` 테이블의 CRUD를 담당합니다.
+- **`modules.mail_history`**: `mail_history` 테이블의 CRUD를 담당합니다.
+- **`modules.mail_processor`**: `processing_logs` 테이블에 로그를 기록합니다.
+
+## 4. 개발 가이드라인
+
+- **스키마 변경**: 스키마 변경이 필요한 경우, `infra/migrations/initial_schema.sql`을 직접 수정하지 마십시오. 대신, 별도의 마이그레이션 스크립트(`upgrade_YYYYMMDD.sql`)를 작성하고, `database.py`에 해당 스크립트를 실행하는 로직을 추가하는 것을 원칙으로 합니다. (현재는 초기 개발 단계이므로 `initial_schema.sql`을 수정할 수 있으나, 향후에는 마이그레이션 절차를 따라야 합니다.)
+- **직접 쿼리 지양**: 가능한 경우, 각 모듈의 `repository.py`에 정의된 메서드를 사용하여 데이터베이스와 상호작용하십시오. 이는 코드의 재사용성을 높이고 SQL 인젝션과 같은 보안 위험을 줄입니다.
+- **인덱스 추가**: 특정 필드를 자주 조회하는 쿼리가 추가될 경우, 성능 향상을 위해 해당 필드에 인덱스(`CREATE INDEX`)를 추가하는 것을 고려하십시오.

@@ -7,7 +7,7 @@ IACSGraph 프로젝트의 모든 모듈이 공유하는 핵심 기반 서비스�
 ## 2. 핵심 컴포넌트 (`infra/core`)
 
 - **`config.py`**: `.env` 파일의 환경 변수를 로드하고 애플리케이션 전체에 설정을 제공합니다. `get_config()`를 통해 싱글톤 인스턴스에 접근할 수 있습니다.
-- **`database.py`**: SQLite 데이터베이스 연결 및 트랜잭션을 관리합니다. 최초 실행 시 `infra/migrations/initial_schema.sql`을 참조하여 스키마를 자동으로 생성합니다.
+- **`database.py`**: SQLite 데이터베이스 연결 및 트랜잭션을 관리합니다. 최초 실행 시 `infra/migrations/initial_schema.sql`을 참조하여 스키마를 자동으로 생성합니다. 자세한 내용은 [IACSGraph 데이터베이스 가이드](./references/sqlite_guideline.md)를 참조하십시오.
 - **`logger.py`**: 구조화된 로그를 생성하고 관리합니다. `get_logger(__name__)`으로 각 모듈에서 로거를 가져와 사용합니다.
 - **`exceptions.py`**: `IACSGraphError`를 기반으로 하는 표준 예외 클래스들을 정의하여 일관된 오류 처리를 지원합니다.
 - **`kafka_client.py`**: Kafka 연동을 위한 클라이언트 (향후 이벤트 기반 아키텍처에서 사용 예정).
