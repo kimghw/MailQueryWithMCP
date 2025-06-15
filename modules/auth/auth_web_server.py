@@ -7,10 +7,12 @@ OAuth 2.0 인증 콜백을 처리하는 임시 웹서버입니다.
 
 import asyncio
 import threading
+import json
+from http.server import HTTPServer, BaseHTTPRequestHandler
 from typing import Optional, Dict, Any, Callable
-from datetime import datetime
-from aiohttp import web, ClientSession
-from urllib.parse import parse_qs
+from datetime import datetime, timedelta
+from urllib.parse import urlparse, parse_qs
+import requests
 
 from infra.core.logger import get_logger
 from infra.core.config import get_config
@@ -29,6 +31,63 @@ from ._auth_helpers import (
 logger = get_logger(__name__)
 
 
+class CallbackHandler(BaseHTTPRequestHandler):
+    """OAuth 콜백 요청 핸들러"""
+    
+    def do_GET(self):
+        """GET 요청 처리"""
+        parsed_path = urlparse(self.path)
+        
+        if parsed_path.path == '/health':
+            self._handle_health_check()
+        elif parsed_path.path == '/auth/callback':
+            self._handle_oauth_callback()
+        else:
+            self.send_response(404)
+            self.end_headers()
+            self.wfile.write(b"Not Found")
+    
+    def _handle_health_check(self):
+        """헬스체크 처리"""
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.end_headers()
+        response = {
+            "status": "ok",
+            "timestamp": datetime.utcnow().isoformat(),
+            "server": "oauth_callback_server"
+        }
+        self.wfile.write(json.dumps(response).encode())
+    
+    def _handle_oauth_callback(self):
+        """OAuth 콜백 처리"""
+        parsed_url = urlparse(self.path)
+        query_params = parse_qs(parsed_url.query)
+        
+        # 쿼리 파라미터를 단일 값으로 변환
+        params = {}
+        for key, values in query_params.items():
+            params[key] = values[0] if values else ""
+        
+        logger.debug(f"OAuth 콜백 수신: {list(params.keys())}")
+        
+        # 서버 인스턴스에서 처리
+        if hasattr(self.server, 'auth_server'):
+            response_html = self.server.auth_server._process_callback(params)
+            self.send_response(200)
+            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.end_headers()
+            self.wfile.write(response_html.encode('utf-8'))
+        else:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(b"Server Error")
+    
+    def log_message(self, format, *args):
+        """로그 메시지 커스터마이징"""
+        pass  # 기본 로그 억제
+
+
 class AuthWebServer:
     """OAuth 콜백 처리를 위한 임시 웹서버"""
 
@@ -38,11 +97,10 @@ class AuthWebServer:
         self.oauth_client = get_oauth_client()
         self.token_service = get_token_service()
         
-        self.app: Optional[web.Application] = None
-        self.runner: Optional[web.AppRunner] = None
-        self.site: Optional[web.TCPSite] = None
+        self.httpd: Optional[HTTPServer] = None
         self.server_thread: Optional[threading.Thread] = None
         self.is_running = False
+        self.port = 5000
         
         # 세션 저장소 참조 (외부에서 주입)
         self.session_store: Optional[Dict[str, Any]] = None
@@ -69,18 +127,20 @@ class AuthWebServer:
             서버 URL
         """
         try:
-            self.app = web.Application()
+            self.port = port
             
-            # 라우트 설정
-            self.app.router.add_get('/auth/callback', self._handle_oauth_callback)
-            self.app.router.add_get('/health', self._handle_health_check)
+            # HTTPServer 생성
+            server_address = ('localhost', port)
+            self.httpd = HTTPServer(server_address, CallbackHandler)
+            self.httpd.auth_server = self  # 핸들러에서 접근할 수 있도록 참조 추가
             
-            # 서버 시작
-            self.runner = web.AppRunner(self.app)
-            await self.runner.setup()
+            # 별도 스레드에서 서버 실행
+            def run_server():
+                logger.info(f"OAuth 콜백 웹서버 시작 중: http://localhost:{port}")
+                self.httpd.serve_forever()
             
-            self.site = web.TCPSite(self.runner, 'localhost', port)
-            await self.site.start()
+            self.server_thread = threading.Thread(target=run_server, daemon=True)
+            self.server_thread.start()
             
             self.is_running = True
             server_url = f"http://localhost:{port}"
@@ -90,25 +150,21 @@ class AuthWebServer:
             
         except Exception as e:
             logger.error(f"웹서버 시작 실패: {str(e)}")
-            await self._cleanup()
+            self._cleanup()
             raise
 
     async def auth_web_server_stop(self):
         """웹서버를 중지합니다."""
         try:
             self.is_running = False
-            await self._cleanup()
+            self._cleanup()
             logger.info("OAuth 콜백 웹서버 중지됨")
         except Exception as e:
             logger.error(f"웹서버 중지 실패: {str(e)}")
 
-    async def _handle_oauth_callback(self, request: web.Request) -> web.Response:
-        """OAuth 콜백 요청을 처리합니다."""
+    def _process_callback(self, query_params: Dict[str, str]) -> str:
+        """OAuth 콜백을 처리하고 HTML 응답을 반환합니다."""
         try:
-            # 쿼리 매개변수 파싱
-            query_params = dict(request.query)
-            logger.debug(f"OAuth 콜백 수신: {list(query_params.keys())}")
-            
             # 콜백 데이터 생성
             callback_data = AuthCallback(
                 code=query_params.get('code', ''),
@@ -120,31 +176,29 @@ class AuthWebServer:
             
             # 오류가 있는 경우
             if callback_data.has_error():
-                return await self._handle_callback_error(callback_data)
+                return self._handle_callback_error(callback_data)
             
             # 정상적인 인증 코드 처리
-            return await self._handle_callback_success(callback_data)
+            return self._handle_callback_success(callback_data)
             
         except Exception as e:
             logger.error(f"OAuth 콜백 처리 실패: {str(e)}")
-            error_html = auth_generate_callback_error_html(
+            return auth_generate_callback_error_html(
                 "server_error", 
                 "콜백 처리 중 서버 오류가 발생했습니다"
             )
-            return web.Response(text=error_html, content_type='text/html', status=500)
 
-    async def _handle_callback_success(self, callback_data: AuthCallback) -> web.Response:
+    def _handle_callback_success(self, callback_data: AuthCallback) -> str:
         """성공적인 OAuth 콜백을 처리합니다."""
         state = callback_data.state
         
         # 세션 저장소에서 해당 세션 찾기
         if not self.session_store or state not in self.session_store:
             logger.warning(f"유효하지 않은 state: {state[:10]}...")
-            error_html = auth_generate_callback_error_html(
+            return auth_generate_callback_error_html(
                 "invalid_request",
                 "유효하지 않은 인증 요청입니다"
             )
-            return web.Response(text=error_html, content_type='text/html', status=400)
         
         session = self.session_store[state]
         
@@ -175,7 +229,7 @@ class AuthWebServer:
             if account and account['oauth_client_id']:
                 # 계정별 OAuth 설정으로 토큰 교환
                 logger.info(f"계정별 OAuth 설정으로 토큰 교환: user_id={session.user_id}")
-                token_info = await self._exchange_code_with_account_config(
+                token_info = self._exchange_code_with_account_config(
                     callback_data.code,
                     account['oauth_client_id'],
                     account['oauth_client_secret'],
@@ -185,17 +239,29 @@ class AuthWebServer:
             else:
                 # 전역 설정으로 토큰 교환 (fallback)
                 logger.info(f"전역 OAuth 설정으로 토큰 교환: user_id={session.user_id}")
-                token_info = await self.oauth_client.exchange_code_for_tokens(callback_data.code)
+                # 동기 방식으로 토큰 교환
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                token_info = loop.run_until_complete(
+                    self.oauth_client.exchange_code_for_tokens(callback_data.code)
+                )
+                loop.close()
             
             # 토큰 유효성 검증
             if not auth_validate_token_info(token_info):
                 raise ValueError("유효하지 않은 토큰 정보")
             
             # 토큰을 데이터베이스에 저장
-            account_id = await self.token_service.store_tokens(
-                user_id=session.user_id,
-                token_info=token_info
+            # 동기 방식으로 토큰 저장
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            account_id = loop.run_until_complete(
+                self.token_service.store_tokens(
+                    user_id=session.user_id,
+                    token_info=token_info
+                )
             )
+            loop.close()
             
             # 세션 완료 처리
             session.status = AuthState.COMPLETED
@@ -207,10 +273,17 @@ class AuthWebServer:
                 {"account_id": account_id}
             )
             
-            # 등록된 콜백 핸들러 호출
+            # 등록된 콜백 핸들러 호출 (동기 방식)
             if state in self.callback_handlers:
                 try:
-                    await self.callback_handlers[state](session, token_info)
+                    handler = self.callback_handlers[state]
+                    if asyncio.iscoroutinefunction(handler):
+                        loop = asyncio.new_event_loop()
+                        asyncio.set_event_loop(loop)
+                        loop.run_until_complete(handler(session, token_info))
+                        loop.close()
+                    else:
+                        handler(session, token_info)
                 except Exception as e:
                     logger.warning(f"콜백 핸들러 실행 실패: {str(e)}")
             
@@ -221,7 +294,7 @@ class AuthWebServer:
             )
             
             logger.info(f"OAuth 인증 완료: user_id={session.user_id}")
-            return web.Response(text=success_html, content_type='text/html')
+            return success_html
             
         except Exception as e:
             logger.error(f"토큰 교환 실패: {str(e)}")
@@ -236,13 +309,12 @@ class AuthWebServer:
                 {"error": str(e)}
             )
             
-            error_html = auth_generate_callback_error_html(
+            return auth_generate_callback_error_html(
                 "server_error",
                 "토큰 교환 중 오류가 발생했습니다"
             )
-            return web.Response(text=error_html, content_type='text/html', status=500)
 
-    async def _handle_callback_error(self, callback_data: AuthCallback) -> web.Response:
+    def _handle_callback_error(self, callback_data: AuthCallback) -> str:
         """OAuth 콜백 오류를 처리합니다."""
         state = callback_data.state
         error = callback_data.error or "unknown_error"
@@ -263,18 +335,10 @@ class AuthWebServer:
             )
         
         # 오류 페이지 반환
-        error_html = auth_generate_callback_error_html(error, description)
-        return web.Response(text=error_html, content_type='text/html', status=400)
+        return auth_generate_callback_error_html(error, description)
 
-    async def _handle_health_check(self, request: web.Request) -> web.Response:
-        """서버 상태 확인 엔드포인트"""
-        return web.json_response({
-            "status": "ok",
-            "timestamp": datetime.utcnow().isoformat(),
-            "server": "oauth_callback_server"
-        })
 
-    async def _exchange_code_with_account_config(
+    def _exchange_code_with_account_config(
         self, 
         code: str, 
         client_id: str, 
@@ -288,15 +352,29 @@ class AuthWebServer:
         Args:
             code: 인증 코드
             client_id: OAuth 클라이언트 ID
-            client_secret: OAuth 클라이언트 시크릿
+            client_secret: OAuth 클라이언트 시크릿 (암호화된 값)
             tenant_id: Azure AD 테넌트 ID
             redirect_uri: 리다이렉트 URI
             
         Returns:
             토큰 정보 딕셔너리
         """
-        import aiohttp
         from urllib.parse import urlencode
+        from cryptography.fernet import Fernet
+        
+        # 클라이언트 시크릿 복호화
+        try:
+            if client_secret and client_secret.startswith('gAAAAA'):
+                # Fernet 암호화된 값인 경우 복호화
+                fernet = Fernet(self.config.encryption_key.encode())
+                decrypted_secret = fernet.decrypt(client_secret.encode()).decode()
+                logger.debug("클라이언트 시크릿 복호화 성공")
+            else:
+                # 평문인 경우 그대로 사용
+                decrypted_secret = client_secret
+        except Exception as e:
+            logger.error(f"클라이언트 시크릿 복호화 실패: {str(e)}")
+            raise ValueError("클라이언트 시크릿 복호화 실패")
         
         # 토큰 엔드포인트 URL
         token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
@@ -304,7 +382,7 @@ class AuthWebServer:
         # 토큰 요청 데이터
         data = {
             "client_id": client_id,
-            "client_secret": client_secret,
+            "client_secret": decrypted_secret,
             "code": code,
             "redirect_uri": redirect_uri,
             "grant_type": "authorization_code",
@@ -317,40 +395,39 @@ class AuthWebServer:
         
         logger.debug(f"토큰 교환 요청: client_id={client_id[:8]}..., tenant_id={tenant_id}")
         
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                token_url, 
-                data=urlencode(data),
-                headers=headers
-            ) as response:
-                response_data = await response.json()
-                
-                if response.status != 200:
-                    error = response_data.get("error", "unknown_error")
-                    error_description = response_data.get("error_description", "")
-                    logger.error(f"토큰 교환 실패: {error} - {error_description}")
-                    raise Exception(f"토큰 교환 실패: {error} - {error_description}")
-                
-                # 만료 시간 계산
-                expires_in = response_data.get("expires_in", 3600)
-                expiry_time = datetime.utcnow() + timedelta(seconds=expires_in)
-                response_data["expiry_time"] = expiry_time.isoformat()
-                
-                logger.info(f"계정별 설정으로 토큰 교환 성공: client_id={client_id[:8]}...")
-                return response_data
+        response = requests.post(
+            token_url,
+            data=urlencode(data),
+            headers=headers
+        )
+        
+        response_data = response.json()
+        
+        if response.status_code != 200:
+            error = response_data.get("error", "unknown_error")
+            error_description = response_data.get("error_description", "")
+            logger.error(f"토큰 교환 실패: {error} - {error_description}")
+            raise Exception(f"토큰 교환 실패: {error} - {error_description}")
+        
+        # 만료 시간 계산
+        expires_in = response_data.get("expires_in", 3600)
+        expiry_time = datetime.utcnow() + timedelta(seconds=expires_in)
+        response_data["expiry_time"] = expiry_time.isoformat()
+        
+        logger.info(f"계정별 설정으로 토큰 교환 성공: client_id={client_id[:8]}...")
+        return response_data
 
-    async def _cleanup(self):
+    def _cleanup(self):
         """리소스 정리"""
         try:
-            if self.site:
-                await self.site.stop()
-                self.site = None
+            if self.httpd:
+                self.httpd.shutdown()
+                self.httpd = None
             
-            if self.runner:
-                await self.runner.cleanup()
-                self.runner = None
+            if self.server_thread and self.server_thread.is_alive():
+                self.server_thread.join(timeout=5)
+                self.server_thread = None
             
-            self.app = None
             self.callback_handlers.clear()
             
         except Exception as e:
@@ -360,7 +437,7 @@ class AuthWebServer:
         """소멸자"""
         if self.is_running:
             try:
-                asyncio.create_task(self._cleanup())
+                self._cleanup()
             except:
                 pass
 

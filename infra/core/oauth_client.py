@@ -123,7 +123,7 @@ class OAuthClient:
 
     async def exchange_code_for_tokens(self, authorization_code: str) -> Dict[str, Any]:
         """
-        인증 코드를 액세스 토큰과 리프레시 토큰으로 교환합니다.
+        인증 코드를 액세스 토큰과 리프레시 토큰으로 교환합니다. (공통 설정 사용)
         
         Args:
             authorization_code: 인증 코드
@@ -167,6 +167,79 @@ class OAuthClient:
                 token_info = self._parse_token_response(response_data)
                 
                 logger.info("토큰 교환 성공")
+                return token_info
+
+        except aiohttp.ClientError as e:
+            raise APIConnectionError(
+                f"토큰 교환 중 네트워크 오류: {str(e)}",
+                api_endpoint=token_url
+            ) from e
+        except Exception as e:
+            raise TokenError(
+                f"토큰 교환 중 예상치 못한 오류: {str(e)}"
+            ) from e
+
+    async def exchange_code_for_tokens_with_account_config(
+        self, 
+        authorization_code: str,
+        client_id: str,
+        client_secret: str,
+        tenant_id: str,
+        redirect_uri: str
+    ) -> Dict[str, Any]:
+        """
+        계정별 OAuth 설정을 사용하여 인증 코드를 토큰으로 교환합니다.
+        
+        Args:
+            authorization_code: 인증 코드
+            client_id: 계정별 클라이언트 ID
+            client_secret: 계정별 클라이언트 시크릿
+            tenant_id: 계정별 테넌트 ID
+            redirect_uri: 계정별 리다이렉트 URI
+            
+        Returns:
+            토큰 정보 딕셔너리
+        """
+        if not client_id or not client_secret:
+            raise AuthenticationError(
+                "계정별 OAuth 설정이 완료되지 않았습니다."
+            )
+
+        # 테넌트별 토큰 URL 구성
+        authority = f"https://login.microsoftonline.com/{tenant_id or 'common'}"
+        token_url = f"{authority}/oauth2/v2.0/token"
+        
+        data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": authorization_code,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+            "scope": " ".join(self.config.azure_scopes),
+        }
+
+        try:
+            session = await self._get_session()
+            async with session.post(token_url, data=data) as response:
+                response_data = await response.json()
+                
+                if response.status != 200:
+                    error_msg = response_data.get("error_description", "토큰 교환 실패")
+                    logger.error(f"계정별 토큰 교환 실패: {error_msg}, client_id={client_id[:8]}...")
+                    raise TokenError(
+                        f"토큰 교환 실패: {error_msg}",
+                        details={
+                            "status_code": response.status,
+                            "error": response_data.get("error"),
+                            "error_description": response_data.get("error_description"),
+                            "client_id": client_id[:8] + "..."
+                        }
+                    )
+
+                # 토큰 정보 파싱
+                token_info = self._parse_token_response(response_data)
+                
+                logger.info(f"계정별 토큰 교환 성공: client_id={client_id[:8]}...")
                 return token_info
 
         except aiohttp.ClientError as e:
