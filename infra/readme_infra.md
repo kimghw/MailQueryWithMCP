@@ -6,12 +6,61 @@ IACSGraph 프로젝트의 모든 모듈이 공유하는 핵심 기반 서비스�
 
 ## 2. 핵심 컴포넌트 (`infra/core`)
 
-- **`config.py`**: `.env` 파일의 환경 변수를 로드하고 애플리케이션 전체에 설정을 제공합니다. `get_config()`를 통해 싱글톤 인스턴스에 접근할 수 있습니다.
-- **`database.py`**: SQLite 데이터베이스 연결 및 트랜잭션을 관리합니다. 최초 실행 시 `infra/migrations/initial_schema.sql`을 참조하여 스키마를 자동으로 생성합니다. 자세한 내용은 [IACSGraph 데이터베이스 가이드](./references/sqlite_guideline.md)를 참조하십시오.
-- **`logger.py`**: 구조화된 로그를 생성하고 관리합니다. `get_logger(__name__)`으로 각 모듈에서 로거를 가져와 사용합니다.
-- **`exceptions.py`**: `IACSGraphError`를 기반으로 하는 표준 예외 클래스들을 정의하여 일관된 오류 처리를 지원합니다.
-- **`kafka_client.py`**: Kafka 연동을 위한 클라이언트 (향후 이벤트 기반 아키텍처에서 사용 예정).
-- **`oauth_client.py` / `token_service.py`**: OAuth 인증 및 토큰 관리를 위한 서비스 (향후 `auth` 모듈에서 사용 예정).
+### 2.1 **`config.py`** - 환경설정 관리
+- `.env` 파일의 환경 변수를 로드하고 애플리케이션 전체에 설정을 제공
+- `get_config()` 싱글톤 함수로 접근
+- 주요 설정: `database_path`, `encryption_key`, `enrollment_directory`, `log_level`
+
+### 2.2 **`database.py`** - SQLite 데이터베이스 관리 (레이지 싱글톤)
+- **연결 관리**: SQLite 연결을 레이지 싱글톤으로 관리, 멀티스레드 지원
+- **스키마 초기화**: 최초 실행 시 `infra/migrations/initial_schema.sql` 자동 실행
+- **주요 메서드**:
+  - `fetch_one(query, params)` - 단일 행 조회
+  - `fetch_all(query, params)` - 다중 행 조회
+  - `insert(table, data)` - 데이터 삽입, 생성된 ID 반환
+  - `update(table, data, where_clause, where_params)` - 데이터 업데이트
+  - `delete(table, where_clause, where_params)` - 데이터 삭제
+  - `execute_query(query, params, fetch_result)` - 범용 쿼리 실행
+  - `execute_many(query, params_list)` - 배치 쿼리 실행
+- **트랜잭션**: `with db.transaction()` 컨텍스트 매니저 지원
+- **접근**: `from infra.core.database import get_database_manager`
+
+### 2.3 **`token_service.py`** - 토큰 관리 서비스 (레이지 싱글톤)
+- **토큰 저장/조회**: accounts 테이블과 연동하여 토큰 관리
+- **자동 갱신**: 만료된 토큰 자동 감지 및 refresh_token으로 갱신
+- **주요 메서드**:
+  - `store_tokens(user_id, token_info, user_name)` - 토큰 정보 저장
+  - `get_valid_access_token(user_id)` - 유효한 액세스 토큰 반환 (자동 갱신 포함)
+  - `validate_and_refresh_token(user_id)` - 토큰 검증 및 갱신
+  - `check_authentication_status(user_id)` - 인증 상태 확인 및 재인증 필요 여부 판단
+  - `get_all_active_accounts()` - 모든 활성 계정 조회
+  - `update_account_status(user_id, status)` - 계정 상태 업데이트
+  - `revoke_tokens(user_id)` - 토큰 무효화
+- **접근**: `from infra.core.token_service import get_token_service`
+
+### 2.4 **`oauth_client.py`** - OAuth 클라이언트
+- **토큰 교환**: Authorization code를 access_token으로 교환
+- **토큰 갱신**: refresh_token으로 새로운 access_token 획득
+- **토큰 검증**: Microsoft Graph API를 통한 토큰 유효성 확인
+- **주요 메서드**:
+  - `exchange_code_for_tokens(code, redirect_uri, code_verifier)` - 인증 코드 교환
+  - `refresh_access_token(refresh_token)` - 토큰 갱신
+  - `validate_token(access_token)` - 토큰 유효성 검증
+- **접근**: `from infra.core.oauth_client import get_oauth_client`
+
+### 2.5 **`logger.py`** - 구조화된 로깅
+- 구조화된 로그를 생성하고 관리
+- `get_logger(__name__)`으로 각 모듈에서 로거를 가져와 사용
+- 로그 레벨: DEBUG, INFO, WARNING, ERROR
+
+### 2.6 **`exceptions.py`** - 표준 예외 클래스
+- `IACSGraphError`를 기반으로 하는 표준 예외 클래스들 정의
+- 일관된 오류 처리 지원
+- 주요 예외: `DatabaseError`, `TokenError`, `AuthenticationError`, `ValidationError`
+
+### 2.7 **`kafka_client.py`** - Kafka 클라이언트
+- Kafka 연동을 위한 클라이언트 (이벤트 기반 아키텍처용)
+- Producer/Consumer 기능 제공
 
 ## 3. 사용법
 
