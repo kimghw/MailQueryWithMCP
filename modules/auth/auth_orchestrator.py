@@ -25,6 +25,7 @@ from ._auth_helpers import (
     auth_sanitize_user_id, auth_create_session_expiry,
     auth_calculate_session_timeout, auth_log_session_activity
 )
+from modules.account._account_helpers import AccountCryptoHelpers
 
 logger = get_logger(__name__)
 
@@ -399,6 +400,8 @@ class AuthOrchestrator:
             OAuth 설정 딕셔너리 또는 None
         """
         try:
+            logger.debug(f"계정별 OAuth 설정 조회 시도: user_id={user_id}")
+            
             account = self.db.fetch_one(
                 """
                 SELECT oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri
@@ -413,9 +416,12 @@ class AuthOrchestrator:
                 return None
             
             account_dict = dict(account)
+            logger.debug(f"조회된 계정 정보: {list(account_dict.keys())}")
             
             # OAuth 클라이언트 ID가 있는지 확인
             oauth_client_id = account_dict.get("oauth_client_id")
+            oauth_client_secret = account_dict.get("oauth_client_secret")
+            
             if not oauth_client_id:
                 logger.debug(f"계정별 OAuth 설정이 없음: user_id={user_id}")
                 return None
@@ -425,11 +431,24 @@ class AuthOrchestrator:
                 logger.debug(f"oauth_client_id가 비어있음: user_id={user_id}")
                 return None
             
-            logger.debug(f"계정별 OAuth 설정 발견: user_id={user_id}, client_id={oauth_client_id[:8]}...")
+            # oauth_client_secret 복호화
+            if oauth_client_secret:
+                try:
+                    crypto_helper = AccountCryptoHelpers()
+                    decrypted_secret = crypto_helper.account_decrypt_sensitive_data(oauth_client_secret)
+                    account_dict["oauth_client_secret"] = decrypted_secret
+                    logger.debug(f"oauth_client_secret 복호화 완료: user_id={user_id}")
+                except Exception as decrypt_error:
+                    logger.error(f"oauth_client_secret 복호화 실패: user_id={user_id}, error={str(decrypt_error)}")
+                    return None
+            
+            logger.info(f"계정별 OAuth 설정 발견: user_id={user_id}, client_id={oauth_client_id[:8]}...")
             return account_dict
             
         except Exception as e:
             logger.error(f"계정별 OAuth 설정 조회 실패: user_id={user_id}, error={str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
 
 

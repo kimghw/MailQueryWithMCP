@@ -16,6 +16,7 @@ from infra.core.logger import get_logger
 from infra.core.config import get_config
 from infra.core.oauth_client import get_oauth_client
 from infra.core.token_service import get_token_service
+from infra.core.database import get_database_manager
 from .auth_schema import AuthCallback, AuthState
 from ._auth_helpers import (
     auth_parse_callback_params,
@@ -158,8 +159,33 @@ class AuthWebServer:
                 {"code_length": len(callback_data.code)}
             )
             
-            # 인증 코드를 토큰으로 교환
-            token_info = await self.oauth_client.exchange_code_for_tokens(callback_data.code)
+            # 계정별 OAuth 설정 가져오기
+            db = get_database_manager()
+            account = db.fetch_one(
+                """
+                SELECT oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri
+                FROM accounts 
+                WHERE user_id = ? AND is_active = 1
+                """,
+                (session.user_id,)
+            )
+            
+            token_info = None
+            
+            if account and account['oauth_client_id']:
+                # 계정별 OAuth 설정으로 토큰 교환
+                logger.info(f"계정별 OAuth 설정으로 토큰 교환: user_id={session.user_id}")
+                token_info = await self._exchange_code_with_account_config(
+                    callback_data.code,
+                    account['oauth_client_id'],
+                    account['oauth_client_secret'],
+                    account['oauth_tenant_id'],
+                    account['oauth_redirect_uri'] or self.config.oauth_redirect_uri
+                )
+            else:
+                # 전역 설정으로 토큰 교환 (fallback)
+                logger.info(f"전역 OAuth 설정으로 토큰 교환: user_id={session.user_id}")
+                token_info = await self.oauth_client.exchange_code_for_tokens(callback_data.code)
             
             # 토큰 유효성 검증
             if not auth_validate_token_info(token_info):
@@ -247,6 +273,71 @@ class AuthWebServer:
             "timestamp": datetime.utcnow().isoformat(),
             "server": "oauth_callback_server"
         })
+
+    async def _exchange_code_with_account_config(
+        self, 
+        code: str, 
+        client_id: str, 
+        client_secret: str,
+        tenant_id: str,
+        redirect_uri: str
+    ) -> Dict[str, Any]:
+        """
+        계정별 OAuth 설정을 사용하여 인증 코드를 토큰으로 교환합니다.
+        
+        Args:
+            code: 인증 코드
+            client_id: OAuth 클라이언트 ID
+            client_secret: OAuth 클라이언트 시크릿
+            tenant_id: Azure AD 테넌트 ID
+            redirect_uri: 리다이렉트 URI
+            
+        Returns:
+            토큰 정보 딕셔너리
+        """
+        import aiohttp
+        from urllib.parse import urlencode
+        
+        # 토큰 엔드포인트 URL
+        token_url = f"https://login.microsoftonline.com/{tenant_id}/oauth2/v2.0/token"
+        
+        # 토큰 요청 데이터
+        data = {
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "code": code,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+            "scope": "https://graph.microsoft.com/.default offline_access"
+        }
+        
+        headers = {
+            "Content-Type": "application/x-www-form-urlencoded"
+        }
+        
+        logger.debug(f"토큰 교환 요청: client_id={client_id[:8]}..., tenant_id={tenant_id}")
+        
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                token_url, 
+                data=urlencode(data),
+                headers=headers
+            ) as response:
+                response_data = await response.json()
+                
+                if response.status != 200:
+                    error = response_data.get("error", "unknown_error")
+                    error_description = response_data.get("error_description", "")
+                    logger.error(f"토큰 교환 실패: {error} - {error_description}")
+                    raise Exception(f"토큰 교환 실패: {error} - {error_description}")
+                
+                # 만료 시간 계산
+                expires_in = response_data.get("expires_in", 3600)
+                expiry_time = datetime.utcnow() + timedelta(seconds=expires_in)
+                response_data["expiry_time"] = expiry_time.isoformat()
+                
+                logger.info(f"계정별 설정으로 토큰 교환 성공: client_id={client_id[:8]}...")
+                return response_data
 
     async def _cleanup(self):
         """리소스 정리"""
