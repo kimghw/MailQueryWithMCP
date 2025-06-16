@@ -72,12 +72,12 @@ class MailProcessorKeywordExtractorService:
         # 텍스트 길이 제한 (2000자)
         limited_text = text[:2000] if len(text) > 2000 else text
         
-        prompt = f"""다음 이메일 본문에서 가장 중요한 키워드 {max_keywords}개를 한국어로 추출해주세요.
-키워드는 명사 위주로 추출하고, 콤마로 구분하여 나열해주세요. 제목에나 기본적으로 메일 번호가 숫자와 문자로 식별됩니다. 그 식별번호는 키워드에 포함되어야 합니다. 메일 내용을 보면 어떤 기관, 어떤 종류의 문서 작업, 다음 회의일정, 주요 기술 내용, 향후 작업 계획 등이 있으며 이것들도 키워드에 속합니다. 
+        prompt = f"""다음 이메일 본문에서 가장 중요한 키워드 {max_keywords}개를 추출해주세요.
+키워드는 콤마로 구분하여 나열해주세요. 번호나 기호 없이 키워드만 작성해주세요.
 
 이메일 본문: {limited_text}
 
-형식: 키워드1(문서번호), 키워드2, 키워드3, 키워드4, 키워드5"""
+응답 형식: 키워드1, 키워드2, 키워드3, 키워드4, 키워드5"""
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -91,10 +91,14 @@ class MailProcessorKeywordExtractorService:
             "messages": [
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 100,
+            "max_tokens": 500,  # 토큰 수 증가
             "temperature": 0.3,
             "top_p": 1.0
         }
+        
+        self.logger.debug(f"OpenRouter API 호출 시작: {self.base_url}/chat/completions")
+        self.logger.debug(f"Model: {self.model}")
+        self.logger.debug(f"Prompt 길이: {len(prompt)} 문자")
         
         try:
             async with aiohttp.ClientSession() as session:
@@ -104,14 +108,32 @@ class MailProcessorKeywordExtractorService:
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
+                    self.logger.debug(f"OpenRouter API 응답 상태: {response.status}")
+                    
                     if response.status == 200:
                         data = await response.json()
+                        self.logger.debug(f"OpenRouter API 응답 데이터: {data}")
+                        
+                        # 응답 구조 확인
+                        if 'choices' not in data or not data['choices']:
+                            self.logger.error(f"OpenRouter API 응답에 choices가 없음: {data}")
+                            return []
+                        
+                        if 'message' not in data['choices'][0]:
+                            self.logger.error(f"OpenRouter API 응답에 message가 없음: {data['choices'][0]}")
+                            return []
+                        
                         content = data['choices'][0]['message']['content'].strip()
+                        self.logger.debug(f"OpenRouter API 응답 내용: '{content}'")
                         
-                        # 키워드 파싱
-                        keywords = [kw.strip() for kw in content.split(',')]
-                        keywords = [kw for kw in keywords if kw and len(kw) >= 2]
+                        if not content:
+                            self.logger.warning("OpenRouter API 응답 내용이 비어있음")
+                            return []
                         
+                        # 키워드 파싱 - 다양한 형식 지원
+                        keywords = self._parse_keywords(content)
+                        
+                        self.logger.info(f"OpenRouter API 키워드 추출 성공: {keywords}")
                         return keywords[:max_keywords]
                         
                     elif response.status == 429:
@@ -124,7 +146,7 @@ class MailProcessorKeywordExtractorService:
                         self.logger.error(f"OpenRouter API 오류: {response.status} - {error_text}")
                         return []
         except Exception as e:
-            self.logger.error(f"OpenRouter API 호출 실패: {str(e)}")
+            self.logger.error(f"OpenRouter API 호출 실패: {str(e)}", exc_info=True)
             return []
     
     def _fallback_keyword_extraction(self, text: str, max_keywords: int) -> List[str]:
@@ -165,3 +187,40 @@ class MailProcessorKeywordExtractorService:
         clean = re.sub(r'[^\w\s가-힣.,!?()-]', ' ', clean)
         
         return clean.strip()
+    
+    def _parse_keywords(self, content: str) -> List[str]:
+        """다양한 형식의 키워드 응답을 파싱"""
+        keywords = []
+        
+        # 1. 콤마로 구분된 형식: "키워드1, 키워드2, 키워드3"
+        if ',' in content:
+            keywords = [kw.strip() for kw in content.split(',')]
+        
+        # 2. 번호 매김 형식: "1. 키워드1\n2. 키워드2\n3. 키워드3"
+        elif re.search(r'\d+\.\s*', content):
+            # 번호와 점을 제거하고 키워드만 추출
+            lines = content.split('\n')
+            for line in lines:
+                # "1. 키워드" 형식에서 키워드만 추출
+                match = re.match(r'\d+\.\s*(.+)', line.strip())
+                if match:
+                    keywords.append(match.group(1).strip())
+        
+        # 3. 줄바꿈으로 구분된 형식: "키워드1\n키워드2\n키워드3"
+        elif '\n' in content:
+            keywords = [line.strip() for line in content.split('\n') if line.strip()]
+        
+        # 4. 공백으로 구분된 형식: "키워드1 키워드2 키워드3"
+        else:
+            keywords = content.split()
+        
+        # 키워드 정제
+        cleaned_keywords = []
+        for kw in keywords:
+            # 불필요한 문자 제거
+            kw = re.sub(r'^[^\w가-힣]+|[^\w가-힣]+$', '', kw)
+            # 최소 길이 확인
+            if kw and len(kw) >= 2:
+                cleaned_keywords.append(kw)
+        
+        return cleaned_keywords

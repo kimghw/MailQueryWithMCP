@@ -154,13 +154,8 @@ class MailProcessorOrchestrator:
             sender_address = sender_info.get('address', '')
             subject = mail.get('subject', '')
             
-            # 1. 발신자 필터링 (from_address 또는 from 필드 모두 지원)
-            sender_info = mail.get('from_address', mail.get('from', {}))
-            if isinstance(sender_info, dict):
-                sender_info = sender_info.get('emailAddress', {})
-                sender_address = sender_info.get('address', '')
-            else:
-                sender_address = ''
+            # 1. 발신자 필터링 - 개선된 발신자 추출 사용
+            sender_address = MailProcessorDataHelper._extract_sender_address(mail)
                 
             if not self.filter_service.should_process(sender_address, subject):
                 return MailProcessorDataHelper.create_processed_mail_data(

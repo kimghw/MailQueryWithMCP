@@ -264,14 +264,9 @@ class MailProcessorDataHelper:
         status: ProcessingStatus,
         error_message: Optional[str] = None
     ) -> ProcessedMailData:
-        """처리된 메일 데이터 생성 - from_address와 received_date_time 필드 지원"""
-        # 발신자 정보 추출 (from_address 또는 from 필드 지원)
-        sender_info = mail.get('from_address', mail.get('from', {}))
-        if isinstance(sender_info, dict):
-            sender_info = sender_info.get('emailAddress', {})
-            sender_address = sender_info.get('address', '')
-        else:
-            sender_address = ''
+        """처리된 메일 데이터 생성 - 다양한 발신자 필드 지원"""
+        # 발신자 정보 추출 - 여러 필드 순차 확인
+        sender_address = MailProcessorDataHelper._extract_sender_address(mail)
         
         # 수신 시간 파싱 (received_date_time 또는 receivedDateTime 필드 지원)
         received_time_str = mail.get('received_date_time', mail.get('receivedDateTime', ''))
@@ -322,3 +317,45 @@ class MailProcessorDataHelper:
             body_content = mail['subject']
         
         return body_content
+    
+    @staticmethod
+    def _extract_sender_address(mail: Dict) -> str:
+        """발신자 주소 추출 - 여러 필드 순차 확인"""
+        
+        # 1. from 필드 확인
+        from_field = mail.get('from', {})
+        if from_field and isinstance(from_field, dict):
+            email_addr = from_field.get('emailAddress', {})
+            if email_addr and email_addr.get('address'):
+                return email_addr['address']
+        
+        # 2. sender 필드 확인
+        sender_field = mail.get('sender', {})
+        if sender_field and isinstance(sender_field, dict):
+            email_addr = sender_field.get('emailAddress', {})
+            if email_addr and email_addr.get('address'):
+                return email_addr['address']
+        
+        # 3. from_address 필드 확인 (GraphMailItem 호환)
+        from_address = mail.get('from_address', {})
+        if from_address and isinstance(from_address, dict):
+            email_addr = from_address.get('emailAddress', {})
+            if email_addr and email_addr.get('address'):
+                return email_addr['address']
+        
+        # 4. 초안 메일의 경우 빈 문자열 반환
+        if mail.get('isDraft', False):
+            logger.debug(f"초안 메일로 발신자 정보 없음: {mail.get('id', 'unknown')}")
+            return ''
+        
+        # 5. 발신자 정보가 없는 경우 로깅
+        logger.debug(f"발신자 정보 없음", extra={
+            "mail_id": mail.get('id', 'unknown'),
+            "is_draft": mail.get('isDraft', False),
+            "has_from": bool(mail.get('from')),
+            "has_sender": bool(mail.get('sender')),
+            "has_from_address": bool(mail.get('from_address')),
+            "subject": mail.get('subject', '')[:50]
+        })
+        
+        return ''  # 발신자 정보 없음

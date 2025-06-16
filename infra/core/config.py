@@ -221,6 +221,33 @@ class Config:
         except Exception as e:
             raise ConfigurationError(f"데이터 복호화 실패: {str(e)}")
 
+    # Mail Processor 설정
+    @property
+    def enable_mail_history(self) -> bool:
+        """메일 히스토리 저장 기능 활성화 여부"""
+        return os.getenv("ENABLE_MAIL_HISTORY", "true").lower() in ("true", "1", "yes", "on")
+
+    @property
+    def max_keywords_per_mail(self) -> int:
+        """메일당 최대 키워드 수"""
+        return int(os.getenv("MAX_KEYWORDS_PER_MAIL", "5"))
+
+    @property
+    def max_mails_per_account(self) -> int:
+        """계정당 최대 메일 처리 수"""
+        return int(os.getenv("MAX_MAILS_PER_ACCOUNT", "200"))
+
+    # OpenRouter 설정
+    @property
+    def openrouter_api_key(self) -> Optional[str]:
+        """OpenRouter API 키"""
+        return os.getenv("OPENROUTER_API_KEY")
+
+    @property
+    def openrouter_model(self) -> str:
+        """OpenRouter 모델"""
+        return os.getenv("OPENROUTER_MODEL", "openai/o3-mini")
+
     def to_dict(self) -> dict:
         """설정을 딕셔너리로 반환 (민감한 정보 제외)"""
         return {
@@ -243,6 +270,9 @@ class Config:
             "http_timeout": self.http_timeout,
             "kafka_timeout": self.kafka_timeout,
             "enrollment_directory": self.enrollment_directory,
+            "enable_mail_history": self.enable_mail_history,
+            "max_keywords_per_mail": self.max_keywords_per_mail,
+            "max_mails_per_account": self.max_mails_per_account,
             "openai_configured": self.is_openai_configured(),
             "oauth_configured": self.is_oauth_configured(),
         }
