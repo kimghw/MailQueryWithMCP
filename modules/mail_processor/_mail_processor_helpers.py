@@ -198,11 +198,15 @@ class MailProcessorKafkaHelper:
     def __init__(self):
         self.kafka_client = get_kafka_client()
     
-    async def publish_kafka_event(self, account_id: str, mail: Dict) -> None:
-        """Kafka 이벤트 발행"""
+    async def publish_kafka_event(self, account_id: str, mail: Dict, keywords: List[str] = None) -> None:
+        """Kafka 이벤트 발행 - 키워드 정보 포함"""
         try:
             # mail 딕셔너리의 datetime 객체들을 문자열로 변환
             mail_copy = self._convert_datetime_to_string(mail.copy())
+            
+            # 키워드 정보를 메일 데이터에 추가
+            if keywords:
+                mail_copy['extracted_keywords'] = keywords
             
             event = MailReceivedEvent(
                 event_id=str(uuid.uuid4()),
@@ -231,7 +235,7 @@ class MailProcessorKafkaHelper:
                 key=account_id
             )
             
-            logger.debug(f"Kafka 이벤트 발행 완료: {mail.get('id', 'unknown')}")
+            logger.debug(f"Kafka 이벤트 발행 완료 (키워드 {len(keywords) if keywords else 0}개): {mail.get('id', 'unknown')}")
             
         except Exception as e:
             logger.error(f"Kafka 이벤트 발행 실패: {str(e)}")

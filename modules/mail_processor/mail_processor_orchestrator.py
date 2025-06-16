@@ -103,8 +103,8 @@ class MailProcessorOrchestrator:
                     if processed_mail.processing_status == ProcessingStatus.SUCCESS:
                         # DB 저장
                         await self.db_helper.save_mail_history(processed_mail)
-                        # Kafka 이벤트 발행
-                        await self.kafka_helper.publish_kafka_event(account['user_id'], mail)
+                        # Kafka 이벤트 발행 (키워드 정보 포함)
+                        await self.kafka_helper.publish_kafka_event(account['user_id'], mail, processed_mail.keywords)
                         processed_count += 1
                         
                     elif processed_mail.processing_status == ProcessingStatus.SKIPPED:
@@ -231,8 +231,8 @@ class MailProcessorOrchestrator:
             # 5. DB 저장
             await self.db_helper.save_mail_history(processed_mail)
             
-            # 6. Kafka 이벤트 발행
-            await self.kafka_helper.publish_kafka_event(account_id, mail_dict)
+            # 6. Kafka 이벤트 발행 (키워드 정보 포함)
+            await self.kafka_helper.publish_kafka_event(account_id, mail_dict, processed_mail.keywords)
             
             self.logger.info(f"GraphMailItem 처리 완료: {mail_item.id}")
             return processed_mail
