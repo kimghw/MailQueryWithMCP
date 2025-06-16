@@ -246,81 +246,6 @@ class MailIntegrationProcessor:
         except Exception as e:
             logger.error(f"Mail Query 정리 실패: {str(e)}")
     
-    def clear_mail_history_data(self) -> dict:
-        """mail_history 테이블 데이터만 삭제 (스키마 유지)"""
-        try:
-            logger.info("🗑️  mail_history 테이블 데이터 삭제 시작...")
-            
-            # 기존 데이터 개수 확인
-            count_result = self.db_manager.fetch_one("SELECT COUNT(*) as count FROM mail_history")
-            existing_count = count_result['count'] if count_result else 0
-            
-            if existing_count == 0:
-                logger.info("ℹ️  mail_history 테이블이 이미 비어있습니다.")
-                return {
-                    'success': True,
-                    'existing_count': 0,
-                    'deleted_count': 0,
-                    'message': 'mail_history 테이블이 이미 비어있음'
-                }
-            
-            # 데이터 삭제 (스키마는 유지)
-            deleted_count = self.db_manager.delete("mail_history", "1=1")  # 모든 데이터 삭제
-            
-            logger.info(f"✅ mail_history 데이터 삭제 완료: {existing_count}개 → 0개")
-            
-            return {
-                'success': True,
-                'existing_count': existing_count,
-                'deleted_count': deleted_count,
-                'message': f'mail_history 테이블에서 {deleted_count}개 레코드 삭제됨'
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ mail_history 데이터 삭제 실패: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'message': 'mail_history 데이터 삭제 중 오류 발생'
-            }
-    
-    def clear_processing_logs_data(self) -> dict:
-        """processing_logs 테이블 데이터만 삭제 (스키마 유지)"""
-        try:
-            logger.info("🗑️  processing_logs 테이블 데이터 삭제 시작...")
-            
-            # 기존 데이터 개수 확인
-            count_result = self.db_manager.fetch_one("SELECT COUNT(*) as count FROM processing_logs")
-            existing_count = count_result['count'] if count_result else 0
-            
-            if existing_count == 0:
-                logger.info("ℹ️  processing_logs 테이블이 이미 비어있습니다.")
-                return {
-                    'success': True,
-                    'existing_count': 0,
-                    'deleted_count': 0,
-                    'message': 'processing_logs 테이블이 이미 비어있음'
-                }
-            
-            # 데이터 삭제 (스키마는 유지)
-            deleted_count = self.db_manager.delete("processing_logs", "1=1")
-            
-            logger.info(f"✅ processing_logs 데이터 삭제 완료: {existing_count}개 → 0개")
-            
-            return {
-                'success': True,
-                'existing_count': existing_count,
-                'deleted_count': deleted_count,
-                'message': f'processing_logs 테이블에서 {deleted_count}개 레코드 삭제됨'
-            }
-            
-        except Exception as e:
-            logger.error(f"❌ processing_logs 데이터 삭제 실패: {str(e)}")
-            return {
-                'success': False,
-                'error': str(e),
-                'message': 'processing_logs 데이터 삭제 중 오류 발생'
-            }
 
 
 async def main():
@@ -340,12 +265,11 @@ async def main():
             print("🗑️  데이터 초기화 모드")
             print("=" * 50)
             
-            # mail_history 데이터 삭제
-            mail_history_result = processor.clear_mail_history_data()
+            # 전역 DB 함수로 테이블 정리
+            mail_history_result = processor.db_manager.clear_table_data("mail_history")
             print(f"📧 mail_history: {mail_history_result['message']}")
             
-            # processing_logs 데이터 삭제
-            logs_result = processor.clear_processing_logs_data()
+            logs_result = processor.db_manager.clear_table_data("processing_logs")
             print(f"📝 processing_logs: {logs_result['message']}")
             
             print("\n✅ 데이터 초기화 완료")
@@ -393,12 +317,12 @@ async def main():
         
         else:
             print(f"❌ 처리 실패: {result['error']}")
-            print(f"🔍 실패 단계: {result.get('stage', 'unknown')}")
+            print(f"� 실패 단계: {result.get('stage', 'unknown')}")
     
     except KeyboardInterrupt:
         print("\n⚠️ 사용자에 의해 중단됨")
     except Exception as e:
-        print(f"\n💥 예상치 못한 오류: {str(e)}")
+        print(f"\n� 예상치 못한 오류: {str(e)}")
     
     finally:
         # 리소스 정리

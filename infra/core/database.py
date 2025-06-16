@@ -390,6 +390,108 @@ class DatabaseManager:
             connection.rollback()
             logger.error(f"트랜잭션 롤백됨: {str(e)}")
             raise
+
+    def clear_table_data(self, table_name: str) -> dict:
+        """
+        테이블 데이터만 삭제 (스키마 유지)
+        
+        Args:
+            table_name: 정리할 테이블명
+            
+        Returns:
+            dict: 정리 결과 정보
+        """
+        try:
+            # 테이블 존재 확인
+            if not self.table_exists(table_name):
+                return {
+                    'success': False,
+                    'error': f'테이블 {table_name}이 존재하지 않음',
+                    'existing_count': 0,
+                    'deleted_count': 0
+                }
+            
+            # 기존 데이터 개수 확인
+            count_result = self.fetch_one(f"SELECT COUNT(*) as count FROM {table_name}")
+            existing_count = count_result['count'] if count_result else 0
+            
+            if existing_count == 0:
+                logger.info(f"테이블 {table_name}이 이미 비어있습니다.")
+                return {
+                    'success': True,
+                    'existing_count': 0,
+                    'deleted_count': 0,
+                    'message': f'{table_name} 테이블이 이미 비어있음'
+                }
+            
+            # 데이터 삭제 (스키마는 유지)
+            deleted_count = self.delete(table_name, "1=1")  # 모든 데이터 삭제
+            
+            logger.info(f"테이블 {table_name} 데이터 삭제 완료: {existing_count}개 → 0개")
+            
+            return {
+                'success': True,
+                'existing_count': existing_count,
+                'deleted_count': deleted_count,
+                'message': f'{table_name} 테이블에서 {deleted_count}개 레코드 삭제됨'
+            }
+            
+        except Exception as e:
+            logger.error(f"테이블 {table_name} 데이터 삭제 실패: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'existing_count': 0,
+                'deleted_count': 0,
+                'message': f'{table_name} 데이터 삭제 중 오류 발생'
+            }
+
+    def clear_multiple_tables_data(self, table_names: List[str]) -> dict:
+        """
+        여러 테이블의 데이터를 일괄 삭제 (스키마 유지)
+        
+        Args:
+            table_names: 정리할 테이블명 리스트
+            
+        Returns:
+            dict: 전체 정리 결과 정보
+        """
+        try:
+            logger.info(f"다중 테이블 데이터 삭제 시작: {', '.join(table_names)}")
+            
+            results = []
+            total_deleted = 0
+            
+            for table_name in table_names:
+                result = self.clear_table_data(table_name)
+                results.append({
+                    'table': table_name,
+                    **result
+                })
+                
+                if result['success']:
+                    total_deleted += result['deleted_count']
+            
+            success_count = sum(1 for r in results if r['success'])
+            
+            logger.info(f"다중 테이블 정리 완료: {success_count}/{len(table_names)}개 성공, 총 {total_deleted}개 레코드 삭제")
+            
+            return {
+                'success': success_count == len(table_names),
+                'total_tables': len(table_names),
+                'success_count': success_count,
+                'total_deleted': total_deleted,
+                'results': results,
+                'message': f'{success_count}/{len(table_names)}개 테이블 정리 완료'
+            }
+            
+        except Exception as e:
+            logger.error(f"다중 테이블 정리 실패: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e),
+                'message': '다중 테이블 정리 중 오류 발생'
+            }
         
 
 @lru_cache(maxsize=1)
