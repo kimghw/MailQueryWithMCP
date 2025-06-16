@@ -9,7 +9,7 @@ ALTER TABLE accounts ADD COLUMN oauth_client_id TEXT;
 ALTER TABLE accounts ADD COLUMN oauth_client_secret TEXT; -- 암호화된 데이터
 ALTER TABLE accounts ADD COLUMN oauth_tenant_id TEXT;
 ALTER TABLE accounts ADD COLUMN oauth_redirect_uri TEXT;
-ALTER TABLE accounts ADD COLUMN status TEXT NOT NULL DEFAULT 'INACTIVE';
+ALTER TABLE accounts ADD COLUMN status TEXT NOT NULL DEFAULT 'ACTIVE';
 ALTER TABLE accounts ADD COLUMN auth_type TEXT;
 ALTER TABLE accounts ADD COLUMN delegated_permissions TEXT; -- JSON 형태
 

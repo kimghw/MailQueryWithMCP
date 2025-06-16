@@ -56,7 +56,7 @@ CREATE TABLE accounts (
     user_id TEXT UNIQUE NOT NULL,
     user_name TEXT NOT NULL,
     email TEXT UNIQUE NOT NULL,
-    status TEXT NOT NULL DEFAULT 'INACTIVE',
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
     is_active BOOLEAN NOT NULL DEFAULT 0,
     
     -- Enrollment 정보

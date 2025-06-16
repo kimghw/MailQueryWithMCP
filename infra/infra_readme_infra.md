@@ -42,7 +42,7 @@ CREATE TABLE accounts (
     oauth_client_secret TEXT, -- 암호화된 데이터
     oauth_tenant_id TEXT,
     oauth_redirect_uri TEXT,
-    status TEXT NOT NULL DEFAULT 'INACTIVE',
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
     auth_type TEXT,
     delegated_permissions TEXT -- JSON 형태
 );
