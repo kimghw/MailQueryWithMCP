@@ -45,10 +45,17 @@ class MailQueryOrchestrator:
             # 1. 입력 검증
             await self._validate_request(request)
             
-            # 2. infra.token_service를 통한 토큰 확보
-            access_token = await self.token_service.get_valid_access_token(request.user_id)
-            if not access_token:
-                raise AuthenticationError(f"유효한 토큰이 없습니다: {request.user_id}")
+            # 2. 토큰 상태 사전 확인 및 갱신
+            token_status = await self.token_service.validate_and_refresh_token(request.user_id)
+            
+            if token_status["status"] not in ["valid", "refreshed"]:
+                raise AuthenticationError(
+                    f"토큰 인증 실패: {token_status['message']}",
+                    details={"user_id": request.user_id, "status": token_status["status"]}
+                )
+            
+            access_token = token_status["access_token"]
+            logger.info(f"토큰 검증 완료: user_id={request.user_id}, status={token_status['status']}")
             
             # 3. 모듈 내부: OData 필터 생성
             odata_filter = None
@@ -154,10 +161,17 @@ class MailQueryOrchestrator:
             if not sanitized_term:
                 raise ValueError("유효한 검색어가 필요합니다")
             
-            # 토큰 확보
-            access_token = await self.token_service.get_valid_access_token(user_id)
-            if not access_token:
-                raise AuthenticationError(f"유효한 토큰이 없습니다: {user_id}")
+            # 토큰 상태 사전 확인 및 갱신
+            token_status = await self.token_service.validate_and_refresh_token(user_id)
+            
+            if token_status["status"] not in ["valid", "refreshed"]:
+                raise AuthenticationError(
+                    f"토큰 인증 실패: {token_status['message']}",
+                    details={"user_id": user_id, "status": token_status["status"]}
+                )
+            
+            access_token = token_status["access_token"]
+            logger.info(f"토큰 검증 완료 (검색): user_id={user_id}, status={token_status['status']}")
             
             # 선택 필드 처리
             select_clause = None
@@ -206,9 +220,17 @@ class MailQueryOrchestrator:
     async def mail_query_get_mailbox_info(self, user_id: str) -> MailboxInfo:
         """사용자 메일박스 정보 조회"""
         try:
-            access_token = await self.token_service.get_valid_access_token(user_id)
-            if not access_token:
-                raise AuthenticationError(f"유효한 토큰이 없습니다: {user_id}")
+            # 토큰 상태 사전 확인 및 갱신
+            token_status = await self.token_service.validate_and_refresh_token(user_id)
+            
+            if token_status["status"] not in ["valid", "refreshed"]:
+                raise AuthenticationError(
+                    f"토큰 인증 실패: {token_status['message']}",
+                    details={"user_id": user_id, "status": token_status["status"]}
+                )
+            
+            access_token = token_status["access_token"]
+            logger.info(f"토큰 검증 완료 (메일박스 정보): user_id={user_id}, status={token_status['status']}")
             
             mailbox_info = await self.graph_client.get_mailbox_info(access_token)
             
@@ -227,9 +249,17 @@ class MailQueryOrchestrator:
     ) -> GraphMailItem:
         """특정 메시지 조회"""
         try:
-            access_token = await self.token_service.get_valid_access_token(user_id)
-            if not access_token:
-                raise AuthenticationError(f"유효한 토큰이 없습니다: {user_id}")
+            # 토큰 상태 사전 확인 및 갱신
+            token_status = await self.token_service.validate_and_refresh_token(user_id)
+            
+            if token_status["status"] not in ["valid", "refreshed"]:
+                raise AuthenticationError(
+                    f"토큰 인증 실패: {token_status['message']}",
+                    details={"user_id": user_id, "status": token_status["status"]}
+                )
+            
+            access_token = token_status["access_token"]
+            logger.info(f"토큰 검증 완료 (메시지 조회): user_id={user_id}, status={token_status['status']}")
             
             select_clause = None
             if select_fields:
@@ -298,7 +328,7 @@ class MailQueryOrchestrator:
                 "created_at": datetime.utcnow()
             }
             
-            await self.db.insert("query_logs", log_data)
+            self.db.insert("query_logs", log_data)
             
         except Exception as e:
             logger.error(f"쿼리 로그 기록 실패: {str(e)}")
@@ -325,7 +355,7 @@ class MailQueryOrchestrator:
                 "created_at": datetime.utcnow()
             }
             
-            await self.db.insert("query_logs", log_data)
+            self.db.insert("query_logs", log_data)
             
         except Exception as e:
             logger.error(f"검색 로그 기록 실패: {str(e)}")
@@ -354,7 +384,7 @@ class MailQueryOrchestrator:
                 "created_at": datetime.utcnow()
             }
             
-            await self.db.insert("query_logs", log_data)
+            self.db.insert("query_logs", log_data)
             
         except Exception as e:
             logger.error(f"오류 로그 기록 실패: {str(e)}")

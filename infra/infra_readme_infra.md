@@ -16,6 +16,48 @@ IACSGraph 프로젝트의 모든 모듈이 공유하는 핵심 기반 서비스�
 - **`exceptions.py`**: `IACSGraphError`를 기반으로 하는 표준 예외 클래스를 정의하여 일관된 오류 처리를 지원합니다.
 - **`kafka_client.py`**: Kafka 연동을 위한 Producer/Consumer 기능을 제공합니다. (이벤트 기반 아키텍처용)
 
+### 2.1 토큰 서비스 (`token_service.py`) 상세
+
+토큰 서비스는 OAuth 토큰의 전체 생명주기를 관리하는 핵심 컴포넌트입니다.
+
+#### 주요 기능
+
+1. **토큰 저장 및 관리**
+   - `store_tokens()`: 새로운 토큰 정보를 데이터베이스에 저장
+   - `revoke_tokens()`: 토큰 무효화
+   - `cleanup_expired_tokens()`: 만료된 토큰 정리
+
+2. **토큰 조회 및 자동 갱신**
+   - `get_valid_access_token()`: 유효한 액세스 토큰 반환 (만료 시 자동 갱신)
+   - `validate_and_refresh_token()`: 토큰 유효성 검증 및 필요 시 갱신
+   - `force_token_refresh()`: 강제 토큰 갱신
+
+3. **인증 상태 관리**
+   - `check_authentication_status()`: 계정의 인증 상태 확인
+   - `update_account_status()`: 계정 상태 업데이트 (ACTIVE, INACTIVE, REAUTH_REQUIRED 등)
+   - `deactivate_account()`: 계정 비활성화
+
+4. **계정 정보 조회**
+   - `get_account_info()`: 특정 계정 정보 조회
+   - `get_all_active_accounts()`: 모든 활성 계정 조회
+   - `get_accounts_by_status()`: 상태별 계정 조회
+   - `get_accounts_requiring_reauth()`: 재인증 필요 계정 조회
+
+#### 토큰 갱신 흐름
+
+```mermaid
+graph TD
+    A[토큰 요청] --> B{토큰 유효?}
+    B -->|예| C[액세스 토큰 반환]
+    B -->|아니오| D{리프레시 토큰 존재?}
+    D -->|예| E[토큰 갱신 시도]
+    D -->|아니오| F[재인증 필요]
+    E --> G{갱신 성공?}
+    G -->|예| H[새 토큰 저장]
+    G -->|아니오| F
+    H --> C
+```
+
 ## 3. 데이터베이스 스키마 (`infra/migrations/`)
 
 `database.py`가 시작될 때 `infra/migrations/` 폴더의 `.sql` 파일들이 실행되어 데이터베이스 스키마를 구성합니다. 최종 테이블 구조는 다음과 같습니다.
@@ -100,6 +142,8 @@ CREATE TABLE account_audit_logs (
 
 다른 모듈에서는 필요한 `infra` 서비스를 `import`하여 사용합니다.
 
+### 4.1 기본 사용법
+
 ```python
 # 필요한 인프라 서비스들을 import
 from infra.core import get_config, get_database_manager, get_logger
@@ -124,6 +168,130 @@ try:
 
 except DatabaseError as e:
     logger.error(f"데이터베이스 작업 실패: {e}", exc_info=True)
+```
+
+### 4.2 토큰 서비스 사용법
+
+```python
+from infra.core import get_token_service, get_logger
+from infra.core.exceptions import TokenError, TokenExpiredError
+
+# 토큰 서비스 인스턴스 가져오기
+token_service = get_token_service()
+logger = get_logger(__name__)
+
+# 1. 유효한 액세스 토큰 가져오기 (자동 갱신 포함)
+async def get_access_token_example(user_id: str):
+    try:
+        access_token = await token_service.get_valid_access_token(user_id)
+        if access_token:
+            logger.info(f"유효한 토큰을 획득했습니다: {user_id}")
+            return access_token
+        else:
+            logger.warning(f"토큰을 가져올 수 없습니다: {user_id}")
+            return None
+    except TokenExpiredError:
+        logger.error(f"리프레시 토큰이 만료되었습니다: {user_id}")
+        # 재인증 필요
+        return None
+
+# 2. 토큰 유효성 검증 및 갱신
+async def validate_token_example(user_id: str):
+    result = await token_service.validate_and_refresh_token(user_id)
+    
+    if result['status'] == 'valid':
+        logger.info("토큰이 유효합니다")
+        return result['access_token']
+    elif result['status'] == 'refreshed':
+        logger.info("토큰이 갱신되었습니다")
+        return result['access_token']
+    else:
+        logger.warning(f"토큰 검증 실패: {result['message']}")
+        return None
+
+# 3. 인증 상태 확인
+async def check_auth_status_example(user_id: str):
+    auth_status = await token_service.check_authentication_status(user_id)
+    
+    logger.info(f"인증 상태: {auth_status['status']}")
+    logger.info(f"재인증 필요: {auth_status['requires_reauth']}")
+    
+    if auth_status['requires_reauth']:
+        # 재인증 프로세스 시작
+        logger.warning(f"재인증이 필요합니다: {auth_status['message']}")
+    
+    return auth_status
+
+# 4. 새로운 토큰 저장
+async def store_new_tokens_example(user_id: str, token_info: dict):
+    try:
+        account_id = await token_service.store_tokens(
+            user_id=user_id,
+            token_info=token_info,
+            user_name="사용자 이름"
+        )
+        logger.info(f"토큰 저장 완료: account_id={account_id}")
+        return account_id
+    except Exception as e:
+        logger.error(f"토큰 저장 실패: {str(e)}")
+        return None
+
+# 5. 계정별 상태 조회
+async def get_accounts_by_status_example():
+    # 재인증이 필요한 계정들 조회
+    reauth_accounts = await token_service.get_accounts_requiring_reauth()
+    for account in reauth_accounts:
+        logger.info(f"재인증 필요: {account['user_id']}")
+    
+    # 비활성 계정들 조회
+    inactive_accounts = await token_service.get_inactive_accounts()
+    for account in inactive_accounts:
+        logger.info(f"비활성 계정: {account['user_id']}")
+```
+
+### 4.3 통합 사용 예시
+
+```python
+import asyncio
+from infra.core import get_token_service, get_oauth_client, get_logger
+
+async def process_user_request(user_id: str):
+    """사용자 요청 처리 시 토큰 관리 예시"""
+    token_service = get_token_service()
+    oauth_client = get_oauth_client()
+    logger = get_logger(__name__)
+    
+    try:
+        # 1. 유효한 액세스 토큰 가져오기
+        access_token = await token_service.get_valid_access_token(user_id)
+        
+        if not access_token:
+            logger.error(f"유효한 토큰이 없습니다: {user_id}")
+            return None
+        
+        # 2. 토큰을 사용하여 API 호출
+        # 예: Microsoft Graph API 호출
+        user_info = await oauth_client.get_user_info(access_token)
+        
+        # 3. 마지막 동기화 시간 업데이트
+        await token_service.update_last_sync_time(user_id)
+        
+        return user_info
+        
+    except TokenExpiredError:
+        # 토큰이 만료되어 갱신할 수 없는 경우
+        logger.warning(f"토큰 갱신 실패, 재인증 필요: {user_id}")
+        await token_service.update_account_status(user_id, "REAUTH_REQUIRED")
+        return None
+        
+    except Exception as e:
+        logger.error(f"요청 처리 실패: {user_id}, error={str(e)}")
+        return None
+
+# 실행 예시
+if __name__ == "__main__":
+    user_id = "user@example.com"
+    result = asyncio.run(process_user_request(user_id))
 ```
 
 ## 5. 필수 환경 설정 (`.env` 파일)
