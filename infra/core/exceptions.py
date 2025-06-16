@@ -164,10 +164,13 @@ class AuthenticationError(IACSGraphError):
         details = kwargs.get("details", {})
         if auth_type:
             details["auth_type"] = auth_type
-            
+        
+        # error_code를 kwargs에서 제거하여 중복 전달 방지
+        error_code = kwargs.pop("error_code", "AUTH_ERROR")
+        
         super().__init__(
             message=message,
-            error_code=kwargs.get("error_code", "AUTH_ERROR"),
+            error_code=error_code,
             details=details,
         )
 
@@ -176,10 +179,13 @@ class TokenError(AuthenticationError):
     """토큰 관련 오류"""
 
     def __init__(self, message: str, **kwargs):
+        # error_code를 kwargs에서 제거하여 중복 전달 방지
+        error_code = kwargs.pop("error_code", "TOKEN_ERROR")
+        
         super().__init__(
             message=message,
-            error_code=kwargs.get("error_code", "TOKEN_ERROR"),
             auth_type="oauth",
+            error_code=error_code,
             **kwargs
         )
 
@@ -188,9 +194,12 @@ class TokenExpiredError(TokenError):
     """토큰 만료 오류"""
 
     def __init__(self, message: str = "액세스 토큰이 만료되었습니다", **kwargs):
+        # error_code를 kwargs에서 제거하여 중복 전달 방지
+        error_code = kwargs.pop("error_code", "TOKEN_EXPIRED")
+        
         super().__init__(
             message=message,
-            error_code=kwargs.get("error_code", "TOKEN_EXPIRED"),
+            error_code=error_code,
             **kwargs
         )
 
@@ -199,9 +208,12 @@ class TokenRefreshError(TokenError):
     """토큰 갱신 오류"""
 
     def __init__(self, message: str = "토큰 갱신에 실패했습니다", **kwargs):
+        # error_code를 kwargs에서 제거하여 중복 전달 방지
+        error_code = kwargs.pop("error_code", "TOKEN_REFRESH_ERROR")
+        
         super().__init__(
             message=message,
-            error_code=kwargs.get("error_code", "TOKEN_REFRESH_ERROR"),
+            error_code=error_code,
             **kwargs
         )
 

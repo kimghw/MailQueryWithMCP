@@ -7,7 +7,7 @@ OAuth 클라이언트와 함께 작동하여 안전한 토큰 라이프사이클
 
 import asyncio
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 from .config import get_config
@@ -85,7 +85,7 @@ class TokenService:
                 "token_expiry": expiry_time,
                 "status": status,
                 "is_active": True,
-                "updated_at": datetime.utcnow().isoformat()
+                "updated_at": datetime.now(timezone.utc).isoformat()
             }
 
             if existing_account:
@@ -101,7 +101,7 @@ class TokenService:
             else:
                 # 새 계정 생성 - 최초 등록시 INACTIVE 상태로 설정
                 account_data["status"] = "INACTIVE"
-                account_data["created_at"] = datetime.utcnow().isoformat()
+                account_data["created_at"] = datetime.now(timezone.utc).isoformat()
                 account_id = self.db.insert("accounts", account_data)
                 logger.info(f"새 계정 생성: user_id={user_id}, account_id={account_id}, status=INACTIVE")
 
@@ -149,7 +149,10 @@ class TokenService:
                     expiry_time = datetime.fromisoformat(expiry_time)
                 
                 # 토큰이 아직 유효한 경우
-                if datetime.utcnow() < expiry_time:
+                # timezone-aware 비교를 위해 expiry_time이 naive인 경우 UTC로 변환
+                if expiry_time.tzinfo is None:
+                    expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) < expiry_time:
                     # 계정 상태를 ACTIVE로 업데이트
                     await self.update_account_status(user_id, "ACTIVE")
                     logger.debug(f"유효한 액세스 토큰 반환: user_id={user_id}")
@@ -284,7 +287,12 @@ class TokenService:
         """
         try:
             account = self.db.fetch_one(
-                "SELECT refresh_token, user_name FROM accounts WHERE user_id = ? AND is_active = 1",
+                """
+                SELECT refresh_token, user_name, oauth_client_id, 
+                       oauth_client_secret, oauth_tenant_id
+                FROM accounts 
+                WHERE user_id = ? AND is_active = 1
+                """,
                 (user_id,)
             )
 
@@ -292,9 +300,36 @@ class TokenService:
                 logger.warning(f"갱신할 토큰이 없음: user_id={user_id}")
                 return False
 
-            new_token_info = await self.oauth_client.refresh_access_token(
-                account["refresh_token"]
-            )
+            # 계정별 OAuth 설정 확인
+            oauth_client_id = account["oauth_client_id"]
+            oauth_client_secret = account["oauth_client_secret"]
+            oauth_tenant_id = account["oauth_tenant_id"]
+
+            # 계정별 OAuth 설정이 없으면 공통 설정 사용
+            if oauth_client_id and oauth_client_secret:
+                # 암호화된 client_secret 복호화
+                try:
+                    decrypted_secret = self.config.decrypt_data(oauth_client_secret)
+                except Exception as e:
+                    logger.error(f"OAuth 클라이언트 시크릿 복호화 실패: user_id={user_id}, error={str(e)}")
+                    raise AuthenticationError("OAuth 설정 복호화에 실패했습니다.")
+
+                logger.info(f"계정별 설정으로 강제 토큰 갱신: user_id={user_id}")
+                new_token_info = await self.oauth_client.refresh_access_token(
+                    account["refresh_token"],
+                    client_id=oauth_client_id,
+                    client_secret=decrypted_secret,
+                    tenant_id=oauth_tenant_id
+                )
+            else:
+                # 공통 설정 사용
+                if not self.config.is_oauth_configured():
+                    raise AuthenticationError("OAuth 설정이 완료되지 않았습니다.")
+                
+                logger.info(f"공통 설정으로 강제 토큰 갱신: user_id={user_id}")
+                new_token_info = await self.oauth_client.refresh_access_token(
+                    account["refresh_token"]
+                )
             
             await self.store_tokens(
                 user_id=user_id,
@@ -328,7 +363,7 @@ class TokenService:
                 table="accounts",
                 data={
                     "is_active": False,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 },
                 where_clause="user_id = ?",
                 where_params=(user_id,)
@@ -374,7 +409,10 @@ class TokenService:
                 if expiry_time:
                     if isinstance(expiry_time, str):
                         expiry_time = datetime.fromisoformat(expiry_time)
-                    account_dict["token_expired"] = datetime.utcnow() >= expiry_time
+                    # timezone-aware 비교
+                    if expiry_time.tzinfo is None:
+                        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+                    account_dict["token_expired"] = datetime.now(timezone.utc) >= expiry_time
                 else:
                     account_dict["token_expired"] = True
 
@@ -413,7 +451,10 @@ class TokenService:
                 if expiry_time:
                     if isinstance(expiry_time, str):
                         expiry_time = datetime.fromisoformat(expiry_time)
-                    account_dict["token_expired"] = datetime.utcnow() >= expiry_time
+                    # timezone-aware 비교
+                    if expiry_time.tzinfo is None:
+                        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+                    account_dict["token_expired"] = datetime.now(timezone.utc) >= expiry_time
                 else:
                     account_dict["token_expired"] = True
 
@@ -439,8 +480,8 @@ class TokenService:
             rows_affected = self.db.update(
                 table="accounts",
                 data={
-                    "last_sync_time": datetime.utcnow().isoformat(),
-                    "updated_at": datetime.utcnow().isoformat()
+                    "last_sync_time": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 },
                 where_clause="user_id = ? AND is_active = 1",
                 where_params=(user_id,)
@@ -466,7 +507,7 @@ class TokenService:
         """
         try:
             # 30일 이상 된 비활성 계정들을 찾아서 토큰 정보 삭제
-            cutoff_date = (datetime.utcnow() - timedelta(days=30)).isoformat()
+            cutoff_date = (datetime.now(timezone.utc) - timedelta(days=30)).isoformat()
             
             rows_affected = self.db.update(
                 table="accounts",
@@ -474,7 +515,7 @@ class TokenService:
                     "access_token": None,
                     "refresh_token": None,
                     "token_expiry": None,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 },
                 where_clause="is_active = 0 AND updated_at < ?",
                 where_params=(cutoff_date,)
@@ -508,7 +549,7 @@ class TokenService:
                     "token_expiry": None,
                     "status": "INACTIVE",
                     "is_active": False,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 },
                 where_clause="user_id = ?",
                 where_params=(user_id,)
@@ -541,7 +582,7 @@ class TokenService:
                 table="accounts",
                 data={
                     "status": status,
-                    "updated_at": datetime.utcnow().isoformat()
+                    "updated_at": datetime.now(timezone.utc).isoformat()
                 },
                 where_clause="user_id = ?",
                 where_params=(user_id,)
@@ -617,7 +658,10 @@ class TokenService:
                     else:
                         expiry_time = token_expiry
                     
-                    if datetime.utcnow() < expiry_time:
+                    # timezone-aware 비교
+                    if expiry_time.tzinfo is None:
+                        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+                    if datetime.now(timezone.utc) < expiry_time:
                         access_token_valid = True
                 except Exception:
                     pass
@@ -654,7 +698,7 @@ class TokenService:
                         "user_id": user_id,
                         "status": "ERROR",
                         "requires_reauth": True,
-                        "message": "[AUTH_ERROR] OAuth 설정이 완료되지 않았습니다."
+                        "message": "OAuth 설정이 완료되지 않았습니다."
                     }
 
             # refresh_token 유효성 확인
@@ -772,7 +816,10 @@ class TokenService:
                 if expiry_time:
                     if isinstance(expiry_time, str):
                         expiry_time = datetime.fromisoformat(expiry_time)
-                    account_dict["token_expired"] = datetime.utcnow() >= expiry_time
+                    # timezone-aware 비교
+                    if expiry_time.tzinfo is None:
+                        expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+                    account_dict["token_expired"] = datetime.now(timezone.utc) >= expiry_time
                 else:
                     account_dict["token_expired"] = True
                     

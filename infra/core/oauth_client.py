@@ -10,7 +10,7 @@ import base64
 import json
 import urllib.parse
 from typing import Optional, Dict, Any, List
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
 import aiohttp
@@ -38,8 +38,7 @@ class OAuthClient:
                 timeout=timeout,
                 headers={
                     "User-Agent": "IACSGraph/1.0",
-                    "Accept": "application/json",
-                    "Content-Type": "application/json"
+                    "Accept": "application/json"
                 }
             )
         return self._session
@@ -499,8 +498,8 @@ class OAuthClient:
         token_type = response_data.get("token_type", "Bearer")
         scope = response_data.get("scope", "")
 
-        # 만료 시간 계산 (버퍼 시간 적용)
-        expiry_time = datetime.utcnow() + timedelta(
+        # 만료 시간 계산 (버퍼 시간 적용) - UTC timezone-aware datetime 사용
+        expiry_time = datetime.now(timezone.utc) + timedelta(
             seconds=expires_in - (self.config.token_refresh_buffer_minutes * 60)
         )
 
@@ -511,7 +510,7 @@ class OAuthClient:
             "expires_in": expires_in,
             "expiry_time": expiry_time,
             "scope": scope,
-            "created_at": datetime.utcnow()
+            "created_at": datetime.now(timezone.utc)
         }
 
         # ID 토큰이 있으면 디코딩하여 사용자 정보 추출
@@ -574,7 +573,12 @@ class OAuthClient:
         if isinstance(expiry_time, str):
             expiry_time = datetime.fromisoformat(expiry_time.replace("Z", "+00:00"))
         
-        return datetime.utcnow() >= expiry_time
+        # timezone-aware datetime 비교
+        if expiry_time.tzinfo is None:
+            # timezone-naive인 경우 UTC로 가정
+            expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+        
+        return datetime.now(timezone.utc) >= expiry_time
 
     async def close(self) -> None:
         """HTTP 세션을 종료합니다."""

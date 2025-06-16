@@ -598,4 +598,287 @@ sequenceDiagram
 ```
 1. ClientApp → MailQueryOrchestrator.mail_query_user_emails()
 2. MailQueryOrchestrator → infra.token_service (토큰 확보)
-3
+3. MailQueryOrchestrator → GraphAPIClient (Graph API 호출)
+4. GraphAPIClient → Microsoft Graph API
+5. MailQueryOrchestrator → infra.database (로그 기록)
+```
+
+## 9. 추가 권장사항 (개선 및 확장)
+
+### 9.1 필수 수정사항 (즉시 적용)
+
+#### A. 비동기/동기 함수 정리
+**문제**: 현재 구현에서 `DatabaseManager.insert()`는 동기 함수인데 `await`를 사용하고 있어 런타임 오류 발생 가능
+
+```python
+# mail_query_orchestrator.py 수정 필요
+async def _log_query_execution(self, ...):
+    try:
+        # ❌ 기존: await self.db.insert("query_logs", log_data)
+        # ✅ 수정: self.db.insert("query_logs", log_data)
+        self.db.insert("query_logs", log_data)
+    except Exception as e:
+        logger.error(f"쿼리 로그 기록 실패: {str(e)}")
+
+async def _log_query_error(self, ...):
+    try:
+        # ❌ 기존: await self.db.insert("query_logs", log_data)  
+        # ✅ 수정: self.db.insert("query_logs", log_data)
+        self.db.insert("query_logs", log_data)
+    except Exception as e:
+        logger.error(f"오류 로그 기록 실패: {str(e)}")
+```
+
+#### B. 토큰 서비스 연동 강화
+**개선**: `token_service.validate_and_refresh_token()` 사용으로 토큰 유효성 사전 검증 및 자동 갱신
+
+```python
+# mail_query_orchestrator.py 개선
+async def mail_query_user_emails(self, request: MailQueryRequest) -> MailQueryResponse:
+    start_time = time.time()
+    
+    try:
+        # 1. 토큰 유효성 사전 검증 및 자동 갱신
+        token_status = await self.token_service.validate_and_refresh_token(request.user_id)
+        
+        if token_status["status"] not in ["valid", "refreshed"]:
+            raise AuthenticationError(
+                f"토큰 인증 실패: {token_status['message']}",
+                details={"user_id": request.user_id, "status": token_status["status"]}
+            )
+        
+        access_token = token_status["access_token"]
+        logger.info(f"토큰 검증 완료: user_id={request.user_id}, status={token_status['status']}")
+        
+        # 2. 나머지 로직 계속...
+```
+
+### 9.2 기능 확장 권장사항
+
+#### A. OData 필터 빌더 확장
+**목적**: 쿼리 파라미터를 한 곳에서 통합 관리하고 확장성 제공
+
+```python
+# odata_filter_builder.py에 추가
+def build_full_query_params(
+    self, 
+    filters: Optional[MailQueryFilters] = None,
+    select_fields: Optional[List[str]] = None,
+    orderby: Optional[str] = None,
+    top: int = 50,
+    skip: int = 0
+) -> Dict[str, Any]:
+    """전체 쿼리 파라미터 구성"""
+    params = {
+        "$top": min(top, 1000),
+        "$skip": skip,
+        "$orderby": orderby or "receivedDateTime desc"
+    }
+    
+    if filters:
+        filter_str = self.build_filter(filters)
+        if filter_str:
+            params["$filter"] = filter_str
+    
+    if select_fields:
+        params["$select"] = self.build_select_clause(select_fields)
+    
+    return params
+
+def build_select_clause(self, fields: List[str]) -> str:
+    """$select 절 생성"""
+    return ",".join(fields)
+
+def build_orderby_clause(self, orderby: str) -> str:
+    """$orderby 절 생성 및 검증"""
+    valid_fields = ["receivedDateTime", "subject", "from", "hasAttachments", "importance"]
+    field = orderby.split()[0]  # "receivedDateTime desc" -> "receivedDateTime"
+    
+    if field not in valid_fields:
+        return "receivedDateTime desc"  # 기본값
+    
+    return orderby
+```
+
+#### B. 고급 옵션 지원 (UC-2 확장 시나리오)
+**목적**: Microsoft Graph API의 고급 기능 활용 (Prefer 헤더, ImmutableId 등)
+
+```python
+# mail_query_orchestrator.py에 추가
+async def mail_query_with_advanced_options(
+    self, 
+    request: MailQueryRequest,
+    prefer_text_body: bool = False,
+    immutable_ids: bool = False
+) -> MailQueryResponse:
+    """고급 옵션을 포함한 메일 조회"""
+    
+    # 토큰 검증
+    token_status = await self.token_service.validate_and_refresh_token(request.user_id)
+    if token_status["status"] not in ["valid", "refreshed"]:
+        raise AuthenticationError(f"토큰 인증 실패: {token_status['message']}")
+    
+    access_token = token_status["access_token"]
+    
+    # 고급 헤더 설정
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    if prefer_text_body:
+        headers["Prefer"] = 'outlook.body-content-type="text"'
+    
+    if immutable_ids:
+        headers["Prefer"] = 'IdType="ImmutableId"'
+    
+    # GraphAPIClient에 헤더 전달하여 호출
+    return await self.graph_client.query_messages_with_headers(
+        access_token=access_token,
+        headers=headers,
+        # ... 기타 파라미터
+    )
+```
+
+#### C. GraphAPIClient 헤더 지원 확장
+**목적**: 사용자 정의 헤더를 통한 Graph API 고급 기능 활용
+
+```python
+# graph_api_client.py에 추가
+async def query_messages_with_headers(
+    self,
+    access_token: str,
+    headers: Optional[Dict[str, str]] = None,
+    odata_filter: Optional[str] = None,
+    select_fields: Optional[str] = None,
+    top: int = 50,
+    skip: int = 0
+) -> Dict[str, Any]:
+    """사용자 정의 헤더를 포함한 메시지 조회"""
+    
+    url = f"{self.base_url}/me/messages"
+    params = {
+        "$top": min(top, 1000),
+        "$skip": skip,
+        "$orderby": "receivedDateTime desc"
+    }
+    
+    if odata_filter:
+        params["$filter"] = odata_filter
+    if select_fields:
+        params["$select"] = select_fields
+    
+    # 기본 헤더와 사용자 헤더 병합
+    default_headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Accept": "application/json",
+        "Content-Type": "application/json"
+    }
+    
+    if headers:
+        default_headers.update(headers)
+    
+    # 나머지 로직은 기존과 동일...
+```
+
+### 9.3 성능 최적화 권장사항
+
+#### A. 쿼리 성능 예측
+**목적**: 쿼리 실행 전 성능 예상으로 사용자 경험 개선
+
+```python
+# _mail_query_helpers.py에 추가
+def estimate_query_performance(filters: MailQueryFilters, expected_count: int) -> str:
+    """쿼리 성능 예상"""
+    score = 0
+    
+    if filters.date_from or filters.date_to:
+        score += 3  # 날짜 필터는 인덱스가 있어 빠름
+    if filters.sender_address:
+        score += 2  # 발신자 필터도 비교적 빠름
+    if filters.subject_contains:
+        score -= 2  # 텍스트 검색은 느림
+    if expected_count > 1000:
+        score -= 1  # 대량 데이터는 느림
+    
+    if score >= 3:
+        return "FAST"
+    elif score >= 0:
+        return "MODERATE"
+    else:
+        return "SLOW"
+
+def optimize_pagination_strategy(total_expected: int, user_preference: str) -> PaginationOptions:
+    """사용자 선호도에 따른 페이징 전략 최적화"""
+    if user_preference == "fast_preview":
+        return PaginationOptions(top=20, max_pages=2)
+    elif user_preference == "comprehensive":
+        return PaginationOptions(top=100, max_pages=20)
+    else:  # balanced
+        return PaginationOptions(top=50, max_pages=10)
+```
+
+#### B. 에러 처리 강화
+**목적**: 구체적인 오류 분류 및 복구 전략 제공
+
+```python
+# mail_query_orchestrator.py 개선
+async def mail_query_user_emails(self, request: MailQueryRequest) -> MailQueryResponse:
+    try:
+        # ... 기존 로직
+    except AuthenticationError as e:
+        # 토큰 관련 오류는 상세 로깅
+        logger.error(f"인증 오류: user_id={request.user_id}, error={str(e)}")
+        await self._log_query_error(request, f"AUTH_ERROR: {str(e)}", execution_time)
+        raise
+    except APIConnectionError as e:
+        # API 연결 오류는 재시도 가능성 로깅
+        logger.error(f"API 연결 오류: user_id={request.user_id}, error={str(e)}")
+        await self._log_query_error(request, f"API_ERROR: {str(e)}", execution_time)
+        raise
+    except Exception as e:
+        # 일반 오류
+        logger.error(f"메일 조회 실패: user_id={request.user_id}, error={str(e)}")
+        await self._log_query_error(request, f"GENERAL_ERROR: {str(e)}", execution_time)
+        raise
+```
+
+### 9.4 확장 스키마 (향후 대응)
+
+#### A. 고급 요청 옵션
+```python
+# mail_query_schema.py에 추가
+class AdvancedMailQueryOptions(BaseModel):
+    """고급 메일 조회 옵션"""
+    prefer_text_body: bool = Field(default=False, description="텍스트 본문 우선")
+    immutable_ids: bool = Field(default=False, description="불변 ID 사용")
+    include_headers: bool = Field(default=False, description="메시지 헤더 포함")
+    performance_hint: str = Field(default="balanced", description="성능 힌트")
+
+class MailQueryRequestAdvanced(MailQueryRequest):
+    """고급 옵션을 포함한 메일 조회 요청"""
+    advanced_options: Optional[AdvancedMailQueryOptions] = Field(None, description="고급 옵션")
+```
+
+### 9.5 적용 우선순위
+
+#### 🔴 우선순위 1: 필수 수정 (즉시)
+1. **비동기/동기 함수 정리** - 런타임 오류 방지
+2. **토큰 서비스 연동 강화** - 인증 안정성 향상
+
+#### 🟡 우선순위 2: 기능 확장 (권장)
+1. **OData 필터 빌더 확장** - 쿼리 관리 통합화
+2. **고급 옵션 지원** - Graph API 고급 기능 활용
+
+#### 🟢 우선순위 3: 성능 최적화 (선택)
+1. **쿼리 성능 예측** - 사용자 경험 개선
+2. **에러 처리 강화** - 운영 안정성 향상
+
+### 9.6 구현 시 주의사항
+
+1. **350줄 제한 준수**: 모든 확장 기능은 별도 파일로 분리
+2. **완전 독립성 유지**: infra 서비스만 사용, 다른 모듈 의존 금지
+3. **하위 호환성**: 기존 API 인터페이스 변경 없이 확장
+4. **테스트 커버리지**: 각 확장 기능별 테스트 시나리오 작성
+5. **문서 업데이트**: README.md에 새로운 기능 사용법 추가
