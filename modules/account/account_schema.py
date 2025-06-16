@@ -90,7 +90,7 @@ class AccountCreate(BaseModel):
     oauth_redirect_uri: str = Field(..., description="OAuth 리다이렉트 URI")
     auth_type: AuthType = Field(default=AuthType.AUTHORIZATION_CODE_FLOW, description="인증 타입")
     delegated_permissions: List[str] = Field(default_factory=list, description="위임된 권한")
-    status: AccountStatus = Field(default=AccountStatus.INACTIVE, description="계정 상태")
+    status: AccountStatus = Field(default=AccountStatus.ACTIVE, description="계정 상태")
 
     @validator('user_id')
     def validate_user_id(cls, v):

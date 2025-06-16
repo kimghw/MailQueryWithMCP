@@ -228,8 +228,7 @@ class AccountSyncService:
             oauth_tenant_id=enrollment_data.oauth_config.tenant_id,
             oauth_redirect_uri=enrollment_data.oauth_config.redirect_uri,
             auth_type=enrollment_data.oauth_config.auth_type,
-            delegated_permissions=enrollment_data.oauth_config.delegated_permissions,
-            status=AccountStatus.INACTIVE  # 초기 상태는 INACTIVE
+            delegated_permissions=enrollment_data.oauth_config.delegated_permissions
         )
         
         account_id = self.repository.account_create_from_enrollment(account_create)
