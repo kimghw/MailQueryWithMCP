@@ -19,7 +19,9 @@ from .odata_filter_builder import ODataFilterBuilder
 from ._mail_query_helpers import (
     format_query_summary, 
     validate_pagination_params,
-    sanitize_filter_input
+    sanitize_filter_input,
+    save_mail_to_json,
+    save_multiple_mails_to_json
 )
 
 logger = get_logger(__name__)
@@ -37,6 +39,19 @@ class MailQueryOrchestrator:
         self.graph_client = GraphAPIClient()
         self.filter_builder = ODataFilterBuilder()
     
+    async def __aenter__(self):
+        """컨텍스트 매니저 진입"""
+        return self
+    
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """컨텍스트 매니저 종료 시 리소스 정리"""
+        await self.close()
+    
+    async def close(self):
+        """리소스 정리"""
+        await self.graph_client.close()
+        logger.debug("MailQueryOrchestrator 리소스 정리 완료")
+    
     async def mail_query_user_emails(self, request: MailQueryRequest) -> MailQueryResponse:
         """사용자 메일 조회 (독립적 구현)"""
         start_time = time.time()
@@ -45,17 +60,10 @@ class MailQueryOrchestrator:
             # 1. 입력 검증
             await self._validate_request(request)
             
-            # 2. 토큰 상태 사전 확인 및 갱신
-            token_status = await self.token_service.validate_and_refresh_token(request.user_id)
-            
-            if token_status["status"] not in ["valid", "refreshed"]:
-                raise AuthenticationError(
-                    f"토큰 인증 실패: {token_status['message']}",
-                    details={"user_id": request.user_id, "status": token_status["status"]}
-                )
-            
-            access_token = token_status["access_token"]
-            logger.info(f"토큰 검증 완료: user_id={request.user_id}, status={token_status['status']}")
+            # 2. infra.token_service를 통한 토큰 확보
+            access_token = await self.token_service.get_valid_access_token(request.user_id)
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {request.user_id}")
             
             # 3. 모듈 내부: OData 필터 생성
             odata_filter = None
@@ -127,8 +135,8 @@ class MailQueryOrchestrator:
                 }
             )
             
-            # 7. infra.database를 통한 로그 기록
-            await self._log_query_execution(request, response, odata_filter, select_fields)
+            # 7. infra.database를 통한 로그 기록 (동기 함수이므로 await 제거)
+            self._log_query_execution(request, response, odata_filter, select_fields)
             
             logger.info(format_query_summary(
                 request.user_id, len(messages), execution_time
@@ -138,7 +146,7 @@ class MailQueryOrchestrator:
             
         except Exception as e:
             execution_time = int((time.time() - start_time) * 1000)
-            await self._log_query_error(request, str(e), execution_time)
+            self._log_query_error(request, str(e), execution_time)
             
             logger.error(format_query_summary(
                 request.user_id, 0, execution_time, has_error=True
@@ -161,17 +169,10 @@ class MailQueryOrchestrator:
             if not sanitized_term:
                 raise ValueError("유효한 검색어가 필요합니다")
             
-            # 토큰 상태 사전 확인 및 갱신
-            token_status = await self.token_service.validate_and_refresh_token(user_id)
-            
-            if token_status["status"] not in ["valid", "refreshed"]:
-                raise AuthenticationError(
-                    f"토큰 인증 실패: {token_status['message']}",
-                    details={"user_id": user_id, "status": token_status["status"]}
-                )
-            
-            access_token = token_status["access_token"]
-            logger.info(f"토큰 검증 완료 (검색): user_id={user_id}, status={token_status['status']}")
+            # 토큰 확보
+            access_token = await self.token_service.get_valid_access_token(user_id)
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {user_id}")
             
             # 선택 필드 처리
             select_clause = None
@@ -203,7 +204,7 @@ class MailQueryOrchestrator:
             )
             
             # 검색 로그 기록
-            await self._log_search_execution(user_id, sanitized_term, response)
+            self._log_search_execution(user_id, sanitized_term, response)
             
             logger.info(f"메시지 검색 완료: user_id={user_id}, "
                        f"term='{sanitized_term}', count={len(search_data['messages'])}, "
@@ -220,17 +221,9 @@ class MailQueryOrchestrator:
     async def mail_query_get_mailbox_info(self, user_id: str) -> MailboxInfo:
         """사용자 메일박스 정보 조회"""
         try:
-            # 토큰 상태 사전 확인 및 갱신
-            token_status = await self.token_service.validate_and_refresh_token(user_id)
-            
-            if token_status["status"] not in ["valid", "refreshed"]:
-                raise AuthenticationError(
-                    f"토큰 인증 실패: {token_status['message']}",
-                    details={"user_id": user_id, "status": token_status["status"]}
-                )
-            
-            access_token = token_status["access_token"]
-            logger.info(f"토큰 검증 완료 (메일박스 정보): user_id={user_id}, status={token_status['status']}")
+            access_token = await self.token_service.get_valid_access_token(user_id)
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {user_id}")
             
             mailbox_info = await self.graph_client.get_mailbox_info(access_token)
             
@@ -249,17 +242,9 @@ class MailQueryOrchestrator:
     ) -> GraphMailItem:
         """특정 메시지 조회"""
         try:
-            # 토큰 상태 사전 확인 및 갱신
-            token_status = await self.token_service.validate_and_refresh_token(user_id)
-            
-            if token_status["status"] not in ["valid", "refreshed"]:
-                raise AuthenticationError(
-                    f"토큰 인증 실패: {token_status['message']}",
-                    details={"user_id": user_id, "status": token_status["status"]}
-                )
-            
-            access_token = token_status["access_token"]
-            logger.info(f"토큰 검증 완료 (메시지 조회): user_id={user_id}, status={token_status['status']}")
+            access_token = await self.token_service.get_valid_access_token(user_id)
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {user_id}")
             
             select_clause = None
             if select_fields:
@@ -303,7 +288,7 @@ class MailQueryOrchestrator:
                     request.filters.subject_contains
                 )
     
-    async def _log_query_execution(
+    def _log_query_execution(
         self, 
         request: MailQueryRequest, 
         response: MailQueryResponse,
@@ -333,7 +318,7 @@ class MailQueryOrchestrator:
         except Exception as e:
             logger.error(f"쿼리 로그 기록 실패: {str(e)}")
     
-    async def _log_search_execution(
+    def _log_search_execution(
         self, 
         user_id: str, 
         search_term: str, 
@@ -360,7 +345,7 @@ class MailQueryOrchestrator:
         except Exception as e:
             logger.error(f"검색 로그 기록 실패: {str(e)}")
     
-    async def _log_query_error(
+    def _log_query_error(
         self, 
         request: MailQueryRequest, 
         error_message: str, 
@@ -388,3 +373,53 @@ class MailQueryOrchestrator:
             
         except Exception as e:
             logger.error(f"오류 로그 기록 실패: {str(e)}")
+    
+    async def save_message_to_json(
+        self, 
+        user_id: str, 
+        message_id: str,
+        save_dir: str = "./data/mail_samples"
+    ) -> str:
+        """특정 메시지를 JSON 파일로 저장"""
+        try:
+            # 메시지 전체 데이터 조회
+            access_token = await self.token_service.get_valid_access_token(user_id)
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {user_id}")
+            
+            # Graph API에서 원본 데이터 가져오기
+            raw_message = await self.graph_client.get_raw_message(
+                access_token=access_token,
+                message_id=message_id
+            )
+            
+            # JSON 파일로 저장
+            filepath = save_mail_to_json(raw_message, save_dir)
+            
+            logger.info(f"메시지 JSON 저장 완료: user_id={user_id}, "
+                       f"message_id={message_id}, path={filepath}")
+            
+            return filepath
+            
+        except Exception as e:
+            logger.error(f"메시지 JSON 저장 실패: user_id={user_id}, "
+                        f"message_id={message_id}, error={str(e)}")
+            raise
+    
+    async def save_messages_to_json(
+        self, 
+        messages: list,
+        save_dir: str = "./data/mail_samples"
+    ) -> list:
+        """여러 메시지를 JSON 파일로 저장"""
+        try:
+            # 메시지 리스트를 JSON으로 저장
+            saved_files = save_multiple_mails_to_json(messages, save_dir)
+            
+            logger.info(f"메시지 JSON 저장 완료: {len(saved_files)}개 파일")
+            
+            return saved_files
+            
+        except Exception as e:
+            logger.error(f"메시지 JSON 저장 실패: error={str(e)}")
+            raise

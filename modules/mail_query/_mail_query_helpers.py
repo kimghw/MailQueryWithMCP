@@ -2,11 +2,17 @@
 Mail Query 모듈 헬퍼 함수들
 350줄 제한 대응을 위한 유틸리티 함수 분리
 """
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union
 from datetime import datetime
 import re
+import json
+import os
+from pathlib import Path
 
 from .mail_query_schema import GraphMailItem
+from infra.core import get_logger
+
+logger = get_logger(__name__)
 
 
 def escape_odata_string(value: str) -> str:
@@ -235,3 +241,83 @@ def build_query_cache_key(user_id: str, filters_dict: Dict[str, Any],
     # JSON 직렬화 후 해시 생성
     cache_string = json.dumps(cache_data, sort_keys=True, default=str)
     return hashlib.md5(cache_string.encode()).hexdigest()
+
+
+def save_mail_to_json(mail_data: Union[Dict[str, Any], GraphMailItem], 
+                      save_dir: str = "./data/mail_samples") -> str:
+    """
+    메일 데이터를 JSON 파일로 저장
+    
+    Args:
+        mail_data: Graph API 원본 응답 또는 GraphMailItem 객체
+        save_dir: 저장 디렉토리 경로
+        
+    Returns:
+        저장된 파일 경로
+    """
+    try:
+        # 디렉토리 생성
+        Path(save_dir).mkdir(parents=True, exist_ok=True)
+        
+        # GraphMailItem인 경우 dict로 변환
+        if isinstance(mail_data, GraphMailItem):
+            mail_dict = mail_data.model_dump(mode='json')
+            message_id = mail_data.id
+        else:
+            mail_dict = mail_data
+            message_id = mail_data.get('id', 'unknown')
+        
+        # 파일명 생성 (메시지 ID와 타임스탬프 사용)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:21]  # 마이크로초 포함
+        # 메시지 ID에서 파일명에 사용할 수 없는 문자 제거
+        safe_message_id = re.sub(r'[^\w\-_]', '_', message_id)[:30]  # 길이 제한
+        filename = f"mail_{safe_message_id}_{timestamp}.json"
+        filepath = os.path.join(save_dir, filename)
+        
+        # 메타데이터 추가
+        save_data = {
+            "metadata": {
+                "saved_at": datetime.now().isoformat(),
+                "message_id": message_id,
+                "subject": mail_dict.get('subject', 'No Subject'),
+                "received_date": mail_dict.get('receivedDateTime', 
+                                              mail_dict.get('received_date_time'))
+            },
+            "mail_data": mail_dict
+        }
+        
+        # JSON 파일로 저장
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(save_data, f, ensure_ascii=False, indent=2, default=str)
+        
+        logger.info(f"메일 저장 완료: {filepath}")
+        return filepath
+        
+    except Exception as e:
+        logger.error(f"메일 JSON 저장 실패: {e}")
+        raise
+
+
+def save_multiple_mails_to_json(mail_list: list, 
+                                save_dir: str = "./data/mail_samples") -> list:
+    """
+    여러 메일을 JSON 파일로 저장
+    
+    Args:
+        mail_list: 메일 데이터 리스트
+        save_dir: 저장 디렉토리 경로
+        
+    Returns:
+        저장된 파일 경로 리스트
+    """
+    saved_files = []
+    
+    for mail_data in mail_list:
+        try:
+            filepath = save_mail_to_json(mail_data, save_dir)
+            saved_files.append(filepath)
+        except Exception as e:
+            logger.error(f"메일 저장 중 오류 발생: {e}")
+            continue
+    
+    return saved_files
