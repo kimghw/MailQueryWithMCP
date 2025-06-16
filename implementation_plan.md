@@ -262,14 +262,19 @@ CREATE TABLE audit_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- query_logs 테이블
+-- query_logs 테이블 (기본 로깅용)
 CREATE TABLE query_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id TEXT NOT NULL,
-    query_type TEXT,
-    filters TEXT,  -- JSON
-    result_count INTEGER,
-    execution_time_ms INTEGER,
+    user_id TEXT NOT NULL,
+    query_type TEXT DEFAULT 'mail_query',
+    odata_filter TEXT,
+    select_fields TEXT,
+    top INTEGER NOT NULL DEFAULT 50,
+    skip INTEGER NOT NULL DEFAULT 0,
+    result_count INTEGER NOT NULL DEFAULT 0,
+    execution_time_ms INTEGER NOT NULL DEFAULT 0,
+    has_error BOOLEAN NOT NULL DEFAULT FALSE,
+    error_message TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 ```

@@ -3,3 +3,4 @@
 uv.lock
 /home/kimghw/IACSGRAPH/script/ignore_script
 enrollment
+/home/kimghw/IACSGRAPH/modules/auth/references/graphapi_delegated_auth.md

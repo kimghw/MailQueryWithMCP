@@ -72,7 +72,7 @@ class AuthOrchestrator:
                     expires_at=existing_session.expires_at
                 )
             
-            # 새 세션 생성
+            # 새 세션 생성, generate session ID and state
             session_id = auth_generate_session_id(user_id)
             state = auth_generate_state_token()
             expires_at = auth_create_session_expiry(10)  # 10분
