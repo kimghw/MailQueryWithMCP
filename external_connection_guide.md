@@ -47,9 +47,7 @@ Docker 컨테이너:
   - document-processed (파티션: 3)
 
 이메일 관련:
-  - email-graph-iacs-events (파티션: 5)
-  - email-processing-events (파티션: 3)
-  - email-raw-data-events (파티션: 3)
+  - email-raw-data (파티션: 3)
 
 처리 작업 관련:
   - processing-job-events (파티션: 3)
