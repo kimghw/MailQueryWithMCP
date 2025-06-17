@@ -24,6 +24,7 @@ class MailProcessorGraphApiHelper:
     
     async def fetch_mails_from_graph(self, account: Dict) -> List[Dict]:
         """Graph API 직접 호출로 메일 조회"""
+        session = None
         try:
             # 유효한 토큰 획득
             access_token = await self.token_service.get_valid_access_token(account['user_id'])
@@ -55,7 +56,12 @@ class MailProcessorGraphApiHelper:
             
             all_mails = []
             
-            async with aiohttp.ClientSession() as session:
+            # 세션을 명시적으로 생성하고 관리
+            connector = aiohttp.TCPConnector(limit=10, limit_per_host=5)
+            timeout = aiohttp.ClientTimeout(total=30, connect=10)
+            session = aiohttp.ClientSession(connector=connector, timeout=timeout)
+            
+            try:
                 while url and len(all_mails) < 200:  # 최대 200개 제한
                     async with session.get(url, headers=headers, params=params) as response:
                         if response.status == 200:
@@ -79,12 +85,27 @@ class MailProcessorGraphApiHelper:
                         else:
                             error_text = await response.text()
                             raise Exception(f"Graph API 호출 실패: {response.status} - {error_text}")
+            finally:
+                # 세션을 명시적으로 닫기
+                if session and not session.closed:
+                    await session.close()
+                    # 커넥터도 명시적으로 닫기
+                    if hasattr(session, '_connector') and session._connector:
+                        await session._connector.close()
             
             logger.info(f"계정 {account['user_id']}: 총 {len(all_mails)}개 메일 조회 완료")
             return all_mails
             
         except Exception as e:
             logger.error(f"Graph API 호출 실패 - 계정 {account['user_id']}: {str(e)}")
+            # 예외 발생 시에도 세션 정리
+            if session and not session.closed:
+                try:
+                    await session.close()
+                    if hasattr(session, '_connector') and session._connector:
+                        await session._connector.close()
+                except Exception as cleanup_error:
+                    logger.warning(f"세션 정리 중 오류: {cleanup_error}")
             raise
 
 
