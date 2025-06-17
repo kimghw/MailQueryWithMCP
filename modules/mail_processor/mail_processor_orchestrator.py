@@ -200,23 +200,34 @@ class MailProcessorOrchestrator:
                 email_address = mail_item.sender.get('emailAddress', {})
                 sender_address = email_address.get('address', '')
             
-            # 1. 발신자 필터링
+            # 1. 발신자 필터링 - 필터링된 메일은 키워드 추출 없이 바로 SKIPPED 반환
             if not self.filter_service.should_process(sender_address, mail_item.subject or ''):
                 return MailProcessorDataHelper.create_processed_mail_data(
                     mail_dict, account_id, [], ProcessingStatus.SKIPPED,
                     "발신자 필터링으로 제외"
                 )
             
-            # 2. 중복 검사
+            # 2. 중복 검사 - 중복 메일도 키워드 추출 없이 바로 SKIPPED 반환
             if await self.db_helper.is_duplicate_mail(mail_item.id, sender_address):
                 return MailProcessorDataHelper.create_processed_mail_data(
                     mail_dict, account_id, [], ProcessingStatus.SKIPPED,
                     "중복 메일"
                 )
             
-            # 3. 키워드 추출
+            # 3. 키워드 추출 (필터링과 중복 검사를 통과한 메일만)
             body_content = self._extract_content_from_graph_mail_item(mail_item)
             keyword_response = await self.keyword_service.extract_keywords(body_content)
+            
+            # 키워드 추출 정보 로깅
+            self.logger.info(f"키워드 추출 완료 - 메일: {mail_item.id}")
+            self.logger.info(f"🔧 [EXTRACTION] 방식: {keyword_response.method}, 모델: {keyword_response.model}")
+            self.logger.info(f"⏱️ [EXTRACTION] 실행시간: {keyword_response.execution_time_ms}ms")
+            
+            if keyword_response.token_info:
+                token_info = keyword_response.token_info
+                self.logger.info(f"🪙 [TOKEN] 사용량: {token_info.get('total_tokens', 0)}토큰")
+                if token_info.get('cost_usd', 0) > 0:
+                    self.logger.info(f"💰 [COST] 비용: ${token_info.get('cost_usd', 0)}")
             
             # 4. 처리된 메일 데이터 생성
             processed_mail = MailProcessorDataHelper.create_processed_mail_data(

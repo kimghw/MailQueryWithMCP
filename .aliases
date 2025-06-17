@@ -1,6 +1,8 @@
 ## 데이터베이스
 # accounts 데이터베이스 삭제 
 alias db_clear_accounts="uv run python -m script.ignore.clear_database --table accounts"
+# mail_history 및 processing_logs 테이블 초기화
+alias db_clear_mail_history="uv run python test_mail_integration.py --clear-data"
 
 ## 계정등록 및 삭제
 # enrollment 파일 증분 동기화(계정 생성/업데이트)
@@ -11,3 +13,6 @@ alias ac_sync_accounts="uv run python -m script.ignore.sync_accounts"
 alias auth_flow_userid="uv run python -m script.ignore.auth_flow.py --mode single --user-id"
 # 전체 계정 인증 플로우 시작
 alias auth_flow="uv run python -m script.ignore.auth_flow.py --mode check-all" 
+
+
+## test_mail_integrated

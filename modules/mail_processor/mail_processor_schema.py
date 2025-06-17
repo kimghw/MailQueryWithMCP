@@ -101,5 +101,7 @@ class KeywordExtractionRequest(BaseModel):
 class KeywordExtractionResponse(BaseModel):
     """키워드 추출 응답"""
     keywords: List[str]
-    method: str  # "openrouter" or "fallback"
+    method: str  # "openrouter", "fallback", "empty_text", "fallback_error"
+    model: str  # 사용된 모델명 (예: "openai/o3-mini", "rule_based")
     execution_time_ms: int
+    token_info: Dict[str, Any] = Field(default_factory=dict, description="토큰 사용량 정보")

@@ -36,18 +36,22 @@ class MailProcessorKeywordExtractorService:
                 return KeywordExtractionResponse(
                     keywords=[],
                     method="empty_text",
-                    execution_time_ms=int((time.time() - start_time) * 1000)
+                    model=self.model,
+                    execution_time_ms=int((time.time() - start_time) * 1000),
+                    token_info={}
                 )
             
             # OpenRouter API 호출
             if self.api_key:
-                keywords = await self._call_openrouter_api(clean_text, max_keywords)
+                keywords, token_info = await self._call_openrouter_api(clean_text, max_keywords)
                 if keywords:
                     self.logger.debug(f"키워드 추출 성공: {keywords}")
                     return KeywordExtractionResponse(
                         keywords=keywords,
                         method="openrouter",
-                        execution_time_ms=int((time.time() - start_time) * 1000)
+                        model=self.model,
+                        execution_time_ms=int((time.time() - start_time) * 1000),
+                        token_info=token_info
                     )
             
             # Fallback 키워드 추출
@@ -55,7 +59,9 @@ class MailProcessorKeywordExtractorService:
             return KeywordExtractionResponse(
                 keywords=keywords,
                 method="fallback",
-                execution_time_ms=int((time.time() - start_time) * 1000)
+                model="rule_based",
+                execution_time_ms=int((time.time() - start_time) * 1000),
+                token_info={}
             )
                 
         except Exception as e:
@@ -64,11 +70,13 @@ class MailProcessorKeywordExtractorService:
             return KeywordExtractionResponse(
                 keywords=keywords,
                 method="fallback_error",
-                execution_time_ms=int((time.time() - start_time) * 1000)
+                model="rule_based",
+                execution_time_ms=int((time.time() - start_time) * 1000),
+                token_info={}
             )
     
-    async def _call_openrouter_api(self, text: str, max_keywords: int) -> List[str]:
-        """OpenRouter API 호출"""
+    async def _call_openrouter_api(self, text: str, max_keywords: int) -> tuple[List[str], dict]:
+        """OpenRouter API 호출 (토큰 사용량 정보 포함)"""
         # 텍스트 길이 제한 (2000자)
         limited_text = text[:2000] if len(text) > 2000 else text
         
@@ -100,6 +108,13 @@ class MailProcessorKeywordExtractorService:
         self.logger.debug(f"Model: {self.model}")
         self.logger.debug(f"Prompt 길이: {len(prompt)} 문자")
         
+        token_info = {
+            "prompt_tokens": 0,
+            "completion_tokens": 0,
+            "total_tokens": 0,
+            "cost_usd": 0.0
+        }
+        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -114,40 +129,57 @@ class MailProcessorKeywordExtractorService:
                         data = await response.json()
                         self.logger.debug(f"OpenRouter API 응답 데이터: {data}")
                         
+                        # 토큰 사용량 정보 추출
+                        if 'usage' in data:
+                            usage = data['usage']
+                            token_info.update({
+                                "prompt_tokens": usage.get('prompt_tokens', 0),
+                                "completion_tokens": usage.get('completion_tokens', 0),
+                                "total_tokens": usage.get('total_tokens', 0)
+                            })
+                            
+                            # 비용 계산 (o3-mini 기준: $0.0015/1K input, $0.006/1K output)
+                            if self.model == "openai/o3-mini":
+                                input_cost = (token_info["prompt_tokens"] / 1000) * 0.0015
+                                output_cost = (token_info["completion_tokens"] / 1000) * 0.006
+                                token_info["cost_usd"] = round(input_cost + output_cost, 6)
+                        
                         # 응답 구조 확인
                         if 'choices' not in data or not data['choices']:
                             self.logger.error(f"OpenRouter API 응답에 choices가 없음: {data}")
-                            return []
+                            return [], token_info
                         
                         if 'message' not in data['choices'][0]:
                             self.logger.error(f"OpenRouter API 응답에 message가 없음: {data['choices'][0]}")
-                            return []
+                            return [], token_info
                         
                         content = data['choices'][0]['message']['content'].strip()
                         self.logger.debug(f"OpenRouter API 응답 내용: '{content}'")
                         
                         if not content:
                             self.logger.warning("OpenRouter API 응답 내용이 비어있음")
-                            return []
+                            return [], token_info
                         
                         # 키워드 파싱 - 다양한 형식 지원
                         keywords = self._parse_keywords(content)
                         
                         self.logger.info(f"OpenRouter API 키워드 추출 성공: {keywords}")
-                        return keywords[:max_keywords]
+                        self.logger.info(f"토큰 사용량: {token_info['total_tokens']}토큰, 비용: ${token_info['cost_usd']}")
+                        
+                        return keywords[:max_keywords], token_info
                         
                     elif response.status == 429:
                         # Rate limit - 잠시 대기 후 fallback
                         self.logger.warning("OpenRouter API rate limit, fallback 사용")
-                        return []
+                        return [], token_info
                         
                     else:
                         error_text = await response.text()
                         self.logger.error(f"OpenRouter API 오류: {response.status} - {error_text}")
-                        return []
+                        return [], token_info
         except Exception as e:
             self.logger.error(f"OpenRouter API 호출 실패: {str(e)}", exc_info=True)
-            return []
+            return [], token_info
     
     def _fallback_keyword_extraction(self, text: str, max_keywords: int) -> List[str]:
         """OpenRouter 실패 시 간단한 fallback 키워드 추출"""
