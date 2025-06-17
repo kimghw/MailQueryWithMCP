@@ -51,10 +51,12 @@ class MailIntegrationProcessor:
         start_time = datetime.now()
         
         try:
+            logger.info(f"🔄 [CALL STACK] MailIntegrationProcessor.process_recent_mails() 시작")
+            logger.info(f"📋 [PARAMS] 사용자: {user_id}, 조회 개수: {mail_count}")
             logger.info(f"=== 메일 통합 처리 시작 ===")
-            logger.info(f"사용자: {user_id}, 조회 개수: {mail_count}")
             
             # 1단계: Mail Query로 최근 메일 조회
+            logger.info("🔄 [CALL STACK] → 1단계: _query_recent_mails() 호출")
             logger.info("1단계: 최근 메일 조회 중...")
             query_result = await self._query_recent_mails(user_id, mail_count)
             
@@ -103,10 +105,15 @@ class MailIntegrationProcessor:
     async def _query_recent_mails(self, user_id: str, mail_count: int) -> dict:
         """Mail Query 모듈로 최근 메일 조회"""
         try:
+            logger.info(f"🔄 [CALL STACK] → → _query_recent_mails() 실행")
+            logger.info(f"📋 [PARAMS] user_id={user_id}, mail_count={mail_count}")
+            
             # 최근 7일간의 메일만 조회 (성능 최적화)
             date_from = datetime.now() - timedelta(days=7)
+            logger.info(f"📅 [FILTER] 조회 기간: {date_from.strftime('%Y-%m-%d')} ~ 현재")
             
             # 메일 조회 요청 구성
+            logger.info(f"🔧 [CONFIG] MailQueryRequest 구성 중...")
             request = MailQueryRequest(
                 user_id=user_id,
                 filters=MailQueryFilters(
@@ -124,11 +131,12 @@ class MailIntegrationProcessor:
             )
             
             # Mail Query 실행
+            logger.info(f"🔗 [MODULE] MailQueryOrchestrator.mail_query_user_emails() 호출")
             async with self.mail_query_orchestrator as orchestrator:
                 response = await orchestrator.mail_query_user_emails(request)
             
-            logger.info(f"메일 조회 성공: {response.total_fetched}개")
-            logger.debug(f"실행 시간: {response.execution_time_ms}ms")
+            logger.info(f"✅ [SUCCESS] 메일 조회 성공: {response.total_fetched}개")
+            logger.info(f"⏱️ [PERF] Mail Query 실행시간: {response.execution_time_ms}ms")
             
             return {
                 'success': True,
@@ -151,11 +159,15 @@ class MailIntegrationProcessor:
     
     async def _process_messages(self, user_id: str, messages: List[GraphMailItem]) -> List[dict]:
         """Mail Processor 모듈로 각 메일 처리"""
+        logger.info(f"🔄 [CALL STACK] → 2단계: _process_messages() 실행")
+        logger.info(f"📋 [PARAMS] user_id={user_id}, messages_count={len(messages)}")
+        
         processing_results = []
         
         for i, message in enumerate(messages, 1):
             try:
-                logger.info(f"메일 {i}/{len(messages)} 처리 중: {message.subject[:50]}...")
+                logger.info(f"📧 [MAIL {i}/{len(messages)}] 처리 중: {message.subject[:50]}...")
+                logger.info(f"🔗 [MODULE] MailProcessorOrchestrator.process_graph_mail_item() 호출")
                 
                 # Mail Processor로 개별 메일 처리
                 processed_result = await self.mail_processor_orchestrator.process_graph_mail_item(
@@ -176,7 +188,7 @@ class MailIntegrationProcessor:
                 
                 processing_results.append(result)
                 
-                # 간단한 로그
+                # 상세한 처리 결과 로그
                 status_emoji = {
                     ProcessingStatus.SUCCESS: "✅",
                     ProcessingStatus.SKIPPED: "⏭️",
@@ -184,13 +196,15 @@ class MailIntegrationProcessor:
                 }
                 
                 emoji = status_emoji.get(processed_result.processing_status, "❓")
-                logger.info(f"{emoji} 메일 {i}: {processed_result.processing_status.value}")
+                logger.info(f"{emoji} [RESULT] 메일 {i}: {processed_result.processing_status.value}")
                 
-                if processed_result.keywords:
-                    logger.debug(f"   키워드: {', '.join(processed_result.keywords)}")
+                if processed_result.processing_status == ProcessingStatus.SUCCESS:
+                    logger.info(f"📊 [DATA] 키워드 추출: {len(processed_result.keywords)}개")
+                    if processed_result.keywords:
+                        logger.info(f"🏷️ [KEYWORDS] {', '.join(processed_result.keywords)}")
                 
                 if processed_result.error_message:
-                    logger.warning(f"   오류: {processed_result.error_message}")
+                    logger.warning(f"⚠️ [ERROR] 오류: {processed_result.error_message}")
                 
             except Exception as e:
                 logger.error(f"메일 {i} 처리 실패: {str(e)}")
@@ -267,7 +281,7 @@ async def main():
     
     # 사용자 설정
     user_id = "kimghw"  # 실제 사용자 ID로 변경
-    mail_count = 5      # 조회할 메일 개수
+    mail_count = 6    # 조회할 메일 개수
     
     processor = MailIntegrationProcessor()
     

@@ -61,6 +61,7 @@ class MailQueryRequest(BaseModel):
         return v
 
 
+# # 실제 넘어 가는 값
 class GraphMailItem(BaseModel):
     """Graph API 메일 아이템"""
     id: str = Field(..., description="메일 ID")
@@ -80,6 +81,8 @@ class GraphMailItem(BaseModel):
         populate_by_name = True
 
 
+
+# mail_query 출력
 class MailQueryResponse(BaseModel):
     """메일 조회 응답"""
     user_id: str = Field(..., description="사용자 ID")
