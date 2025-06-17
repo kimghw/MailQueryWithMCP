@@ -85,30 +85,13 @@ class TextCleaner:
             refined_mail['body_preview'] = self.clean_text(mail['body_preview'])
         
         # 3. body.content 정제
-        if mail.get('body') and isinstance(mail['body'], dict):
-            refined_body = mail['body'].copy()
-            if refined_body.get('content'):
+        if 'body' in refined_mail and isinstance(refined_mail['body'], dict):
+            refined_body = refined_mail['body'].copy()
+            if 'content' in refined_body and refined_body['content'] is not None:
                 refined_body['content'] = self.clean_text(refined_body['content'])
             refined_mail['body'] = refined_body
-        
-        # 4. 키워드 추출용 전체 내용 생성
-        # 본문 내용 추출 우선순위: body.content > bodyPreview > subject
-        content_for_keywords = ""
-        
-        # body.content 확인
-        if refined_mail.get('body') and isinstance(refined_mail['body'], dict):
-            content_for_keywords = refined_mail['body'].get('content', '')
-        
-        # bodyPreview 확인
-        if not content_for_keywords:
-            content_for_keywords = refined_mail.get('bodyPreview', refined_mail.get('body_preview', ''))
-        
-        # subject도 포함 (중요한 정보가 있을 수 있음)
-        subject = refined_mail.get('subject', '')
-        if subject and subject not in content_for_keywords:
-            content_for_keywords = f"{subject} {content_for_keywords}"
-        
-        return refined_mail, content_for_keywords
+            
+        return refined_mail
 
     def is_content_too_short(self, content: str, min_length: int = 10) -> bool:
         """

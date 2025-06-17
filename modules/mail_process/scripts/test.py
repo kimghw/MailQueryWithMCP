@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-Mail Processor 간소화 버전 테스트 스크립트
-외부에서 메일을 가져와서 처리하는 테스트
+Mail Query -> Mail Process 통합 테스트
+mail_query에서 메일을 조회하고 mail_process로 처리하는 전체 플로우 테스트
 """
+
+#uv run python script/ignore/mail_query_processor.py --clear-data
 import asyncio
 import sys
 from datetime import datetime, timedelta
-from typing import List, Dict
+from typing import List, Dict, Optional
+import json
 
 # 모듈 임포트
 from modules.mail_query import (
@@ -33,189 +36,298 @@ update_all_loggers_level("INFO")
 logger = get_logger(__name__)
 
 
-class MailProcessorTester:
-    """Mail Processor 간소화 버전 테스터"""
+class MailIntegrationTester:
+    """Mail Query -> Mail Process 통합 테스터"""
     
     def __init__(self):
         self.mail_query = MailQueryOrchestrator()
         self.mail_processor = MailProcessorOrchestrator()
         self.db_manager = get_database_manager()
     
-    async def test_mail_processing(self, user_id: str = "kimghw", mail_count: int = 5) -> dict:
-        """메일 처리 테스트 메인 함수"""
+    async def test_integration_flow(
+        self, 
+        user_id: str = "kimghw",
+        days_back: int = 7,
+        max_mails: int = 10,
+        filters: Optional[MailQueryFilters] = None
+    ) -> Dict:
+        """
+        통합 플로우 테스트
+        
+        Args:
+            user_id: 사용자 ID
+            days_back: 조회할 과거 일수
+            max_mails: 최대 처리할 메일 수
+            filters: 추가 필터 조건
+            
+        Returns:
+            테스트 결과 딕셔너리
+        """
         start_time = datetime.now()
+        results = {
+            'success': False,
+            'query_phase': {},
+            'process_phase': {},
+            'statistics': {},
+            'errors': []
+        }
         
         try:
-            logger.info("=== Mail Processor 테스트 시작 ===")
-            logger.info(f"대상 사용자: {user_id}, 처리할 메일 수: {mail_count}")
+            logger.info("=== Mail Query → Mail Process 통합 테스트 시작 ===")
+            logger.info(f"사용자: {user_id}, 조회 기간: {days_back}일, 최대 메일: {max_mails}개")
             
-            # 1단계: 외부에서 메일 데이터 가져오기 (Mail Query 사용)
-            logger.info("\n📥 1단계: 외부에서 메일 데이터 가져오기")
-            mails = await self._fetch_mails_from_external(user_id, mail_count)
+            # Phase 1: Mail Query - 메일 조회
+            logger.info("\n📥 Phase 1: Mail Query - 메일 데이터 조회")
+            query_results = await self._phase1_query_mails(
+                user_id, days_back, max_mails, filters
+            )
+            results['query_phase'] = query_results
             
-            if not mails:
-                logger.warning("가져온 메일이 없습니다.")
-                return {
-                    'success': False,
-                    'error': '메일을 가져오지 못했습니다.',
-                    'stage': 'fetch'
-                }
+            if not query_results['success']:
+                results['errors'].append("메일 조회 실패")
+                return results
             
-            logger.info(f"✅ {len(mails)}개 메일 가져오기 완료")
+            # Phase 2: Mail Process - 메일 처리
+            logger.info("\n🔧 Phase 2: Mail Process - 메일 처리")
+            process_results = await self._phase2_process_mails(
+                user_id, 
+                query_results['messages']
+            )
+            results['process_phase'] = process_results
             
-            # 2단계: Mail Processor로 처리
-            logger.info("\n🔧 2단계: Mail Processor로 처리")
+            # Phase 3: 통계 및 분석
+            logger.info("\n📊 Phase 3: 통계 분석")
+            statistics = await self._phase3_analyze_results(
+                user_id,
+                query_results,
+                process_results
+            )
+            results['statistics'] = statistics
             
-            # 단일 메일 처리 테스트
-            if len(mails) == 1:
-                result = await self._test_single_mail_processing(user_id, mails[0])
-            else:
-                # 배치 처리 테스트
-                result = await self._test_batch_mail_processing(user_id, mails)
+            # 전체 실행 시간
+            total_time = (datetime.now() - start_time).total_seconds()
+            results['total_execution_time'] = round(total_time, 2)
+            results['success'] = True
             
-            # 3단계: 필터 통계 확인
-            logger.info("\n📊 3단계: 필터 통계 확인")
-            filter_stats = self.mail_processor.get_filter_stats()
-            result['filter_stats'] = filter_stats
-            
-            # 실행 시간 계산
-            execution_time = (datetime.now() - start_time).total_seconds()
-            result['total_execution_time'] = round(execution_time, 2)
-            
-            logger.info(f"\n=== 테스트 완료 (총 {execution_time:.2f}초) ===")
-            
-            return result
+            logger.info(f"\n=== 통합 테스트 완료 (총 {total_time:.2f}초) ===")
             
         except Exception as e:
-            logger.error(f"테스트 실패: {str(e)}", exc_info=True)
-            return {
-                'success': False,
-                'error': str(e),
-                'stage': 'test',
-                'execution_time': (datetime.now() - start_time).total_seconds()
-            }
+            logger.error(f"통합 테스트 실패: {str(e)}", exc_info=True)
+            results['errors'].append(str(e))
+            results['total_execution_time'] = (datetime.now() - start_time).total_seconds()
+        
         finally:
             # 리소스 정리
             await self._cleanup()
+        
+        return results
     
-    async def _fetch_mails_from_external(self, user_id: str, mail_count: int) -> List[Dict]:
-        """외부 소스에서 메일 가져오기 (Mail Query 사용)"""
+    async def _phase1_query_mails(
+        self,
+        user_id: str,
+        days_back: int,
+        max_mails: int,
+        additional_filters: Optional[MailQueryFilters]
+    ) -> Dict:
+        """Phase 1: 메일 조회"""
         try:
-            # 최근 7일간의 메일 조회
-            date_from = datetime.now() - timedelta(days=7)
+            # 기본 필터 설정
+            date_from = datetime.now() - timedelta(days=days_back)
             
-            request = MailQueryRequest(
-                user_id=user_id,
-                filters=MailQueryFilters(
-                    date_from=date_from
-                ),
-                pagination=PaginationOptions(
-                    top=mail_count,
-                    skip=0,
-                    max_pages=1
-                ),
-                select_fields=[
-                    "id", "subject", "from", "sender", "receivedDateTime", 
-                    "bodyPreview", "body", "hasAttachments", "importance", "isRead"
-                ]
+            if additional_filters:
+                filters = additional_filters
+                if not filters.date_from:
+                    filters.date_from = date_from
+            else:
+                filters = MailQueryFilters(date_from=date_from)
+            
+            # 페이징 옵션
+            pagination = PaginationOptions(
+                top=min(max_mails, 50),  # 한 페이지당 최대 50개
+                skip=0,
+                max_pages=(max_mails // 50) + 1
             )
             
+            # 필드 선택 (처리에 필요한 필드만)
+            select_fields = [
+                "id", "subject", "from", "sender", "receivedDateTime",
+                "bodyPreview", "body", "hasAttachments", "importance", "isRead"
+            ]
+            
+            # 메일 조회 요청
+            request = MailQueryRequest(
+                user_id=user_id,
+                filters=filters,
+                pagination=pagination,
+                select_fields=select_fields
+            )
+            
+            # 메일 조회 실행
             async with self.mail_query as query:
                 response = await query.mail_query_user_emails(request)
             
-            # GraphMailItem을 Dict로 변환
-            mails = []
-            for message in response.messages:
-                mail_dict = message.model_dump()
-                mails.append(mail_dict)
-            
-            logger.info(f"외부에서 {len(mails)}개 메일 가져옴")
-            return mails
-            
-        except Exception as e:
-            logger.error(f"메일 가져오기 실패: {str(e)}")
-            return []
-    
-    async def _test_single_mail_processing(self, user_id: str, mail: Dict) -> dict:
-        """단일 메일 처리 테스트"""
-        logger.info("\n🔬 단일 메일 처리 테스트")
-        logger.info(f"메일 제목: {mail.get('subject', 'No Subject')[:50]}...")
-        
-        try:
-            # process_single_mail 직접 호출
-            start_time = datetime.now()
-            result = await self.mail_processor.process_single_mail(user_id, mail)
-            processing_time = (datetime.now() - start_time).total_seconds()
-            
             # 결과 정리
+            messages = []
+            for msg in response.messages[:max_mails]:  # 최대 개수 제한
+                messages.append(msg.model_dump())
+            
             return {
                 'success': True,
-                'test_type': 'single',
-                'mail_id': result.mail_id,
-                'subject': result.subject,
-                'sender': result.sender_address,
-                'status': result.processing_status.value,
-                'keywords': result.keywords,
-                'error_message': result.error_message,
-                'processing_time': round(processing_time, 3),
-                'details': {
-                    'sent_time': result.sent_time.isoformat(),
-                    'processed_at': result.processed_at.isoformat(),
-                    'body_preview': result.body_preview[:100] + '...' if len(result.body_preview) > 100 else result.body_preview
-                }
+                'total_fetched': response.total_fetched,
+                'messages': messages,
+                'query_time_ms': response.execution_time_ms,
+                'query_info': response.query_info,
+                'has_more': response.has_more
             }
             
         except Exception as e:
-            logger.error(f"단일 메일 처리 실패: {str(e)}")
+            logger.error(f"메일 조회 실패: {str(e)}")
             return {
                 'success': False,
-                'test_type': 'single',
-                'error': str(e)
+                'error': str(e),
+                'messages': []
             }
     
-    async def _test_batch_mail_processing(self, user_id: str, mails: List[Dict]) -> dict:
-        """배치 메일 처리 테스트"""
-        logger.info(f"\n🔬 배치 메일 처리 테스트 ({len(mails)}개)")
+    async def _phase2_process_mails(
+        self,
+        user_id: str,
+        messages: List[Dict]
+    ) -> Dict:
+        """Phase 2: 메일 처리"""
+        start_time = datetime.now()
         
         try:
-            # process_mail_batch 호출
-            start_time = datetime.now()
+            # 배치 처리 실행
             stats = await self.mail_processor.process_mail_batch(
-                user_id, 
-                mails, 
-                publish_batch_event=False  # 배치 완료 이벤트 발행 안함
+                account_id=user_id,
+                mails=messages,
+                publish_batch_event=False  # 테스트에서는 이벤트 발행 안함
             )
+            
+            # 처리 시간 계산
             processing_time = (datetime.now() - start_time).total_seconds()
             
-            # 각 메일의 상세 결과 수집
-            individual_results = []
-            
-            # 개별 메일 처리 결과를 위해 다시 처리 (실제로는 DB에서 조회 가능)
-            for mail in mails[:3]:  # 처음 3개만 상세 표시
+            # 개별 메일 처리 결과 샘플 수집 (상위 3개)
+            sample_results = []
+            for mail in messages[:3]:
                 result = await self.mail_processor.process_single_mail(user_id, mail)
-                individual_results.append({
+                sample_results.append({
                     'mail_id': result.mail_id,
                     'subject': result.subject[:50] + '...' if len(result.subject) > 50 else result.subject,
                     'status': result.processing_status.value,
-                    'keywords': result.keywords
+                    'keywords': result.keywords,
+                    'error': result.error_message
                 })
             
             return {
                 'success': True,
-                'test_type': 'batch',
                 'statistics': stats,
                 'processing_time': round(processing_time, 3),
-                'average_time_per_mail': round(processing_time / len(mails), 3),
-                'sample_results': individual_results
+                'average_time_per_mail': round(processing_time / len(messages), 3) if messages else 0,
+                'sample_results': sample_results
             }
             
         except Exception as e:
-            logger.error(f"배치 메일 처리 실패: {str(e)}")
+            logger.error(f"메일 처리 실패: {str(e)}")
             return {
                 'success': False,
-                'test_type': 'batch',
-                'error': str(e)
+                'error': str(e),
+                'statistics': {
+                    'processed': 0,
+                    'skipped': 0,
+                    'failed': len(messages),
+                    'total': len(messages)
+                }
             }
+    
+    async def _phase3_analyze_results(
+        self,
+        user_id: str,
+        query_results: Dict,
+        process_results: Dict
+    ) -> Dict:
+        """Phase 3: 결과 분석 및 통계"""
+        try:
+            # 기본 통계
+            stats = {
+                'query_stats': {
+                    'total_mails_found': query_results.get('total_fetched', 0),
+                    'mails_retrieved': len(query_results.get('messages', [])),
+                    'query_time_ms': query_results.get('query_time_ms', 0),
+                    'has_more_data': query_results.get('has_more', False)
+                },
+                'process_stats': process_results.get('statistics', {}),
+                'performance': {
+                    'total_processing_time': process_results.get('processing_time', 0),
+                    'avg_time_per_mail': process_results.get('average_time_per_mail', 0),
+                    'query_performance': query_results.get('query_info', {}).get('performance_estimate', 'UNKNOWN')
+                }
+            }
+            
+            # 처리율 계산
+            if stats['query_stats']['mails_retrieved'] > 0:
+                process_rate = (
+                    stats['process_stats'].get('processed', 0) / 
+                    stats['query_stats']['mails_retrieved']
+                ) * 100
+                stats['process_rate'] = round(process_rate, 2)
+            else:
+                stats['process_rate'] = 0
+            
+            # 필터 효율성
+            filter_stats = self.mail_processor.get_filter_stats()
+            stats['filter_efficiency'] = filter_stats
+            
+            # 키워드 분석 (샘플 결과에서)
+            if process_results.get('sample_results'):
+                all_keywords = []
+                for result in process_results['sample_results']:
+                    all_keywords.extend(result.get('keywords', []))
+                
+                # 키워드 빈도 분석
+                from collections import Counter
+                keyword_freq = Counter(all_keywords)
+                stats['top_keywords'] = keyword_freq.most_common(10)
+            
+            # DB에서 추가 통계 조회
+            recent_stats = self._get_recent_processing_stats(user_id)
+            if recent_stats:
+                stats['recent_history'] = recent_stats
+            
+            return stats
+            
+        except Exception as e:
+            logger.error(f"통계 분석 실패: {str(e)}")
+            return {'error': str(e)}
+    
+    def _get_recent_processing_stats(self, user_id: str) -> Optional[Dict]:
+        """최근 처리 통계 조회"""
+        try:
+            # 최근 24시간 처리 통계
+            query = """
+                SELECT 
+                    COUNT(*) as total_processed,
+                    COUNT(DISTINCT sender) as unique_senders,
+                    AVG(json_array_length(keywords)) as avg_keywords_per_mail
+                FROM mail_history mh
+                JOIN accounts a ON mh.account_id = a.id
+                WHERE a.user_id = ? 
+                AND mh.processed_at >= datetime('now', '-1 day')
+            """
+            
+            result = self.db_manager.fetch_one(query, (user_id,))
+            
+            if result:
+                return {
+                    'last_24h_processed': result['total_processed'] or 0,
+                    'unique_senders': result['unique_senders'] or 0,
+                    'avg_keywords': round(result['avg_keywords_per_mail'] or 0, 2)
+                }
+            
+        except Exception as e:
+            logger.error(f"통계 조회 실패: {str(e)}")
+        
+        return None
     
     async def _cleanup(self):
         """리소스 정리"""
@@ -225,117 +337,157 @@ class MailProcessorTester:
         except Exception as e:
             logger.error(f"리소스 정리 실패: {str(e)}")
     
-    def print_results(self, results: dict):
+    def print_results(self, results: Dict):
         """결과를 보기 좋게 출력"""
-        print("\n" + "="*60)
-        print("📊 Mail Processor 테스트 결과")
-        print("="*60)
+        print("\n" + "="*70)
+        print("📊 Mail Query → Mail Process 통합 테스트 결과")
+        print("="*70)
         
         if not results.get('success'):
-            print(f"❌ 테스트 실패: {results.get('error', 'Unknown error')}")
-            print(f"실패 단계: {results.get('stage', 'unknown')}")
+            print(f"\n❌ 테스트 실패")
+            for error in results.get('errors', []):
+                print(f"  - {error}")
             return
         
-        test_type = results.get('test_type', 'unknown')
+        # Query Phase 결과
+        print("\n📥 Phase 1: Mail Query 결과")
+        query = results['query_phase']
+        print(f"  - 총 메일 수: {query['total_fetched']}개")
+        print(f"  - 조회된 메일: {len(query['messages'])}개")
+        print(f"  - 조회 시간: {query['query_time_ms']}ms")
+        print(f"  - 추가 데이터: {'있음' if query['has_more'] else '없음'}")
         
-        if test_type == 'single':
-            print("\n✅ 단일 메일 처리 테스트 성공")
-            print(f"📧 메일 ID: {results['mail_id']}")
-            print(f"📋 제목: {results['subject']}")
-            print(f"👤 발신자: {results['sender']}")
-            print(f"📊 상태: {results['status']}")
-            
-            if results['keywords']:
-                print(f"🏷️  키워드: {', '.join(results['keywords'])}")
-            else:
-                print("🏷️  키워드: 없음")
-            
-            if results.get('error_message'):
-                print(f"⚠️  오류: {results['error_message']}")
-            
-            print(f"⏱️  처리 시간: {results['processing_time']}초")
-            
-        elif test_type == 'batch':
-            print("\n✅ 배치 메일 처리 테스트 성공")
-            stats = results['statistics']
-            print(f"📊 전체 통계:")
-            print(f"  - 총 메일: {stats['total']}개")
-            print(f"  - 처리됨: {stats['processed']}개")
-            print(f"  - 건너뜀: {stats['skipped']}개")
-            print(f"  - 실패: {stats['failed']}개")
-            print(f"⏱️  총 처리 시간: {results['processing_time']}초")
-            print(f"⏱️  평균 처리 시간: {results['average_time_per_mail']}초/메일")
-            
-            if results.get('sample_results'):
-                print("\n📋 샘플 결과:")
-                for i, sample in enumerate(results['sample_results'], 1):
-                    print(f"\n  메일 {i}:")
-                    print(f"    제목: {sample['subject']}")
-                    print(f"    상태: {sample['status']}")
-                    if sample['keywords']:
-                        print(f"    키워드: {', '.join(sample['keywords'])}")
+        # Process Phase 결과
+        print("\n🔧 Phase 2: Mail Process 결과")
+        process = results['process_phase']
+        stats = process['statistics']
+        print(f"  - 처리됨: {stats['processed']}개")
+        print(f"  - 건너뜀: {stats['skipped']}개")
+        print(f"  - 실패: {stats['failed']}개")
+        print(f"  - 처리 시간: {process['processing_time']}초")
+        print(f"  - 평균 시간: {process['average_time_per_mail']}초/메일")
         
-        # 필터 통계
-        if results.get('filter_stats'):
-            stats = results['filter_stats']
-            print("\n🔍 필터 통계:")
-            print(f"  - 필터링 활성화: {stats['filtering_enabled']}")
-            print(f"  - 차단 도메인: {stats['blocked_domains_count']}개")
-            print(f"  - 차단 키워드: {stats['blocked_keywords_count']}개")
-            print(f"  - 차단 패턴: {stats['blocked_patterns_count']}개")
+        # 샘플 결과
+        if process.get('sample_results'):
+            print("\n📋 처리 샘플:")
+            for i, sample in enumerate(process['sample_results'][:3], 1):
+                print(f"\n  메일 {i}:")
+                print(f"    제목: {sample['subject']}")
+                print(f"    상태: {sample['status']}")
+                if sample['keywords']:
+                    print(f"    키워드: {', '.join(sample['keywords'])}")
+                if sample.get('error'):
+                    print(f"    오류: {sample['error']}")
         
-        print(f"\n⏱️  전체 실행 시간: {results.get('total_execution_time', 0)}초")
-        print("="*60)
+        # 통계 분석
+        print("\n📊 Phase 3: 통계 분석")
+        stats = results['statistics']
+        print(f"  - 처리율: {stats['process_rate']}%")
+        print(f"  - 쿼리 성능: {stats['performance']['query_performance']}")
+        
+        if stats.get('top_keywords'):
+            print("\n🏷️  상위 키워드:")
+            for keyword, count in stats['top_keywords'][:5]:
+                print(f"    - {keyword}: {count}회")
+        
+        if stats.get('recent_history'):
+            hist = stats['recent_history']
+            print("\n📈 최근 24시간 통계:")
+            print(f"    - 처리된 메일: {hist['last_24h_processed']}개")
+            print(f"    - 고유 발신자: {hist['unique_senders']}명")
+            print(f"    - 평균 키워드: {hist['avg_keywords']}개/메일")
+        
+        print(f"\n⏱️  전체 실행 시간: {results['total_execution_time']}초")
+        print("="*70)
+
+
+async def test_with_filters():
+    """필터를 사용한 테스트"""
+    print("\n🔍 필터링된 메일 처리 테스트")
+    print("-"*50)
+    
+    tester = MailIntegrationTester()
+    
+    # 특정 조건의 메일만 처리
+    filters = MailQueryFilters(
+        date_from=datetime.now() - timedelta(days=3),  # 최근 3일
+        has_attachments=True,                          # 첨부파일 있음
+        is_read=False                                  # 읽지 않은 메일
+    )
+    
+    results = await tester.test_integration_flow(
+        user_id="kimghw",
+        days_back=3,
+        max_mails=20,
+        filters=filters
+    )
+    
+    tester.print_results(results)
+
+
+async def test_large_batch():
+    """대량 메일 처리 테스트"""
+    print("\n📦 대량 메일 배치 처리 테스트")
+    print("-"*50)
+    
+    tester = MailIntegrationTester()
+    
+    results = await tester.test_integration_flow(
+        user_id="kimghw",
+        days_back=30,  # 30일간의 메일
+        max_mails=100  # 최대 100개 처리
+    )
+    
+    tester.print_results(results)
 
 
 async def main():
     """메인 실행 함수"""
-    print("🚀 Mail Processor 간소화 버전 테스트")
+    print("🚀 Mail Query → Mail Process 통합 테스트")
     print("="*50)
-    
-    # 설정
-    user_id = "kimghw"  # 테스트할 사용자 ID
-    mail_count = 5      # 처리할 메일 개수
     
     # 명령행 인수 처리
     if len(sys.argv) > 1:
-        if sys.argv[1] == "--single":
-            mail_count = 1
-            print("📧 단일 메일 처리 모드")
-        elif sys.argv[1] == "--batch":
-            if len(sys.argv) > 2:
-                mail_count = int(sys.argv[2])
-            print(f"📦 배치 처리 모드 ({mail_count}개)")
-        elif sys.argv[1] == "--clear-data":
-            print("🗑️  데이터 초기화 모드")
-            db_manager = get_database_manager()
+        if sys.argv[1] == "--filter":
+            # 필터 테스트
+            await test_with_filters()
+        elif sys.argv[1] == "--large":
+            # 대량 처리 테스트
+            await test_large_batch()
+        elif sys.argv[1] == "--custom":
+            # 사용자 정의 테스트
+            user_id = sys.argv[2] if len(sys.argv) > 2 else "kimghw"
+            days = int(sys.argv[3]) if len(sys.argv) > 3 else 7
+            count = int(sys.argv[4]) if len(sys.argv) > 4 else 10
             
-            # 테이블 데이터 초기화
-            result1 = db_manager.clear_table_data("mail_history")
-            print(f"📧 mail_history: {result1['message']}")
+            print(f"\n사용자 정의 테스트: user={user_id}, days={days}, count={count}")
             
-            result2 = db_manager.clear_table_data("processing_logs")
-            print(f"📝 processing_logs: {result2['message']}")
-            
-            print("\n✅ 데이터 초기화 완료")
+            tester = MailIntegrationTester()
+            results = await tester.test_integration_flow(user_id, days, count)
+            tester.print_results(results)
+        else:
+            print("\n사용법:")
+            print("  python test_integration.py              # 기본 테스트")
+            print("  python test_integration.py --filter     # 필터 테스트")
+            print("  python test_integration.py --large      # 대량 처리 테스트")
+            print("  python test_integration.py --custom [user_id] [days] [count]")
             return
-    
-    # 테스터 실행
-    tester = MailProcessorTester()
-    
-    try:
-        # 테스트 실행
-        results = await tester.test_mail_processing(user_id, mail_count)
+    else:
+        # 기본 테스트
+        print("\n📧 기본 통합 테스트 (최근 7일, 최대 10개)")
+        print("-"*50)
         
-        # 결과 출력
+        tester = MailIntegrationTester()
+        results = await tester.test_integration_flow()
         tester.print_results(results)
         
-    except KeyboardInterrupt:
-        print("\n⚠️ 사용자에 의해 중단됨")
-    except Exception as e:
-        print(f"\n💥 예상치 못한 오류: {str(e)}")
-        import traceback
-        traceback.print_exc()
+        # JSON으로 결과 저장 옵션
+        save_json = input("\n💾 결과를 JSON으로 저장하시겠습니까? (y/n): ")
+        if save_json.lower() == 'y':
+            filename = f"integration_test_result_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(results, f, ensure_ascii=False, indent=2, default=str)
+            print(f"✅ 결과가 {filename}에 저장되었습니다.")
     
     print("\n🏁 테스트 종료")
 

@@ -66,7 +66,12 @@ class MailProcessorOrchestrator:
                 )
 
             # 3단계: 텍스트 정제 (유틸리티)
-            refined_mail, clean_content = self.text_cleaner.prepare_mail_content(mail)
+            refined_mail = self.text_cleaner.prepare_mail_content(mail)
+            
+            # 키워드 추출용 텍스트 생성
+            subject_for_keywords = refined_mail.get('subject', '')
+            body_for_keywords = refined_mail.get('body', {}).get('content', '')
+            clean_content = f"{subject_for_keywords} {body_for_keywords}".strip()
             
             # 내용이 너무 짧은지 확인 (유틸리티)
             if self.text_cleaner.is_content_too_short(clean_content):
@@ -93,8 +98,6 @@ class MailProcessorOrchestrator:
                     keywords = await self.keyword_service.extract_keywords(clean_content)
             else:
                 keywords = await self.keyword_service.extract_keywords(clean_content)
-            # 5.1단계
-            refined_mail['extracted_keywords'] = keywords
 
             # 6단계: 처리된 메일 데이터 생성, 데이터베이스 저장
             processed_mail = self._create_processed_mail_data(
