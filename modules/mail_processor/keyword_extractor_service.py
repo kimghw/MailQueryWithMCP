@@ -76,7 +76,13 @@ class MailProcessorKeywordExtractorService:
             )
     
     async def _call_openrouter_api(self, text: str, max_keywords: int) -> tuple[List[str], dict]:
-        """OpenRouter API 호출 (토큰 사용량 정보 포함)"""
+        """OpenRouter API 호출"""
+        
+        # API 키 확인
+        if not self.api_key:
+            self.logger.warning("OpenRouter API 키가 설정되지 않음")
+            return [], {}
+        
         # 텍스트 길이 제한 (2000자)
         limited_text = text[:2000] if len(text) > 2000 else text
         
@@ -85,7 +91,7 @@ class MailProcessorKeywordExtractorService:
 
 이메일 본문: {limited_text}
 
-응답 형식: 키워드1, 키워드2, 키워드3, 키워드4, 키워드5"""
+키워드:"""  # 응답 형식 단순화
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -95,19 +101,17 @@ class MailProcessorKeywordExtractorService:
         }
         
         payload = {
-            "model": self.model,
+            "model": self.model,  # 설정에서 가져온 모델명 사용
             "messages": [
+                {"role": "system", "content": "You are a helpful assistant that extracts keywords from emails."},
                 {"role": "user", "content": prompt}
             ],
-            "max_tokens": 500,  # 토큰 수 증가
+            "max_tokens": 100,
             "temperature": 0.3,
             "top_p": 1.0
         }
         
-        self.logger.debug(f"OpenRouter API 호출 시작: {self.base_url}/chat/completions")
-        self.logger.debug(f"Model: {self.model}")
-        self.logger.debug(f"Prompt 길이: {len(prompt)} 문자")
-        
+        # 토큰 정보 초기화
         token_info = {
             "prompt_tokens": 0,
             "completion_tokens": 0,
@@ -123,64 +127,56 @@ class MailProcessorKeywordExtractorService:
                     json=payload,
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
-                    self.logger.debug(f"OpenRouter API 응답 상태: {response.status}")
                     
-                    if response.status == 200:
-                        data = await response.json()
-                        self.logger.debug(f"OpenRouter API 응답 데이터: {data}")
-                        
-                        # 토큰 사용량 정보 추출
-                        if 'usage' in data:
-                            usage = data['usage']
-                            token_info.update({
-                                "prompt_tokens": usage.get('prompt_tokens', 0),
-                                "completion_tokens": usage.get('completion_tokens', 0),
-                                "total_tokens": usage.get('total_tokens', 0)
-                            })
-                            
-                            # 비용 계산 (o3-mini 기준: $0.0015/1K input, $0.006/1K output)
-                            if self.model == "openai/o3-mini":
-                                input_cost = (token_info["prompt_tokens"] / 1000) * 0.0015
-                                output_cost = (token_info["completion_tokens"] / 1000) * 0.006
-                                token_info["cost_usd"] = round(input_cost + output_cost, 6)
-                        
-                        # 응답 구조 확인
-                        if 'choices' not in data or not data['choices']:
-                            self.logger.error(f"OpenRouter API 응답에 choices가 없음: {data}")
-                            return [], token_info
-                        
-                        if 'message' not in data['choices'][0]:
-                            self.logger.error(f"OpenRouter API 응답에 message가 없음: {data['choices'][0]}")
-                            return [], token_info
-                        
-                        content = data['choices'][0]['message']['content'].strip()
-                        self.logger.debug(f"OpenRouter API 응답 내용: '{content}'")
-                        
-                        if not content:
-                            self.logger.warning("OpenRouter API 응답 내용이 비어있음")
-                            return [], token_info
-                        
-                        # 키워드 파싱 - 다양한 형식 지원
-                        keywords = self._parse_keywords(content)
-                        
-                        self.logger.info(f"OpenRouter API 키워드 추출 성공: {keywords}")
-                        self.logger.info(f"토큰 사용량: {token_info['total_tokens']}토큰, 비용: ${token_info['cost_usd']}")
-                        
-                        return keywords[:max_keywords], token_info
-                        
-                    elif response.status == 429:
-                        # Rate limit - 잠시 대기 후 fallback
-                        self.logger.warning("OpenRouter API rate limit, fallback 사용")
-                        return [], token_info
-                        
-                    else:
+                    if response.status != 200:
                         error_text = await response.text()
-                        self.logger.error(f"OpenRouter API 오류: {response.status} - {error_text}")
+                        self.logger.error(f"OpenRouter API 오류 ({response.status}): {error_text}")
                         return [], token_info
+                    
+                    data = await response.json()
+                    
+                    # 토큰 사용량 정보 추출
+                    if 'usage' in data:
+                        usage = data['usage']
+                        token_info.update({
+                            "prompt_tokens": usage.get('prompt_tokens', 0),
+                            "completion_tokens": usage.get('completion_tokens', 0),
+                            "total_tokens": usage.get('total_tokens', 0)
+                        })
+                        
+                        # 비용 계산 (gpt-3.5-turbo 기준: $0.0015/1K input, $0.002/1K output)
+                        input_cost = (token_info["prompt_tokens"] / 1000) * 0.0015
+                        output_cost = (token_info["completion_tokens"] / 1000) * 0.002
+                        token_info["cost_usd"] = round(input_cost + output_cost, 6)
+                    
+                    # 응답 구조 확인
+                    if 'choices' not in data or not data['choices']:
+                        self.logger.error(f"OpenRouter API 응답 형식 오류: {data}")
+                        return [], token_info
+                    
+                    choice = data['choices'][0]
+                    if 'message' not in choice or 'content' not in choice['message']:
+                        self.logger.error(f"메시지 내용 없음: {choice}")
+                        return [], token_info
+                    
+                    content = choice['message']['content'].strip()
+                    
+                    if not content:
+                        self.logger.warning("OpenRouter API 응답이 비어있음")
+                        return [], token_info
+                    
+                    # 키워드 파싱
+                    keywords = self._parse_keywords(content)
+                    
+                    self.logger.info(f"OpenRouter 키워드 추출 성공: {keywords}")
+                    self.logger.info(f"토큰 사용량: {token_info['total_tokens']}토큰, 비용: ${token_info['cost_usd']}")
+                    
+                    return keywords[:max_keywords], token_info
+                    
         except Exception as e:
             self.logger.error(f"OpenRouter API 호출 실패: {str(e)}", exc_info=True)
             return [], token_info
-    
+
     def _fallback_keyword_extraction(self, text: str, max_keywords: int) -> List[str]:
         """OpenRouter 실패 시 간단한 fallback 키워드 추출"""
         # 간단한 한국어 단어 추출

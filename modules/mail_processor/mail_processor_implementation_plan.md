@@ -467,7 +467,7 @@ async def _publish_kafka_event(self, account_id: str, mail: Dict):
         )
         
         await producer.send(
-            'email-raw-data-events',
+            'email-raw-data',
             value=event.model_dump(),
             key=account_id.encode('utf-8')
         )

@@ -463,7 +463,7 @@ class MailProcessorOrchestrator:
                     
                     # Kafka 이벤트 발행
                     event = self._create_mail_event(account['id'], mail)
-                    await producer.send('email-raw-data-events', event)
+                    await producer.send('email-raw-data', event)
                 
                 # 마지막 동기화 시간 업데이트
                 await self._update_last_sync_time(conn, account['id'])

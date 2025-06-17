@@ -230,7 +230,7 @@ class MailProcessorKafkaHelper:
                 event_data['response_timestamp'] = event_data['response_timestamp'].isoformat()
             
             self.kafka_client.produce_event(
-                topic='email-raw-data-events',
+                topic='email-raw-data',
                 event_data=event_data,
                 key=account_id
             )

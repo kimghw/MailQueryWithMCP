@@ -74,7 +74,7 @@ class Config:
     @property
     def kafka_topic_email_events(self) -> str:
         """이메일 이벤트 Kafka 토픽"""
-        return os.getenv("KAFKA_TOPIC_EMAIL_EVENTS", "email-raw-data-events")
+        return os.getenv("KAFKA_TOPIC_EMAIL_EVENTS", "email-raw-data")
 
     @property
     def kafka_consumer_group_id(self) -> str:

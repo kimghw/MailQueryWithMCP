@@ -175,7 +175,7 @@ CREATE TABLE mail_history (
 
 ## Kafka 이벤트
 
-### 토픽: email-raw-data-events
+### 토픽: email-raw-data
 
 **이벤트 구조:**
 ```json

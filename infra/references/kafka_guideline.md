@@ -122,7 +122,7 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Error sending document-uploaded event: {e}")
 
-    # --- Example 2: Publish an email-raw-data-events event ---
+    # --- Example 2: Publish an email-raw-data event ---
     # Simulate data obtained from Microsoft Graph API
     sample_email_graph_data = {
         "id": "graph-email-id-xyz",
@@ -151,12 +151,12 @@ if __name__ == "__main__":
     )
 
     try:
-        # Publish to 'email-raw-data-events' topic (3 partitions)
-        future = producer.send('email-raw-data-events', value=mail_raw_event, key=mail_raw_event['event_id'])
+        # Publish to 'email-raw-data' topic (3 partitions)
+        future = producer.send('email-raw-data', value=mail_raw_event, key=mail_raw_event['event_id'])
         record_metadata = future.get(timeout=10)
-        print(f"\n[email-raw-data-events] Event sent! Topic: {record_metadata.topic}, Partition: {record_metadata.partition}, Offset: {record_metadata.offset}")
+        print(f"\n[email-raw-data] Event sent! Topic: {record_metadata.topic}, Partition: {record_metadata.partition}, Offset: {record_metadata.offset}")
     except Exception as e:
-        print(f"Error sending email-raw-data-events event: {e}")
+        print(f"Error sending email-raw-data event: {e}")
 
     finally:
         producer.flush()
@@ -199,7 +199,7 @@ def get_iacsrag_consumer(topics: list):
 # Example Usage
 if __name__ == "__main__":
     # Specify the topics you want this consumer to listen to
-    topics_to_consume = ['document-uploaded', 'email-raw-data-events'] 
+    topics_to_consume = ['document-uploaded', 'email-raw-data'] 
     consumer = get_iacsrag_consumer(topics_to_consume)
 
     print(f"Listening for messages on topics: {topics_to_consume}...")
@@ -222,7 +222,7 @@ if __name__ == "__main__":
                 print(f"Document {event_data['data']['document_id']} processed.")
                 # You might publish a 'document-processed' event here
             
-            elif message.topic == 'email-raw-data-events':
+            elif message.topic == 'email-raw-data':
                 event_data = message.value
                 print(f"Processing raw email data: Account ID = {event_data['account_id']}")
                 email_subject = event_data['response_data']['value'][0]['subject'] if event_data['response_data']['value'] else 'N/A'
