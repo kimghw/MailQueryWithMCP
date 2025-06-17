@@ -312,7 +312,7 @@ class MailProcessorDataHelper:
     
     @staticmethod
     def extract_mail_content(mail: Dict) -> str:
-        """메일에서 텍스트 내용 추출"""
+        """메일에서 텍스트 내용 추출 및 기본 정제"""
         # 본문 내용 추출 우선순위: body.content > bodyPreview > subject
         body_content = ""
         
@@ -328,6 +328,12 @@ class MailProcessorDataHelper:
         # 3. subject만 있는 경우
         elif mail.get('subject'):
             body_content = mail['subject']
+        
+        # 기본 텍스트 정제 (캐리지 리턴 제거)
+        if body_content:
+            # \r\n -> \n, \r -> \n 변환
+            body_content = body_content.replace('\r\n', '\n')
+            body_content = body_content.replace('\r', '\n')
         
         return body_content
     
