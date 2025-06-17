@@ -20,8 +20,11 @@ from modules.mail_processor import (
     GraphMailItem,
     ProcessingStatus
 )
-from infra.core.logger import get_logger
+from infra.core.logger import get_logger, update_all_loggers_level
 from infra.core.database import get_database_manager
+
+# 디버깅 메시지 숨기기 (INFO 레벨로 설정)
+update_all_loggers_level("INFO")
 
 logger = get_logger(__name__)
 
