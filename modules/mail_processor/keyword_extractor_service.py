@@ -23,6 +23,26 @@ class MailProcessorKeywordExtractorService:
         self.model = getattr(self.config, 'openrouter_model', "openai/gpt-3.5-turbo")
         self.base_url = "https://openrouter.ai/api/v1"
         
+        # 재사용 가능한 세션 (클래스 레벨에서 관리)
+        self._session: Optional[aiohttp.ClientSession] = None
+        
+    async def __aenter__(self):
+        """비동기 컨텍스트 매니저 진입"""
+        self._session = aiohttp.ClientSession()
+        return self
+        
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """비동기 컨텍스트 매니저 종료"""
+        if self._session:
+            await self._session.close()
+            self._session = None
+            
+    async def close(self):
+        """세션 수동 종료"""
+        if self._session:
+            await self._session.close()
+            self._session = None
+        
     async def extract_keywords(self, text: str, max_keywords: int = 5) -> KeywordExtractionResponse:
         """메일 본문에서 키워드 추출"""
         start_time = time.time()
@@ -75,6 +95,12 @@ class MailProcessorKeywordExtractorService:
                 token_info={}
             )
     
+    async def _get_session(self) -> aiohttp.ClientSession:
+        """세션 가져오기 (필요시 생성)"""
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+        return self._session
+    
     async def _call_openrouter_api(self, text: str, max_keywords: int) -> tuple[List[str], dict]:
         """OpenRouter API 호출"""
         
@@ -119,70 +145,73 @@ class MailProcessorKeywordExtractorService:
         
         self.logger.info(f"📤 요청 페이로드: {json.dumps(payload, ensure_ascii=False)[:200]}...")
         
+        session = None
         try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=payload,
-                    timeout=aiohttp.ClientTimeout(total=30)
-                ) as response:
-                    
-                    # 응답 상태 및 헤더 로그
-                    self.logger.info(f"📥 응답 상태: {response.status}")
-                    self.logger.info(f"📋 응답 헤더: {dict(response.headers)}")
-                    
-                    # 원시 응답 텍스트 먼저 읽기
-                    response_text = await response.text()
-                    self.logger.info(f"📄 원시 응답: {response_text[:500]}...")
-                    
-                    if response.status != 200:
-                        self.logger.error(f"❌ API 오류: {response_text}")
-                        return [], token_info
-                    
-                    # JSON 파싱
-                    try:
-                        data = json.loads(response_text)
-                    except json.JSONDecodeError as e:
-                        self.logger.error(f"❌ JSON 파싱 실패: {e}")
-                        return [], token_info
-                    
-                    # 전체 응답 구조 로그
-                    self.logger.info(f"📊 전체 응답 구조: {json.dumps(data, ensure_ascii=False, indent=2)}")
-                    
-                    # 토큰 사용량 정보 추출
-                    if 'usage' in data:
-                        usage = data['usage']
-                        token_info.update({
-                            "prompt_tokens": usage.get('prompt_tokens', 0),
-                            "completion_tokens": usage.get('completion_tokens', 0),
-                            "total_tokens": usage.get('total_tokens', 0)
-                        })
-                        
-                        # 비용 계산 (gpt-3.5-turbo 기준: $0.0015/1K input, $0.002/1K output)
-                        input_cost = (token_info["prompt_tokens"] / 1000) * 0.0015
-                        output_cost = (token_info["completion_tokens"] / 1000) * 0.002
-                        token_info["cost_usd"] = round(input_cost + output_cost, 6)
-                    
-                    # 응답에서 컨텐츠 추출
-                    if 'choices' in data and data['choices']:
-                        choice = data['choices'][0]
-                        if 'message' in choice and 'content' in choice['message']:
-                            content = choice['message']['content']
-                            self.logger.info(f"✅ 추출된 컨텐츠: '{content}'")
-                            
-                            if content and content.strip():
-                                keywords = self._parse_keywords(content)
-                                self.logger.info(f"🏷️ 파싱된 키워드: {keywords}")
-                                return keywords[:max_keywords], token_info
-                            else:
-                                self.logger.warning("⚠️ 컨텐츠가 비어있음")
-                        else:
-                            self.logger.error(f"❌ message.content 없음: {choice}")
-                    else:
-                        self.logger.error(f"❌ choices 없음: {data}")
-                    
+            # 세션 가져오기
+            session = await self._get_session()
+            
+            async with session.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30)
+            ) as response:
+                
+                # 응답 상태 및 헤더 로그
+                self.logger.info(f"📥 응답 상태: {response.status}")
+                self.logger.info(f"📋 응답 헤더: {dict(response.headers)}")
+                
+                # 원시 응답 텍스트 먼저 읽기
+                response_text = await response.text()
+                self.logger.info(f"📄 원시 응답: {response_text[:500]}...")
+                
+                if response.status != 200:
+                    self.logger.error(f"❌ API 오류: {response_text}")
                     return [], token_info
+                
+                # JSON 파싱
+                try:
+                    data = json.loads(response_text)
+                except json.JSONDecodeError as e:
+                    self.logger.error(f"❌ JSON 파싱 실패: {e}")
+                    return [], token_info
+                
+                # 전체 응답 구조 로그
+                self.logger.info(f"📊 전체 응답 구조: {json.dumps(data, ensure_ascii=False, indent=2)}")
+                
+                # 토큰 사용량 정보 추출
+                if 'usage' in data:
+                    usage = data['usage']
+                    token_info.update({
+                        "prompt_tokens": usage.get('prompt_tokens', 0),
+                        "completion_tokens": usage.get('completion_tokens', 0),
+                        "total_tokens": usage.get('total_tokens', 0)
+                    })
+                    
+                    # 비용 계산 (gpt-3.5-turbo 기준: $0.0015/1K input, $0.002/1K output)
+                    input_cost = (token_info["prompt_tokens"] / 1000) * 0.0015
+                    output_cost = (token_info["completion_tokens"] / 1000) * 0.002
+                    token_info["cost_usd"] = round(input_cost + output_cost, 6)
+                
+                # 응답에서 컨텐츠 추출
+                if 'choices' in data and data['choices']:
+                    choice = data['choices'][0]
+                    if 'message' in choice and 'content' in choice['message']:
+                        content = choice['message']['content']
+                        self.logger.info(f"✅ 추출된 컨텐츠: '{content}'")
+                        
+                        if content and content.strip():
+                            keywords = self._parse_keywords(content)
+                            self.logger.info(f"🏷️ 파싱된 키워드: {keywords}")
+                            return keywords[:max_keywords], token_info
+                        else:
+                            self.logger.warning("⚠️ 컨텐츠가 비어있음")
+                    else:
+                        self.logger.error(f"❌ message.content 없음: {choice}")
+                else:
+                    self.logger.error(f"❌ choices 없음: {data}")
+                
+                return [], token_info
                     
         except aiohttp.ClientError as e:
             self.logger.error(f"❌ 네트워크 오류: {str(e)}")
@@ -192,27 +221,21 @@ class MailProcessorKeywordExtractorService:
             return [], token_info
 
     def _fallback_keyword_extraction(self, text: str, max_keywords: int) -> List[str]:
-        """OpenRouter 실패 시 간단한 fallback 키워드 추출 - 개선된 버전"""
-        # 텍스트 정제
+        """OpenRouter 실패 시 간단한 fallback 키워드 추출"""
+        # 간단한 한국어 단어 추출
         clean_text = self._clean_text(text)
         
         # 한국어 단어 추출 (2글자 이상)
         korean_words = re.findall(r'[가-힣]{2,}', clean_text)
         
-        # 영문 단어 추출 (3글자 이상, 의미있는 단어만)
+        # 영문 단어 추출 (3글자 이상)
         english_words = re.findall(r'[A-Za-z]{3,}', clean_text)
-        # 의미없는 반복 패턴 제거
-        english_words = [w for w in english_words if not re.match(r'^(.)\1+$', w)]
         
         # 숫자 포함 식별자 추출 (예: EA004, REQ-123)
         identifiers = re.findall(r'[A-Z]{2,}\d+|[A-Z]+-\d+|\d{3,}', clean_text)
         
         # 모든 단어 합치기
         all_words = korean_words + english_words + identifiers
-        
-        # 불용어 제거
-        stopwords = {'the', 'and', 'or', 'is', 'are', 'was', 'were', 'been', 'have', 'has', 'had'}
-        all_words = [w for w in all_words if w.lower() not in stopwords]
         
         # 빈도수 기반 상위 키워드 선택
         word_counts = Counter(all_words)
@@ -221,42 +244,26 @@ class MailProcessorKeywordExtractorService:
         return top_keywords
     
     def _clean_text(self, text: str) -> str:
-        """텍스트 정제 - 개선된 버전"""
+        """텍스트 정제"""
         if not text:
             return ""
         
         # HTML 태그 제거
         clean = re.sub(r'<[^>]+>', '', text)
         
-        # 연속된 줄바꿈 및 캐리지 리턴 제거
-        clean = re.sub(r'[\r\n]+', ' ', clean)
-        
-        # Windows 스타일 줄바꿈 제거
-        clean = clean.replace('\r\n', ' ')
-        clean = clean.replace('\n\r', ' ')
-        
-        # 탭 문자를 공백으로 변환
-        clean = clean.replace('\t', ' ')
+        # 과도한 공백 정리
+        clean = re.sub(r'\s+', ' ', clean)
         
         # 특수문자 정리 (한글, 영문, 숫자, 기본 구두점만 유지)
         clean = re.sub(r'[^\w\s가-힣.,!?()-]', ' ', clean)
         
-        # 과도한 공백 정리
-        clean = re.sub(r'\s+', ' ', clean)
-        
-        # 의미없는 단일 문자 제거
-        clean = re.sub(r'\b[a-zA-Z]\b', '', clean)
-        
         return clean.strip()
     
     def _parse_keywords(self, content: str) -> List[str]:
-        """다양한 형식의 키워드 응답을 파싱 - 개선된 버전"""
+        """다양한 형식의 키워드 응답을 파싱"""
         keywords = []
         
         self.logger.debug(f"키워드 파싱 시작: '{content}'")
-        
-        # 줄바꿈 문자 정리
-        content = re.sub(r'[\r\n]+', '\n', content)
         
         # 1. 번호 매김 형식: "1. 키워드1\n2. 키워드2\n3. 키워드3"
         if re.search(r'\d+\.\s*', content):
@@ -294,17 +301,6 @@ class MailProcessorKeywordExtractorService:
         for kw in keywords:
             # 불필요한 문자 제거 (앞뒤 특수문자)
             kw = re.sub(r'^[^\w가-힣]+|[^\w가-힣]+$', '', kw)
-            
-            # 의미없는 패턴 필터링 (예: 'L', 'LL', 'LLL' 등)
-            if re.match(r'^[Ll]+$', kw):
-                self.logger.debug(f"의미없는 패턴 필터링: '{kw}'")
-                continue
-            
-            # 단일 문자 필터링
-            if len(kw) == 1 and kw.isalpha():
-                self.logger.debug(f"단일 문자 필터링: '{kw}'")
-                continue
-            
             # 최소 길이 확인 (2글자 이상)
             if kw and len(kw) >= 2:
                 cleaned_keywords.append(kw)
