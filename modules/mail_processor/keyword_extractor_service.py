@@ -244,20 +244,49 @@ class MailProcessorKeywordExtractorService:
         return top_keywords
     
     def _clean_text(self, text: str) -> str:
-        """텍스트 정제"""
+        """텍스트 정제 - 개선된 버전"""
         if not text:
             return ""
         
-        # HTML 태그 제거
-        clean = re.sub(r'<[^>]+>', '', text)
+        # 1. 먼저 모든 종류의 줄바꿈을 일반 줄바꿈으로 통일
+        # \r\n -> \n, \r -> \n
+        clean = text.replace('\r\n', '\n')
+        clean = clean.replace('\r', '\n')
         
-        # 과도한 공백 정리
+        # 2. HTML 태그 제거
+        clean = re.sub(r'<[^>]+>', '', clean)
+        
+        # 3. 이메일 주소를 공백으로 변환 (< > 안의 내용 포함)
+        clean = re.sub(r'<[^>]+@[^>]+>', ' ', clean)
+        clean = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', ' ', clean)
+        
+        # 4. URL 제거
+        clean = re.sub(r'https?://[^\s]+', ' ', clean)
+        clean = re.sub(r'www\.[^\s]+', ' ', clean)
+        
+        # 5. 연속된 줄바꿈을 하나의 공백으로 변환
+        clean = re.sub(r'\n+', ' ', clean)
+        
+        # 6. 탭 문자를 공백으로 변환
+        clean = clean.replace('\t', ' ')
+        
+        # 7. 특수문자 정리 (한글, 영문, 숫자, 기본 구두점만 유지)
+        # 괄호, 하이픈, 콜론, 세미콜론도 추가로 유지
+        clean = re.sub(r'[^\w\s가-힣.,!?():;-]', ' ', clean)
+        
+        # 8. 불필요한 구분선 제거 (------, ====== 등)
+        clean = re.sub(r'[-=]{3,}', ' ', clean)
+        
+        # 9. 과도한 공백 정리
         clean = re.sub(r'\s+', ' ', clean)
         
-        # 특수문자 정리 (한글, 영문, 숫자, 기본 구두점만 유지)
-        clean = re.sub(r'[^\w\s가-힣.,!?()-]', ' ', clean)
+        # 10. 의미없는 단일 문자 제거 (단, 숫자는 유지)
+        clean = re.sub(r'\b[a-zA-Z]\b', '', clean)
         
-        return clean.strip()
+        # 11. 양쪽 공백 제거
+        clean = clean.strip()
+        
+        return clean
     
     def _parse_keywords(self, content: str) -> List[str]:
         """다양한 형식의 키워드 응답을 파싱"""
