@@ -192,21 +192,27 @@ class MailProcessorKeywordExtractorService:
             return [], token_info
 
     def _fallback_keyword_extraction(self, text: str, max_keywords: int) -> List[str]:
-        """OpenRouter 실패 시 간단한 fallback 키워드 추출"""
-        # 간단한 한국어 단어 추출
+        """OpenRouter 실패 시 간단한 fallback 키워드 추출 - 개선된 버전"""
+        # 텍스트 정제
         clean_text = self._clean_text(text)
         
         # 한국어 단어 추출 (2글자 이상)
         korean_words = re.findall(r'[가-힣]{2,}', clean_text)
         
-        # 영문 단어 추출 (3글자 이상)
+        # 영문 단어 추출 (3글자 이상, 의미있는 단어만)
         english_words = re.findall(r'[A-Za-z]{3,}', clean_text)
+        # 의미없는 반복 패턴 제거
+        english_words = [w for w in english_words if not re.match(r'^(.)\1+$', w)]
         
         # 숫자 포함 식별자 추출 (예: EA004, REQ-123)
         identifiers = re.findall(r'[A-Z]{2,}\d+|[A-Z]+-\d+|\d{3,}', clean_text)
         
         # 모든 단어 합치기
         all_words = korean_words + english_words + identifiers
+        
+        # 불용어 제거
+        stopwords = {'the', 'and', 'or', 'is', 'are', 'was', 'were', 'been', 'have', 'has', 'had'}
+        all_words = [w for w in all_words if w.lower() not in stopwords]
         
         # 빈도수 기반 상위 키워드 선택
         word_counts = Counter(all_words)
@@ -215,26 +221,42 @@ class MailProcessorKeywordExtractorService:
         return top_keywords
     
     def _clean_text(self, text: str) -> str:
-        """텍스트 정제"""
+        """텍스트 정제 - 개선된 버전"""
         if not text:
             return ""
         
         # HTML 태그 제거
         clean = re.sub(r'<[^>]+>', '', text)
         
-        # 과도한 공백 정리
-        clean = re.sub(r'\s+', ' ', clean)
+        # 연속된 줄바꿈 및 캐리지 리턴 제거
+        clean = re.sub(r'[\r\n]+', ' ', clean)
+        
+        # Windows 스타일 줄바꿈 제거
+        clean = clean.replace('\r\n', ' ')
+        clean = clean.replace('\n\r', ' ')
+        
+        # 탭 문자를 공백으로 변환
+        clean = clean.replace('\t', ' ')
         
         # 특수문자 정리 (한글, 영문, 숫자, 기본 구두점만 유지)
         clean = re.sub(r'[^\w\s가-힣.,!?()-]', ' ', clean)
         
+        # 과도한 공백 정리
+        clean = re.sub(r'\s+', ' ', clean)
+        
+        # 의미없는 단일 문자 제거
+        clean = re.sub(r'\b[a-zA-Z]\b', '', clean)
+        
         return clean.strip()
     
     def _parse_keywords(self, content: str) -> List[str]:
-        """다양한 형식의 키워드 응답을 파싱"""
+        """다양한 형식의 키워드 응답을 파싱 - 개선된 버전"""
         keywords = []
         
         self.logger.debug(f"키워드 파싱 시작: '{content}'")
+        
+        # 줄바꿈 문자 정리
+        content = re.sub(r'[\r\n]+', '\n', content)
         
         # 1. 번호 매김 형식: "1. 키워드1\n2. 키워드2\n3. 키워드3"
         if re.search(r'\d+\.\s*', content):
@@ -272,6 +294,17 @@ class MailProcessorKeywordExtractorService:
         for kw in keywords:
             # 불필요한 문자 제거 (앞뒤 특수문자)
             kw = re.sub(r'^[^\w가-힣]+|[^\w가-힣]+$', '', kw)
+            
+            # 의미없는 패턴 필터링 (예: 'L', 'LL', 'LLL' 등)
+            if re.match(r'^[Ll]+$', kw):
+                self.logger.debug(f"의미없는 패턴 필터링: '{kw}'")
+                continue
+            
+            # 단일 문자 필터링
+            if len(kw) == 1 and kw.isalpha():
+                self.logger.debug(f"단일 문자 필터링: '{kw}'")
+                continue
+            
             # 최소 길이 확인 (2글자 이상)
             if kw and len(kw) >= 2:
                 cleaned_keywords.append(kw)

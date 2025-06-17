@@ -1,4 +1,5 @@
 """Mail Processor 헬퍼 함수들 (350줄 제한 대응)"""
+import re
 import json
 import uuid
 import aiohttp
@@ -201,35 +202,45 @@ class MailProcessorKafkaHelper:
         self.config = get_config()
     
     async def publish_kafka_event(self, account_id: str, mail: Dict, keywords: List[str] = None) -> None:
-        """Kafka 이벤트 발행 - 키워드 정보 포함"""
+        """Kafka 이벤트 발행 - 키워드 정보 포함 개선"""
         try:
             # mail 딕셔너리의 datetime 객체들을 문자열로 변환
             mail_copy = self._convert_datetime_to_string(mail.copy())
             
-            # 키워드 정보를 메일 데이터에 추가
+            # 키워드 정제 - 빈 문자열이나 의미없는 문자 제거
             if keywords:
-                mail_copy['extracted_keywords'] = keywords
+                cleaned_keywords = []
+                for keyword in keywords:
+                    # 키워드 정제
+                    cleaned = keyword.strip()
+                    # 최소 2글자 이상이고, 의미없는 패턴이 아닌 경우만 포함
+                    if len(cleaned) >= 2 and not re.match(r'^[Ll]+$', cleaned):
+                        cleaned_keywords.append(cleaned)
+                
+                # 정제된 키워드를 메일 데이터에 추가
+                if cleaned_keywords:
+                    mail_copy['extracted_keywords'] = cleaned_keywords
+                    logger.debug(f"정제된 키워드 {len(cleaned_keywords)}개 추가: {cleaned_keywords}")
             
-            event = MailReceivedEvent(
-                event_id=str(uuid.uuid4()),
-                account_id=account_id,
-                occurred_at=datetime.now(),
-                request_params={
+            # 이벤트 구조 생성
+            event_data = {
+                "event_type": "email.raw_data_received",
+                "event_id": str(uuid.uuid4()),
+                "account_id": account_id,
+                "occurred_at": datetime.now().isoformat(),
+                "api_endpoint": "/v1.0/me/messages",
+                "response_status": 200,
+                "request_params": {
                     "$select": "id,subject,from,body,bodyPreview,receivedDateTime",
                     "$top": 50
                 },
-                response_data={"value": [mail_copy]},
-                response_timestamp=datetime.now()
-            )
-            
-            # datetime 객체를 문자열로 변환하여 JSON 직렬화 가능하게 만듦
-            event_data = event.model_dump()
-            
-            # datetime 필드들을 ISO 형식 문자열로 변환
-            if 'occurred_at' in event_data and isinstance(event_data['occurred_at'], datetime):
-                event_data['occurred_at'] = event_data['occurred_at'].isoformat()
-            if 'response_timestamp' in event_data and isinstance(event_data['response_timestamp'], datetime):
-                event_data['response_timestamp'] = event_data['response_timestamp'].isoformat()
+                "response_data": {
+                    "value": [mail_copy],  # keywords가 포함된 mail_copy
+                    "@odata.context": f"https://graph.microsoft.com/v1.0/$metadata#users('{account_id}')/messages",
+                    "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/messages?$skip=50"
+                },
+                "response_timestamp": datetime.now().isoformat()
+            }
             
             self.kafka_client.produce_event(
                 topic=self.config.kafka_topic_email_events,
@@ -237,7 +248,7 @@ class MailProcessorKafkaHelper:
                 key=account_id
             )
             
-            logger.debug(f"Kafka 이벤트 발행 완료 (키워드 {len(keywords) if keywords else 0}개): {mail.get('id', 'unknown')}")
+            logger.debug(f"Kafka 이벤트 발행 완료 (키워드 {len(cleaned_keywords) if keywords else 0}개): {mail.get('id', 'unknown')}")
             
         except Exception as e:
             logger.error(f"Kafka 이벤트 발행 실패: {str(e)}")
