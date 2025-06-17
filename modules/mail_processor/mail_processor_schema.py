@@ -119,3 +119,17 @@ class KeywordExtractionResponse(BaseModel):
     token_info: Dict[str, Any] = Field(
         default_factory=dict, description="토큰 사용량 정보"
     )
+
+
+class ProcessedMailEvent(BaseModel):
+    """
+    메일 처리 후 Kafka로 전송될 이벤트 스키마
+    """
+
+    account_id: int
+    message_id: str
+    received_time: datetime
+    subject: str
+    sender: str
+    keywords: List[str]
+    processed_at: datetime = Field(default_factory=datetime.now)

@@ -304,54 +304,21 @@ class MailProcessorDatabaseHelper:
 
 class MailProcessorKafkaHelper:
     """Kafka 이벤트 발행 헬퍼"""
-    
+
     def __init__(self):
         self.kafka_client = get_kafka_client()
         self.config = get_config()
-    
+
     async def publish_kafka_event(self, account_id: str, mail: Dict, keywords: List[str] = None) -> None:
-        """Kafka 이벤트 발행 - 키워드 정보 포함 개선"""
+        """Kafka 이벤트 발행 - 정제된 데이터 사용"""
         try:
             # mail 딕셔너리의 datetime 객체들을 문자열로 변환
             mail_copy = self._convert_datetime_to_string(mail.copy())
-            
-            # 메일 content 정제 적용
-            if 'body' in mail_copy and isinstance(mail_copy['body'], dict):
-                if 'content' in mail_copy['body']:
-                    original_content = mail_copy['body']['content']
-                    cleaned_content = MailProcessorDataHelper._clean_text(original_content)
-                    mail_copy['body']['content'] = cleaned_content
-                    logger.debug(f"메일 content 정제 완료: {len(original_content)} -> {len(cleaned_content)} 문자")
-            
-            # bodyPreview 정제 적용
-            if 'bodyPreview' in mail_copy and mail_copy['bodyPreview']:
-                original_preview = mail_copy['bodyPreview']
-                cleaned_preview = MailProcessorDataHelper._clean_text(original_preview)
-                mail_copy['bodyPreview'] = cleaned_preview
-                logger.debug(f"메일 bodyPreview 정제 완료: {len(original_preview)} -> {len(cleaned_preview)} 문자")
-            
-            # body_preview 필드도 정제 (다른 필드명 지원)
-            if 'body_preview' in mail_copy and mail_copy['body_preview']:
-                original_body_preview = mail_copy['body_preview']
-                cleaned_body_preview = MailProcessorDataHelper._clean_text(original_body_preview)
-                mail_copy['body_preview'] = cleaned_body_preview
-                logger.debug(f"메일 body_preview 정제 완료: {len(original_body_preview)} -> {len(cleaned_body_preview)} 문자")
-            
-            # 키워드 정제 - 빈 문자열이나 의미없는 문자 제거
-            cleaned_keywords = []
+
+            # 키워드가 있으면 추가
             if keywords:
-                for keyword in keywords:
-                    # 키워드 정제
-                    cleaned = keyword.strip()
-                    # 최소 2글자 이상이고, 의미없는 패턴이 아닌 경우만 포함
-                    if len(cleaned) >= 2 and not re.match(r'^[Ll]+$', cleaned):
-                        cleaned_keywords.append(cleaned)
-                
-                # 정제된 키워드를 메일 데이터에 추가
-                if cleaned_keywords:
-                    mail_copy['extracted_keywords'] = cleaned_keywords
-                    logger.debug(f"정제된 키워드 {len(cleaned_keywords)}개 추가: {cleaned_keywords}")
-            
+                mail_copy['extracted_keywords'] = keywords
+
             # 이벤트 구조 생성
             event_data = {
                 "event_type": "email.raw_data_received",
@@ -365,21 +332,21 @@ class MailProcessorKafkaHelper:
                     "$top": 50
                 },
                 "response_data": {
-                    "value": [mail_copy],  # keywords가 포함된 mail_copy
+                    "value": [mail_copy],
                     "@odata.context": f"https://graph.microsoft.com/v1.0/$metadata#users('{account_id}')/messages",
                     "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/messages?$skip=50"
                 },
                 "response_timestamp": datetime.now().isoformat()
             }
-            
+
             self.kafka_client.produce_event(
                 topic=self.config.kafka_topic_email_events,
                 event_data=event_data,
                 key=account_id
             )
-            
-            logger.debug(f"Kafka 이벤트 발행 완료 (키워드 {len(cleaned_keywords)}개): {mail.get('id', 'unknown')}")
-            
+
+            logger.debug(f"Kafka 이벤트 발행 완료 (키워드 {len(keywords or [])}개): {mail.get('id', 'unknown')}")
+
         except Exception as e:
             logger.error(f"Kafka 이벤트 발행 실패: {str(e)}")
             # 이벤트 발행 실패는 전체 프로세스를 중단시키지 않음
@@ -459,48 +426,8 @@ class MailProcessorDataHelper:
         elif mail.get('subject'):
             body_content = mail['subject']
         
-        # 텍스트 정제 적용
-        if body_content:
-            body_content = MailProcessorDataHelper._clean_text(body_content)
-        
+        # 정제 로직은 MailProcessorTextHelper로 이동
         return body_content
-    
-    @staticmethod
-    def _clean_text(text: str) -> str:
-        """텍스트 정제 - 이메일 content용"""
-        if not text:
-            return ""
-        
-        # 1. 모든 종류의 줄바꿈을 공백으로 변환
-        # \r\n -> 공백, \r -> 공백, \n -> 공백
-        clean = text.replace('\r\n', ' ')
-        clean = clean.replace('\r', ' ')
-        clean = clean.replace('\n', ' ')
-        
-        # 2. HTML 태그 제거
-        clean = re.sub(r'<[^>]+>', '', clean)
-        
-        # 3. 이메일 주소를 공백으로 변환 (< > 안의 내용 포함)
-        clean = re.sub(r'<[^>]+@[^>]+>', ' ', clean)
-        clean = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', ' ', clean)
-        
-        # 4. URL 제거
-        clean = re.sub(r'https?://[^\s]+', ' ', clean)
-        clean = re.sub(r'www\.[^\s]+', ' ', clean)
-        
-        # 5. 탭 문자를 공백으로 변환
-        clean = clean.replace('\t', ' ')
-        
-        # 6. 불필요한 구분선 제거 (------, ====== 등)
-        clean = re.sub(r'[-=]{5,}', ' ', clean)
-        
-        # 7. 과도한 공백 정리 (연속된 공백을 하나로)
-        clean = re.sub(r'\s+', ' ', clean)
-        
-        # 8. 양쪽 공백 제거
-        clean = clean.strip()
-        
-        return clean
     
     @staticmethod
     def _extract_sender_address(mail: Dict) -> str:
@@ -543,3 +470,50 @@ class MailProcessorDataHelper:
         })
         
         return ''  # 발신자 정보 없음
+
+
+class MailProcessorTextHelper:
+    """텍스트 처리 헬퍼"""
+    
+    @staticmethod
+    def clean_text(text: str) -> str:
+        """텍스트 정제 - 통합된 버전"""
+        if not text:
+            return ""
+
+        # 1. 모든 종류의 줄바꿈을 일반 줄바꿈으로 통일
+        clean = text.replace("\r\n", "\n").replace("\r", "\n")
+        
+        # 2. HTML 태그 제거
+        clean = re.sub(r'<[^>]+>', '', clean)
+        
+        # 3. 이메일 주소를 공백으로 변환
+        clean = re.sub(r'<[^>]+@[^>]+>', ' ', clean)
+        clean = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', ' ', clean)
+        
+        # 4. URL 제거
+        clean = re.sub(r'https?://[^\s]+', ' ', clean)
+        clean = re.sub(r'www\.[^\s]+', ' ', clean)
+        
+        # 5. 연속된 줄바꿈을 하나의 공백으로 변환
+        clean = re.sub(r"\n+", " ", clean)
+        
+        # 6. 탭 문자를 공백으로 변환
+        clean = clean.replace('\t', ' ')
+        
+        # 7. 특수문자 정리 (한글, 영문, 숫자, 기본 구두점만 유지)
+        clean = re.sub(r'[^\w\s가-힣.,!?():;-]', ' ', clean)
+        
+        # 8. 불필요한 구분선 제거
+        clean = re.sub(r'[-=]{5,}', ' ', clean)
+        
+        # 9. 의미없는 단일 문자 제거 (단, 숫자는 유지)
+        clean = re.sub(r'\b[a-zA-Z]\b', '', clean)
+        
+        # 10. 과도한 공백 정리
+        clean = re.sub(r'\s+', ' ', clean)
+        
+        # 11. 양쪽 공백 제거
+        clean = clean.strip()
+        
+        return clean

@@ -2,7 +2,7 @@
 # accounts 데이터베이스 삭제 
 alias db_clear_accounts="uv run python -m script.ignore.clear_database --table accounts"
 # mail_history 및 processing_logs 테이블 초기화
-alias db_clear_history="uv run python test_mail_integration.py --clear-data"
+alias db_clear_history="uv run python script/ignore/mail_query_processor.py --clear-data"
 
 ## 계정등록 및 삭제
 # enrollment 파일 증분 동기화(계정 생성/업데이트)

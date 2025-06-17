@@ -26,6 +26,7 @@ __all__ = [
     "KeywordExtractionRequest",
     "KeywordExtractionResponse",
     "GraphMailItem",
+    "ProcessedMailEvent",
     # 서비스
     "MailProcessorKeywordExtractorService",
     "MailProcessorFilterService",

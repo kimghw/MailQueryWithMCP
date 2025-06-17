@@ -2,7 +2,7 @@
 
 import time
 from datetime import datetime
-from typing import List, Dict, Optional
+from typing import List, Dict
 
 from infra.core.logger import get_logger
 from .mail_processor_schema import (
@@ -18,6 +18,7 @@ from ._mail_processor_helpers import (
     MailProcessorDatabaseHelper,
     MailProcessorKafkaHelper,
     MailProcessorDataHelper,
+    MailProcessorTextHelper,
 )
 
 
@@ -150,10 +151,8 @@ class MailProcessorOrchestrator:
             self.logger.error(f"계정 {account['user_id']} 처리 실패: {str(e)}")
             raise
 
-    async def _process_single_mail(
-        self, account_id: str, mail: Dict
-    ) -> ProcessedMailData:
-        """개별 메일 처리 - 통합된 플로우"""
+    async def _process_single_mail(self, account_id: str, mail: Dict) -> ProcessedMailData:
+        """개별 메일 처리 - 정제된 데이터만 사용"""
         try:
             # 1단계: 발신자 정보 추출
             sender_address = MailProcessorDataHelper._extract_sender_address(mail)
@@ -161,57 +160,44 @@ class MailProcessorOrchestrator:
 
             # 2단계: 발신자 필터링
             if not self.filter_service.should_process(sender_address, subject):
-                self.logger.debug(
-                    f"메일 필터링됨: {mail.get('id')} from {sender_address}"
-                )
                 return MailProcessorDataHelper.create_processed_mail_data(
-                    mail,
-                    account_id,
-                    [],
-                    ProcessingStatus.SKIPPED,
-                    "발신자 필터링으로 제외",
+                    mail, account_id, [], ProcessingStatus.SKIPPED, "발신자 필터링으로 제외"
                 )
 
-            # 3단계: 메일 내용 정리 (한 번만 수행)
+            # 3단계: 메일 내용 정제 (한 번만!)
             clean_content = self._prepare_mail_content(mail)
-
-            # 4단계: 중복 검사 (정리된 내용의 해시로)
-            is_duplicate, existing_keywords = (
-                await self.db_helper.check_duplicate_by_content(
-                    mail.get("id"), sender_address, clean_content
+            
+            # 정제된 내용이 너무 짧으면 스킵
+            if len(clean_content.strip()) < 10:
+                return MailProcessorDataHelper.create_processed_mail_data(
+                    mail, account_id, [], ProcessingStatus.SKIPPED, "내용 부족"
                 )
+
+            # 4단계: 중복 검사 (정제된 내용으로)
+            is_duplicate, existing_keywords = await self.db_helper.check_duplicate_by_content(
+                mail.get("id"), sender_address, clean_content
             )
 
             if is_duplicate:
-                self.logger.debug(f"중복 메일: {mail.get('id')}")
-                # 기존 키워드가 있으면 그대로 사용
                 return MailProcessorDataHelper.create_processed_mail_data(
-                    mail,
-                    account_id,
-                    existing_keywords or [],
-                    ProcessingStatus.SKIPPED,
-                    "중복 메일",
+                    mail, account_id, existing_keywords or [], ProcessingStatus.SKIPPED, "중복 메일"
                 )
 
-            # 5단계: 키워드 추출
-            keyword_response = await self.keyword_service.extract_keywords(
-                clean_content
-            )
+            # 5단계: 키워드 추출 (정제된 내용 사용, 재정제 불필요)
+            keywords = await self._extract_keywords_from_clean_content(clean_content)
 
-            # 6단계: DB 저장 및 이벤트 발행
+            # 6단계: 처리된 메일 데이터 생성
             processed_mail = MailProcessorDataHelper.create_processed_mail_data(
-                mail, account_id, keyword_response.keywords, ProcessingStatus.SUCCESS
+                mail, account_id, keywords, ProcessingStatus.SUCCESS
             )
 
-            # 컨텐츠 해시와 함께 저장
-            await self.db_helper.save_mail_history_with_hash(
-                processed_mail, clean_content
-            )
+            # 7단계: DB 저장 (정제된 내용의 해시 사용)
+            await self.db_helper.save_mail_history_with_hash(processed_mail, clean_content)
 
-            # Kafka 이벤트 발행
-            await self.kafka_helper.publish_kafka_event(
-                account_id, mail, processed_mail.keywords
-            )
+            # 8단계: Kafka 이벤트 발행 (정제된 내용 포함)
+            mail_with_clean_content = mail.copy()
+            mail_with_clean_content['clean_content'] = clean_content
+            await self.kafka_helper.publish_kafka_event(account_id, mail_with_clean_content, keywords)
 
             return processed_mail
 
@@ -225,16 +211,23 @@ class MailProcessorOrchestrator:
         """메일 내용을 추출하고 정리하는 통합 메서드"""
         # 1. 원본 내용 추출
         raw_content = MailProcessorDataHelper.extract_mail_content(mail)
-
-        # 2. 텍스트 정제 (키워드 추출 서비스의 clean_text 활용)
-        clean_content = self.keyword_service._clean_text(raw_content)
-
+        
+        # 2. 텍스트 정제 (Helper 사용)
+        clean_content = MailProcessorTextHelper.clean_text(raw_content)
+        
         # 3. 제목도 포함 (중요한 정보가 있을 수 있음)
         subject = mail.get("subject", "")
-        if subject and subject not in clean_content:
-            clean_content = f"{subject}\n{clean_content}"
-
+        if subject:
+            clean_subject = MailProcessorTextHelper.clean_text(subject)
+            if clean_subject and clean_subject not in clean_content:
+                clean_content = f"{clean_subject} {clean_content}"
+        
         return clean_content
+
+    async def _extract_keywords_from_clean_content(self, clean_content: str) -> List[str]:
+        """정제된 내용에서 키워드 추출 (정제 없이)"""
+        response = await self.keyword_service.extract_keywords_from_clean_content(clean_content)
+        return response.keywords if hasattr(response, 'keywords') else response
 
     async def process_graph_mail_item(
         self, mail_item: GraphMailItem, account_id: str
