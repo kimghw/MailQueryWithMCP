@@ -22,8 +22,17 @@ from modules.mail_processor import (
 )
 from infra.core.logger import get_logger, update_all_loggers_level
 from infra.core.database import get_database_manager
+import logging
 
-# 디버깅 메시지 숨기기 (INFO 레벨로 설정)
+# Kafka 관련 모든 디버깅 메시지 숨기기
+logging.getLogger("infra.core.kafka_client").setLevel(logging.ERROR)
+logging.getLogger("kafka").setLevel(logging.ERROR)
+logging.getLogger("aiokafka").setLevel(logging.ERROR)
+logging.getLogger("kafka.conn").setLevel(logging.ERROR)
+logging.getLogger("kafka.producer").setLevel(logging.ERROR)
+logging.getLogger("kafka.client").setLevel(logging.ERROR)
+
+# 전체 로그 레벨은 INFO 유지 (필요한 정보는 보이도록)
 update_all_loggers_level("INFO")
 
 logger = get_logger(__name__)
@@ -299,24 +308,22 @@ async def main():
             if summary['top_keywords']:
                 print(f"\n🏷️  주요 키워드: {', '.join(summary['top_keywords'])}")
             
-            # 상세 결과 (옵션)
-            print(f"\n📋 상세 결과:")
-            for i, mail_result in enumerate(result['processing_results'], 1):
+            # 간단한 상태 요약만 출력 (메일 내용 상세 출력 제거)
+            print(f"\n📋 처리 상태:")
+            status_counts = {}
+            for mail_result in result['processing_results']:
+                status = mail_result['processing_status']
+                status_counts[status] = status_counts.get(status, 0) + 1
+            
+            for status, count in status_counts.items():
                 status_emoji = {
                     'SUCCESS': '✅',
-                    'SKIPPED': '⏭️',
+                    'SKIPPED': '⏭️', 
                     'FAILED': '❌',
                     'ERROR': '💥'
                 }
-                emoji = status_emoji.get(mail_result['processing_status'], '❓')
-                
-                print(f"{i}. {emoji} {mail_result['subject'][:40]}...")
-                print(f"   발신자: {mail_result['sender']}")
-                if mail_result['keywords']:
-                    print(f"   키워드: {', '.join(mail_result['keywords'])}")
-                if mail_result['error_message']:
-                    print(f"   오류: {mail_result['error_message']}")
-                print()
+                emoji = status_emoji.get(status, '❓')
+                print(f"  {emoji} {status}: {count}개")
         
         else:
             print(f"❌ 처리 실패: {result['error']}")
