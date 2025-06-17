@@ -9,6 +9,7 @@ from infra.core.logger import get_logger
 from infra.core.token_service import get_token_service
 from infra.core.database import get_database_manager
 from infra.core.kafka_client import get_kafka_client
+from infra.core.config import get_config
 from .mail_processor_schema import ProcessedMailData, ProcessingStatus, MailReceivedEvent
 
 logger = get_logger(__name__)
@@ -197,6 +198,7 @@ class MailProcessorKafkaHelper:
     
     def __init__(self):
         self.kafka_client = get_kafka_client()
+        self.config = get_config()
     
     async def publish_kafka_event(self, account_id: str, mail: Dict, keywords: List[str] = None) -> None:
         """Kafka 이벤트 발행 - 키워드 정보 포함"""
@@ -230,7 +232,7 @@ class MailProcessorKafkaHelper:
                 event_data['response_timestamp'] = event_data['response_timestamp'].isoformat()
             
             self.kafka_client.produce_event(
-                topic='email-raw-data',
+                topic=self.config.kafka_topic_email_events,
                 event_data=event_data,
                 key=account_id
             )
