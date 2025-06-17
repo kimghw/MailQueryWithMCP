@@ -246,7 +246,7 @@ class Config:
     @property
     def openrouter_model(self) -> str:
         """OpenRouter 모델"""
-        return os.getenv("OPENROUTER_MODEL", "openai/o3-mini")
+        return os.getenv("OPENROUTER_MODEL", "openai/gpt-3.5-turbo")
 
     def to_dict(self) -> dict:
         """설정을 딕셔너리로 반환 (민감한 정보 제외)"""

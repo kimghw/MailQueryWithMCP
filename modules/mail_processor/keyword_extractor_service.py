@@ -20,7 +20,7 @@ class MailProcessorKeywordExtractorService:
         
         # OpenRouter 설정
         self.api_key = getattr(self.config, 'openrouter_api_key', None)
-        self.model = getattr(self.config, 'openrouter_model', "openai/o3-mini")
+        self.model = "openai/gpt-3.5-turbo"  # 직접 설정으로 o3-mini 문제 해결
         self.base_url = "https://openrouter.ai/api/v1"
         
     async def extract_keywords(self, text: str, max_keywords: int = 5) -> KeywordExtractionResponse:
@@ -78,37 +78,35 @@ class MailProcessorKeywordExtractorService:
     async def _call_openrouter_api(self, text: str, max_keywords: int) -> tuple[List[str], dict]:
         """OpenRouter API 호출"""
         
-        # API 키 확인
+        # API 키 상태 확인
         if not self.api_key:
-            self.logger.warning("OpenRouter API 키가 설정되지 않음")
+            self.logger.error("❌ OpenRouter API 키가 설정되지 않음")
             return [], {}
         
-        # 텍스트 길이 제한 (2000자)
-        limited_text = text[:2000] if len(text) > 2000 else text
+        # API 키 일부 표시 (디버깅용)
+        self.logger.info(f"🔑 OpenRouter API 키: {self.api_key[:10]}...{self.api_key[-4:]}")
+        self.logger.info(f"📡 OpenRouter 모델: {self.model}")
+        self.logger.info(f"🌐 OpenRouter URL: {self.base_url}/chat/completions")
         
-        prompt = f"""다음 이메일 본문에서 가장 중요한 키워드 {max_keywords}개를 추출해주세요.
-키워드는 콤마로 구분하여 나열해주세요. 번호나 기호 없이 키워드만 작성해주세요.
-
-이메일 본문: {limited_text}
-
-키워드:"""  # 응답 형식 단순화
+        # 텍스트 길이 제한 (1000자로 줄임)
+        limited_text = text[:1000] if len(text) > 1000 else text
+        
+        # 간단한 프롬프트
+        prompt = f"Extract {max_keywords} keywords from this email: {limited_text}\n\nKeywords:"
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "HTTP-Referer": "https://iacsgraph.local",
-            "X-Title": "IACSGRAPH Mail Processor"
         }
         
+        # OpenRouter 공식 형식 - gpt-3.5-turbo는 더 안정적
         payload = {
-            "model": self.model,  # 설정에서 가져온 모델명 사용
+            "model": self.model,
             "messages": [
-                {"role": "system", "content": "You are a helpful assistant that extracts keywords from emails."},
                 {"role": "user", "content": prompt}
             ],
             "max_tokens": 100,
-            "temperature": 0.3,
-            "top_p": 1.0
+            "temperature": 0.3
         }
         
         # 토큰 정보 초기화
@@ -119,6 +117,8 @@ class MailProcessorKeywordExtractorService:
             "cost_usd": 0.0
         }
         
+        self.logger.info(f"📤 요청 페이로드: {json.dumps(payload, ensure_ascii=False)[:200]}...")
+        
         try:
             async with aiohttp.ClientSession() as session:
                 async with session.post(
@@ -128,12 +128,27 @@ class MailProcessorKeywordExtractorService:
                     timeout=aiohttp.ClientTimeout(total=30)
                 ) as response:
                     
+                    # 응답 상태 및 헤더 로그
+                    self.logger.info(f"📥 응답 상태: {response.status}")
+                    self.logger.info(f"📋 응답 헤더: {dict(response.headers)}")
+                    
+                    # 원시 응답 텍스트 먼저 읽기
+                    response_text = await response.text()
+                    self.logger.info(f"📄 원시 응답: {response_text[:500]}...")
+                    
                     if response.status != 200:
-                        error_text = await response.text()
-                        self.logger.error(f"OpenRouter API 오류 ({response.status}): {error_text}")
+                        self.logger.error(f"❌ API 오류: {response_text}")
                         return [], token_info
                     
-                    data = await response.json()
+                    # JSON 파싱
+                    try:
+                        data = json.loads(response_text)
+                    except json.JSONDecodeError as e:
+                        self.logger.error(f"❌ JSON 파싱 실패: {e}")
+                        return [], token_info
+                    
+                    # 전체 응답 구조 로그
+                    self.logger.info(f"📊 전체 응답 구조: {json.dumps(data, ensure_ascii=False, indent=2)}")
                     
                     # 토큰 사용량 정보 추출
                     if 'usage' in data:
@@ -149,32 +164,31 @@ class MailProcessorKeywordExtractorService:
                         output_cost = (token_info["completion_tokens"] / 1000) * 0.002
                         token_info["cost_usd"] = round(input_cost + output_cost, 6)
                     
-                    # 응답 구조 확인
-                    if 'choices' not in data or not data['choices']:
-                        self.logger.error(f"OpenRouter API 응답 형식 오류: {data}")
-                        return [], token_info
+                    # 응답에서 컨텐츠 추출
+                    if 'choices' in data and data['choices']:
+                        choice = data['choices'][0]
+                        if 'message' in choice and 'content' in choice['message']:
+                            content = choice['message']['content']
+                            self.logger.info(f"✅ 추출된 컨텐츠: '{content}'")
+                            
+                            if content and content.strip():
+                                keywords = self._parse_keywords(content)
+                                self.logger.info(f"🏷️ 파싱된 키워드: {keywords}")
+                                return keywords[:max_keywords], token_info
+                            else:
+                                self.logger.warning("⚠️ 컨텐츠가 비어있음")
+                        else:
+                            self.logger.error(f"❌ message.content 없음: {choice}")
+                    else:
+                        self.logger.error(f"❌ choices 없음: {data}")
                     
-                    choice = data['choices'][0]
-                    if 'message' not in choice or 'content' not in choice['message']:
-                        self.logger.error(f"메시지 내용 없음: {choice}")
-                        return [], token_info
+                    return [], token_info
                     
-                    content = choice['message']['content'].strip()
-                    
-                    if not content:
-                        self.logger.warning("OpenRouter API 응답이 비어있음")
-                        return [], token_info
-                    
-                    # 키워드 파싱
-                    keywords = self._parse_keywords(content)
-                    
-                    self.logger.info(f"OpenRouter 키워드 추출 성공: {keywords}")
-                    self.logger.info(f"토큰 사용량: {token_info['total_tokens']}토큰, 비용: ${token_info['cost_usd']}")
-                    
-                    return keywords[:max_keywords], token_info
-                    
+        except aiohttp.ClientError as e:
+            self.logger.error(f"❌ 네트워크 오류: {str(e)}")
+            return [], token_info
         except Exception as e:
-            self.logger.error(f"OpenRouter API 호출 실패: {str(e)}", exc_info=True)
+            self.logger.error(f"❌ 예상치 못한 오류: {str(e)}", exc_info=True)
             return [], token_info
 
     def _fallback_keyword_extraction(self, text: str, max_keywords: int) -> List[str]:
@@ -220,35 +234,48 @@ class MailProcessorKeywordExtractorService:
         """다양한 형식의 키워드 응답을 파싱"""
         keywords = []
         
-        # 1. 콤마로 구분된 형식: "키워드1, 키워드2, 키워드3"
-        if ',' in content:
-            keywords = [kw.strip() for kw in content.split(',')]
+        self.logger.debug(f"키워드 파싱 시작: '{content}'")
         
-        # 2. 번호 매김 형식: "1. 키워드1\n2. 키워드2\n3. 키워드3"
-        elif re.search(r'\d+\.\s*', content):
-            # 번호와 점을 제거하고 키워드만 추출
+        # 1. 번호 매김 형식: "1. 키워드1\n2. 키워드2\n3. 키워드3"
+        if re.search(r'\d+\.\s*', content):
+            self.logger.debug("번호 매김 형식으로 파싱")
             lines = content.split('\n')
             for line in lines:
+                line = line.strip()
+                if not line:
+                    continue
                 # "1. 키워드" 형식에서 키워드만 추출
-                match = re.match(r'\d+\.\s*(.+)', line.strip())
+                match = re.match(r'\d+\.\s*(.+)', line)
                 if match:
-                    keywords.append(match.group(1).strip())
+                    keyword = match.group(1).strip()
+                    if keyword:
+                        keywords.append(keyword)
+                        self.logger.debug(f"번호 매김에서 추출: '{keyword}'")
+        
+        # 2. 콤마로 구분된 형식: "키워드1, 키워드2, 키워드3"
+        elif ',' in content:
+            self.logger.debug("콤마 구분 형식으로 파싱")
+            keywords = [kw.strip() for kw in content.split(',') if kw.strip()]
         
         # 3. 줄바꿈으로 구분된 형식: "키워드1\n키워드2\n키워드3"
         elif '\n' in content:
+            self.logger.debug("줄바꿈 구분 형식으로 파싱")
             keywords = [line.strip() for line in content.split('\n') if line.strip()]
         
         # 4. 공백으로 구분된 형식: "키워드1 키워드2 키워드3"
         else:
+            self.logger.debug("공백 구분 형식으로 파싱")
             keywords = content.split()
         
         # 키워드 정제
         cleaned_keywords = []
         for kw in keywords:
-            # 불필요한 문자 제거
+            # 불필요한 문자 제거 (앞뒤 특수문자)
             kw = re.sub(r'^[^\w가-힣]+|[^\w가-힣]+$', '', kw)
-            # 최소 길이 확인
+            # 최소 길이 확인 (2글자 이상)
             if kw and len(kw) >= 2:
                 cleaned_keywords.append(kw)
+                self.logger.debug(f"정제된 키워드: '{kw}'")
         
+        self.logger.debug(f"최종 파싱 결과: {cleaned_keywords}")
         return cleaned_keywords
