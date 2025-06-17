@@ -20,7 +20,7 @@ class MailProcessorKeywordExtractorService:
         
         # OpenRouter 설정
         self.api_key = getattr(self.config, 'openrouter_api_key', None)
-        self.model = "openai/gpt-3.5-turbo"  # 직접 설정으로 o3-mini 문제 해결
+        self.model = getattr(self.config, 'openrouter_model', "openai/gpt-3.5-turbo")
         self.base_url = "https://openrouter.ai/api/v1"
         
     async def extract_keywords(self, text: str, max_keywords: int = 5) -> KeywordExtractionResponse:
