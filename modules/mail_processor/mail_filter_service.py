@@ -1,4 +1,5 @@
 """발신자 필터링 서비스"""
+import os
 from typing import Set
 from infra.core.logger import get_logger
 
@@ -9,28 +10,27 @@ class MailProcessorFilterService:
     def __init__(self):
         self.logger = get_logger(__name__)
         
-        # 차단할 도메인 목록
-        self.blocked_domains: Set[str] = {
-            'noreply.com', 'no-reply.com', 'donotreply.com',
-            'notifications.com', 'alerts.com', 'system.com',
-            'mailer-daemon.com', 'postmaster.com', 'bounce.com',
-            'newsletter.com', 'marketing.com', 'promo.com'
-        }
+        # 환경변수에서 필터링 설정 로드
+        self.filtering_enabled = os.getenv('ENABLE_MAIL_FILTERING', 'true').lower() == 'true'
+        self.suspicious_check_enabled = os.getenv('ENABLE_SUSPICIOUS_SENDER_CHECK', 'true').lower() == 'true'
         
-        # 차단할 키워드 목록
-        self.blocked_keywords: Set[str] = {
-            'newsletter', 'promotion', 'marketing', 'advertisement',
-            'unsubscribe', 'spam', 'bulk', 'mass',
-            '광고', '홍보', '마케팅', '뉴스레터', '구독취소',
-            'noreply', 'no-reply', 'donotreply', 'auto-reply'
-        }
+        # 차단할 도메인 목록 (환경변수에서 로드)
+        blocked_domains_str = os.getenv('BLOCKED_DOMAINS', 
+            'noreply.com,no-reply.com,donotreply.com,notifications.com,alerts.com,system.com,mailer-daemon.com,postmaster.com,bounce.com,newsletter.com,marketing.com,promo.com')
+        self.blocked_domains: Set[str] = {domain.strip().lower() for domain in blocked_domains_str.split(',') if domain.strip()}
         
-        # 차단할 발신자 패턴
-        self.blocked_sender_patterns: Set[str] = {
-            'noreply@', 'no-reply@', 'donotreply@', 'auto-reply@',
-            'system@', 'daemon@', 'postmaster@', 'mailer@',
-            'newsletter@', 'marketing@', 'promo@', 'ads@'
-        }
+        # 차단할 키워드 목록 (환경변수에서 로드)
+        blocked_keywords_str = os.getenv('BLOCKED_KEYWORDS',
+            'newsletter,promotion,marketing,advertisement,unsubscribe,spam,bulk,mass,광고,홍보,마케팅,뉴스레터,구독취소,noreply,no-reply,donotreply,auto-reply')
+        self.blocked_keywords: Set[str] = {keyword.strip().lower() for keyword in blocked_keywords_str.split(',') if keyword.strip()}
+        
+        # 차단할 발신자 패턴 (환경변수에서 로드)
+        blocked_patterns_str = os.getenv('BLOCKED_SENDER_PATTERNS',
+            'noreply@,no-reply@,donotreply@,auto-reply@,system@,daemon@,postmaster@,mailer@,newsletter@,marketing@,promo@,ads@')
+        self.blocked_sender_patterns: Set[str] = {pattern.strip().lower() for pattern in blocked_patterns_str.split(',') if pattern.strip()}
+        
+        self.logger.info(f"메일 필터링 서비스 초기화 완료 - 필터링 활성화: {self.filtering_enabled}")
+        self.logger.debug(f"차단 도메인 {len(self.blocked_domains)}개, 차단 키워드 {len(self.blocked_keywords)}개, 차단 패턴 {len(self.blocked_sender_patterns)}개 로드됨")
     
     def should_process(self, sender_address: str, subject: str = "") -> bool:
         """
@@ -43,6 +43,11 @@ class MailProcessorFilterService:
         Returns:
             True: 처리해야 함, False: 필터링해야 함
         """
+        # 필터링이 비활성화된 경우 모든 메일 처리
+        if not self.filtering_enabled:
+            self.logger.debug("메일 필터링이 비활성화되어 모든 메일 처리")
+            return True
+            
         if not sender_address:
             self.logger.debug("발신자 주소가 없어 필터링")
             return False
@@ -74,8 +79,8 @@ class MailProcessorFilterService:
                 self.logger.debug(f"제목의 차단 키워드로 필터링: {keyword}")
                 return False
         
-        # 5. 특수 문자 패턴 확인 (스팸 메일 특징)
-        if self._is_suspicious_sender(sender_lower):
+        # 5. 특수 문자 패턴 확인 (스팸 메일 특징) - 설정에 따라 활성화
+        if self.suspicious_check_enabled and self._is_suspicious_sender(sender_lower):
             self.logger.debug(f"의심스러운 발신자로 필터링: {sender_address}")
             return False
         

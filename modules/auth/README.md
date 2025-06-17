@@ -1,122 +1,246 @@
-# Auth 모듈 - OAuth 2.0 인증 플로우 관리
+# Auth 모듈
 
-Auth 모듈은 OAuth 2.0 인증 플로우를 조정하고 메모리 기반의 임시 세션을 관리하는 경량화된 모듈입니다. `infra` 서비스들을 최대한 활용하여 OAuth 플로우 관리에만 집중합니다.
+OAuth 2.0 인증 플로우를 조정하고 메모리 기반의 임시 세션을 관리하는 경량화된 모듈입니다. `infra` 서비스들을 최대한 활용하여 OAuth 플로우 관리에만 집중합니다.
 
-## 🚀 주요 기능
-
-- **OAuth 플로우 조정**: 인증 URL 생성, 콜백 처리, 토큰 교환까지의 전체 플로우를 관리합니다.
-- **메모리 세션 관리**: 인증 과정에서 사용되는 임시 세션을 메모리에 저장하고 관리합니다. (DB 저장 없음)
-- **일괄 인증 처리**: 여러 계정의 인증 상태를 확인하고 필요한 경우 순차적으로 인증을 조정합니다.
-- **infra 서비스 연동**: `token_service`, `oauth_client`, `database` 등 기존 `infra` 서비스를 직접 활용합니다.
-
-## 📁 모듈 구조
+## 🔄 데이터 파이프라인 구조
 
 ```
-modules/auth/
-├── __init__.py                 # 모듈 초기화 및 export
-├── auth_orchestrator.py        # OAuth 플로우 조정 (메인 API)
-├── auth_web_server.py          # OAuth 콜백 처리 웹서버 관리
-├── auth_schema.py              # OAuth 관련 Pydantic 모델
-├── _auth_helpers.py            # OAuth 전용 유틸리티
-└── references/
-    └── graphapi_delegated_auth.md  # Microsoft Graph API 인증 가이드
+인증 요청 (user_id)
+        ↓
+AuthOrchestrator (세션 생성)
+        ↓
+    ┌───────────────────┐
+    │  메모리 세션 저장  │ ← state 토큰으로 CSRF 방지
+    └───────────────────┘
+        ↓
+OAuth 인증 URL 생성 (계정별 설정 사용)
+        ↓
+사용자 브라우저 → Azure AD
+        ↓
+OAuth 콜백 (code + state)
+        ↓
+AuthWebServer (콜백 수신)
+        ↓
+토큰 교환 (계정별 client_secret 사용)
+        ↓
+TokenService → accounts 테이블 업데이트
 ```
 
-## 🔄 호출 스택 다이어그램
+### 동작 방식
+1. **세션 생성**: 각 인증 요청마다 고유 세션 ID와 state 토큰 생성
+2. **계정별 OAuth**: Account 모듈의 enrollment 설정 사용
+3. **콜백 처리**: 로컬 웹서버(포트 5000)에서 OAuth 콜백 수신
+4. **CSRF 검증**: state 토큰으로 요청 유효성 확인
+5. **토큰 저장**: 획득한 토큰은 TokenService를 통해 암호화 저장
 
-```mermaid
-sequenceDiagram
-    participant ClientApp as 클라이언트 앱
-    participant AuthOrchestrator as auth_orchestrator.py
-    participant AuthWebServer as auth_web_server.py
-    participant InfraServices as infra.*
+## 📋 모듈 설정 파일 관리
 
-    ClientApp->>AuthOrchestrator: 인증 시작/상태 조회 요청
-    AuthOrchestrator->>AuthWebServer: 웹서버 시작 및 세션 공유
-    AuthOrchestrator->>InfraServices: 계정 정보 조회 (database)
-    AuthOrchestrator->>InfraServices: 인증 URL 생성 (oauth_client)
-    
-    Note over AuthWebServer, InfraServices: 사용자가 브라우저에서 인증 후<br/>콜백이 웹서버로 전달됨
+### 환경 변수 설정 (`.env`)
+```env
+# OAuth 콜백 서버 설정
+OAUTH_CALLBACK_PORT=5000
+OAUTH_CALLBACK_HOST=localhost
 
-    AuthWebServer->>AuthOrchestrator: 콜백 정보 전달
-    AuthOrchestrator->>InfraServices: 토큰 교환 (oauth_client)
-    AuthOrchestrator->>InfraServices: 토큰 저장 (token_service)
-    AuthOrchestrator->>ClientApp: 최종 상태 반환
+# 세션 설정
+AUTH_SESSION_TIMEOUT_MINUTES=10
+AUTH_MAX_CONCURRENT_SESSIONS=100
+
+# 재시도 설정
+AUTH_TOKEN_EXCHANGE_RETRIES=3
+AUTH_TOKEN_EXCHANGE_TIMEOUT=30
 ```
 
-## 📝 사용 방법
+### 계정별 OAuth 설정 (Account 모듈의 enrollment 파일 활용)
+```yaml
+# enrollment/user@company.com.yaml
+oauth:
+  redirect_uri: http://localhost:5000/auth/callback
+  auth_type: "Authorization Code Flow"
+  delegated_permissions:
+    - Mail.ReadWrite
+    - Mail.Send
+    - offline_access
+```
 
-`AuthOrchestrator`는 `get_auth_orchestrator()`를 통해 싱글턴 인스턴스로 접근할 수 있습니다. 모든 기능은 Pydantic 모델을 사용하여 요청하고 응답받습니다.
+## 🚀 모듈별 사용 방법 및 예시
 
-### 1. 인증 인스턴스 가져오기
-
+### 1. 단일 사용자 인증
 ```python
-from modules.auth import get_auth_orchestrator
+from modules.auth import get_auth_orchestrator, AuthStartRequest
+import asyncio
 
-# AuthOrchestrator 인스턴스 가져오기
-auth_orchestrator = get_auth_orchestrator()
+async def authenticate_user():
+    orchestrator = get_auth_orchestrator()
+    
+    # 인증 시작
+    request = AuthStartRequest(user_id="kimghw")
+    response = await orchestrator.auth_orchestrator_start_authentication(request)
+    
+    print(f"인증 URL: {response.auth_url}")
+    print(f"세션 ID: {response.session_id}")
+    print(f"만료 시간: {response.expires_at}")
+    
+    # 사용자를 브라우저로 리다이렉트
+    # webbrowser.open(response.auth_url)
+    
+    # 상태 확인 (폴링)
+    while True:
+        status = await orchestrator.auth_orchestrator_get_session_status(
+            response.session_id
+        )
+        print(f"상태: {status.status} - {status.message}")
+        
+        if status.is_completed:
+            print("✅ 인증 완료!")
+            break
+        elif status.status in ["FAILED", "EXPIRED"]:
+            print(f"❌ 인증 실패: {status.error_message}")
+            break
+            
+        await asyncio.sleep(2)  # 2초마다 확인
+
+# 실행
+asyncio.run(authenticate_user())
 ```
 
-### 2. 단일 사용자 인증
+### 2. 일괄 인증
+```python
+from modules.auth import AuthBulkRequest
 
-인증을 시작하고, 생성된 `auth_url`로 사용자를 안내합니다. 사용자가 인증을 완료하면 `get_session_status`를 통해 상태를 확인할 수 있습니다.
+async def bulk_authenticate():
+    orchestrator = get_auth_orchestrator()
+    
+    # 여러 사용자 일괄 인증
+    request = AuthBulkRequest(
+        user_ids=["kimghw", "leehs", "parkjy"],
+        max_concurrent=3,
+        timeout_minutes=15
+    )
+    
+    response = await orchestrator.auth_orchestrator_bulk_authentication(request)
+    
+    print(f"총 {response.total_users}명 처리")
+    print(f"- 인증 대기: {response.pending_count}명")
+    print(f"- 완료: {response.completed_count}명")
+    print(f"- 실패: {response.failed_count}명")
+    
+    # 인증이 필요한 사용자들의 URL 출력
+    for status in response.user_statuses:
+        if status.auth_url:
+            print(f"\n{status.user_id}: {status.auth_url}")
+```
 
-- **`auth_orchestrator_start_authentication(request: AuthStartRequest) -> AuthStartResponse`**
-  - **요청**: `AuthStartRequest` (user_id)
-  - **응답**: `AuthStartResponse` (session_id, auth_url, expires_at)
-- **`auth_orchestrator_get_session_status(session_id: str) -> AuthStatusResponse`**
-  - **요청**: `session_id`
-  - **응답**: `AuthStatusResponse` (session_id, user_id, status, message, is_completed)
+### 3. 모든 계정 상태 조회
+```python
+async def check_all_accounts():
+    orchestrator = get_auth_orchestrator()
+    
+    accounts = await orchestrator.auth_orchestrator_get_all_accounts_status()
+    
+    for account in accounts:
+        print(f"\n사용자: {account['user_id']}")
+        print(f"- 토큰 만료: {account['token_expired']}")
+        print(f"- 마지막 동기화: {account['last_sync_time']}")
+        print(f"- 진행 중인 세션: {account['has_pending_session']}")
+```
 
-### 3. 일괄 인증
+### 4. 세션 관리
+```python
+from modules.auth import AuthCleanupRequest
 
-여러 사용자의 인증 상태를 한 번에 확인하고, 인증이 필요한 사용자에 대해 인증 URL을 생성하여 반환합니다.
+async def manage_sessions():
+    orchestrator = get_auth_orchestrator()
+    
+    # 만료된 세션 정리
+    cleanup_request = AuthCleanupRequest(
+        expire_threshold_minutes=60,  # 60분 이상 된 세션
+        force_cleanup=False
+    )
+    
+    result = await orchestrator.auth_orchestrator_cleanup_sessions(cleanup_request)
+    
+    print(f"정리된 세션: {result.cleaned_sessions}개")
+    print(f"활성 세션: {result.active_sessions}개")
+```
 
-- **`auth_orchestrator_bulk_authentication(request: AuthBulkRequest) -> AuthBulkResponse`**
-  - **요청**: `AuthBulkRequest` (user_ids)
-  - **응답**: `AuthBulkResponse` (총 사용자 수, 상태별 사용자 수, 사용자별 상태 목록)
+## 🔐 보안 기능
 
-### 4. 전체 계정 상태 조회
+### CSRF 보호
+- 각 인증 요청마다 고유한 `state` 토큰 생성
+- 콜백 시 state 검증으로 위조 요청 차단
 
-데이터베이스에 저장된 모든 계정의 현재 인증 상태와 토큰 만료 여부를 조회합니다.
+### 세션 관리
+```python
+# 메모리 세션 구조
+AuthSession {
+    session_id: "auth_20250617143022_a1b2c3d4_e5f6g7h8"
+    user_id: "kimghw"
+    state: "랜덤한_32바이트_토큰"
+    auth_url: "https://login.microsoftonline.com/..."
+    status: "PENDING|CALLBACK_RECEIVED|COMPLETED|FAILED|EXPIRED"
+    expires_at: "2025-06-17T14:40:22Z"  # 10분 후
+}
+```
 
-- **`auth_orchestrator_get_all_accounts_status() -> List[Dict[str, Any]]`**
-  - **응답**: 각 계정의 상태 정보가 담긴 딕셔너리 리스트
+## ⚠️ 주의사항
 
-### 5. 세션 정리
+### 메모리 세션의 한계
+1. **서버 재시작 시 소실**: 모든 진행 중인 세션이 사라집니다
+2. **분산 환경 미지원**: 단일 서버에서만 동작
+3. **세션 수 제한**: 메모리 사용량 고려 필요
 
-만료되었거나 완료된 임시 인증 세션을 메모리에서 정리합니다.
+### 포트 충돌
+```bash
+# 포트 5000이 사용 중인 경우
+export OAUTH_CALLBACK_PORT=5001
+```
 
-- **`auth_orchestrator_cleanup_sessions(request: AuthCleanupRequest) -> AuthCleanupResponse`**
-  - **요청**: `AuthCleanupRequest` (만료 기준 시간(분), 강제 정리 여부)
-  - **응답**: `AuthCleanupResponse` (정리된 세션 수, 남은 세션 수)
+### 인증 시간 제한
+- 기본 세션 타임아웃: 10분
+- 사용자가 10분 내에 인증을 완료해야 함
 
-## 🔧 주요 컴포넌트
+## 📊 인증 상태
 
-- **`AuthOrchestrator`**: OAuth 플로우의 메인 조정자. 인증 시작, 상태 확인, 일괄 처리 등 모듈의 핵심 API를 제공합니다.
-- **`AuthWebServerManager`**: OAuth 콜백 처리를 위한 임시 웹서버의 생명주기를 관리합니다. `AuthOrchestrator`에 의해 내부적으로 제어됩니다.
-- **`AuthSession`**: 인증 과정을 관리하는 메모리 기반 임시 세션 모델. CSRF 방지용 `state` 토큰과 만료 시간을 포함합니다.
+| 상태 | 설명 | 다음 액션 |
+|------|------|----------|
+| `PENDING` | 사용자 인증 대기 중 | 브라우저에서 인증 진행 |
+| `CALLBACK_RECEIVED` | 콜백 수신, 토큰 교환 중 | 자동 처리 |
+| `COMPLETED` | 인증 완료 | 토큰 사용 가능 |
+| `FAILED` | 인증 실패 | 오류 메시지 확인 |
+| `EXPIRED` | 세션 만료 | 재인증 필요 |
 
-## 🛡️ 보안 고려사항
+## 🔗 다른 모듈과의 연계
 
-- **CSRF 방지**: 각 세션마다 고유한 `state` 토큰을 생성하여 콜백 시 검증합니다.
-- **세션 만료**: 모든 임시 세션은 기본 10분의 만료 시간을 가지며, 만료 시 자동으로 정리될 수 있습니다.
-- **민감 데이터 마스킹**: 로그 출력 시 토큰과 같은 민감 정보는 자동으로 마스킹됩니다.
+### Account 모듈
+- 계정별 OAuth 설정 (client_id, client_secret, scopes) 읽기
+- 계정 상태 확인 (활성/비활성)
 
-## ⚙️ 의존성
+### Token Service
+- 토큰 교환 후 자동 저장
+- 토큰 유효성 검증
 
-- `infra.core.token_service`: 토큰 저장, 갱신, 상태 확인
-- `infra.core.oauth_client`: OAuth 클라이언트 (인증 URL 생성, 토큰 교환)
-- `infra.core.database`: DB 연결 및 계정 정보 직접 쿼리
-- `infra.core.logger`: 전역 로깅 시스템
-- `infra.core.config`: 환경 변수 관리
+### Database
+- accounts 테이블의 토큰 필드 업데이트
+- 암호화된 상태로 저장
 
-## 🚨 제한사항
+## 🚨 에러 처리
 
-- **메모리 세션**: 서버 재시작 시 진행 중이던 인증 세션 정보가 소실됩니다.
-- **단일 서버 환경**: 여러 서버 인스턴스 간 세션 공유를 지원하지 않습니다.
-- **동시 인증**: 사용자당 하나의 진행 중인 인증 세션만 허용됩니다.
+### 일반적인 오류와 해결 방법
 
-## 🧪 테스트
+1. **"계정별 OAuth 설정이 없습니다"**
+   - Account 모듈에서 enrollment 파일 확인
+   - 계정 동기화 실행
 
-테스트는 `/test/scenario/`에 정의된 시나리오에 따라 수행됩니다.
+2. **"토큰 교환 실패: 401"**
+   - Azure AD의 client_secret 확인
+   - 리다이렉트 URI 일치 여부 확인
+
+3. **"세션을 찾을 수 없습니다"**
+   - 세션 만료 확인 (10분)
+   - 서버 재시작 여부 확인
+
+## 📈 성능 고려사항
+
+- 동시 인증 세션: 기본 100개 제한
+- 메모리 사용량: 세션당 약 1KB
+- 콜백 처리 시간: 평균 200ms
