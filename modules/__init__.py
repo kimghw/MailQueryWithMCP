@@ -7,7 +7,7 @@ from . import auth
 from . import account
 from . import mail_query
 from . import mail_processor
-from . import mail_history
+from . import mail_process
 from . import keyword_extractor
 
 __all__ = [
@@ -15,6 +15,6 @@ __all__ = [
     "account", 
     "mail_query",
     "mail_processor",
-    "mail_history",
+    "mail_process",
     "keyword_extractor"
 ]

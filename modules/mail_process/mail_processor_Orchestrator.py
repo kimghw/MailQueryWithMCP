@@ -66,7 +66,7 @@ class MailProcessorOrchestrator:
                 )
 
             # 3단계: 텍스트 정제 (유틸리티)
-            clean_content = self.text_cleaner.prepare_mail_content(mail)
+            refined_mail, clean_content = self.text_cleaner.prepare_mail_content(mail)
             
             # 내용이 너무 짧은지 확인 (유틸리티)
             if self.text_cleaner.is_content_too_short(clean_content):
@@ -93,18 +93,21 @@ class MailProcessorOrchestrator:
                     keywords = await self.keyword_service.extract_keywords(clean_content)
             else:
                 keywords = await self.keyword_service.extract_keywords(clean_content)
+            # 5.1단계
+            refined_mail['extracted_keywords'] = keywords
 
-            # 6단계: 처리된 메일 데이터 생성
+            # 6단계: 처리된 메일 데이터 생성, 데이터베이스 저장
             processed_mail = self._create_processed_mail_data(
                 mail_id, account_id, sender_address, subject, body_preview,
                 sent_time, keywords, ProcessingStatus.SUCCESS
             )
+            
 
             # 7단계: DB 저장 (서비스)
             self.db_service.save_mail_with_hash(processed_mail, clean_content)
 
             # 8단계: 이벤트 발행 (서비스)
-            self.event_service.publish_mail_event(account_id, mail, keywords, clean_content)
+            self.event_service.publish_mail_event(account_id, refined_mail, keywords)
 
             self.logger.info(
                 f"메일 처리 완료 - ID: {mail_id}, 키워드: {len(keywords)}개"

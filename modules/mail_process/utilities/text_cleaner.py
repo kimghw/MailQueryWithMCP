@@ -1,9 +1,7 @@
-## 2. utilities/text_cleaner.py
-
 """텍스트 정제 유틸리티"""
 
 import re
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 from infra.core.logger import get_logger
 
 
@@ -63,43 +61,54 @@ class TextCleaner:
         
         return clean
 
-    def prepare_mail_content(self, mail: Dict) -> str:
+    def prepare_mail_content(self, mail: Dict) -> Tuple[Dict, str]:
         """
-        메일 내용 준비 - 제목과 본문을 합쳐서 정제
+        메일 내용 준비 - 원본 메일을 정제하여 새로운 메일 객체와 전체 정제 내용 반환
         
         Args:
-            mail: 메일 딕셔너리
+            mail: 원본 메일 딕셔너리
             
         Returns:
-            정제된 전체 내용
+            (정제된 메일 딕셔너리, 키워드 추출용 전체 정제 내용)
         """
+        # 원본 메일 복사
+        refined_mail = mail.copy()
+        
+        # 1. subject 정제
+        if mail.get('subject'):
+            refined_mail['subject'] = self.clean_text(mail['subject'])
+        
+        # 2. bodyPreview 정제
+        if mail.get('bodyPreview'):
+            refined_mail['bodyPreview'] = self.clean_text(mail['bodyPreview'])
+        elif mail.get('body_preview'):
+            refined_mail['body_preview'] = self.clean_text(mail['body_preview'])
+        
+        # 3. body.content 정제
+        if mail.get('body') and isinstance(mail['body'], dict):
+            refined_body = mail['body'].copy()
+            if refined_body.get('content'):
+                refined_body['content'] = self.clean_text(refined_body['content'])
+            refined_mail['body'] = refined_body
+        
+        # 4. 키워드 추출용 전체 내용 생성
         # 본문 내용 추출 우선순위: body.content > bodyPreview > subject
-        body_content = ""
+        content_for_keywords = ""
         
-        # 1. body.content 확인
-        body = mail.get('body', {})
-        if isinstance(body, dict) and body.get('content'):
-            body_content = body['content']
+        # body.content 확인
+        if refined_mail.get('body') and isinstance(refined_mail['body'], dict):
+            content_for_keywords = refined_mail['body'].get('content', '')
         
-        # 2. bodyPreview 확인
-        elif mail.get('bodyPreview'):
-            body_content = mail['bodyPreview']
+        # bodyPreview 확인
+        if not content_for_keywords:
+            content_for_keywords = refined_mail.get('bodyPreview', refined_mail.get('body_preview', ''))
         
-        # 3. subject만 있는 경우
-        subject = mail.get('subject', '')
-        if not body_content and subject:
-            body_content = subject
+        # subject도 포함 (중요한 정보가 있을 수 있음)
+        subject = refined_mail.get('subject', '')
+        if subject and subject not in content_for_keywords:
+            content_for_keywords = f"{subject} {content_for_keywords}"
         
-        # 텍스트 정제
-        clean_content = self.clean_text(body_content)
-        
-        # 제목도 포함 (중요한 정보가 있을 수 있음)
-        if subject:
-            clean_subject = self.clean_text(subject)
-            if clean_subject and clean_subject not in clean_content:
-                clean_content = f"{clean_subject} {clean_content}"
-        
-        return clean_content
+        return refined_mail, content_for_keywords
 
     def is_content_too_short(self, content: str, min_length: int = 10) -> bool:
         """
@@ -113,5 +122,3 @@ class TextCleaner:
             너무 짧으면 True
         """
         return len(content.strip()) < min_length
-
-
