@@ -207,6 +207,28 @@ class MailProcessorKafkaHelper:
             # mail 딕셔너리의 datetime 객체들을 문자열로 변환
             mail_copy = self._convert_datetime_to_string(mail.copy())
             
+            # 메일 content 정제 적용
+            if 'body' in mail_copy and isinstance(mail_copy['body'], dict):
+                if 'content' in mail_copy['body']:
+                    original_content = mail_copy['body']['content']
+                    cleaned_content = MailProcessorDataHelper._clean_text(original_content)
+                    mail_copy['body']['content'] = cleaned_content
+                    logger.debug(f"메일 content 정제 완료: {len(original_content)} -> {len(cleaned_content)} 문자")
+            
+            # bodyPreview 정제 적용
+            if 'bodyPreview' in mail_copy and mail_copy['bodyPreview']:
+                original_preview = mail_copy['bodyPreview']
+                cleaned_preview = MailProcessorDataHelper._clean_text(original_preview)
+                mail_copy['bodyPreview'] = cleaned_preview
+                logger.debug(f"메일 bodyPreview 정제 완료: {len(original_preview)} -> {len(cleaned_preview)} 문자")
+            
+            # body_preview 필드도 정제 (다른 필드명 지원)
+            if 'body_preview' in mail_copy and mail_copy['body_preview']:
+                original_body_preview = mail_copy['body_preview']
+                cleaned_body_preview = MailProcessorDataHelper._clean_text(original_body_preview)
+                mail_copy['body_preview'] = cleaned_body_preview
+                logger.debug(f"메일 body_preview 정제 완료: {len(original_body_preview)} -> {len(cleaned_body_preview)} 문자")
+            
             # 키워드 정제 - 빈 문자열이나 의미없는 문자 제거
             if keywords:
                 cleaned_keywords = []
@@ -329,13 +351,48 @@ class MailProcessorDataHelper:
         elif mail.get('subject'):
             body_content = mail['subject']
         
-        # 기본 텍스트 정제 (캐리지 리턴 제거)
+        # 텍스트 정제 적용
         if body_content:
-            # \r\n -> \n, \r -> \n 변환
-            body_content = body_content.replace('\r\n', '\n')
-            body_content = body_content.replace('\r', '\n')
+            body_content = MailProcessorDataHelper._clean_text(body_content)
         
         return body_content
+    
+    @staticmethod
+    def _clean_text(text: str) -> str:
+        """텍스트 정제 - 이메일 content용"""
+        if not text:
+            return ""
+        
+        # 1. 모든 종류의 줄바꿈을 공백으로 변환
+        # \r\n -> 공백, \r -> 공백, \n -> 공백
+        clean = text.replace('\r\n', ' ')
+        clean = clean.replace('\r', ' ')
+        clean = clean.replace('\n', ' ')
+        
+        # 2. HTML 태그 제거
+        clean = re.sub(r'<[^>]+>', '', clean)
+        
+        # 3. 이메일 주소를 공백으로 변환 (< > 안의 내용 포함)
+        clean = re.sub(r'<[^>]+@[^>]+>', ' ', clean)
+        clean = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', ' ', clean)
+        
+        # 4. URL 제거
+        clean = re.sub(r'https?://[^\s]+', ' ', clean)
+        clean = re.sub(r'www\.[^\s]+', ' ', clean)
+        
+        # 5. 탭 문자를 공백으로 변환
+        clean = clean.replace('\t', ' ')
+        
+        # 6. 불필요한 구분선 제거 (------, ====== 등)
+        clean = re.sub(r'[-=]{5,}', ' ', clean)
+        
+        # 7. 과도한 공백 정리 (연속된 공백을 하나로)
+        clean = re.sub(r'\s+', ' ', clean)
+        
+        # 8. 양쪽 공백 제거
+        clean = clean.strip()
+        
+        return clean
     
     @staticmethod
     def _extract_sender_address(mail: Dict) -> str:

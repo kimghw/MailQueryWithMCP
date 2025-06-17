@@ -16,4 +16,4 @@ alias auth_flow="uv run python /home/kimghw/IACSGRAPH/script/ignore/auth_flow.py
 
 
 # integration 테스트
-alias integration_test="PYTHONPATH=. python /home/kimghw/IACSGRAPH/script/ignore/mail_query_processor.py 2>&1 | grep -v 'KafkaProducer\|Sender\|Timeouts\|BrokerConnection'"
+alias integration_test="PYTHONPATH=. python script/ignore/mail_query_processor.py 2>&1 | grep -v 'KafkaProducer\|Sender\|Timeouts\|BrokerConnection'"
