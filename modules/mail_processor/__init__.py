@@ -9,7 +9,7 @@ from .mail_processor_schema import (
     AccountProcessingStatus,
     KeywordExtractionRequest,
     KeywordExtractionResponse,
-    GraphMailItem
+    GraphMailItem,
 )
 from .keyword_extractor_service import MailProcessorKeywordExtractorService
 from .mail_filter_service import MailProcessorFilterService
@@ -17,18 +17,16 @@ from .mail_filter_service import MailProcessorFilterService
 __all__ = [
     # 메인 오케스트레이터
     "MailProcessorOrchestrator",
-    
     # 스키마
     "ProcessingStatus",
-    "MailReceivedEvent", 
+    "MailReceivedEvent",
     "ProcessedMailData",
     "MailProcessingResult",
     "AccountProcessingStatus",
     "KeywordExtractionRequest",
     "KeywordExtractionResponse",
     "GraphMailItem",
-    
     # 서비스
     "MailProcessorKeywordExtractorService",
-    "MailProcessorFilterService"
+    "MailProcessorFilterService",
 ]

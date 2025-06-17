@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS mail_history (
     sender TEXT,
     keywords TEXT, -- JSON 형태의 텍스트
     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    content_hash TEXT, -- 중복 메일 검사를 위한 내용 해시
     FOREIGN KEY (account_id) REFERENCES accounts (id)
 );
 
@@ -42,5 +43,6 @@ CREATE TABLE IF NOT EXISTS processing_logs (
 CREATE INDEX IF NOT EXISTS idx_accounts_user_id ON accounts (user_id);
 CREATE INDEX IF NOT EXISTS idx_mail_history_message_id ON mail_history (message_id);
 CREATE INDEX IF NOT EXISTS idx_mail_history_received_time ON mail_history (received_time);
+CREATE INDEX IF NOT EXISTS idx_mail_history_content_hash ON mail_history (content_hash);
 CREATE INDEX IF NOT EXISTS idx_processing_logs_run_id ON processing_logs (run_id);
 CREATE INDEX IF NOT EXISTS idx_processing_logs_timestamp ON processing_logs (timestamp);

@@ -1,4 +1,5 @@
 """Mail Processor 모듈 스키마 정의"""
+
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
@@ -19,14 +20,18 @@ from enum import Enum
 # GraphMailItem: Microsoft Graph API를 통해 가져온 메일 아이템을 표현합니다.
 
 
-
 class GraphMailItem(BaseModel):
     """Graph API 메일 아이템"""
+
     id: str = Field(..., description="메일 ID")
     subject: Optional[str] = Field(None, description="제목")
     sender: Optional[Dict[str, Any]] = Field(None, description="발신자 정보")
-    from_address: Optional[Dict[str, Any]] = Field(None, alias="from", description="From 필드")
-    to_recipients: List[Dict[str, Any]] = Field(default_factory=list, description="수신자 목록")
+    from_address: Optional[Dict[str, Any]] = Field(
+        None, alias="from", description="From 필드"
+    )
+    to_recipients: List[Dict[str, Any]] = Field(
+        default_factory=list, description="수신자 목록"
+    )
     received_date_time: datetime = Field(..., description="수신 시간")
     body_preview: Optional[str] = Field(None, description="본문 미리보기")
     body: Optional[Dict[str, Any]] = Field(None, description="본문 전체")
@@ -38,6 +43,7 @@ class GraphMailItem(BaseModel):
 
 class ProcessingStatus(str, Enum):
     """처리 상태"""
+
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
@@ -46,6 +52,7 @@ class ProcessingStatus(str, Enum):
 # 이벤트 발행 스키마
 class MailReceivedEvent(BaseModel):
     """Kafka로 전송될 메일 수신 이벤트"""
+
     event_type: str = "email.raw_data_received"
     event_id: str
     account_id: str
@@ -59,6 +66,7 @@ class MailReceivedEvent(BaseModel):
 
 class ProcessedMailData(BaseModel):
     """처리된 메일 데이터"""
+
     mail_id: str
     account_id: str
     sender_address: str
@@ -73,6 +81,7 @@ class ProcessedMailData(BaseModel):
 
 class MailProcessingResult(BaseModel):
     """메일 처리 결과"""
+
     account_id: str
     total_fetched: int
     processed_count: int
@@ -85,6 +94,7 @@ class MailProcessingResult(BaseModel):
 
 class AccountProcessingStatus(BaseModel):
     """계정별 처리 상태"""
+
     account_id: str
     email: str
     status: str
@@ -94,14 +104,18 @@ class AccountProcessingStatus(BaseModel):
 
 class KeywordExtractionRequest(BaseModel):
     """키워드 추출 요청"""
+
     text: str
     max_keywords: int = 5
 
 
 class KeywordExtractionResponse(BaseModel):
     """키워드 추출 응답"""
+
     keywords: List[str]
     method: str  # "openrouter", "fallback", "empty_text", "fallback_error"
     model: str  # 사용된 모델명 (예: "openai/o3-mini", "rule_based")
     execution_time_ms: int
-    token_info: Dict[str, Any] = Field(default_factory=dict, description="토큰 사용량 정보")
+    token_info: Dict[str, Any] = Field(
+        default_factory=dict, description="토큰 사용량 정보"
+    )

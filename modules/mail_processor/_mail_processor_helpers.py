@@ -2,9 +2,10 @@
 import re
 import json
 import uuid
+import hashlib
 import aiohttp
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 
 from infra.core.logger import get_logger
 from infra.core.token_service import get_token_service
@@ -213,6 +214,92 @@ class MailProcessorDatabaseHelper:
         self.db_manager.execute_query(log_query, (run_id, account_id, error_message))
         
         logger.error(f"계정 {account_id} 에러 기록: {error_message}")
+    
+    async def check_duplicate_by_content(self, mail_id: str, sender_address: str, content: str) -> tuple[bool, list]:
+        """내용 기반 중복 검사 - 해시 비교"""
+        # 내용 해시 생성
+        content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+        
+        # 해시 기반 중복 검사
+        query = """
+            SELECT keywords 
+            FROM mail_history 
+            WHERE content_hash = ? OR message_id = ?
+            LIMIT 1
+        """
+        
+        result = self.db_manager.fetch_one(query, (content_hash, mail_id))
+        
+        if result:
+            # 기존 키워드 파싱
+            try:
+                existing_keywords = json.loads(result['keywords']) if result['keywords'] else []
+            except (json.JSONDecodeError, TypeError):
+                existing_keywords = []
+            
+            return True, existing_keywords
+        
+        return False, []
+    
+    async def save_mail_history_with_hash(self, processed_mail: ProcessedMailData, content: str) -> None:
+        """메일 히스토리 저장 - 내용 해시 포함"""
+        # 내용 해시 생성
+        content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
+        
+        # account_id가 문자열인 경우 accounts 테이블에서 실제 ID 조회
+        if isinstance(processed_mail.account_id, str):
+            account_query = "SELECT id FROM accounts WHERE user_id = ?"
+            account_result = self.db_manager.fetch_one(account_query, (processed_mail.account_id,))
+            
+            if account_result:
+                actual_account_id = account_result['id']
+            else:
+                # 테스트용 계정이 없는 경우 임시로 생성
+                logger.warning(f"계정 {processed_mail.account_id}가 존재하지 않음, 임시 계정 생성")
+                insert_account_query = """
+                    INSERT INTO accounts (user_id, user_name, is_active) 
+                    VALUES (?, ?, 1)
+                """
+                self.db_manager.execute_query(insert_account_query, (
+                    processed_mail.account_id, 
+                    f"Test User ({processed_mail.account_id})"
+                ))
+                
+                # 생성된 계정 ID 조회
+                account_result = self.db_manager.fetch_one(account_query, (processed_mail.account_id,))
+                actual_account_id = account_result['id']
+        else:
+            actual_account_id = processed_mail.account_id
+        
+        # content_hash 컬럼이 있는지 확인하고 없으면 추가
+        try:
+            # 먼저 content_hash 컬럼 추가 시도
+            alter_query = "ALTER TABLE mail_history ADD COLUMN content_hash TEXT"
+            self.db_manager.execute_query(alter_query)
+            logger.info("mail_history 테이블에 content_hash 컬럼 추가됨")
+        except Exception:
+            # 이미 컬럼이 있거나 다른 이유로 실패한 경우 무시
+            pass
+        
+        query = """
+            INSERT INTO mail_history (
+                account_id, message_id, received_time, subject, 
+                sender, keywords, processed_at, content_hash
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """
+        
+        keywords_json = json.dumps(processed_mail.keywords, ensure_ascii=False)
+        
+        self.db_manager.execute_query(query, (
+            actual_account_id,
+            processed_mail.mail_id,
+            processed_mail.sent_time,
+            processed_mail.subject,
+            processed_mail.sender_address,
+            keywords_json,
+            processed_mail.processed_at,
+            content_hash
+        ))
 
 
 class MailProcessorKafkaHelper:
@@ -251,8 +338,8 @@ class MailProcessorKafkaHelper:
                 logger.debug(f"메일 body_preview 정제 완료: {len(original_body_preview)} -> {len(cleaned_body_preview)} 문자")
             
             # 키워드 정제 - 빈 문자열이나 의미없는 문자 제거
+            cleaned_keywords = []
             if keywords:
-                cleaned_keywords = []
                 for keyword in keywords:
                     # 키워드 정제
                     cleaned = keyword.strip()
@@ -291,7 +378,7 @@ class MailProcessorKafkaHelper:
                 key=account_id
             )
             
-            logger.debug(f"Kafka 이벤트 발행 완료 (키워드 {len(cleaned_keywords) if keywords else 0}개): {mail.get('id', 'unknown')}")
+            logger.debug(f"Kafka 이벤트 발행 완료 (키워드 {len(cleaned_keywords)}개): {mail.get('id', 'unknown')}")
             
         except Exception as e:
             logger.error(f"Kafka 이벤트 발행 실패: {str(e)}")
