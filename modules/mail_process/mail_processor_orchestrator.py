@@ -75,13 +75,14 @@ class MailProcessorOrchestrator:
             # Phase 3: 저장 및 이벤트 발행
             saved_results = await self._phase3_persist(account_id, processed_mails)
             
-            # Phase 4: 통계 기록
+            # Phase 4: 통계 기록 - processed_mails 전달 추가!
             statistics = await self._phase4_statistics(
                 account_id, 
                 len(mails),
                 len(filtered_mails),
                 saved_results,
-                publish_batch_event
+                publish_batch_event,
+                processed_mails  # 이 부분 추가!
             )
             
             self.logger.info(f"메일 처리 완료: {statistics}")
@@ -103,11 +104,34 @@ class MailProcessorOrchestrator:
     async def _phase2_process(self, account_id: str, mails: List[Dict]) -> List[Dict]:
         """Phase 2: 정제 및 키워드 추출"""
         self.logger.debug(f"Phase 2 시작: 처리 ({len(mails)}개)")
-        return await self.processing_service.process_mails(mails)
+        processed_mails = await self.processing_service.process_mails(mails)
+        
+        # 처리된 메일에서 키워드 정보 확인 (디버깅용)
+        total_keywords = 0
+        for mail in processed_mails:
+            if '_processed' in mail and 'keywords' in mail['_processed']:
+                keywords = mail['_processed']['keywords']
+                total_keywords += len(keywords)
+                if keywords:
+                    self.logger.debug(f"메일 {mail.get('id', 'unknown')}: 키워드 {len(keywords)}개 - {keywords}")
+        
+        self.logger.info(f"Phase 2 완료: {len(processed_mails)}개 메일에서 총 {total_keywords}개 키워드 추출")
+        return processed_mails
     
     async def _phase3_persist(self, account_id: str, mails: List[Dict]) -> Dict:
         """Phase 3: 저장 및 이벤트 발행"""
         self.logger.debug(f"Phase 3 시작: 저장 ({len(mails)}개)")
+        
+        # 처리된 메일 데이터에 키워드 정보 포함
+        for mail in mails:
+            if '_processed' in mail:
+                # _processed 정보를 메일 데이터에 병합
+                processed_info = mail['_processed']
+                mail['keywords'] = processed_info.get('keywords', [])
+                mail['clean_content'] = processed_info.get('clean_content', '')
+                mail['sent_time'] = processed_info.get('sent_time')
+                mail['processing_status'] = 'SUCCESS'
+        
         return await self.persistence_service.persist_mails(account_id, mails)
     
     async def _phase4_statistics(
@@ -116,7 +140,8 @@ class MailProcessorOrchestrator:
         total_count: int,
         filtered_count: int,
         saved_results: Dict,
-        publish_batch_event: bool
+        publish_batch_event: bool,
+        processed_mails: List[Dict] = None  # 파라미터 추가
     ) -> Dict:
         """Phase 4: 통계 기록"""
         self.logger.debug("Phase 4 시작: 통계")
@@ -125,7 +150,8 @@ class MailProcessorOrchestrator:
             total_count=total_count,
             filtered_count=filtered_count,
             saved_results=saved_results,
-            publish_batch_event=publish_batch_event
+            publish_batch_event=publish_batch_event,
+            processed_mails=processed_mails  # 전달 추가
         )
     
     async def _cleanup_resources(self):
