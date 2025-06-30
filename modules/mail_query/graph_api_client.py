@@ -10,7 +10,7 @@ from datetime import datetime
 from infra.core.config import get_config
 from infra.core.logger import get_logger
 from infra.core.exceptions import APIConnectionError, TokenExpiredError
-from ._mail_query_helpers import (  # 언더스코어 추가
+from .mail_query_helpers import (  # 언더스코어 제거됨
     parse_graph_mail_item, 
     parse_graph_error_response,
     calculate_retry_delay,
@@ -44,6 +44,8 @@ class GraphAPIClient:
         """세션 정리"""
         if self._session and not self._session.closed:
             await self._session.close()
+            # 세션이 완전히 닫힐 때까지 잠시 대기
+            await asyncio.sleep(0.1)
             logger.debug("aiohttp 세션 정리됨")
             self._session = None
     

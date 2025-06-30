@@ -6,7 +6,7 @@ from typing import Optional
 from datetime import datetime
 
 from .mail_query_schema import MailQueryFilters
-from .mail_query_helpers import escape_odata_string
+from .mail_query_helpers import escape_odata_string  # 언더스코어 제거됨
 
 
 class ODataFilterBuilder:
