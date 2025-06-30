@@ -3,22 +3,33 @@
 모든 계정의 메일 조회 및 처리 통합 테스터
 """
 
+import sys
+import os
+
+# Python 경로에 프로젝트 루트 추가
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 import asyncio
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 import json
 from collections import defaultdict
 
-from modules.mail_query import (
-    MailQueryOrchestrator,
-    MailQueryRequest,
-    MailQueryFilters,
-    PaginationOptions
-)
-from modules.mail_process import (
-    MailProcessorOrchestrator,
-    ProcessingStatus
-)
+# 직접 import (옵션 1: 소문자 파일명)
+from modules.mail_query.mail_query_orchestrator import MailQueryOrchestrator
+from modules.mail_query.mail_query_schema import MailQueryRequest, MailQueryFilters, PaginationOptions
+
+# 직접 import (파일명에 따라 아래 중 하나 선택)
+# 옵션 1: mail_processor_orchestrator.py (소문자)
+# from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
+
+# 옵션 2: mail_processor_Orchestrator.py (대문자 O)
+from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
+
+# from modules.mail_process.mail_processor_schema import ProcessingStatus
+
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger, update_all_loggers_level
 from infra.core.config import get_config
@@ -36,10 +47,6 @@ class AllAccountsFullProcessTester:
         self.mail_processor = MailProcessorOrchestrator()
         self.db = get_database_manager()
         self.config = get_config()
-        
-        # 중복 검토 상태 확인
-        self.duplicate_check_enabled = self.mail_processor.get_duplicate_check_status()
-        logger.info(f"중복 검토 상태: {'활성화' if self.duplicate_check_enabled else '비활성화'}")
         
     async def get_all_active_accounts(self) -> List[Dict[str, Any]]:
         """활성화된 모든 계정 조회"""
@@ -132,30 +139,39 @@ class AllAccountsFullProcessTester:
             logger.info(f"🔧 [{user_id}] 메일 처리 시작...")
             process_start = datetime.now()
             
-            # 메서드 이름 수정: process_mails 사용
-            process_stats = await self.mail_processor.process_mails(
-                account_id=user_id,
-                mails=[mail.model_dump() for mail in query_response.messages],
-                publish_batch_event=False  # 테스트에서는 이벤트 발행 안함
-            )
+            # mail_processor_orchestrator.py의 실제 메서드 호출
+            async with self.mail_processor as processor:
+                process_stats = await processor.process_mails(
+                    account_id=user_id,
+                    mails=[mail.model_dump() for mail in query_response.messages],
+                    publish_batch_event=False  # 테스트에서는 이벤트 발행 안함
+                )
             
             result["process_success"] = True
-            result["mails_processed"] = process_stats["total"]
+            result["mails_processed"] = process_stats.get("total", 0)
             result["processing_stats"] = {
-                "success": process_stats["processed"],
-                "skipped": process_stats["skipped"],
-                "failed": process_stats["failed"]
+                "success": process_stats.get("processed", 0),
+                "skipped": process_stats.get("skipped", 0),
+                "failed": process_stats.get("failed", 0)
             }
             
             # 상세 통계 추가
-            if "skip_details" in process_stats:
-                result["skip_details"] = process_stats["skip_details"]
-            if "filter_details" in process_stats:
-                result["filter_details"] = process_stats["filter_details"]
+            if "skip_reasons" in process_stats:
+                result["skip_details"] = {
+                    "total": process_stats["skipped"],
+                    "reasons": process_stats["skip_reasons"]
+                }
+            
+            if "filter_reasons" in process_stats:
+                result["filter_details"] = {
+                    "total": process_stats.get("filtered", 0),
+                    "reasons": process_stats["filter_reasons"]
+                }
+            
             if "error_details" in process_stats:
                 result["error_details"] = process_stats["error_details"]
             
-            # 키워드 추출
+            # 키워드 수집
             if "keywords" in process_stats:
                 result["keywords_extracted"] = process_stats["keywords"]
                 logger.info(f"🔑 [{user_id}] 추출된 키워드: {len(process_stats['keywords'])}개")
@@ -170,9 +186,9 @@ class AllAccountsFullProcessTester:
             
             logger.info(
                 f"✅ [{user_id}] 메일 처리 완료: "
-                f"성공={process_stats['processed']}, "
-                f"건너뜀={process_stats['skipped']}, "
-                f"실패={process_stats['failed']}"
+                f"성공={process_stats.get('processed', 0)}, "
+                f"건너뜀={process_stats.get('skipped', 0)}, "
+                f"실패={process_stats.get('failed', 0)}"
             )
             
         except Exception as e:
@@ -201,7 +217,6 @@ class AllAccountsFullProcessTester:
         print(f"\n📅 설정:")
         print(f"  - 조회 기간: 최근 {days_back}일")
         print(f"  - 계정당 최대 메일: {max_mails_per_account}개")
-        print(f"  - 중복 검토: {'활성화' if self.duplicate_check_enabled else '비활성화'}")
         print(f"  - 시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("\n" + "=" * 80)
         
@@ -260,13 +275,13 @@ class AllAccountsFullProcessTester:
                   f"실패={result['processing_stats']['failed']}")
             
             # 상세 스킵 사유 출력
-            if result.get('skip_details') and result['skip_details']['reasons']:
+            if result.get('skip_details') and result['skip_details'].get('reasons'):
                 print(f"     - 스킵 상세:")
                 for reason, count in result['skip_details']['reasons'].items():
                     print(f"       • {reason}: {count}개")
             
             # 필터링 상세 출력
-            if result.get('filter_details') and result['filter_details']['reasons']:
+            if result.get('filter_details') and result['filter_details'].get('reasons'):
                 print(f"     - 필터링 상세:")
                 for reason, count in result['filter_details']['reasons'].items():
                     print(f"       • {reason}: {count}개")
@@ -347,10 +362,10 @@ class AllAccountsFullProcessTester:
         all_filter_reasons = defaultdict(int)
         
         for result in all_results:
-            if result.get('skip_details') and result['skip_details']['reasons']:
+            if result.get('skip_details') and result['skip_details'].get('reasons'):
                 for reason, count in result['skip_details']['reasons'].items():
                     all_skip_reasons[reason] += count
-            if result.get('filter_details') and result['filter_details']['reasons']:
+            if result.get('filter_details') and result['filter_details'].get('reasons'):
                 for reason, count in result['filter_details']['reasons'].items():
                     all_filter_reasons[reason] += count
         
@@ -372,8 +387,7 @@ class AllAccountsFullProcessTester:
                 "test_info": {
                     "test_date": datetime.now().isoformat(),
                     "days_back": days_back,
-                    "max_mails_per_account": max_mails_per_account,
-                    "duplicate_check_enabled": self.duplicate_check_enabled
+                    "max_mails_per_account": max_mails_per_account
                 },
                 "summary": total_stats,
                 "detailed_results": all_results
@@ -396,7 +410,7 @@ class AllAccountsFullProcessTester:
     async def close(self):
         """리소스 정리"""
         await self.mail_query.close()
-        # mail_processor는 별도의 close 메서드가 없음
+        await self.mail_processor.close()
 
 
 async def main():
@@ -409,7 +423,7 @@ async def main():
     
     if len(sys.argv) > 1:
         if sys.argv[1] == "--help":
-            print("사용법: python test_all_accounts_full_process.py [days] [max_mails]")
+            print("사용법: python mail_query_process.py [days] [max_mails]")
             print("  days: 조회할 과거 일수 (기본: 60)")
             print("  max_mails: 계정당 최대 메일 수 (기본: 20)")
             return
