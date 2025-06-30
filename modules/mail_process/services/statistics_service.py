@@ -1,4 +1,4 @@
-"""통계 서비스 - 처리 통계 관리 및 기록"""
+"""통계 서비스 - 처리 통계 관리 및 기록 (키워드 포함 수정)"""
 
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
@@ -16,6 +16,7 @@ class StatisticsService:
         self.kafka = get_kafka_client()
         self.logger = get_logger(__name__)
         self._current_stats = {}  # 현재 처리 통계
+        self._collected_keywords = []  # 수집된 키워드
     
     async def record_statistics(
         self, 
@@ -23,9 +24,17 @@ class StatisticsService:
         total_count: int,
         filtered_count: int,
         saved_results: Dict,
-        publish_batch_event: bool
+        publish_batch_event: bool,
+        processed_mails: List[Dict] = None  # 처리된 메일 리스트 추가
     ) -> Dict:
         """통계 기록 및 반환"""
+        
+        # 키워드 수집
+        keywords = []
+        if processed_mails:
+            for mail in processed_mails:
+                if '_processed' in mail and 'keywords' in mail['_processed']:
+                    keywords.extend(mail['_processed']['keywords'])
         
         # 통계 계산
         statistics = {
@@ -47,11 +56,16 @@ class StatisticsService:
                 saved_results.get('duplicates', 0),
                 filtered_count
             ),
+            'keywords': keywords,  # 키워드 추가
+            'unique_keywords': list(set(keywords)),  # 고유 키워드
+            'keyword_count': len(keywords),  # 총 키워드 수
+            'unique_keyword_count': len(set(keywords)),  # 고유 키워드 수
             'timestamp': datetime.utcnow().isoformat()
         }
         
         # 현재 통계 저장
         self._current_stats = statistics
+        self._collected_keywords = keywords
         
         # DB에 통계 기록
         self._record_to_db(account_id, statistics)
@@ -63,6 +77,7 @@ class StatisticsService:
         self.logger.info(
             f"통계 완료: account={account_id}, "
             f"total={total_count}, saved={statistics['saved_mails']}, "
+            f"keywords={statistics['unique_keyword_count']}, "
             f"success_rate={statistics['success_rate']}%"
         )
         
@@ -71,6 +86,10 @@ class StatisticsService:
     def get_current_statistics(self) -> Dict:
         """현재 처리 중인 통계 반환 (부분 실패 시 사용)"""
         return self._current_stats.copy()
+    
+    def get_collected_keywords(self) -> List[str]:
+        """수집된 키워드 반환"""
+        return self._collected_keywords.copy()
     
     def _calculate_success_rate(self, saved: int, total: int) -> float:
         """성공률 계산"""
@@ -93,6 +112,7 @@ class StatisticsService:
                 f"total={stats['total_mails']}, "
                 f"saved={stats['saved_mails']}, "
                 f"duplicates={stats['duplicate_mails']}, "
+                f"keywords={stats['unique_keyword_count']}, "
                 f"success_rate={stats['success_rate']}%"
             )
             
@@ -123,9 +143,11 @@ class StatisticsService:
                     "processed_count": stats['saved_mails'],
                     "skipped_count": stats['skipped_mails'],
                     "duplicate_count": stats['duplicate_mails'],
+                    "keyword_count": stats['unique_keyword_count'],
                     "success_rate": stats['success_rate'],
                     "duplication_rate": stats['duplication_rate']
-                }
+                },
+                "keywords": stats['unique_keywords'][:20]  # 상위 20개 키워드만
             }
             
             self.kafka.produce_event(

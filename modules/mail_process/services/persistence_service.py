@@ -5,8 +5,8 @@ import json
 from typing import Dict, List, Tuple
 from datetime import datetime
 from infra.core import get_logger
-from modules.mail_process.service.db_service import MailDatabaseService
-from modules.mail_process.service.event_service import MailEventService
+from modules.mail_process.services.db_service import MailDatabaseService
+from modules.mail_process.services.event_service import MailEventService
 from modules.mail_process.mail_processor_schema import ProcessedMailData
 
 
