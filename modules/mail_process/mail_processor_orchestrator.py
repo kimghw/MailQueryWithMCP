@@ -1,6 +1,6 @@
 """메일 처리 오케스트레이터 - 순수 흐름 제어만 담당"""
 
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 from infra.core import get_logger
 from .services import (
     FilteringService,
@@ -53,7 +53,7 @@ class MailProcessorOrchestrator:
         publish_batch_event: bool = True
     ) -> Dict[str, Any]:
         """
-        메일 처리 메인 플로우
+        메일 처리 메인 플로우 (중복 체크 우선 처리)
         
         Args:
             account_id: 계정 ID
@@ -69,20 +69,25 @@ class MailProcessorOrchestrator:
             # Phase 1: 초기화 및 필터링
             filtered_mails = await self._phase1_filter(account_id, mails)
             
-            # Phase 2: 정제 및 키워드 추출
-            processed_mails = await self._phase2_process(account_id, filtered_mails)
+            # Phase 2: 중복 체크 (간단한 체크만)
+            new_mails, duplicate_mails = await self._phase2_duplicate_check(account_id, filtered_mails)
             
-            # Phase 3: 저장 및 이벤트 발행
-            saved_results = await self._phase3_persist(account_id, processed_mails)
+            # Phase 3: 신규 메일만 정제 및 키워드 추출
+            processed_mails = await self._phase3_process_new_mails(account_id, new_mails)
             
-            # Phase 4: 통계 기록 - processed_mails 전달 추가!
-            statistics = await self._phase4_statistics(
+            # Phase 4: 저장 및 이벤트 발행
+            saved_results = await self._phase4_persist(account_id, processed_mails)
+            
+            # Phase 5: 통계 기록
+            statistics = await self._phase5_statistics(
                 account_id, 
                 len(mails),
                 len(filtered_mails),
+                len(new_mails),
+                len(duplicate_mails),
                 saved_results,
                 publish_batch_event,
-                processed_mails  # 이 부분 추가!
+                processed_mails
             )
             
             self.logger.info(f"메일 처리 완료: {statistics}")
@@ -101,9 +106,43 @@ class MailProcessorOrchestrator:
         self.logger.debug(f"Phase 1 시작: 필터링 ({len(mails)}개)")
         return await self.filtering_service.filter_mails(mails)
     
-    async def _phase2_process(self, account_id: str, mails: List[Dict]) -> List[Dict]:
-        """Phase 2: 정제 및 키워드 추출"""
-        self.logger.debug(f"Phase 2 시작: 처리 ({len(mails)}개)")
+    async def _phase2_duplicate_check(self, account_id: str, mails: List[Dict]) -> Tuple[List[Dict], List[Dict]]:
+        """Phase 2: 중복 체크 (처리 전)"""
+        self.logger.debug(f"Phase 2 시작: 중복 체크 ({len(mails)}개)")
+        
+        # 중복 체크가 비활성화된 경우 모든 메일을 신규로 처리
+        if not self.persistence_service.duplicate_check_enabled:
+            self.logger.debug("중복 체크 비활성화 - 모든 메일을 신규로 처리")
+            return mails, []
+        
+        # 배치 중복 체크 수행
+        mail_ids = [mail.get('id', '') for mail in mails if mail.get('id')]
+        existing_ids = self.persistence_service.get_existing_mail_ids(mail_ids)
+        existing_ids_set = set(existing_ids)
+        
+        new_mails = []
+        duplicate_mails = []
+        
+        for mail in mails:
+            mail_id = mail.get('id', '')
+            if mail_id and mail_id in existing_ids_set:
+                duplicate_mails.append(mail)
+                self.logger.debug(f"중복 메일 발견: {mail_id}")
+            else:
+                new_mails.append(mail)
+        
+        self.logger.info(
+            f"Phase 2 완료: 전체 {len(mails)}개 중 신규 {len(new_mails)}개, 중복 {len(duplicate_mails)}개"
+        )
+        return new_mails, duplicate_mails
+    
+    async def _phase3_process_new_mails(self, account_id: str, mails: List[Dict]) -> List[Dict]:
+        """Phase 3: 신규 메일만 정제 및 키워드 추출"""
+        if not mails:
+            self.logger.debug("Phase 3 스킵: 처리할 신규 메일이 없습니다.")
+            return []
+        
+        self.logger.debug(f"Phase 3 시작: 신규 메일 처리 ({len(mails)}개)")
         processed_mails = await self.processing_service.process_mails(mails)
         
         # 처리된 메일에서 키워드 정보 확인 (디버깅용)
@@ -115,12 +154,21 @@ class MailProcessorOrchestrator:
                 if keywords:
                     self.logger.debug(f"메일 {mail.get('id', 'unknown')}: 키워드 {len(keywords)}개 - {keywords}")
         
-        self.logger.info(f"Phase 2 완료: {len(processed_mails)}개 메일에서 총 {total_keywords}개 키워드 추출")
+        self.logger.info(f"Phase 3 완료: {len(processed_mails)}개 메일에서 총 {total_keywords}개 키워드 추출")
         return processed_mails
     
-    async def _phase3_persist(self, account_id: str, mails: List[Dict]) -> Dict:
-        """Phase 3: 저장 및 이벤트 발행"""
-        self.logger.debug(f"Phase 3 시작: 저장 ({len(mails)}개)")
+    async def _phase4_persist(self, account_id: str, mails: List[Dict]) -> Dict:
+        """Phase 4: 저장 및 이벤트 발행"""
+        if not mails:
+            self.logger.debug("Phase 4 스킵: 저장할 메일이 없습니다.")
+            return {
+                'saved': 0,
+                'duplicates': 0,
+                'failed': 0,
+                'events_published': 0
+            }
+        
+        self.logger.debug(f"Phase 4 시작: 저장 ({len(mails)}개)")
         
         # 처리된 메일 데이터에 키워드 정보 포함
         for mail in mails:
@@ -134,25 +182,33 @@ class MailProcessorOrchestrator:
         
         return await self.persistence_service.persist_mails(account_id, mails)
     
-    async def _phase4_statistics(
+    async def _phase5_statistics(
         self, 
         account_id: str,
         total_count: int,
         filtered_count: int,
+        new_count: int,
+        duplicate_count: int,
         saved_results: Dict,
         publish_batch_event: bool,
-        processed_mails: List[Dict] = None  # 파라미터 추가
+        processed_mails: List[Dict] = None
     ) -> Dict:
-        """Phase 4: 통계 기록"""
-        self.logger.debug("Phase 4 시작: 통계")
-        return await self.statistics_service.record_statistics(
-            account_id=account_id,
-            total_count=total_count,
-            filtered_count=filtered_count,
-            saved_results=saved_results,
-            publish_batch_event=publish_batch_event,
-            processed_mails=processed_mails  # 전달 추가
-        )
+        """Phase 5: 통계 기록 (중복 정보 포함)"""
+        self.logger.debug("Phase 5 시작: 통계")
+        
+        # 통계 서비스에 전달할 파라미터 구성
+        statistics_params = {
+            'account_id': account_id,
+            'total_count': total_count,
+            'filtered_count': filtered_count,
+            'new_count': new_count,
+            'duplicate_count': duplicate_count,
+            'saved_results': saved_results,
+            'publish_batch_event': publish_batch_event,
+            'processed_mails': processed_mails
+        }
+        
+        return await self.statistics_service.record_statistics(**statistics_params)
     
     async def _cleanup_resources(self):
         """리소스 정리"""

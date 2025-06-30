@@ -19,27 +19,67 @@ class PersistenceService:
         self.event_service = MailEventService()
         
         # 중복 체크 활성화 여부 (환경변수에서 읽기)
-        self.duplicate_check_enabled = (
-            os.getenv("ENABLE_MAIL_DUPLICATE_CHECK", "true").lower() == "true"
-        )
+        env_value = os.getenv("ENABLE_MAIL_DUPLICATE_CHECK", "true")
+        # 주석 제거 (#로 시작하는 부분 제거)
+        if '#' in env_value:
+            env_value = env_value.split('#')[0].strip()
+        
+        self.duplicate_check_enabled = env_value.lower() == "true"
         self.logger.info(f"중복 체크 활성화: {self.duplicate_check_enabled}")
+    
+    def get_existing_mail_ids(self, mail_ids: List[str]) -> List[str]:
+        """여러 메일 ID의 존재 여부를 한 번에 확인 (배치 조회)"""
+        if not mail_ids or not self.duplicate_check_enabled:
+            return []
+        
+        try:
+            # IN 절을 사용한 배치 조회
+            placeholders = ','.join(['?' for _ in mail_ids])
+            query = f"""
+                SELECT message_id 
+                FROM mail_history 
+                WHERE message_id IN ({placeholders})
+            """
+            
+            results = self.db_service.db_manager.fetch_all(query, mail_ids)
+            existing_ids = [row['message_id'] for row in results]
+            
+            self.logger.debug(f"배치 중복 체크: {len(mail_ids)}개 중 {len(existing_ids)}개 존재")
+            return existing_ids
+            
+        except Exception as e:
+            self.logger.error(f"배치 중복 체크 오류: {str(e)}")
+            # 오류 시 모든 ID를 존재하는 것으로 간주 (안전하게)
+            return mail_ids
+    
+    def is_duplicate_by_id(self, mail_id: str) -> bool:
+        """메일 ID로만 간단히 중복 체크 (단일 체크)"""
+        if not self.duplicate_check_enabled:
+            return False
+        
+        try:
+            existing_mail = self.db_service.get_mail_by_id(mail_id)
+            return existing_mail is not None
+        except Exception as e:
+            self.logger.error(f"중복 체크 오류: {str(e)}")
+            # 오류 시 중복으로 간주하여 안전하게 처리
+            return True
     
     async def persist_mails(self, account_id: str, mails: List[Dict]) -> Dict:
         """
         메일 데이터 저장
         
         ENABLE_MAIL_DUPLICATE_CHECK=false: DB 저장 없이 바로 이벤트 발행
-        ENABLE_MAIL_DUPLICATE_CHECK=true: 중복 체크 → 신규만 DB 저장 및 이벤트 발행
+        ENABLE_MAIL_DUPLICATE_CHECK=true: 신규 메일만 DB 저장 및 이벤트 발행
         
         Args:
             account_id: 계정 ID
-            mails: 처리된 메일 리스트
+            mails: 처리된 메일 리스트 (이미 중복 체크된 신규 메일만)
             
         Returns:
             저장 결과 통계
         """
         saved_count = 0
-        duplicate_count = 0
         failed_count = 0
         event_published_count = 0
         
@@ -54,19 +94,10 @@ class PersistenceService:
                     self.logger.debug(f"중복 체크 OFF - 이벤트만 발행: {mail.get('id')}")
                     continue
                 
-                # 중복 체크가 활성화된 경우
+                # 중복 체크가 활성화된 경우 (이미 Phase 2에서 중복 확인됨)
                 processed_mail = self._create_processed_mail_data(account_id, mail)
                 
-                # 중복 체크
-                is_duplicate = self._check_duplicate(processed_mail, mail.get('clean_content', ''))
-                
-                if is_duplicate:
-                    # 중복인 경우: 저장도 안하고 이벤트도 안보냄
-                    self.logger.debug(f"중복 메일 건너뜀: {processed_mail.mail_id}")
-                    duplicate_count += 1
-                    continue
-                
-                # 신규 메일인 경우: DB 저장
+                # DB 저장
                 success = self._save_to_database(processed_mail, mail.get('clean_content', ''))
                 
                 if success:
@@ -84,56 +115,21 @@ class PersistenceService:
         
         results = {
             'saved': saved_count,
-            'duplicates': duplicate_count,
+            'duplicates': 0,  # Phase 2에서 이미 제외됨
             'failed': failed_count,
             'total': len(mails),
             'events_published': event_published_count,
-            'duplicate_check_enabled': self.duplicate_check_enabled  # 추가!
+            'duplicate_check_enabled': self.duplicate_check_enabled
         }
         
         self.logger.info(
             f"메일 처리 완료 - 저장: {saved_count}, "
-            f"중복: {duplicate_count}, 실패: {failed_count}, "
+            f"실패: {failed_count}, "
             f"이벤트 발행: {event_published_count}, "
             f"중복체크: {'ON' if self.duplicate_check_enabled else 'OFF'}"
         )
         
         return results
-    
-    def _check_duplicate(self, processed_mail: ProcessedMailData, clean_content: str) -> bool:
-        """
-        중복 체크 (중복 체크가 활성화된 경우에만 호출됨)
-        
-        Args:
-            processed_mail: 처리된 메일 데이터
-            clean_content: 정제된 메일 내용
-            
-        Returns:
-            중복 여부 (True: 중복, False: 신규)
-        """
-        try:
-            # 메일 ID로 먼저 체크
-            existing_mail = self.db_service.get_mail_by_id(processed_mail.mail_id)
-            if existing_mail:
-                self.logger.debug(f"메일 ID 중복: {processed_mail.mail_id}")
-                return True
-            
-            # 컨텐츠 해시로 체크 (내용 기반 중복 체크)
-            if clean_content:
-                is_duplicate, _ = self.db_service.check_duplicate_by_content_hash(
-                    processed_mail.mail_id,
-                    clean_content
-                )
-                if is_duplicate:
-                    self.logger.debug(f"내용 해시 중복: {processed_mail.mail_id}")
-                    return True
-            
-            return False
-            
-        except Exception as e:
-            self.logger.error(f"중복 체크 오류: {str(e)}")
-            # 오류 시 중복으로 간주하여 안전하게 처리
-            return True
     
     def _save_to_database(self, processed_mail: ProcessedMailData, clean_content: str) -> bool:
         """
