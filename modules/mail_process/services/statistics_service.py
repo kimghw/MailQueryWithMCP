@@ -60,6 +60,7 @@ class StatisticsService:
             'unique_keywords': list(set(keywords)),  # 고유 키워드
             'keyword_count': len(keywords),  # 총 키워드 수
             'unique_keyword_count': len(set(keywords)),  # 고유 키워드 수
+            'duplicate_check_enabled': saved_results.get('duplicate_check_enabled', True),  # 추가!
             'timestamp': datetime.utcnow().isoformat()
         }
         

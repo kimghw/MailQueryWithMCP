@@ -88,7 +88,7 @@ class PersistenceService:
             'failed': failed_count,
             'total': len(mails),
             'events_published': event_published_count,
-            'duplicate_check_enabled': self.duplicate_check_enabled
+            'duplicate_check_enabled': self.duplicate_check_enabled  # 추가!
         }
         
         self.logger.info(
