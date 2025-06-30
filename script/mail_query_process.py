@@ -132,7 +132,7 @@ class AllAccountsFullProcessTester:
             logger.info(f"🔧 [{user_id}] 메일 처리 시작...")
             process_start = datetime.now()
             
-            # 배치 처리 - 메서드 이름 수정: process_mail_batch -> process_mails
+            # 메서드 이름 수정: process_mails 사용
             process_stats = await self.mail_processor.process_mails(
                 account_id=user_id,
                 mails=[mail.model_dump() for mail in query_response.messages],
@@ -155,18 +155,18 @@ class AllAccountsFullProcessTester:
             if "error_details" in process_stats:
                 result["error_details"] = process_stats["error_details"]
             
+            # 키워드 추출
+            if "keywords" in process_stats:
+                result["keywords_extracted"] = process_stats["keywords"]
+                logger.info(f"🔑 [{user_id}] 추출된 키워드: {len(process_stats['keywords'])}개")
+                if process_stats['keywords']:
+                    # 상위 10개 키워드만 로그에 표시
+                    sample_keywords = process_stats['keywords'][:10]
+                    logger.info(f"   샘플 키워드: {', '.join(sample_keywords)}")
+            
             result["execution_time"]["process_ms"] = int(
                 (datetime.now() - process_start).total_seconds() * 1000
             )
-            
-            # 3. 키워드 수집 (샘플)
-            if process_stats["processed"] > 0:
-                # 처리된 메일 중 일부의 키워드 수집
-                # 주의: _process_single_mail은 private 메서드이므로 직접 호출할 수 없습니다
-                # 대신 전체 배치 처리 결과를 사용합니다
-                
-                # 간단한 예시 키워드 (실제로는 처리된 메일에서 추출됨)
-                result["keywords_extracted"] = ["테스트", "키워드", "예시"]
             
             logger.info(
                 f"✅ [{user_id}] 메일 처리 완료: "
@@ -177,7 +177,7 @@ class AllAccountsFullProcessTester:
             
         except Exception as e:
             error_msg = f"계정 처리 오류: {str(e)}"
-            logger.error(f"❌ [{user_id}] {error_msg}")
+            logger.error(f"❌ [{user_id}] {error_msg}", exc_info=True)
             result["errors"].append(error_msg)
         
         finally:
@@ -274,8 +274,10 @@ class AllAccountsFullProcessTester:
             print(f"     - 실행 시간: 조회={result['execution_time']['query_ms']}ms, "
                   f"처리={result['execution_time']['process_ms']}ms")
             
+            # 키워드 출력 추가
             if result["keywords_extracted"]:
-                print(f"     - 추출 키워드: {', '.join(result['keywords_extracted'][:5])}...")
+                print(f"     - 추출된 키워드 수: {len(result['keywords_extracted'])}개")
+                print(f"     - 샘플 키워드: {', '.join(result['keywords_extracted'][:5])}")
         
         # 3. 전체 통계
         print("\n" + "=" * 80)
@@ -306,7 +308,13 @@ class AllAccountsFullProcessTester:
         print(f"  - 총 키워드 수: {len(total_stats['all_keywords'])}개")
         print(f"  - 고유 키워드 수: {len(unique_keywords)}개")
         if unique_keywords:
-            print(f"  - 상위 키워드: {', '.join(unique_keywords[:10])}")
+            # 키워드 빈도 분석
+            from collections import Counter
+            keyword_freq = Counter(total_stats["all_keywords"])
+            top_keywords = keyword_freq.most_common(10)
+            print(f"  - 상위 10개 키워드:")
+            for keyword, count in top_keywords:
+                print(f"    • {keyword}: {count}회")
         
         # 실행 시간 분석
         total_query_time = sum(r['execution_time']['query_ms'] for r in all_results)
@@ -321,8 +329,8 @@ class AllAccountsFullProcessTester:
         
         # 4. 상세 결과 테이블
         print(f"\n📋 계정별 상세 결과:")
-        print(f"{'계정':<15} {'조회':<8} {'성공':<8} {'건너뜀':<8} {'실패':<8} {'시간(초)':<10}")
-        print("-" * 65)
+        print(f"{'계정':<15} {'조회':<8} {'성공':<8} {'건너뜀':<8} {'실패':<8} {'키워드':<10} {'시간(초)':<10}")
+        print("-" * 75)
         
         for result in all_results:
             print(f"{result['user_id']:<15} "
@@ -330,6 +338,7 @@ class AllAccountsFullProcessTester:
                   f"{result['processing_stats']['success']:<8} "
                   f"{result['processing_stats']['skipped']:<8} "
                   f"{result['processing_stats']['failed']:<8} "
+                  f"{len(result['keywords_extracted']):<10} "
                   f"{result['execution_time']['total_ms']/1000:<10.1f}")
         
         # 전체 스킵/필터링 사유 집계
