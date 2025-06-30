@@ -221,10 +221,28 @@ class MailKeywordService:
         """소멸자 - 세션 정리 시도 (최후의 수단)"""
         if hasattr(self, '_session') and self._session and not self._session.closed:
             try:
-                # 이미 이벤트 루프가 닫혔을 수 있으므로 조용히 실패
+                # 동기적으로 세션 정리 시도
                 import asyncio
-                loop = asyncio.get_event_loop()
-                if not loop.is_closed():
-                    loop.create_task(self._session.close())
+                import warnings
+                
+                # 경고 무시 (Python 종료 시 발생하는 경고들)
+                with warnings.catch_warnings():
+                    warnings.simplefilter("ignore")
+                    
+                    # 이벤트 루프가 실행 중인지 확인
+                    try:
+                        loop = asyncio.get_running_loop()
+                        if loop and not loop.is_closed():
+                            # 이미 실행 중인 루프에서는 새 태스크 생성하지 않음
+                            pass
+                    except RuntimeError:
+                        # 실행 중인 루프가 없는 경우
+                        try:
+                            loop = asyncio.new_event_loop()
+                            asyncio.set_event_loop(loop)
+                            loop.run_until_complete(self._session.close())
+                            loop.close()
+                        except:
+                            pass
             except:
-                pass  # 소멸자에서는 예외를 무시
+                pass  # 소멸자에서는 모든 예외를 무시
