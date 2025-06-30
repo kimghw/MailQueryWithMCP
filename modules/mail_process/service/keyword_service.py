@@ -8,7 +8,7 @@ from collections import Counter
 from typing import List, Optional, Tuple
 from infra.core.config import get_config
 from infra.core.logger import get_logger
-from modules.mail_processor.mail_processor_schema import KeywordExtractionResponse
+from modules.mail_process.mail_processor_schema import KeywordExtractionResponse
 
 
 class MailKeywordService:

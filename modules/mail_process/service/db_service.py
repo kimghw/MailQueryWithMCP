@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Tuple, List, Optional
 from infra.core.logger import get_logger
 from infra.core.database import get_database_manager
-from modules.mail_processor.mail_processor_schema import ProcessedMailData
+from modules.mail_process.mail_processor_schema import ProcessedMailData
 
 
 class MailDatabaseService:

@@ -13,7 +13,7 @@ from .mail_processor_schema import (
 )
 from .keyword_extractor_service import MailProcessorKeywordExtractorService
 from .mail_filter_service import MailProcessorFilterService
-from ._mail_processor_helpers import (
+from .mail_processor_helpers import (
     MailProcessorGraphApiHelper,
     MailProcessorDatabaseHelper,
     MailProcessorKafkaHelper,
