@@ -6,11 +6,11 @@ from typing import Optional
 from datetime import datetime
 
 from .mail_query_schema import MailQueryFilters
-from ._mail_query_helpers import escape_odata_string
+from .mail_query_helpers import escape_odata_string
 
 
 class ODataFilterBuilder:
-    """OData 필터 문자열 생성기 (모듈 내부)"""
+    """OData 필터 문자열 생성기"""
     
     def build_filter(self, filters: MailQueryFilters) -> Optional[str]:
         """필터 조건을 OData 필터 문자열로 변환"""
@@ -54,26 +54,6 @@ class ODataFilterBuilder:
         # ISO 8601 형식으로 변환 (Z suffix 추가)
         return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
     
-    def build_search_query(self, search_term: str, search_fields: Optional[list] = None) -> str:
-        """검색 쿼리 문자열 생성 ($search용)"""
-        if not search_term:
-            return ""
-        
-        escaped_term = escape_odata_string(search_term)
-        
-        # 특정 필드가 지정된 경우
-        if search_fields:
-            search_conditions = []
-            for field in search_fields:
-                if field in ['subject', 'body', 'from', 'to', 'cc', 'bcc']:
-                    search_conditions.append(f"{field}:{escaped_term}")
-            
-            if search_conditions:
-                return " OR ".join(search_conditions)
-        
-        # 기본 검색 (모든 필드)
-        return f'"{escaped_term}"'
-    
     def validate_filter_complexity(self, filters: MailQueryFilters) -> bool:
         """필터 복잡성 검증 (InefficientFilter 오류 방지)"""
         condition_count = 0
@@ -94,22 +74,6 @@ class ODataFilterBuilder:
         
         # 복잡한 필터는 성능 문제를 일으킬 수 있음
         return condition_count <= 5
-    
-    def build_orderby_clause(self, sort_field: str = "receivedDateTime", 
-                           sort_direction: str = "desc") -> str:
-        """정렬 절 생성"""
-        allowed_fields = {
-            'receivedDateTime', 'subject', 'from/emailAddress/address', 
-            'hasAttachments', 'importance', 'isRead'
-        }
-        
-        if sort_field not in allowed_fields:
-            sort_field = 'receivedDateTime'
-        
-        if sort_direction.lower() not in ['asc', 'desc']:
-            sort_direction = 'desc'
-        
-        return f"{sort_field} {sort_direction}"
     
     def build_select_clause(self, select_fields: Optional[list] = None) -> Optional[str]:
         """선택 필드 절 생성"""

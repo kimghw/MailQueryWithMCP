@@ -46,7 +46,7 @@ class MailIntegrationProcessor:
         self.mail_processor_orchestrator = MailProcessorOrchestrator()
         self.db_manager = get_database_manager()
     
-    async def process_recent_mails(self, user_id: str = "kimghw", mail_count: int = 5) -> dict:
+    async def process_recent_mails(self, user_id: str = "krsdtp", mail_count: int = 50) -> dict:
         """최근 메일 조회 및 처리 통합 워크플로우"""
         start_time = datetime.now()
         
@@ -108,8 +108,8 @@ class MailIntegrationProcessor:
             logger.info(f"🔄 [CALL STACK] → → _query_recent_mails() 실행")
             logger.info(f"📋 [PARAMS] user_id={user_id}, mail_count={mail_count}")
             
-            # 최근 7일간의 메일만 조회 (성능 최적화)
-            date_from = datetime.now() - timedelta(days=7)
+            # 최근 3달간의 메일만 조회 (성능 최적화)
+            date_from = datetime.now() - timedelta(days=90)
             logger.info(f"📅 [FILTER] 조회 기간: {date_from.strftime('%Y-%m-%d')} ~ 현재")
             
             # 메일 조회 요청 구성
@@ -280,8 +280,8 @@ async def main():
     print("=" * 50)
     
     # 사용자 설정
-    user_id = "kimghw"  # 실제 사용자 ID로 변경
-    mail_count = 6    # 조회할 메일 개수
+    user_id = "krsdtp"  # 실제 사용자 ID로 변경
+    mail_count = 100  # 조회할 메일 개수
     
     processor = MailIntegrationProcessor()
     

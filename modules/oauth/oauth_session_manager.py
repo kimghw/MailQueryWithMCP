@@ -1,126 +1,116 @@
-"""메모리 세션 저장소 관리 - 메인 컴포넌트"""
+"""메모리 세션 저장소 관리 - 통합 버전"""
 
 import secrets
 import hashlib
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 from threading import Lock
 from datetime import datetime, timedelta
 from infra.core.logger import get_logger
 from infra.core.database import get_database_manager
 from .oauth_schema import (
     OAuthSession, OAuthState, OAuthStatusResponse,
-    OAuthCleanupRequest, OAuthCleanupResponse
+    OAuthCleanupRequest, OAuthCleanupResponse,
+    OAuthStartResponse, OAuthBulkStatus
 )
 
 
 class OAuthSessionManager:
-    """메모리 기반 OAuth 세션 저장소 관리자"""
+    """메모리 기반 OAuth 세션 통합 관리자"""
 
     def __init__(self):
         self.logger = get_logger(__name__)
         self._sessions: Dict[str, OAuthSession] = {}
-        self._lock = Lock()  # 스레드 안전성을 위한 락
+        self._lock = Lock()
         self.db = get_database_manager()
 
-    # ===== 세션 생성 관련 =====
+    # ===== 세션 생성 및 관리 =====
 
-    def generate_session_id(self, user_id: str) -> str:
+    def create_session(self, user_id: str, expiry_minutes: int = 10) -> OAuthSession:
         """
-        OAuth 세션 고유 ID를 생성합니다.
+        새로운 OAuth 세션을 생성하고 저장합니다.
         
         Args:
             user_id: 사용자 ID
+            expiry_minutes: 만료까지의 분
             
         Returns:
-            세션 ID
+            생성된 세션
         """
-        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
-        random_part = secrets.token_hex(8)
-        user_hash = hashlib.md5(user_id.encode()).hexdigest()[:8]
-        
-        session_id = f"auth_{timestamp}_{user_hash}_{random_part}"
-        self.logger.debug(f"세션 ID 생성: {session_id}")
-        return session_id
+        # 기존 진행 중인 세션 확인
+        existing_session = self.find_pending_session_by_user(user_id)
+        if existing_session:
+            self.logger.info(f"기존 세션 재사용: user_id={user_id}")
+            return existing_session
 
-    def generate_state_token(self) -> str:
-        """
-        CSRF 방지용 상태 토큰을 생성합니다.
+        # 새 세션 생성
+        session_id = self._generate_session_id(user_id)
+        state = self._generate_state_token()
+        expires_at = datetime.utcnow() + timedelta(minutes=expiry_minutes)
         
-        Returns:
-            상태 토큰
-        """
-        state_token = secrets.token_urlsafe(32)
-        self.logger.debug(f"상태 토큰 생성: {state_token[:10]}...")
-        return state_token
-    
-    def create_session_expiry(self, minutes: int = 10) -> datetime:
-        """
-        세션 만료 시간을 생성합니다.
+        session = OAuthSession(
+            session_id=session_id,
+            user_id=user_id,
+            state=state,
+            status=OAuthState.PENDING,
+            expires_at=expires_at
+        )
         
-        Args:
-            minutes: 만료까지의 분
-            
-        Returns:
-            만료 시간
-        """
-        expiry_time = datetime.utcnow() + timedelta(minutes=minutes)
-        self.logger.debug(f"세션 만료 시간 설정: {expiry_time.isoformat()}")
-        return expiry_time
-    
-    # ===== 세션 저장/조회 =====
-
-    def save_session(self, session: OAuthSession) -> None:
-        """
-        세션을 저장합니다.
-
-        Args:
-            session: 저장할 세션
-        """
+        # 세션 저장
         with self._lock:
-            self._sessions[session.state] = session
-            self.logger.debug(f"세션 저장: session_id={session.session_id}, state={session.state[:10]}...")
+            self._sessions[state] = session
+            
+        self.logger.info(f"새 세션 생성: session_id={session_id}, user_id={user_id}")
+        return session
+
+    def update_session_auth_url(self, state: str, auth_url: str) -> None:
+        """세션에 인증 URL을 설정합니다."""
+        with self._lock:
+            if state in self._sessions:
+                self._sessions[state].auth_url = auth_url
+                self.logger.debug(f"인증 URL 설정됨: state={state[:10]}...")
+
+    def update_session_status(
+        self, 
+        state: str, 
+        status: OAuthState, 
+        error_message: Optional[str] = None
+    ) -> None:
+        """세션 상태를 업데이트합니다."""
+        with self._lock:
+            if state in self._sessions:
+                session = self._sessions[state]
+                session.status = status
+                if error_message:
+                    session.error_message = error_message
+                self.logger.info(f"세션 상태 변경: {session.session_id} -> {status.value}")
+
+    # ===== 세션 조회 =====
 
     def get_session_by_state(self, state: str) -> Optional[OAuthSession]:
-        """
-        state로 세션을 조회합니다.
-
-        Args:
-            state: 상태값
-
-        Returns:
-            세션 또는 None
-        """
+        """state로 세션을 조회합니다."""
         with self._lock:
             return self._sessions.get(state)
 
     def find_by_session_id(self, session_id: str) -> Optional[OAuthSession]:
-        """
-        세션 ID로 세션을 찾습니다.
-        
-        Args:
-            session_id: 세션 ID
-
-        Returns:
-            세션 또는 None
-        """
+        """세션 ID로 세션을 찾습니다."""
         with self._lock:
             for session in self._sessions.values():
                 if session.session_id == session_id:
                     return session
             return None
 
-    # ===== 외부 API (오케스트레이터에서 이동) =====
+    def find_pending_session_by_user(self, user_id: str) -> Optional[OAuthSession]:
+        """사용자의 진행 중인 세션을 찾습니다."""
+        with self._lock:
+            for session in self._sessions.values():
+                if session.user_id == user_id and session.is_pending() and not session.is_expired():
+                    return session
+            return None
+
+    # ===== 외부 API =====
 
     def get_session_status(self, session_id: str) -> OAuthStatusResponse:
-        """
-        세션 상태를 조회합니다. (외부 API)
-        
-        Args:
-            session_id: 세션 ID
-            
-        Returns:
-            세션 상태 응답
-        """
+        """세션 상태를 조회합니다."""
         session = self.find_by_session_id(session_id)
         if not session:
             raise ValueError(f"세션을 찾을 수 없습니다: {session_id}")
@@ -129,7 +119,6 @@ class OAuthSessionManager:
         if session.is_expired():
             session.status = OAuthState.EXPIRED
             self.remove_session(session.state)
-            self.logger.info(f"만료된 세션 제거: {session_id}")
 
         # 상태 메시지 생성
         status_messages = {
@@ -151,16 +140,35 @@ class OAuthSessionManager:
             is_completed=(session.status == OAuthState.COMPLETED)
         )
 
+    def create_start_response(self, session: OAuthSession) -> OAuthStartResponse:
+        """세션으로부터 인증 시작 응답을 생성합니다."""
+        return OAuthStartResponse(
+            session_id=session.session_id,
+            user_id=session.user_id,
+            auth_url=session.auth_url,
+            expires_at=session.expires_at,
+            status=session.status
+        )
+
+    def create_bulk_status(
+        self, 
+        user_id: str, 
+        status: str,
+        session_id: Optional[str] = None,
+        auth_url: Optional[str] = None,
+        error: Optional[str] = None
+    ) -> OAuthBulkStatus:
+        """일괄 인증 상태를 생성합니다."""
+        return OAuthBulkStatus(
+            user_id=user_id,
+            status=status,
+            session_id=session_id,
+            auth_url=auth_url,
+            error=error
+        )
+
     def cleanup_sessions(self, request: OAuthCleanupRequest) -> OAuthCleanupResponse:
-        """
-        만료된 세션을 정리합니다. (외부 API)
-        
-        Args:
-            request: 세션 정리 요청
-            
-        Returns:
-            세션 정리 응답
-        """
+        """만료된 세션을 정리합니다."""
         initial_count = self.get_session_count()
         cutoff_time = datetime.utcnow() - timedelta(minutes=request.expire_threshold_minutes)
         
@@ -182,15 +190,12 @@ class OAuthSessionManager:
 
                 if should_remove:
                     sessions_to_remove.append(state)
-                    self.logger.debug(f"세션 정리 대상: {session.session_id}")
             
-            # 세션 제거
             for state in sessions_to_remove:
                 del self._sessions[state]
                 cleaned_count += 1
         
         active_count = self.get_session_count()
-
         self.logger.info(f"세션 정리 완료: {cleaned_count}개 정리, {active_count}개 활성")
 
         return OAuthCleanupResponse(
@@ -200,14 +205,8 @@ class OAuthSessionManager:
         )
 
     async def get_all_accounts_with_session_status(self) -> List[Dict[str, Any]]:
-        """
-        모든 계정의 인증 상태를 세션 정보와 함께 조회합니다. (외부 API)
-        
-        Returns:
-            계정 상태 목록
-        """
+        """모든 계정의 인증 상태를 세션 정보와 함께 조회합니다."""
         try:
-            # 데이터베이스에서 모든 계정 조회
             accounts = self.db.fetch_all(
                 """
                 SELECT user_id, user_name, status, token_expiry, 
@@ -245,61 +244,45 @@ class OAuthSessionManager:
         except Exception as e:
             self.logger.error(f"전체 계정 상태 조회 실패: {str(e)}")
             return []
-    
-    def shutdown(self) -> int:
-        """
-        OAuthSessionManager를 종료하고 모든 세션을 정리합니다. (외부 API)
 
-        Returns:
-            정리된 세션 수
-        """
+    def shutdown(self) -> int:
+        """모든 세션을 정리하고 종료합니다."""
         session_count = self.get_session_count()
         with self._lock:
             self._sessions.clear()
-
         self.logger.info(f"OAuthSessionManager 종료: {session_count}개 세션 정리됨")
         return session_count
 
     # ===== 내부 메서드 =====
-    
+
+    def _generate_session_id(self, user_id: str) -> str:
+        """세션 ID를 생성합니다."""
+        timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+        random_part = secrets.token_hex(8)
+        user_hash = hashlib.md5(user_id.encode()).hexdigest()[:8]
+        return f"auth_{timestamp}_{user_hash}_{random_part}"
+
+    def _generate_state_token(self) -> str:
+        """CSRF 방지용 상태 토큰을 생성합니다."""
+        return secrets.token_urlsafe(32)
+
     def remove_session(self, state: str) -> bool:
-        """
-        세션을 제거합니다.
-        
-        Args:
-            state: 상태값
-            
-        Returns:
-            제거 성공 여부
-        """
+        """세션을 제거합니다."""
         with self._lock:
             if state in self._sessions:
-                session = self._sessions[state]
                 del self._sessions[state]
-                self.logger.debug(f"세션 제거: session_id={session.session_id}")
                 return True
             return False
 
-    def get_all_sessions(self) -> Dict[str, OAuthSession]:
-        """
-        모든 세션을 반환합니다.
-
-        Returns:
-            세션 딕셔너리의 복사본
-        """
-        with self._lock:
-            return self._sessions.copy()
+    def get_session_store(self) -> Dict[str, OAuthSession]:
+        """웹서버와 공유할 세션 저장소 참조를 반환합니다."""
+        return self._sessions
 
     def get_session_count(self) -> int:
-        """
-        저장된 세션 수를 반환합니다.
-        
-        Returns:
-            세션 수
-        """
+        """저장된 세션 수를 반환합니다."""
         with self._lock:
             return len(self._sessions)
-    
+
     def clear_all(self) -> None:
         """모든 세션을 제거합니다."""
         with self._lock:
@@ -307,83 +290,13 @@ class OAuthSessionManager:
             self._sessions.clear()
             self.logger.info(f"모든 세션 제거: {count}개")
 
-    def get_session_store(self) -> Dict[str, OAuthSession]:
-        """
-        웹서버와 공유할 세션 저장소 참조를 반환합니다.
 
-        Returns:
-            세션 저장소 참조
-        """
-        return self._sessions
-
-    def find_pending_session_by_user(self, user_id: str) -> Optional[OAuthSession]:
-        """
-        사용자의 진행 중인 세션을 찾습니다.
-        
-        Args:
-            user_id: 사용자 ID
-            
-        Returns:
-            진행 중인 세션 또는 None
-        """
-        with self._lock:
-            for session in self._sessions.values():
-                if session.user_id == user_id and session.is_pending():
-                    return session
-            return None
-
-    def get_sessions_by_user(self, user_id: str) -> List[OAuthSession]:
-        """
-        특정 사용자의 모든 세션을 조회합니다.
-
-        Args:
-            user_id: 사용자 ID
-
-        Returns:
-            세션 목록
-        """
-        with self._lock:
-            return [
-                session for session in self._sessions.values()
-                if session.user_id == user_id
-            ]
-
-    def cleanup_expired_sessions(self) -> int:
-        """
-        만료된 세션을 정리합니다.
-        
-        Returns:
-            정리된 세션 수
-        """
-        with self._lock:
-            expired_states = []
-            
-            for state, session in self._sessions.items():
-                if session.is_expired():
-                    expired_states.append(state)
-            
-            for state in expired_states:
-                del self._sessions[state]
-            
-            if expired_states:
-                self.logger.info(f"만료된 세션 {len(expired_states)}개 정리됨")
-            
-            return len(expired_states)
-
-
-# 전역 OAuthSessionManager 인스턴스
+# 전역 인스턴스
 _session_manager = None
 
-
 def get_oauth_session_manager() -> OAuthSessionManager:
-    """
-    OAuthSessionManager 인스턴스를 반환합니다.
-
-    Returns:
-        OAuthSessionManager 인스턴스
-    """
+    """OAuthSessionManager 싱글톤 인스턴스를 반환합니다."""
     global _session_manager
     if _session_manager is None:
         _session_manager = OAuthSessionManager()
     return _session_manager
->>>>>>> REPLACE

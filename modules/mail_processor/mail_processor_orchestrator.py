@@ -226,7 +226,7 @@ class MailProcessorOrchestrator:
 
     async def _extract_keywords_from_clean_content(self, clean_content: str) -> List[str]:
         """정제된 내용에서 키워드 추출 (정제 없이)"""
-        response = await self.keyword_service.extract_keywords_from_clean_content(clean_content)
+        response = await self.keyword_service.extract_keywords(clean_content)
         return response.keywords if hasattr(response, 'keywords') else response
 
     async def process_graph_mail_item(

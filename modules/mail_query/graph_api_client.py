@@ -4,14 +4,13 @@ Microsoft Graph API 클라이언트
 """
 import aiohttp
 import asyncio
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 from infra.core.config import get_config
 from infra.core.logger import get_logger
 from infra.core.exceptions import APIConnectionError, TokenExpiredError
-from .mail_query_schema import GraphMailItem, MailboxInfo
-from ._mail_query_helpers import (
+from ._mail_query_helpers import (  # 언더스코어 추가
     parse_graph_mail_item, 
     parse_graph_error_response,
     calculate_retry_delay,
@@ -22,7 +21,7 @@ logger = get_logger(__name__)
 
 
 class GraphAPIClient:
-    """Microsoft Graph API 클라이언트 (모듈 내부)"""
+    """Microsoft Graph API 클라이언트"""
     
     def __init__(self):
         self.config = get_config()
@@ -47,14 +46,6 @@ class GraphAPIClient:
             await self._session.close()
             logger.debug("aiohttp 세션 정리됨")
             self._session = None
-    
-    async def __aenter__(self):
-        """컨텍스트 매니저 진입"""
-        return self
-    
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """컨텍스트 매니저 종료 시 세션 정리"""
-        await self.close()
     
     async def query_messages_single_page(
         self,
@@ -113,121 +104,6 @@ class GraphAPIClient:
             
         except Exception as e:
             logger.error(f"Graph API 메시지 조회 실패: {str(e)}")
-            raise
-    
-    async def get_mailbox_info(self, access_token: str) -> MailboxInfo:
-        """메일박스 정보 조회"""
-        url = f"{self.base_url}/me/mailboxSettings"
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json"
-        }
-        
-        try:
-            response_data = await self._make_request_with_retry(
-                method="GET",
-                url=url,
-                headers=headers
-            )
-            
-            return MailboxInfo(
-                display_name=response_data.get('displayName'),
-                user_principal_name=response_data.get('userPrincipalName'),
-                automatic_replies_setting=response_data.get('automaticRepliesSetting'),
-                archive_folder=response_data.get('archiveFolder'),
-                time_zone=response_data.get('timeZone'),
-                language=response_data.get('language')
-            )
-            
-        except Exception as e:
-            logger.error(f"메일박스 정보 조회 실패: {str(e)}")
-            raise APIConnectionError(
-                f"메일박스 정보 조회 실패: {str(e)}",
-                api_endpoint=url
-            ) from e
-    
-    async def search_messages(
-        self,
-        access_token: str,
-        search_query: str,
-        select_fields: Optional[str] = None,
-        top: int = 50
-    ) -> Dict[str, Any]:
-        """메시지 검색 ($search 사용)"""
-        url = f"{self.base_url}/me/messages"
-        params = {
-            "$search": f'"{search_query}"',
-            "$top": min(top, 250)  # $search는 250개 제한
-        }
-        
-        if select_fields:
-            params["$select"] = select_fields
-        
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-            "ConsistencyLevel": "eventual"  # 검색을 위한 일관성 레벨
-        }
-        
-        try:
-            response_data = await self._make_request_with_retry(
-                method="GET",
-                url=url,
-                headers=headers,
-                params=params
-            )
-            
-            # 검색 결과 파싱
-            messages = []
-            for item in response_data.get('value', []):
-                try:
-                    graph_item = parse_graph_mail_item(item)
-                    messages.append(graph_item)
-                except Exception as e:
-                    logger.warning(f"검색 결과 파싱 실패: {str(e)}")
-                    continue
-            
-            return {
-                'messages': messages,
-                'has_more': False,  # $search는 페이징 제한
-                'next_link': None,
-                'total_count': len(messages)
-            }
-            
-        except Exception as e:
-            logger.error(f"메시지 검색 실패: {str(e)}")
-            raise
-    
-    async def get_message_by_id(
-        self,
-        access_token: str,
-        message_id: str,
-        select_fields: Optional[str] = None
-    ) -> GraphMailItem:
-        """특정 메시지 조회"""
-        url = f"{self.base_url}/me/messages/{message_id}"
-        params = {}
-        
-        if select_fields:
-            params["$select"] = select_fields
-        
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json"
-        }
-        
-        try:
-            response_data = await self._make_request_with_retry(
-                method="GET",
-                url=url,
-                headers=headers,
-                params=params
-            )
-            
-            return parse_graph_mail_item(response_data)
-            
-        except Exception as e:
-            logger.error(f"메시지 조회 실패 (ID: {message_id}): {str(e)}")
             raise
     
     async def _make_request_with_retry(
@@ -315,32 +191,3 @@ class GraphAPIClient:
             f"Graph API 호출 실패: 최대 재시도 횟수 초과",
             api_endpoint=url
         )
-    
-    async def get_raw_message(
-        self,
-        access_token: str,
-        message_id: str
-    ) -> Dict[str, Any]:
-        """메시지 원본 데이터 조회 (전체 필드 포함)"""
-        url = f"{self.base_url}/me/messages/{message_id}"
-        
-        headers = {
-            "Authorization": f"Bearer {access_token}",
-            "Accept": "application/json",
-            "Prefer": "outlook.body-content-type=\"text\""  # 텍스트 형식 선호
-        }
-        
-        try:
-            # 전체 필드를 포함한 원본 데이터 조회
-            response_data = await self._make_request_with_retry(
-                method="GET",
-                url=url,
-                headers=headers
-            )
-            
-            logger.debug(f"메시지 원본 데이터 조회 완료: message_id={message_id}")
-            return response_data
-            
-        except Exception as e:
-            logger.error(f"메시지 원본 조회 실패 (ID: {message_id}): {str(e)}")
-            raise
