@@ -29,13 +29,20 @@ class MailKeywordService:
 
     async def __aenter__(self):
         """비동기 컨텍스트 매니저 진입"""
-        self._session = aiohttp.ClientSession()
+        if self._session is None or self._session.closed:
+            self._session = aiohttp.ClientSession()
+            self.logger.debug("키워드 서비스 세션 생성됨")
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """비동기 컨텍스트 매니저 종료"""
-        if self._session:
+        await self.close()
+
+    async def close(self):
+        """세션 정리"""
+        if self._session and not self._session.closed:
             await self._session.close()
+            self.logger.debug("키워드 서비스 세션 정리됨")
             self._session = None
 
     async def extract_keywords(self, clean_content: str) -> List[str]:
@@ -74,6 +81,7 @@ class MailKeywordService:
         """세션 가져오기 (필요시 생성)"""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession()
+            self.logger.debug("새로운 키워드 서비스 세션 생성")
         return self._session
 
     async def _call_openrouter_api(self, text: str) -> Tuple[List[str], dict]:
@@ -107,7 +115,6 @@ class MailKeywordService:
             "cost_usd": 0.0,
         }
 
-        session = None
         try:
             session = await self._get_session()
 
@@ -145,6 +152,9 @@ class MailKeywordService:
 
                 return [], token_info
 
+        except aiohttp.ClientError as e:
+            self.logger.error(f"OpenRouter API 네트워크 오류: {str(e)}")
+            return [], token_info
         except Exception as e:
             self.logger.error(f"OpenRouter API 호출 실패: {str(e)}")
             return [], token_info
@@ -206,3 +216,15 @@ class MailKeywordService:
                 cleaned_keywords.append(kw)
 
         return cleaned_keywords
+
+    def __del__(self):
+        """소멸자 - 세션 정리 시도 (최후의 수단)"""
+        if hasattr(self, '_session') and self._session and not self._session.closed:
+            try:
+                # 이미 이벤트 루프가 닫혔을 수 있으므로 조용히 실패
+                import asyncio
+                loop = asyncio.get_event_loop()
+                if not loop.is_closed():
+                    loop.create_task(self._session.close())
+            except:
+                pass  # 소멸자에서는 예외를 무시

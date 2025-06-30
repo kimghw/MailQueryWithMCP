@@ -171,6 +171,8 @@ class DatabaseManager:
                 details={"query": query[:200], "params": str(params)[:200]}
             ) from e
 
+
+
     def execute_many(self, query: str, params_list: List[Union[tuple, dict]]) -> int:
         """
         동일한 쿼리를 여러 매개변수로 실행합니다.

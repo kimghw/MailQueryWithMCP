@@ -187,3 +187,6 @@ Thumbs.db
 /temp/
 /cache/
 enrollment/
+
+# Test result files
+*_test_result_*.json
