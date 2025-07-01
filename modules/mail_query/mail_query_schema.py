@@ -2,7 +2,7 @@
 Mail Query 모듈 스키마 정의
 Pydantic v2 기반 데이터 모델
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from pydantic import BaseModel, Field, field_validator
 
@@ -27,8 +27,16 @@ class MailQueryFilters(BaseModel):
     @field_validator('date_from', 'date_to')
     @classmethod
     def validate_dates(cls, v):
-        if v and v > datetime.now():
-            raise ValueError("미래 날짜는 설정할 수 없습니다")
+        if v:
+            # timezone-aware datetime과 비교하기 위해 현재 시간도 UTC로 설정
+            now = datetime.now(timezone.utc)
+            
+            # 입력값이 timezone-naive인 경우 UTC로 가정
+            if v.tzinfo is None:
+                v = v.replace(tzinfo=timezone.utc)
+            
+            if v > now:
+                raise ValueError("미래 날짜는 설정할 수 없습니다")
         return v
 
 
