@@ -170,17 +170,37 @@ class MailProcessorOrchestrator:
         
         self.logger.debug(f"Phase 4 시작: 저장 ({len(mails)}개)")
         
-        # 처리된 메일 데이터에 키워드 정보 포함
+        # 이벤트 발행용 메일 데이터 준비 (DB 저장용 데이터와 분리)
+        mails_for_events = []
+        
+        for mail in mails:
+            # 이벤트용 메일 복사본 생성
+            event_mail = mail.copy()
+            
+            # _processed 정보는 제거 (이벤트에 불필요)
+            if '_processed' in event_mail:
+                del event_mail['_processed']
+            
+            # 중복 필드들 제거
+            fields_to_remove = ['keywords', 'clean_content', 'sent_time', 'processing_status']
+            for field in fields_to_remove:
+                if field in event_mail:
+                    del event_mail[field]
+            
+            mails_for_events.append(event_mail)
+        
+        # DB 저장용 데이터 준비
         for mail in mails:
             if '_processed' in mail:
-                # _processed 정보를 메일 데이터에 병합
+                # _processed 정보를 메일 데이터에 병합 (DB 저장용)
                 processed_info = mail['_processed']
                 mail['keywords'] = processed_info.get('keywords', [])
                 mail['clean_content'] = processed_info.get('clean_content', '')
                 mail['sent_time'] = processed_info.get('sent_time')
                 mail['processing_status'] = 'SUCCESS'
         
-        return await self.persistence_service.persist_mails(account_id, mails)
+        # 수정된 persist_mails 호출 (이벤트용 데이터 전달)
+        return await self.persistence_service.persist_mails(account_id, mails, mails_for_events)
     
     async def _phase5_statistics(
         self, 

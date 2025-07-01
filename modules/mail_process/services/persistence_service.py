@@ -65,7 +65,7 @@ class PersistenceService:
             # 오류 시 중복으로 간주하여 안전하게 처리
             return True
     
-    async def persist_mails(self, account_id: str, mails: List[Dict]) -> Dict:
+    async def persist_mails(self, account_id: str, mails: List[Dict], mails_for_events: List[Dict] = None) -> Dict:
         """
         메일 데이터 저장
         
@@ -74,21 +74,29 @@ class PersistenceService:
         
         Args:
             account_id: 계정 ID
-            mails: 처리된 메일 리스트 (이미 중복 체크된 신규 메일만)
+            mails: 처리된 메일 리스트 (DB 저장용, 이미 중복 체크된 신규 메일만)
+            mails_for_events: 이벤트 발행용 메일 리스트 (중복 필드 제거된 버전)
             
         Returns:
             저장 결과 통계
         """
+        # 이벤트용 메일이 제공되지 않으면 기존 메일 사용
+        if mails_for_events is None:
+            mails_for_events = mails
+            
         saved_count = 0
         failed_count = 0
         event_published_count = 0
         
-        for mail in mails:
+        for i, mail in enumerate(mails):
             try:
+                # 이벤트용 메일 가져오기
+                event_mail = mails_for_events[i] if i < len(mails_for_events) else mail
+                
                 # 중복 체크가 비활성화된 경우
                 if not self.duplicate_check_enabled:
                     # DB 저장 없이 바로 이벤트 발행
-                    await self._publish_event(account_id, mail)
+                    await self._publish_event(account_id, event_mail, mail)
                     event_published_count += 1
                     saved_count += 1  # 통계상 성공으로 처리
                     self.logger.debug(f"중복 체크 OFF - 이벤트만 발행: {mail.get('id')}")
@@ -103,7 +111,7 @@ class PersistenceService:
                 if success:
                     saved_count += 1
                     # DB 저장 성공 시 이벤트 발행
-                    await self._publish_event(account_id, mail)
+                    await self._publish_event(account_id, event_mail, mail)
                     event_published_count += 1
                     self.logger.debug(f"신규 메일 저장 및 이벤트 발행: {processed_mail.mail_id}")
                 else:
@@ -168,14 +176,21 @@ class PersistenceService:
             processed_at=datetime.now()
         )
     
-    async def _publish_event(self, account_id: str, mail: Dict):
-        """이벤트 발행"""
+    async def _publish_event(self, account_id: str, event_mail: Dict, original_mail: Dict):
+        """
+        이벤트 발행
+        
+        Args:
+            account_id: 계정 ID
+            event_mail: 이벤트 발행용 메일 (중복 필드 제거됨)
+            original_mail: 원본 메일 (키워드와 clean_content 정보 포함)
+        """
         try:
             self.event_service.publish_mail_event(
                 account_id=account_id,
-                mail=mail,
-                keywords=mail.get('keywords', []),
-                clean_content=mail.get('clean_content', '')
+                mail=event_mail,
+                keywords=original_mail.get('keywords', []),
+                clean_content=original_mail.get('clean_content', '')
             )
         except Exception as e:
             # 이벤트 발행 실패는 전체 프로세스를 중단시키지 않음

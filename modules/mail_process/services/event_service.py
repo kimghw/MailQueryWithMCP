@@ -30,9 +30,15 @@ class MailEventService:
             # datetime 객체들을 문자열로 변환
             mail_copy = self._convert_datetime_to_string(mail.copy())
 
-            # 키워드와 정제된 내용 추가
+            # 키워드 추가
             mail_copy['extracted_keywords'] = keywords
-            mail_copy['clean_content'] = clean_content
+            
+            # body.content를 clean_content로 교체
+            if 'body' in mail_copy and isinstance(mail_copy['body'], dict):
+                mail_copy['body']['content'] = clean_content
+                # contentType이 HTML인 경우 text로 변경 (정제된 내용이므로)
+                if mail_copy['body'].get('contentType') == 'html':
+                    mail_copy['body']['contentType'] = 'text'
 
             # 이벤트 구조 생성
             event_data = {
