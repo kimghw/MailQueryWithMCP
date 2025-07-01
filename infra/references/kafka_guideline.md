@@ -84,7 +84,7 @@ def create_mail_raw_data_event(account_id: str, email_data: dict, api_endpoint: 
     occurred_at = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z' # Time this event happened
 
     raw_data_event = {
-        "event_type": "email.raw_data_received",
+        "event_type": "email_type",
         "event_id": event_id,
         "account_id": account_id,
         "occurred_at": occurred_at,

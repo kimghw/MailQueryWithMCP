@@ -47,7 +47,7 @@ Docker 컨테이너:
   - document-processed (파티션: 3)
 
 이메일 관련:
-  - email-raw-data (파티션: 3)
+  - email.received (파티션: 3)
 
 처리 작업 관련:
   - processing-job-events (파티션: 3)
@@ -82,7 +82,7 @@ Docker 컨테이너:
 ### 4.5 Mail Raw Data 이벤트 구조
 ```json
 {
-  "event_type": "email.raw_data_received",
+  "event_type": "email_type",
   "event_id": "unique-event-id",
   "account_id": "user-account-id",
   "occurred_at": "2024-01-01T00:00:00Z",

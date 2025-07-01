@@ -223,7 +223,7 @@ class KafkaClient:
         occurred_at = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
 
         return {
-            "event_type": "email.raw_data_received",
+            "event_type": "email_type",
             "event_id": event_id,
             "account_id": account_id,
             "occurred_at": occurred_at,
@@ -411,9 +411,9 @@ class KafkaClient:
         """
         try:
             producer = self._get_producer()
-            # 클러스터 메타데이터 조회로 연결 확인
-            metadata = producer.cluster
-            if metadata.brokers():
+            # 간단한 메타데이터 요청으로 연결 확인
+            partitions = producer.partitions_for('__consumer_offsets')
+            if partitions is not None:
                 logger.debug("Kafka 클러스터 연결 상태 정상")
                 return True
             else:

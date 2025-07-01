@@ -36,7 +36,7 @@ class MailEventService:
 
             # 이벤트 구조 생성
             event_data = {
-                "event_type": "email.raw_data_received",
+                "event_type": "email_type",
                 "event_id": str(uuid.uuid4()),
                 "account_id": account_id,
                 "occurred_at": datetime.now().isoformat(),

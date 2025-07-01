@@ -53,7 +53,7 @@ class ProcessingStatus(str, Enum):
 class MailReceivedEvent(BaseModel):
     """Kafka로 전송될 메일 수신 이벤트"""
 
-    event_type: str = "email.raw_data_received"
+    event_type: str = "email_type"
     event_id: str
     account_id: str
     occurred_at: datetime

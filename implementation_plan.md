@@ -463,7 +463,7 @@ class MailProcessorOrchestrator:
                     
                     # Kafka 이벤트 발행
                     event = self._create_mail_event(account['id'], mail)
-                    await producer.send('email-raw-data', event)
+                    await producer.send('email.received', event)
                 
                 # 마지막 동기화 시간 업데이트
                 await self._update_last_sync_time(conn, account['id'])
@@ -577,7 +577,7 @@ Scheduler → APIGateway.process_all_accounts_mails()
 # modules/mail_processor/event_publisher.py
 @dataclass
 class MailReceivedEvent:
-    event_type: str = "email.raw_data_received"
+    event_type: str = "email_type"
     event_id: str
     account_id: str
     occurred_at: datetime

@@ -55,7 +55,7 @@ print(f"추출된 키워드: {result.keywords}")
 ### Kafka 토픽: email-raw-data
 ```json
 {
-    "event_type": "email.raw_data_received",
+    "event_type": "email_type",
     "event_id": "uuid",
     "account_id": "kimghw",
     "occurred_at": "2025-06-16T10:30:00Z",

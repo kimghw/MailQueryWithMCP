@@ -467,7 +467,7 @@ async def _publish_kafka_event(self, account_id: str, mail: Dict):
         )
         
         await producer.send(
-            'email-raw-data',
+            'email.received',
             value=event.model_dump(),
             key=account_id.encode('utf-8')
         )
@@ -529,7 +529,7 @@ class ProcessingStatus(str, Enum):
 
 class MailReceivedEvent(BaseModel):
     """Kafka로 전송될 메일 수신 이벤트"""
-    event_type: str = "email.raw_data_received"
+    event_type: str = "email_type"
     event_id: str
     account_id: str
     occurred_at: datetime
