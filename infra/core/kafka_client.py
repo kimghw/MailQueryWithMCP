@@ -7,6 +7,7 @@ Kafka Producer와 Consumer를 관리하여 이벤트 기반 아키텍처를 지�
 
 import json
 import threading
+import logging
 from functools import lru_cache
 from typing import Optional, Dict, Any, List, Callable
 from uuid import uuid4
@@ -18,6 +19,70 @@ from kafka.errors import KafkaError as KafkaLibError, KafkaTimeoutError
 from .config import get_config
 from .exceptions import KafkaError, KafkaConnectionError, KafkaProducerError, KafkaConsumerError
 from .logger import get_logger
+
+# Kafka 로그 레벨 설정 (모듈 로드 시 한 번만 실행)
+def _configure_kafka_logging():
+    """Kafka 라이브러리의 로그 레벨을 설정합니다."""
+    config = get_config()
+    
+    # 환경변수에서 Kafka 로그 레벨 가져오기 (기본값: WARNING)
+    kafka_log_level_str = config.get_setting("KAFKA_LOG_LEVEL", "WARNING").upper()
+    kafka_log_level = getattr(logging, kafka_log_level_str, logging.WARNING)
+    
+    # Kafka 관련 모든 로거의 레벨 조정
+    kafka_loggers = [
+        'kafka', 
+        'kafka.producer', 
+        'kafka.consumer', 
+        'kafka.conn', 
+        'kafka.protocol', 
+        'kafka.cluster',
+        'kafka.coordinator',
+        'kafka.coordinator.consumer',
+        'kafka.metrics'
+    ]
+    
+    for logger_name in kafka_loggers:
+        logging.getLogger(logger_name).setLevel(kafka_log_level)
+    
+    # 특정 노이즈 로그 필터링
+    class KafkaNoiseFilter(logging.Filter):
+        """Kafka의 노이즈 로그를 필터링하는 필터"""
+        def filter(self, record):
+            # 무시할 로그 패턴들
+            ignore_patterns = [
+                "Sending request",
+                "Received correlation id:",
+                "Processing response",
+                "Initiating connection to node",
+                "Timeouts:",
+                "Added sensor with name",
+                "Sending metadata request",
+                "Updated cluster metadata",
+                "created new socket",
+                "established TCP connection",
+                "Request:",
+                "Response:",
+                "<BrokerConnection"
+            ]
+            
+            # DEBUG 레벨 로그만 필터링
+            if record.levelno <= logging.DEBUG:
+                msg = record.getMessage()
+                for pattern in ignore_patterns:
+                    if pattern in msg:
+                        return False
+            return True
+    
+    # 필터 적용 (DEBUG 모드가 아닐 때만)
+    if kafka_log_level > logging.DEBUG:
+        kafka_filter = KafkaNoiseFilter()
+        for logger_name in kafka_loggers:
+            logger = logging.getLogger(logger_name)
+            logger.addFilter(kafka_filter)
+
+# 모듈 로드 시 Kafka 로깅 설정 적용
+_configure_kafka_logging()
 
 logger = get_logger(__name__)
 
@@ -31,6 +96,12 @@ class KafkaClient:
         self._producer: Optional[KafkaProducer] = None
         self._consumers: Dict[str, KafkaConsumer] = {}
         self._lock = threading.Lock()
+        
+        # Kafka 이벤트 발행 활성화 여부 확인
+        self._events_enabled = self.config.get_setting("ENABLE_KAFKA_EVENTS", "true").lower() in ("true", "1", "yes", "on")
+        
+        if not self._events_enabled:
+            logger.warning("Kafka 이벤트 발행이 비활성화되었습니다 (ENABLE_KAFKA_EVENTS=false)")
 
     def _get_producer(self) -> KafkaProducer:
         """Kafka Producer를 반환 (레이지 초기화)"""
@@ -38,6 +109,10 @@ class KafkaClient:
             with self._lock:
                 if self._producer is None:
                     try:
+                        # Producer 생성 시 임시로 로그 레벨 낮추기
+                        original_level = logging.getLogger('kafka').level
+                        logging.getLogger('kafka').setLevel(logging.ERROR)
+                        
                         self._producer = KafkaProducer(
                             bootstrap_servers=self.config.kafka_bootstrap_servers,
                             # JSON 직렬화
@@ -53,10 +128,20 @@ class KafkaClient:
                             linger_ms=10,      # 배치 대기 시간
                             # 타임아웃 설정
                             request_timeout_ms=self.config.kafka_timeout * 1000,
+                            # 연결 설정
+                            api_version_auto_timeout_ms=5000,
+                            connections_max_idle_ms=540000,
                         )
+                        
+                        # 원래 로그 레벨로 복원
+                        logging.getLogger('kafka').setLevel(original_level)
+                        
                         logger.info(f"Kafka Producer 초기화 완료: {self.config.kafka_bootstrap_servers}")
                         
                     except Exception as e:
+                        # 로그 레벨 복원
+                        logging.getLogger('kafka').setLevel(original_level)
+                        
                         raise KafkaConnectionError(
                             f"Kafka Producer 연결 실패: {str(e)}",
                             details={"servers": self.config.kafka_bootstrap_servers}
@@ -86,6 +171,10 @@ class KafkaClient:
         
         if consumer_key not in self._consumers:
             try:
+                # Consumer 생성 시 임시로 로그 레벨 낮추기
+                original_level = logging.getLogger('kafka').level
+                logging.getLogger('kafka').setLevel(logging.ERROR)
+                
                 consumer = KafkaConsumer(
                     *topics,
                     bootstrap_servers=self.config.kafka_bootstrap_servers,
@@ -108,10 +197,16 @@ class KafkaClient:
                     consumer_timeout_ms=self.config.kafka_timeout * 1000,
                 )
                 
+                # 원래 로그 레벨로 복원
+                logging.getLogger('kafka').setLevel(original_level)
+                
                 self._consumers[consumer_key] = consumer
                 logger.info(f"Kafka Consumer 생성: 그룹={group_id}, 토픽={topics}")
                 
             except Exception as e:
+                # 로그 레벨 복원
+                logging.getLogger('kafka').setLevel(original_level)
+                
                 raise KafkaConnectionError(
                     f"Kafka Consumer 생성 실패: {str(e)}",
                     details={"topics": topics, "group_id": group_id}
@@ -138,6 +233,11 @@ class KafkaClient:
         Returns:
             발행 성공 여부
         """
+        # Kafka 이벤트가 비활성화된 경우
+        if not self._events_enabled:
+            logger.debug(f"Kafka 이벤트 발행 건너뜀 (비활성화됨): topic={topic}")
+            return True  # 성공으로 간주
+        
         try:
             producer = self._get_producer()
             
@@ -157,10 +257,13 @@ class KafkaClient:
             # 전송 완료 대기
             record_metadata = future.get(timeout=self.config.kafka_timeout)
             
-            logger.debug(
-                f"이벤트 발행 성공: topic={topic}, partition={record_metadata.partition}, "
-                f"offset={record_metadata.offset}"
-            )
+            # DEBUG 레벨에서만 상세 로그
+            if logger.isEnabledFor(logging.DEBUG):
+                logger.debug(
+                    f"이벤트 발행 성공: topic={topic}, partition={record_metadata.partition}, "
+                    f"offset={record_metadata.offset}"
+                )
+            
             return True
             
         except KafkaTimeoutError as e:
@@ -266,10 +369,12 @@ class KafkaClient:
                     topic = message.topic
                     value = message.value
                     
-                    logger.debug(
-                        f"메시지 수신: topic={topic}, partition={message.partition}, "
-                        f"offset={message.offset}"
-                    )
+                    # DEBUG 레벨에서만 상세 로그
+                    if logger.isEnabledFor(logging.DEBUG):
+                        logger.debug(
+                            f"메시지 수신: topic={topic}, partition={message.partition}, "
+                            f"offset={message.offset}"
+                        )
                     
                     # 핸들러 호출
                     message_handler(topic, value)
@@ -313,6 +418,11 @@ class KafkaClient:
         Returns:
             발행 성공 여부
         """
+        # Kafka 이벤트가 비활성화된 경우
+        if not self._events_enabled:
+            logger.debug(f"이메일 이벤트 발행 건너뜀 (비활성화됨): account_id={account_id}")
+            return True
+        
         try:
             for email_data in emails:
                 event = self.create_mail_raw_data_event(
@@ -347,7 +457,8 @@ class KafkaClient:
         if self._producer:
             try:
                 self._producer.flush(timeout=timeout or self.config.kafka_timeout)
-                logger.debug("Producer 버퍼 플러시 완료")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Producer 버퍼 플러시 완료")
             except Exception as e:
                 logger.error(f"Producer 버퍼 플러시 실패: {str(e)}")
 
@@ -414,7 +525,8 @@ class KafkaClient:
             # 간단한 메타데이터 요청으로 연결 확인
             partitions = producer.partitions_for('__consumer_offsets')
             if partitions is not None:
-                logger.debug("Kafka 클러스터 연결 상태 정상")
+                if logger.isEnabledFor(logging.DEBUG):
+                    logger.debug("Kafka 클러스터 연결 상태 정상")
                 return True
             else:
                 logger.warning("Kafka 브로커를 찾을 수 없음")

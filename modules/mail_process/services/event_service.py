@@ -67,14 +67,15 @@ class MailEventService:
             )
 
             # 이벤트 데이터의 일부를 로그로 남겨 확인이 용이하도록 함
-            log_payload = {
-                "event_type": event_data["event_type"],
-                "account_id": account_id,
-                "mail_id": mail.get("id"),
-                "subject": mail.get("subject", "")[:30] + "...",
-                "keywords_count": len(keywords)
-            }
-            self.logger.info(f"메일 처리 이벤트 발행: {log_payload}")
+            subject = mail.get("subject", "")
+            truncated_subject = subject[:50] + "..." if len(subject) > 50 else subject
+            
+            self.logger.info(
+                f"메일 처리 이벤트 발행 - "
+                f"계정: {account_id}, "
+                f"제목: {truncated_subject}, "
+                f"키워드: {len(keywords)}개"
+            )
 
         except Exception as e:
             self.logger.error(f"Kafka 이벤트 발행 실패: {str(e)}")
