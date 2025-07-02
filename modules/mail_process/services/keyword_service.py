@@ -1,11 +1,10 @@
-"""키워드 추출 서비스 (배치 처리 및 구조화된 데이터 추출 지원)"""
+"""키워드 추출 서비스 (구조화된 응답 및 개선된 프롬프트)"""
 
 import re
 import time
 import json
 import asyncio
 import aiohttp
-import os
 from collections import Counter
 from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime
@@ -15,7 +14,7 @@ from modules.mail_process.mail_processor_schema import KeywordExtractionResponse
 
 
 class MailKeywordService:
-    """메일 키워드 추출 서비스 (배치 처리 및 구조화된 데이터 추출 지원)"""
+    """메일 키워드 추출 서비스 (배치 처리 지원)"""
 
     def __init__(self):
         self.config = get_config()
@@ -28,12 +27,12 @@ class MailKeywordService:
         self.max_keywords = int(getattr(self.config, "max_keywords_per_mail", 5))
 
         # 배치 처리 설정
-        self.batch_size = 50
-        self.concurrent_requests = 5
-        self.batch_timeout = 60
+        self.batch_size = int(self.config.get_setting("KEYWORD_EXTRACTION_BATCH_SIZE", "50"))
+        self.concurrent_requests = int(self.config.get_setting("KEYWORD_EXTRACTION_CONCURRENT_REQUESTS", "5"))
+        self.batch_timeout = int(self.config.get_setting("KEYWORD_EXTRACTION_BATCH_TIMEOUT", "60"))
         
-        # 구조화된 추출 모드
-        self.structured_extraction = self.config.get_setting("ENABLE_STRUCTURED_EXTRACTION", "true").lower() == "true"
+        # 구조화된 응답 사용 여부
+        self.use_structured_response = self.config.get_setting("USE_STRUCTURED_KEYWORD_RESPONSE", "true").lower() == "true"
         
         # 재사용 가능한 세션
         self._session: Optional[aiohttp.ClientSession] = None
@@ -41,7 +40,7 @@ class MailKeywordService:
         self.logger.info(
             f"키워드 서비스 초기화: batch_size={self.batch_size}, "
             f"concurrent_requests={self.concurrent_requests}, "
-            f"structured_extraction={self.structured_extraction}"
+            f"structured_response={self.use_structured_response}"
         )
 
     async def __aenter__(self):
@@ -62,50 +61,51 @@ class MailKeywordService:
             self.logger.debug("키워드 서비스 세션 정리됨")
             self._session = None
 
-    async def extract_keywords_batch(self, contents: List[str]) -> List[List[str]]:
+    async def extract_keywords_batch(self, mail_contents: List[Dict[str, str]]) -> List[List[str]]:
         """
-        여러 텍스트의 키워드를 배치로 추출
+        여러 메일의 키워드를 배치로 추출
         
         Args:
-            contents: 텍스트 리스트
+            mail_contents: [{"content": "본문", "subject": "제목"}, ...] 형식의 리스트
             
         Returns:
-            각 텍스트별 키워드 리스트
+            각 메일별 키워드 리스트
         """
-        if not contents:
+        if not mail_contents:
             return []
         
         start_time = time.time()
-        self.logger.info(f"키워드 배치 추출 시작: {len(contents)}개 텍스트")
+        self.logger.info(f"키워드 배치 추출 시작: {len(mail_contents)}개 메일")
         
         # 너무 짧은 텍스트 사전 필터링
         valid_indices = []
-        valid_contents = []
+        valid_mails = []
         
-        for i, content in enumerate(contents):
+        for i, mail_data in enumerate(mail_contents):
+            content = mail_data.get('content', '') if isinstance(mail_data, dict) else str(mail_data)
             if content and len(content.strip()) >= 10:
                 valid_indices.append(i)
-                valid_contents.append(content)
+                valid_mails.append(mail_data)
         
         # 모든 텍스트가 너무 짧은 경우
-        if not valid_contents:
-            self.logger.warning("모든 텍스트가 너무 짧음")
-            return [[] for _ in contents]
+        if not valid_mails:
+            self.logger.warning("모든 메일 내용이 너무 짧음")
+            return [[] for _ in mail_contents]
         
         # 결과 초기화
-        results = [[] for _ in contents]
+        results = [[] for _ in mail_contents]
         
         try:
             # OpenRouter API 사용 가능한 경우
             if self.api_key:
                 # 배치를 더 작은 청크로 나누어 처리
-                for chunk_start in range(0, len(valid_contents), self.batch_size):
-                    chunk_end = min(chunk_start + self.batch_size, len(valid_contents))
-                    chunk_contents = valid_contents[chunk_start:chunk_end]
+                for chunk_start in range(0, len(valid_mails), self.batch_size):
+                    chunk_end = min(chunk_start + self.batch_size, len(valid_mails))
+                    chunk_mails = valid_mails[chunk_start:chunk_end]
                     chunk_indices = valid_indices[chunk_start:chunk_end]
                     
                     # 동시 처리
-                    chunk_results = await self._process_chunk_concurrent(chunk_contents)
+                    chunk_results = await self._process_chunk_concurrent(chunk_mails)
                     
                     # 결과 저장
                     for i, keywords in enumerate(chunk_results):
@@ -113,303 +113,81 @@ class MailKeywordService:
                         results[original_index] = keywords
                     
                     # API 속도 제한 고려
-                    if chunk_end < len(valid_contents):
+                    if chunk_end < len(valid_mails):
                         await asyncio.sleep(0.5)
                         
             else:
                 # Fallback: 동기적 처리
                 self.logger.warning("API 키 없음, fallback 사용")
-                for i, content in zip(valid_indices, valid_contents):
+                for i, mail_data in zip(valid_indices, valid_mails):
+                    content = mail_data.get('content', '') if isinstance(mail_data, dict) else str(mail_data)
                     results[i] = self._fallback_keyword_extraction(content)
             
         except Exception as e:
             self.logger.error(f"배치 키워드 추출 실패: {str(e)}")
             # 실패 시 모든 텍스트에 대해 fallback 사용
-            for i, content in zip(valid_indices, valid_contents):
+            for i, mail_data in zip(valid_indices, valid_mails):
                 if not results[i]:  # 아직 처리되지 않은 경우
+                    content = mail_data.get('content', '') if isinstance(mail_data, dict) else str(mail_data)
                     results[i] = self._fallback_keyword_extraction(content)
         
         elapsed = time.time() - start_time
         self.logger.info(
-            f"키워드 배치 추출 완료: {len(contents)}개 텍스트, "
+            f"키워드 배치 추출 완료: {len(mail_contents)}개 메일, "
             f"{elapsed:.2f}초 소요"
         )
         
         return results
 
-    async def extract_structured_data(self, mail_content: str, subject: str = "") -> Dict[str, Any]:
+    async def _process_chunk_concurrent(self, mail_contents: List[Any]) -> List[List[str]]:
         """
-        메일에서 구조화된 데이터 추출
+        청크를 동시에 처리
         
         Args:
-            mail_content: 메일 본문
-            subject: 메일 제목
+            mail_contents: 처리할 메일 청크
             
         Returns:
-            구조화된 데이터 딕셔너리
+            각 메일의 키워드 리스트
         """
-        if not self.structured_extraction or not self.api_key:
-            # 구조화된 추출이 비활성화되거나 API 키가 없는 경우 기본 키워드만 반환
-            keywords = await self.extract_keywords(mail_content)
-            return {
-                "keywords": keywords,
-                "structured_extraction": False
-            }
-        
-        try:
-            # OpenRouter API를 통한 구조화된 추출
-            structured_data = await self._call_openrouter_structured_api(mail_content, subject)
-            
-            if structured_data:
-                # 추출된 데이터 검증 및 정제
-                validated_data = self._validate_structured_data(structured_data)
-                validated_data["structured_extraction"] = True
-                return validated_data
-            else:
-                # 실패 시 기본 키워드 추출로 폴백
-                keywords = await self.extract_keywords(mail_content)
-                return {
-                    "keywords": keywords,
-                    "structured_extraction": False
-                }
-                
-        except Exception as e:
-            self.logger.error(f"구조화된 데이터 추출 실패: {str(e)}")
-            keywords = await self.extract_keywords(mail_content)
-            return {
-                "keywords": keywords,
-                "structured_extraction": False,
-                "error": str(e)
-            }
-
-    async def _call_openrouter_structured_api(self, content: str, subject: str) -> Optional[Dict]:
-        """OpenRouter API를 통한 구조화된 데이터 추출"""
-        if not self.api_key:
-            return None
-
-        # 텍스트 길이 제한
-        limited_content = content[:2000] if len(content) > 2000 else content
-
-        # 구조화된 추출을 위한 프롬프트 - f-string 포맷 문제 수정
-        prompt = """
-Analyze the following email and extract structured information in JSON format.
-
-Subject: """ + subject + """
-Content: """ + limited_content + """
-
-Extract the following information and return ONLY valid JSON:
-{
-  "summary": "Brief summary of the email content (1-2 sentences)",
-  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
-  "has_deadline": true or false,
-  "response_required": "MANDATORY" or "OPTIONAL" or "NONE",
-  "mail_type": "REQUEST" or "RESPONSE" or "NOTIFICATION" or "COMPLETED" or "OTHER",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "pl_patterns": [
-    {
-      "full_pattern": "Complete pattern like PL25003_ILa",
-      "panel_name": "Panel code (e.g., PL)",
-      "year": "2-digit year (e.g., 25)",
-      "agenda_number": "3-digit number (e.g., 003)",
-      "round_version": "Round letter or null (e.g., null, a, b, c)",
-      "organization_code": "Organization code (e.g., IL)",
-      "sequence": "Sequence letter or null (e.g., a, b, c)",
-      "organization_name": "Full organization name",
-      "reply_version": "Reply version or null (e.g., null, a, b, c)"
-    }
-  ]
-   "analysis_reasoning": {
-    "mail_type_reason": "Explanation of why this mail type was chosen",
-    "response_required_reason": "Explanation of response requirement classification",
-    "deadline_reason": "Explanation of deadline extraction or absence",
-    "key_phrases": ["phrase1", "phrase2"] // Key phrases that influenced the classification
-  }
-}
-
-Rules:
-1. Extract up to 5 most relevant keywords
-2. For pl_patterns:
-   - Look for patterns like: PL25003_ILa, MSC108/3/1, MEPC81/INF.23
-   - Extract PL patterns from the email's Subject line
-3. If no patterns found, return empty array for pl_patterns
-4. Email chain handling:
-   - ONLY analyze the MOST RECENT message (before any "From:", "Sent:", "Subject:" headers)
-   - Ignore quoted or forwarded content below the main message
-5. Parse deadlines carefully:
-   - ONLY consider deadlines mentioned in the current sender's message
-   - If email is addressed to "Chair" or "Panel Chair", do NOT treat dates as deadlines
-   - Only extract deadlines directly requested by the current email sender
-6. Determine response_required:
-   - MANDATORY: Must respond (e.g., "please provide", "members shall", "response required")
-   - OPTIONAL: Response is voluntary (e.g., "tacit acceptance applies", "if you have comments", "comments welcome", "no response means agreement")
-   - NONE: No response expected (notifications, FYI emails)
-7. Determine mail_type:
-   - REQUEST: asking for action, response, or submission
-   - RESPONSE: replying to a request (e.g., "I prefer option 2", "Here are my comments", "Dear Chair")
-   - NOTIFICATION: informing about events, decisions, or updates
-   - COMPLETED: summarizing/compiling multiple opinions AND may request final review (e.g., "consolidated responses", "summary received from members", "compilation of feedback")
-   - OTHER: doesn't fit above categories
-8. Return ONLY the JSON object, no additional text
-"""
-
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-
-        payload = {
-            "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 500,
-            "temperature": 0.1,  # 낮은 temperature로 일관성 있는 JSON 출력
-        }
-
-        try:
-            session = await self._get_session()
-
-            async with session.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
-            ) as response:
-
-                if response.status != 200:
-                    response_text = await response.text()
-                    self.logger.error(f"API 오류: {response_text}")
-                    return None
-
-                data = await response.json()
-
-                # 응답에서 컨텐츠 추출
-                if "choices" in data and data["choices"]:
-                    choice = data["choices"][0]
-                    if "message" in choice and "content" in choice["message"]:
-                        content = choice["message"]["content"]
-                        if content and content.strip():
-                            try:
-                                # JSON 파싱 시도
-                                # 때로는 ```json ... ``` 형태로 올 수 있으므로 정제
-                                content = content.strip()
-                                if content.startswith("```json"):
-                                    content = content[7:]
-                                if content.endswith("```"):
-                                    content = content[:-3]
-                                
-                                structured_data = json.loads(content.strip())
-                                return structured_data
-                            except json.JSONDecodeError as e:
-                                self.logger.error(f"JSON 파싱 실패: {str(e)}, 응답: {content[:200]}")
-                                return None
-
-                return None
-
-        except Exception as e:
-            self.logger.error(f"OpenRouter 구조화 API 호출 실패: {str(e)}")
-            return None
-
-    def _validate_structured_data(self, data: Dict) -> Dict:
-        """추출된 구조화 데이터 검증 및 정제"""
-        validated = {
-            "summary": data.get("summary", ""),
-            "deadline": None,
-            "deadline_text": data.get("deadline_text"),
-            "deadline_type": data.get("deadline_type"),
-            "has_deadline": data.get("has_deadline", False),
-            "response_required": data.get("response_required", "NONE"),
-            "mail_type": data.get("mail_type", "OTHER"),
-            "keywords": [],
-            "pl_patterns": []
-        }
-        
-        # 키워드 검증
-        if isinstance(data.get("keywords"), list):
-            validated["keywords"] = [
-                str(k).strip() for k in data["keywords"][:self.max_keywords] 
-                if k and str(k).strip()
-            ]
-        
-        # 마감일 검증
-        if data.get("deadline"):
-            try:
-                # 다양한 날짜 형식 파싱 시도
-                deadline_str = str(data["deadline"])
-                validated["deadline"] = self._parse_deadline(deadline_str)
-            except:
-                self.logger.warning(f"마감일 파싱 실패: {data.get('deadline')}")
-        
-        # 마감일 타입 검증
-        valid_deadline_types = ["ACTION_REQUIRED", "SUBMISSION_DEADLINE", "INFORMATION_ONLY", "OTHER"]
-        if validated["deadline_type"] not in valid_deadline_types:
-            validated["deadline_type"] = None
-        
-        # 응답 필요 여부 검증
-        valid_response_required = ["MANDATORY", "OPTIONAL", "NONE"]
-        if validated["response_required"] not in valid_response_required:
-            validated["response_required"] = "NONE"
-        
-        # PL 패턴 검증
-        if isinstance(data.get("pl_patterns"), list):
-            for pattern in data["pl_patterns"]:
-                if isinstance(pattern, dict) and pattern.get("full_pattern"):
-                    validated_pattern = self._validate_pl_pattern(pattern)
-                    if validated_pattern:
-                        validated["pl_patterns"].append(validated_pattern)
-        
-        # 메일 타입 검증
-        valid_types = ["REQUEST", "RESPONSE", "NOTIFICATION", "COMPLETED", "OTHER"]
-        if validated["mail_type"] not in valid_types:
-            validated["mail_type"] = "OTHER"
-        
-        return validated
-
-    def _parse_deadline(self, deadline_str: str) -> Optional[str]:
-        """마감일 문자열 파싱"""
-        try:
-            # ISO 형식 시도
-            dt = datetime.fromisoformat(deadline_str.replace('Z', '+00:00'))
-            return dt.strftime("%Y-%m-%d %H:%M:%S")
-        except:
-            try:
-                # 다른 일반적인 형식들 시도
-                from dateutil import parser
-                dt = parser.parse(deadline_str)
-                return dt.strftime("%Y-%m-%d %H:%M:%S")
-            except:
-                return None
-
-    def _validate_pl_pattern(self, pattern: Dict) -> Optional[Dict]:
-        """PL 패턴 검증"""
-        try:
-            return {
-                "full_pattern": str(pattern.get("full_pattern", "")).strip(),
-                "panel_name": str(pattern.get("panel_name", "")).strip(),
-                "year": str(pattern.get("year", "")).strip(),
-                "agenda_number": str(pattern.get("agenda_number", "")).strip(),
-                "round_version": pattern.get("round_version"),
-                "organization_code": str(pattern.get("organization_code", "")).strip(),
-                "sequence": pattern.get("sequence"),
-                "organization_name": str(pattern.get("organization_name", "")).strip(),
-                "reply_version": pattern.get("reply_version")
-            }
-        except:
-            return None
-
-    async def _process_chunk_concurrent(self, contents: List[str]) -> List[List[str]]:
-        """청크를 동시에 처리"""
+        # 세마포어로 동시 요청 수 제한
         semaphore = asyncio.Semaphore(self.concurrent_requests)
         
-        async def process_with_semaphore(content: str) -> List[str]:
+        async def process_with_semaphore(mail_data: Any) -> List[str]:
             async with semaphore:
                 try:
-                    keywords, _ = await self._call_openrouter_api(content)
-                    return keywords if keywords else self._fallback_keyword_extraction(content)
+                    # 구조화된 응답 사용 여부에 따라 다른 함수 호출
+                    if self.use_structured_response:
+                        if isinstance(mail_data, dict):
+                            content = mail_data.get('content', '')
+                            subject = mail_data.get('subject', '')
+                        else:
+                            content = str(mail_data)
+                            subject = ''
+                        
+                        result = await self._call_openrouter_structured_api(content, subject)
+                        if result and 'keywords' in result:
+                            keywords = result['keywords']
+                            # 프롬프트 로깅
+                            if 'prompt_used' in result:
+                                self.logger.debug(f"사용된 프롬프트 길이: {len(result['prompt_used'])} 문자")
+                            return keywords
+                    else:
+                        content = mail_data.get('content', '') if isinstance(mail_data, dict) else str(mail_data)
+                        keywords, _ = await self._call_openrouter_api(content)
+                        if keywords:
+                            return keywords
+                    
+                    content = mail_data.get('content', '') if isinstance(mail_data, dict) else str(mail_data)
+                    return self._fallback_keyword_extraction(content)
                 except Exception as e:
                     self.logger.warning(f"개별 API 호출 실패: {str(e)}")
+                    content = mail_data.get('content', '') if isinstance(mail_data, dict) else str(mail_data)
                     return self._fallback_keyword_extraction(content)
         
-        tasks = [process_with_semaphore(content) for content in contents]
+        # 모든 태스크를 동시에 실행
+        tasks = [process_with_semaphore(mail_data) for mail_data in mail_contents]
         
+        # 타임아웃 설정
         try:
             results = await asyncio.wait_for(
                 asyncio.gather(*tasks, return_exceptions=True),
@@ -417,32 +195,68 @@ Rules:
             )
         except asyncio.TimeoutError:
             self.logger.error(f"배치 처리 타임아웃 ({self.batch_timeout}초)")
-            results = [self._fallback_keyword_extraction(content) for content in contents]
+            # 타임아웃 시 fallback 사용
+            results = []
+            for mail_data in mail_contents:
+                content = mail_data.get('content', '') if isinstance(mail_data, dict) else str(mail_data)
+                results.append(self._fallback_keyword_extraction(content))
         
+        # 예외 처리
         processed_results = []
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 self.logger.warning(f"태스크 {i} 실패: {str(result)}")
-                processed_results.append(self._fallback_keyword_extraction(contents[i]))
+                content = mail_contents[i].get('content', '') if isinstance(mail_contents[i], dict) else str(mail_contents[i])
+                processed_results.append(self._fallback_keyword_extraction(content))
             else:
                 processed_results.append(result)
         
         return processed_results
 
-    async def extract_keywords(self, clean_content: str) -> List[str]:
-        """단일 텍스트에서 키워드 추출 (기존 메서드 유지)"""
+    async def extract_keywords(self, clean_content: str, subject: str = "") -> List[str]:
+        """
+        단일 텍스트에서 키워드 추출 (기존 메서드 유지)
+        
+        Args:
+            clean_content: 이미 정제된 메일 내용
+            subject: 메일 제목 (선택사항)
+            
+        Returns:
+            추출된 키워드 리스트
+        """
         start_time = time.time()
 
         try:
+            # 너무 짧은 텍스트는 빈 리스트 반환
             if len(clean_content.strip()) < 10:
                 return []
 
+            # 구조화된 응답 사용
+            if self.use_structured_response and self.api_key:
+                result = await self._call_openrouter_structured_api(clean_content, subject)
+                if result and 'keywords' in result:
+                    keywords = result['keywords']
+                    # 프롬프트 로깅
+                    if 'prompt_used' in result:
+                        self.logger.debug(f"사용된 프롬프트 길이: {len(result['prompt_used'])} 문자")
+                    self.logger.debug(f"키워드 추출 성공: {keywords}")
+                    
+                    # 추가 정보도 로깅
+                    if 'mail_type' in result:
+                        self.logger.debug(f"메일 타입: {result['mail_type']}")
+                    if 'has_deadline' in result:
+                        self.logger.debug(f"마감일 여부: {result['has_deadline']}")
+                    
+                    return keywords
+
+            # 기존 API 호출
             if self.api_key:
                 keywords, token_info = await self._call_openrouter_api(clean_content)
                 if keywords:
                     self.logger.debug(f"키워드 추출 성공: {keywords}")
                     return keywords
 
+            # Fallback 키워드 추출
             keywords = self._fallback_keyword_extraction(clean_content)
             return keywords
 
@@ -457,13 +271,218 @@ Rules:
             self.logger.debug("새로운 키워드 서비스 세션 생성")
         return self._session
 
+    async def _call_openrouter_structured_api(self, content: str, subject: str = "") -> Optional[Dict]:
+        """
+        OpenRouter API 호출 (구조화된 응답)
+        
+        Args:
+            content: 메일 본문
+            subject: 메일 제목 (선택사항)
+            
+        Returns:
+            {'keywords': [...], 'mail_type': ..., 'has_deadline': ..., 'prompt_used': ...}
+        """
+        if not self.api_key:
+            self.logger.error("OpenRouter API 키가 설정되지 않음")
+            return None
+
+        # 텍스트 길이 제한
+        limited_content = content[:2000] if len(content) > 2000 else content
+        
+        # 제공된 프롬프트 사용
+        system_prompt = """You are an email analysis expert. Extract information from emails and return ONLY valid JSON."""
+
+        user_prompt = f"""Extract the following information and return ONLY valid JSON:
+{{
+  "summary": "Brief summary of the email content (1-2 sentences)",
+  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
+  "has_deadline": true or false,
+  "mail_type": "REQUEST" or "RESPONSE" or "NOTIFICATION" or "COMPLETED" or "OTHER",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "pl_patterns": [
+    {{
+      "full_pattern": "Complete pattern like PL25003_ILa",
+      "panel_name": "Panel code (e.g., PL)",
+      "year": "2-digit year (e.g., 25)",
+      "agenda_number": "3-digit number (e.g., 003)",
+      "round_version": "Round letter or null (e.g., null, a, b, c)",
+      "organization_code": "Organization code (e.g., IL)",
+      "sequence": "Sequence letter or null (e.g., a, b, c)",
+      "organization_name": "Full organization name",
+      "reply_version": "Reply version or null (e.g., null, a, b, c)"
+    }}
+  ]
+}}
+Rules:
+1. Extract up to 5 most relevant keywords
+2. For pl_patterns:
+   - Look for patterns like: PL25003_ILa, MSC108/3/1, MEPC81/INF.23
+   - Extract PL patterns from the email's Subject line
+3. If no patterns found, return empty array for pl_patterns
+4. Email chain handling:
+   - ONLY analyze the MOST RECENT message (before any "From:", "Sent:", "Subject:" headers)
+   - Ignore quoted or forwarded content below the main message
+5. Parse deadlines carefully:
+   - ONLY consider deadlines mentioned in the current sender's message
+   - If email is addressed to "Chair" or "Panel Chair", do NOT treat dates as deadlines
+   - Only extract deadlines directly requested by the current email sender
+6. Determine mail_type:
+   - REQUEST: asking for action, response, or submission
+   - RESPONSE: replying to a request (e.g., "I prefer option 2", "Here are my comments", "Dear Chair")
+   - NOTIFICATION: informing about events, decisions, or updates
+   - COMPLETED: summarizing or compiling multiple opinions/responses from different parties (e.g., "Following are the compiled comments from members", "Summary of responses received", "Consolidated feedback from all parties")
+   - OTHER: doesn't fit above categories
+7. Return ONLY the JSON object, no additional text
+
+Email Subject: {subject if subject else "No subject"}
+Email Content:
+{limited_content}"""
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            "max_tokens": 500,
+            "temperature": 0.1,
+        }
+
+        # response_format이 지원되는 모델인 경우 추가
+        if "gpt-4" in self.model or "gpt-3.5-turbo" in self.model:
+            payload["response_format"] = {"type": "json_object"}
+
+        try:
+            session = await self._get_session()
+            
+            # 프롬프트 로깅
+            full_prompt = f"{system_prompt}\n\n{user_prompt}"
+            self.logger.info(f"구조화된 API 호출 - 프롬프트 길이: {len(full_prompt)} 문자")
+            
+            # 프롬프트의 일부만 로깅 (전체가 너무 길 수 있음)
+            self.logger.debug(f"프롬프트 시작 부분 (500자):\n{full_prompt[:500]}...")
+
+            async with session.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=30),
+            ) as response:
+
+                if response.status != 200:
+                    response_text = await response.text()
+                    self.logger.error(f"API 오류: {response_text}")
+                    return None
+
+                data = await response.json()
+                
+                # OpenRouter API 원본 응답 로깅
+                self.logger.info("=== OpenRouter API 원본 응답 ===")
+                self.logger.info(json.dumps(data, ensure_ascii=False, indent=2))
+                self.logger.info("=================================")
+
+                # 응답에서 컨텐츠 추출
+                if "choices" in data and data["choices"]:
+                    choice = data["choices"][0]
+                    if "message" in choice and "content" in choice["message"]:
+                        content_response = choice["message"]["content"]
+                        
+                        # API가 반환한 content 내용 로깅
+                        self.logger.info("=== OpenRouter API content 응답 ===")
+                        self.logger.info(content_response)
+                        self.logger.info("===================================")
+                        
+                        # JSON 파싱 시도
+                        try:
+                            result = json.loads(content_response)
+                            
+                            # 응답받은 JSON 전체를 로그로 출력
+                            self.logger.info("=== OpenRouter API 응답 JSON ===")
+                            self.logger.info(json.dumps(result, ensure_ascii=False, indent=2))
+                            self.logger.info("================================")
+                            
+                            # 각 필드별 상세 로깅
+                            self.logger.debug(f"요약: {result.get('summary', 'N/A')}")
+                            self.logger.debug(f"마감일: {result.get('deadline', 'N/A')}")
+                            self.logger.debug(f"마감일 존재: {result.get('has_deadline', False)}")
+                            self.logger.debug(f"메일 타입: {result.get('mail_type', 'N/A')}")
+                            
+                            # PL 패턴 로깅
+                            pl_patterns = result.get('pl_patterns', [])
+                            if pl_patterns:
+                                self.logger.debug(f"PL 패턴 수: {len(pl_patterns)}")
+                                for idx, pattern in enumerate(pl_patterns):
+                                    self.logger.debug(f"  패턴 {idx+1}: {pattern.get('full_pattern', 'N/A')}")
+                            
+                            # 키워드 검증 및 정제
+                            keywords = result.get('keywords', [])
+                            if isinstance(keywords, list):
+                                # 키워드 개수 제한
+                                keywords = keywords[:self.max_keywords]
+                                # 빈 문자열 제거
+                                keywords = [k.strip() for k in keywords if k and k.strip()]
+                                result['keywords'] = keywords
+                                self.logger.debug(f"추출된 키워드: {keywords}")
+                            else:
+                                result['keywords'] = []
+                                self.logger.warning("키워드가 리스트 형식이 아님")
+                            
+                            # 사용된 프롬프트 추가 (전체 대신 길이만)
+                            result['prompt_used'] = full_prompt
+                            
+                            # 토큰 사용량 정보 추가
+                            if "usage" in data:
+                                result['token_usage'] = data["usage"]
+                                self.logger.info(
+                                    f"토큰 사용량 - "
+                                    f"입력: {data['usage'].get('prompt_tokens', 0)}, "
+                                    f"출력: {data['usage'].get('completion_tokens', 0)}, "
+                                    f"총합: {data['usage'].get('total_tokens', 0)}"
+                                )
+                            
+                            self.logger.info(
+                                f"구조화된 응답 처리 완료: "
+                                f"키워드 {len(keywords)}개, "
+                                f"메일타입: {result.get('mail_type', 'UNKNOWN')}, "
+                                f"마감일: {result.get('has_deadline', False)}"
+                            )
+                            
+                            return result
+                            
+                        except json.JSONDecodeError as e:
+                            self.logger.warning(f"JSON 파싱 실패: {str(e)}")
+                            self.logger.debug(f"응답 내용: {content_response[:200]}...")
+                            # JSON 파싱 실패 시 기존 방식으로 파싱
+                            keywords = self._parse_keywords(content_response)
+                            return {
+                                'keywords': keywords[:self.max_keywords],
+                                'prompt_used': full_prompt
+                            }
+
+                return None
+
+        except aiohttp.ClientError as e:
+            self.logger.error(f"OpenRouter API 네트워크 오류: {str(e)}")
+            return None
+        except Exception as e:
+            self.logger.error(f"OpenRouter 구조화된 API 호출 실패: {str(e)}")
+            return None
+
     async def _call_openrouter_api(self, text: str) -> Tuple[List[str], dict]:
-        """OpenRouter API 호출 (기본 키워드 추출)"""
+        """OpenRouter API 호출 (기존 방식)"""
         if not self.api_key:
             self.logger.error("OpenRouter API 키가 설정되지 않음")
             return [], {}
 
+        # 텍스트 길이 제한
         limited_text = text[:1000] if len(text) > 1000 else text
+
+        # 간단한 프롬프트
         prompt = f"Extract {self.max_keywords} keywords from this email: {limited_text}\n\nKeywords:"
 
         headers = {
@@ -502,6 +521,7 @@ Rules:
 
                 data = await response.json()
 
+                # 토큰 사용량 정보 추출
                 if "usage" in data:
                     usage = data["usage"]
                     token_info.update({
@@ -510,6 +530,7 @@ Rules:
                         "total_tokens": usage.get("total_tokens", 0),
                     })
 
+                # 응답에서 컨텐츠 추출
                 if "choices" in data and data["choices"]:
                     choice = data["choices"][0]
                     if "message" in choice and "content" in choice["message"]:
@@ -529,9 +550,6 @@ Rules:
 
     def _fallback_keyword_extraction(self, text: str) -> List[str]:
         """Fallback 키워드 추출"""
-        # PL 패턴 추출
-        pl_patterns = re.findall(r'[A-Z]{2,}\d{2,}(?:/\d+)?(?:[/_][A-Z]+\d*)?', text)
-        
         # 한국어 단어 추출 (2글자 이상)
         korean_words = re.findall(r"[가-힣]{2,}", text)
 
@@ -542,7 +560,7 @@ Rules:
         identifiers = re.findall(r"[A-Z]{2,}\d+|[A-Z]+-\d+|\d{3,}", text)
 
         # 모든 단어 합치기
-        all_words = korean_words + english_words + identifiers + pl_patterns
+        all_words = korean_words + english_words + identifiers
 
         # 빈도수 기반 상위 키워드 선택
         word_counts = Counter(all_words)
@@ -596,24 +614,29 @@ Rules:
             "batch_timeout": self.batch_timeout,
             "api_enabled": bool(self.api_key),
             "model": self.model if self.api_key else "fallback",
-            "structured_extraction": self.structured_extraction
+            "use_structured_response": self.use_structured_response
         }
 
     def __del__(self):
         """소멸자 - 세션 정리 시도 (최후의 수단)"""
         if hasattr(self, '_session') and self._session and not self._session.closed:
             try:
+                # 동기적으로 세션 정리 시도
                 import asyncio
                 import warnings
                 
+                # 경고 무시 (Python 종료 시 발생하는 경고들)
                 with warnings.catch_warnings():
                     warnings.simplefilter("ignore")
                     
+                    # 이벤트 루프가 실행 중인지 확인
                     try:
                         loop = asyncio.get_running_loop()
                         if loop and not loop.is_closed():
+                            # 이미 실행 중인 루프에서는 새 태스크 생성하지 않음
                             pass
                     except RuntimeError:
+                        # 실행 중인 루프가 없는 경우
                         try:
                             loop = asyncio.new_event_loop()
                             asyncio.set_event_loop(loop)
@@ -622,4 +645,4 @@ Rules:
                         except:
                             pass
             except:
-                pass
+                pass  # 소멸자에서는 모든 예외를 무시
