@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-07-02T16:16:10.334323",
+  "subject": "",
+  "body_content": "test2 test2",
+  "analysis_result": {
+    "summary": "A brief test message containing only the text 'test2 test2'.",
+    "deadline": null,
+    "has_deadline": false,
+    "mail_type": "OTHER",
+    "keywords": [
+      "test2"
+    ],
+    "keywords_count": 1,
+    "pl_patterns": [],
+    "pl_patterns_count": 0
+  }
+}

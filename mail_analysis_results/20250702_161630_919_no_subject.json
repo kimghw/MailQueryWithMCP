@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-07-02T16:16:30.919916",
+  "subject": "",
+  "body_content": "PL25013_ABa:3rd IACS Safe Digital Transformation Panel - Meeting Dates (Fall) (2nd SDTP Meeting, FUA 14) Date: 27 May 2025 To: SDTP Chair To: SDTP Members Subject: PL25013_ABa: Third IACS Safe Digital Transformation Panel - Meeting Dates (Fall)(2nd SDTP Meeting, FUA 14) Dear Chair and Panel members, Reference is made to the Chair email message (PL25013_ILa) dated 14 May 2025. 1.Regarding item 3 of PL25013_ILa, am available to attend on the option 1 dates and on the option 2 dates. Best Regards, Greg Zidiak ABS SDTP member From: IACS SDTP Chair Sent: Wednesday, May 14, 2025 10:50 AM To: ABS SDTP Member ; ; sdtp ; Darko Dominovic ; krpcyber ; LRPC ; nkegcosdi ; prsdtp ; RINA DigitalPanel ; TL Cyber Systems ; DNV, IACS Safe Digital Transformation Panel ; IRS Safe Digital Transformation Panel Cc: ; IACS SDTP Chair Subject: PL25013_ILa:3rd IACS Safe Digital Transformation Panel - Meeting Dates (Fall) (2nd SDTP Meeting, FUA 14) Date: 14 May 2025 TO: IACS SDT Panel Members Subject: PL25013_ILa:3rd IACS Safe Digital Transformation Panel - Meeting Dates (Fall) (2nd SDTP Meeting, FUA 14) Dear SDT Panel Members, 1. Reference is made to the 2nd SDTP Meeting, FUA 14. 1. As discussed, the 3rd IACS Safe Digital Transformation Panel meeting will be held at the ABS Head office, in Houston, Texas, ... Considering the challenges with the issuance of visas, it is essential to agree on the date of the meeting the soonest possible. In this regard, the following alternative dates are proposed: . Option 1 26-28 August 2025 . Option 2 02-04 September 2025 1. Members are kindly requested to confirm their preference on meeting dates by 28 May 2025. With Kind Regards, Angeliki Zisimatou IACS Safe Digital Transformation Panel Chair",
+  "analysis_result": {
+    "summary": "Greg Zidiak from ABS responds to the SDTP Chair confirming availability for both proposed meeting date options (August 26-28 or September 2-4, 2025).",
+    "deadline": null,
+    "has_deadline": false,
+    "mail_type": "RESPONSE",
+    "keywords": [
+      "SDTP",
+      "meeting dates",
+      "availability",
+      "ABS",
+      "panel member"
+    ],
+    "keywords_count": 5,
+    "pl_patterns": [
+      {
+        "full_pattern": "PL25013_ABa",
+        "panel_name": "PL",
+        "year": "25",
+        "agenda_number": "013",
+        "round_version": null,
+        "organization_code": "AB",
+        "sequence": "a",
+        "organization_name": "ABS",
+        "reply_version": "a"
+      }
+    ],
+    "pl_patterns_count": 1
+  }
+}

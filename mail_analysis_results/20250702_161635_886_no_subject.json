@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-07-02T16:16:35.886958",
+  "subject": "",
+  "body_content": "PL25013_TLa:3rd IACS Safe Digital Transformation Panel - Meeting Dates (Fall) (2nd SDTP Meeting, FUA 14) Date: 27 May 2025 To : Panel Chair Cc : Panel Members Subject: PL25013_TLa:3rd IACS Safe Digital Transformation Panel - Meeting Dates (Fall) (2nd SDTP Meeting, FUA 14) Dear Chair and Panel Members, 1. Reference is made to PL25013_ILa. 2. Both dates are suitable for TL. Best Regards. Bekir . TÜRKMEN TL IACS Safe Digital Transformation Panel Member",
+  "analysis_result": {
+    "summary": "TL confirms that both proposed meeting dates for the 3rd IACS Safe Digital Transformation Panel are suitable.",
+    "deadline": null,
+    "has_deadline": false,
+    "mail_type": "RESPONSE",
+    "keywords": [
+      "IACS",
+      "Safe Digital Transformation Panel",
+      "meeting dates",
+      "TL",
+      "suitable"
+    ],
+    "keywords_count": 5,
+    "pl_patterns": [
+      {
+        "full_pattern": "PL25013_TLa",
+        "panel_name": "PL",
+        "year": "25",
+        "agenda_number": "013",
+        "round_version": null,
+        "organization_code": "TL",
+        "sequence": "a",
+        "organization_name": "TL",
+        "reply_version": "a"
+      }
+    ],
+    "pl_patterns_count": 1
+  }
+}

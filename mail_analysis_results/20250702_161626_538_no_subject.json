@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-07-02T16:16:26.538647",
+  "subject": "",
+  "body_content": "PL25008aCCd: IMO MSC 110 5 - Papers 5 15, 5 16, 5 17, 5 18, 5 21 - To Review Date: 28 May 2025 To: SDTP Chair Cc:SDTP Members Subject: PL25008aCCd: IMO MSC 110 5 - Papers 5 15, 5 16, 5 17, 5 18, 5 21 - To Review Dear Chair and Panel Members, 1. Reference is made to PL25008aILf, 2. With regard as item 4, please note the comment from CCS: 5 15 Noted with no specific comments. 5 16 In CG Coordinators report (MSC110 5), the definition of Override , conditions for issuing Interim MASS Certificate and Data Logging principles are three key items remain unsolved and request the committee to take actions. This paper is therefore supported, and MSC110 is suggested to further deliberate these issues based on the proposals in this submission paper. 5 17 Noted with no specific comments. 5 18 Noted with no specific comments. 5 21 Support to incorporate some of the cyber security related terms into CH4 of the draft Code. Whereas for the proposed amendments to CH9.7, it is suggested to keep it in principle and highlevel (as other part of this Chapter), and detailed requirements could be incorporated into CH22. ________________________________",
+  "analysis_result": {
+    "summary": "Panel member providing comments on IMO MSC 110 papers 5/15, 5/16, 5/17, 5/18, and 5/21 with specific feedback from CCS regarding MASS Certificate and cyber security terms.",
+    "deadline": "2025-05-28 00:00:00",
+    "has_deadline": true,
+    "mail_type": "RESPONSE",
+    "keywords": [
+      "IMO",
+      "MSC",
+      "MASS",
+      "Certificate",
+      "cyber security"
+    ],
+    "keywords_count": 5,
+    "pl_patterns": [
+      {
+        "full_pattern": "PL25008aCCd",
+        "panel_name": "PL",
+        "year": "25",
+        "agenda_number": "008",
+        "round_version": "a",
+        "organization_code": "CC",
+        "sequence": "d",
+        "organization_name": "China Classification Society",
+        "reply_version": null
+      }
+    ],
+    "pl_patterns_count": 1
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-07-02T16:16:28.017323",
+  "subject": "",
+  "body_content": "PL25012_ILb Equasis - 25th Anniversary - Panel on Future of Equasis Date: 27 May 2025 TO: SDT Panel Members Subject: PL25012_ILb Equasis - 25th Anniversary - Panel on Future of Equasis Dear SDT Panel Members, 1. Reference is made PL25012_ILa, item 4. 1. Further to item 1: Eight (8) members (CCS, CRS, DNV, IRS, KR, NK, PRS, TL) provided responses to the GPG Chair questions One (1) member (ABS) has bilaterally provided comments No responses could be located for three (3) members (BV, LR, RINA) 1. Members responses were summarized, as shown in the attached spreadsheet and below: What are IACS view on Equasis based on our long-term cooperation? Is this cooperation satisfactory? SDT panel considers its cooperation with Equasis to be satisfactory and constructive, contributing significantly to transparency and trust in the maritime sector. While the overall experience is positive, there is recognition that further enhancements in data scope could be beneficial. What is the benefit for IACS Members as data providers to Equasis? SDT panel considers participation in Equasis as highly beneficial, citing improved transparency, industry credibility, and enhanced maritime safety. Equasis enables efficient data sharing such as quick determination of vessel Class Society, history of PSC deficiencies and detentions, and vessel owner and fleet information which strengthens trust with stakeholders and positions IACS Members as leaders in responsible and transparent maritime oversight. How do you see Equasis evolving in the future? Is there is need for more transparency? SDT panel anticipates that Equasis will continue to evolve into more integrated, interactive, and comprehensive maritime data platform, capable of supporting real-time and holistic information sharing. The panel recognizes the current level of transparency, noting that links to the Record pages of individual Class Societies typically provide the necessary information. The importance of transparency and data quality is widely acknowledged as fundamental to this evolution, and it is expected that Equasis will broaden its data scope to meet the changing needs of the industry. The panel supports the ongoing development of Equasis to further enhance its role in promoting safety, compliance, and informed decision-making within the maritime sector. Is there benefit to link the various types of data in Equasis? SDT panel recognizes clear benefits in linking various types of data within Equasis. Integrating data sources enhances the ability to conduct comprehensive analyses, supports more informed decision-making, and facilitates the identification of trends and patterns relevant to safety, quality, and operational performance. Linking data also improves user efficiency by providing unified platform for accessing diverse information, thereby supporting risk assessment, regulatory compliance, and industry oversight. While the integration of multiple data types presents certain challenges due to the involvement of numerous stakeholders, the overall value to the maritime sector is significant. Can the type of data shared in Equasis can be further enhanced? Such as environmental related green data ? SDT panel supports the further enhancement of data types shared within Equasis, including the integration of environmental or green data such as vessel emissions, fuel consumption, and other sustainability-related metrics, as well as information on ship cyber incidents. From Classification perspective, the inclusion of shipyard hull numbers, Class Notations, and publicly available energy efficiency information would also be valuable. The panel recognizes that expanding the data scope introduces challenges related to data quality, rapid reporting, and the need for common reporting schemes. Ensuring the accuracy, reliability, and verification of all shared data is essential to maintaining the integrity and effectiveness of Equasis as comprehensive maritime information platform. Any ideas for further improvements of Equasis? SDT panel recommends several avenues for further improvement of Equasis, including enhancing interoperability between ship and shore systems to improve stability and cyber resilience, expanding the range of data sources and types such as ship cyber incidents and strengthening data quality verification processes. Additionally, providing summary tables for owner, ship manager, and ISM company data, including total vessel counts and the number of vessels with each Class, would further increase the platform value. These enhancements would offer users more comprehensive, reliable, and secure access to critical safety and quality information, supporting informed decision-making and effective monitoring within the maritime industry. 1. Panel responses in item 4 will be sent to the GPG Chair for his consideration during the panel discussion on the future of Equasis. would like to thank all members for their responses. 1. Members are kindly requested to note as above. With Kind Regards, Angeliki Zisimatou IACS Safe Digital Transformation Panel Chair",
+  "analysis_result": {
+    "summary": "SDT Panel Chair summarizes compiled responses from 8 members regarding IACS cooperation with Equasis for its 25th anniversary panel discussion.",
+    "deadline": null,
+    "has_deadline": false,
+    "mail_type": "COMPLETED",
+    "keywords": [
+      "Equasis",
+      "25th Anniversary",
+      "SDT Panel",
+      "IACS cooperation",
+      "maritime transparency"
+    ],
+    "keywords_count": 5,
+    "pl_patterns": [
+      {
+        "full_pattern": "PL25012_ILb",
+        "panel_name": "PL",
+        "year": "25",
+        "agenda_number": "012",
+        "round_version": null,
+        "organization_code": "IL",
+        "sequence": "b",
+        "organization_name": null,
+        "reply_version": null
+      }
+    ],
+    "pl_patterns_count": 1
+  }
+}

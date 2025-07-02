@@ -8,6 +8,7 @@ import aiohttp
 from collections import Counter
 from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime
+from pathlib import Path
 from infra.core.config import get_config
 from infra.core.logger import get_logger
 from modules.mail_process.mail_processor_schema import KeywordExtractionResponse
@@ -37,11 +38,83 @@ class MailKeywordService:
         # 재사용 가능한 세션
         self._session: Optional[aiohttp.ClientSession] = None
         
+        # 프롬프트 로드
+        self._load_prompts()
+        
         self.logger.info(
             f"키워드 서비스 초기화: batch_size={self.batch_size}, "
             f"concurrent_requests={self.concurrent_requests}, "
             f"structured_response={self.use_structured_response}"
         )
+
+    def _load_prompts(self):
+        """프롬프트 파일 로드"""
+        try:
+            # 현재 파일의 디렉토리를 기준으로 프롬프트 파일 경로 찾기
+            current_dir = Path(__file__).parent.parent
+            prompt_file = current_dir / "prompts" / "structured_extraction_prompt.txt"
+            
+            if prompt_file.exists():
+                content = prompt_file.read_text(encoding='utf-8')
+                
+                # 프롬프트 파싱
+                self.system_prompt = ""
+                self.user_prompt_template = ""
+                
+                lines = content.split('\n')
+                current_section = None
+                buffer = []
+                
+                for line in lines:
+                    if line.startswith('SYSTEM_PROMPT:'):
+                        if current_section and buffer:
+                            self._save_section(current_section, '\n'.join(buffer))
+                        current_section = 'system'
+                        buffer = [line.replace('SYSTEM_PROMPT:', '').strip()]
+                    elif line.startswith('USER_PROMPT_TEMPLATE:'):
+                        if current_section and buffer:
+                            self._save_section(current_section, '\n'.join(buffer))
+                        current_section = 'user'
+                        buffer = [line.replace('USER_PROMPT_TEMPLATE:', '').strip()]
+                    else:
+                        buffer.append(line)
+                
+                # 마지막 섹션 저장
+                if current_section and buffer:
+                    self._save_section(current_section, '\n'.join(buffer))
+                
+                self.logger.info("프롬프트 파일 로드 완료")
+            else:
+                self.logger.warning(f"프롬프트 파일을 찾을 수 없음: {prompt_file}")
+                self._use_default_prompts()
+                
+        except Exception as e:
+            self.logger.error(f"프롬프트 파일 로드 실패: {str(e)}")
+            self._use_default_prompts()
+    
+    def _save_section(self, section: str, content: str):
+        """프롬프트 섹션 저장"""
+        content = content.strip()
+        if section == 'system':
+            self.system_prompt = content
+        elif section == 'user':
+            self.user_prompt_template = content
+    
+    def _use_default_prompts(self):
+        """기본 프롬프트 사용 (파일 로드 실패 시)"""
+        self.system_prompt = "You are an email analysis expert. Extract information from emails and return ONLY valid JSON."
+        self.user_prompt_template = """Extract the following information and return ONLY valid JSON:
+{{
+  "summary": "Brief summary of the email content (1-2 sentences)",
+  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
+  "has_deadline": true or false,
+  "mail_type": "REQUEST" or "RESPONSE" or "NOTIFICATION" or "COMPLETED" or "OTHER",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"]
+}}
+
+Email Subject: {subject}
+Email Content:
+{content}"""
 
     async def __aenter__(self):
         """비동기 컨텍스트 매니저 진입"""
@@ -288,55 +361,13 @@ class MailKeywordService:
 
         # 텍스트 길이 제한
         limited_content = content[:2000] if len(content) > 2000 else content
+        original_content = content  # 전체 내용 보존
         
-        # 제공된 프롬프트 사용
-        system_prompt = """You are an email analysis expert. Extract information from emails and return ONLY valid JSON."""
-
-        user_prompt = f"""Extract the following information and return ONLY valid JSON:
-{{
-  "summary": "Brief summary of the email content (1-2 sentences)",
-  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
-  "has_deadline": true or false,
-  "mail_type": "REQUEST" or "RESPONSE" or "NOTIFICATION" or "COMPLETED" or "OTHER",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "pl_patterns": [
-    {{
-      "full_pattern": "Complete pattern like PL25003_ILa",
-      "panel_name": "Panel code (e.g., PL)",
-      "year": "2-digit year (e.g., 25)",
-      "agenda_number": "3-digit number (e.g., 003)",
-      "round_version": "Round letter or null (e.g., null, a, b, c)",
-      "organization_code": "Organization code (e.g., IL)",
-      "sequence": "Sequence letter or null (e.g., a, b, c)",
-      "organization_name": "Full organization name",
-      "reply_version": "Reply version or null (e.g., null, a, b, c)"
-    }}
-  ]
-}}
-Rules:
-1. Extract up to 5 most relevant keywords
-2. For pl_patterns:
-   - Look for patterns like: PL25003_ILa, MSC108/3/1, MEPC81/INF.23
-   - Extract PL patterns from the email's Subject line
-3. If no patterns found, return empty array for pl_patterns
-4. Email chain handling:
-   - ONLY analyze the MOST RECENT message (before any "From:", "Sent:", "Subject:" headers)
-   - Ignore quoted or forwarded content below the main message
-5. Parse deadlines carefully:
-   - ONLY consider deadlines mentioned in the current sender's message
-   - If email is addressed to "Chair" or "Panel Chair", do NOT treat dates as deadlines
-   - Only extract deadlines directly requested by the current email sender
-6. Determine mail_type:
-   - REQUEST: asking for action, response, or submission
-   - RESPONSE: replying to a request (e.g., "I prefer option 2", "Here are my comments", "Dear Chair")
-   - NOTIFICATION: informing about events, decisions, or updates
-   - COMPLETED: summarizing or compiling multiple opinions/responses from different parties (e.g., "Following are the compiled comments from members", "Summary of responses received", "Consolidated feedback from all parties")
-   - OTHER: doesn't fit above categories
-7. Return ONLY the JSON object, no additional text
-
-Email Subject: {subject if subject else "No subject"}
-Email Content:
-{limited_content}"""
+        # 프롬프트 템플릿에 값 채우기
+        user_prompt = self.user_prompt_template.format(
+            subject=subject if subject else "No subject",
+            content=limited_content
+        )
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -346,7 +377,7 @@ Email Content:
         payload = {
             "model": self.model,
             "messages": [
-                {"role": "system", "content": system_prompt},
+                {"role": "system", "content": self.system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             "max_tokens": 500,
@@ -360,9 +391,9 @@ Email Content:
         try:
             session = await self._get_session()
             
-            # 프롬프트 로깅
-            full_prompt = f"{system_prompt}\n\n{user_prompt}"
-            self.logger.info(f"구조화된 API 호출 - 프롬프트 길이: {len(full_prompt)} 문자")
+            # 프롬프트 로깅 (디버그 레벨로 변경)
+            full_prompt = f"{self.system_prompt}\n\n{user_prompt}"
+            self.logger.debug(f"구조화된 API 호출 - 프롬프트 길이: {len(full_prompt)} 문자")
             
             # 프롬프트의 일부만 로깅 (전체가 너무 길 수 있음)
             self.logger.debug(f"프롬프트 시작 부분 (500자):\n{full_prompt[:500]}...")
@@ -376,15 +407,15 @@ Email Content:
 
                 if response.status != 200:
                     response_text = await response.text()
-                    self.logger.error(f"API 오류: {response_text}")
+                    self.logger.error(f"API 오류: Status {response.status}, Response: {response_text}")
                     return None
 
                 data = await response.json()
                 
-                # OpenRouter API 원본 응답 로깅
-                self.logger.info("=== OpenRouter API 원본 응답 ===")
-                self.logger.info(json.dumps(data, ensure_ascii=False, indent=2))
-                self.logger.info("=================================")
+                # OpenRouter API 원본 응답 로깅 (디버그 레벨로 변경)
+                self.logger.debug("=== OpenRouter API 원본 응답 ===")
+                self.logger.debug(json.dumps(data, ensure_ascii=False, indent=2))
+                self.logger.debug("=================================")
 
                 # 응답에서 컨텐츠 추출
                 if "choices" in data and data["choices"]:
@@ -392,19 +423,24 @@ Email Content:
                     if "message" in choice and "content" in choice["message"]:
                         content_response = choice["message"]["content"]
                         
-                        # API가 반환한 content 내용 로깅
-                        self.logger.info("=== OpenRouter API content 응답 ===")
-                        self.logger.info(content_response)
-                        self.logger.info("===================================")
+                        # content_response가 None이거나 빈 문자열인지 확인
+                        if not content_response:
+                            self.logger.error("API 응답의 content가 비어있음")
+                            return None
+                        
+                        # API가 반환한 content 내용 로깅 (디버그 레벨로 변경)
+                        self.logger.debug("=== OpenRouter API content 응답 ===")
+                        self.logger.debug(content_response)
+                        self.logger.debug("===================================")
                         
                         # JSON 파싱 시도
                         try:
                             result = json.loads(content_response)
                             
-                            # 응답받은 JSON 전체를 로그로 출력
-                            self.logger.info("=== OpenRouter API 응답 JSON ===")
-                            self.logger.info(json.dumps(result, ensure_ascii=False, indent=2))
-                            self.logger.info("================================")
+                            # 응답받은 JSON 전체를 로그로 출력 (디버그 레벨로 변경)
+                            self.logger.debug("=== OpenRouter API 응답 JSON ===")
+                            self.logger.debug(json.dumps(result, ensure_ascii=False, indent=2))
+                            self.logger.debug("================================")
                             
                             # 각 필드별 상세 로깅
                             self.logger.debug(f"요약: {result.get('summary', 'N/A')}")
@@ -438,25 +474,81 @@ Email Content:
                             # 토큰 사용량 정보 추가
                             if "usage" in data:
                                 result['token_usage'] = data["usage"]
-                                self.logger.info(
+                                self.logger.debug(
                                     f"토큰 사용량 - "
                                     f"입력: {data['usage'].get('prompt_tokens', 0)}, "
                                     f"출력: {data['usage'].get('completion_tokens', 0)}, "
                                     f"총합: {data['usage'].get('total_tokens', 0)}"
                                 )
                             
-                            self.logger.info(
-                                f"구조화된 응답 처리 완료: "
-                                f"키워드 {len(keywords)}개, "
-                                f"메일타입: {result.get('mail_type', 'UNKNOWN')}, "
-                                f"마감일: {result.get('has_deadline', False)}"
-                            )
+                            # 결과를 파일로 저장
+                            self._save_analysis_result(result, subject, original_content)
                             
                             return result
                             
                         except json.JSONDecodeError as e:
-                            self.logger.warning(f"JSON 파싱 실패: {str(e)}")
-                            self.logger.debug(f"응답 내용: {content_response[:200]}...")
+                            self.logger.debug(f"첫 번째 JSON 파싱 시도 실패 (정상적인 경우일 수 있음): {str(e)}")
+                            
+                            # content_response가 실제로 존재하는지 확인
+                            if not content_response:
+                                self.logger.error("content_response가 None 또는 빈 문자열")
+                                return {
+                                    'keywords': [],
+                                    'prompt_used': full_prompt
+                                }
+                            
+                            # JSON이 코드 블록으로 감싸져 있는지 확인
+                            if content_response and content_response.strip().startswith('```'):
+                                self.logger.debug("JSON이 코드 블록으로 감싸져 있음, 추출 시도")
+                                self.logger.debug(f"응답 길이: {len(content_response)}")
+                                
+                                # ```json 또는 ``` 제거
+                                lines = content_response.strip().split('\n')
+                                if lines[0].strip() in ['```json', '```']:
+                                    lines = lines[1:]
+                                if lines and lines[-1].strip() == '```':
+                                    lines = lines[:-1]
+                                clean_json = '\n'.join(lines)
+                                
+                                # clean_json이 비어있는지 확인
+                                if not clean_json.strip():
+                                    self.logger.error("코드 블록 제거 후 빈 문자열")
+                                    return {
+                                        'keywords': [],
+                                        'prompt_used': full_prompt
+                                    }
+                                
+                                try:
+                                    result = json.loads(clean_json)
+                                    self.logger.debug("JSON 파싱 성공 (코드 블록 제거 후)")
+                                    
+                                    # 키워드 처리
+                                    keywords = result.get('keywords', [])
+                                    if isinstance(keywords, list):
+                                        keywords = keywords[:self.max_keywords]
+                                        keywords = [k.strip() for k in keywords if k and k.strip()]
+                                        result['keywords'] = keywords
+                                    else:
+                                        result['keywords'] = []
+                                    
+                                    result['prompt_used'] = full_prompt
+                                    
+                                    result['prompt_used'] = full_prompt
+                                    
+                                    # 결과를 파일로 저장
+                                    self._save_analysis_result(result, subject, original_content)
+                                    
+                                    return result
+                                    
+                                except json.JSONDecodeError as e2:
+                                    self.logger.error(f"코드 블록 제거 후에도 JSON 파싱 실패: {str(e2)}")
+                                    self.logger.error(f"정제된 JSON (처음 200자): {repr(clean_json[:200])}")
+                            else:
+                                # 코드 블록이 없는 경우에만 상세 로그 출력
+                                self.logger.warning(f"JSON 파싱 실패 (코드 블록 없음): {str(e)}")
+                                self.logger.warning(f"응답 타입: {type(content_response)}")
+                                self.logger.warning(f"응답 내용 (처음 200자): {repr(content_response[:200]) if content_response else 'None'}...")
+                            
                             # JSON 파싱 실패 시 기존 방식으로 파싱
                             keywords = self._parse_keywords(content_response)
                             return {
@@ -605,6 +697,57 @@ Email Content:
                 cleaned_keywords.append(kw)
 
         return cleaned_keywords
+
+    def _save_analysis_result(self, result: Dict, subject: str, content: str):
+        """분석 결과를 파일로 저장"""
+        try:
+            import os
+            from datetime import datetime
+            
+            # 저장 디렉토리 생성
+            save_dir = Path("mail_analysis_results")
+            save_dir.mkdir(exist_ok=True)
+            
+            # 타임스탬프 생성
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+            
+            # 저장할 데이터 구성
+            save_data = {
+                "timestamp": datetime.now().isoformat(),
+                "subject": subject,
+                "body_content": content,
+                "analysis_result": {
+                    "summary": result.get('summary', ''),
+                    "deadline": result.get('deadline'),
+                    "has_deadline": result.get('has_deadline', False),
+                    "mail_type": result.get('mail_type', 'UNKNOWN'),
+                    "keywords": result.get('keywords', []),
+                    "keywords_count": len(result.get('keywords', [])),
+                    "pl_patterns": result.get('pl_patterns', []),
+                    "pl_patterns_count": len(result.get('pl_patterns', []))
+                }
+            }
+            
+            # 토큰 사용량 정보 추가 (있는 경우)
+            if 'token_usage' in result:
+                save_data['token_usage'] = result['token_usage']
+            
+            # 파일명 생성 (특수문자 제거)
+            safe_subject = "".join(c for c in subject[:50] if c.isalnum() or c in (' ', '-', '_')).strip()
+            if not safe_subject:
+                safe_subject = "no_subject"
+            
+            filename = f"{timestamp}_{safe_subject}.json"
+            filepath = save_dir / filename
+            
+            # JSON 파일로 저장
+            with open(filepath, 'w', encoding='utf-8') as f:
+                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            
+            self.logger.debug(f"분석 결과 저장됨: {filepath}")
+            
+        except Exception as e:
+            self.logger.error(f"분석 결과 저장 실패: {str(e)}")
 
     def get_batch_statistics(self) -> Dict[str, Any]:
         """배치 처리 통계 반환"""

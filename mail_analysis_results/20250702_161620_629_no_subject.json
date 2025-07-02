@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-07-02T16:16:20.629490",
+  "subject": "",
+  "body_content": "Automatic reply: PL25008aKRd: IMO MSC 110 5 - Papers 5 15, 5 16, 5 17, 5 18, 5 21 - To Review Hvala na vašoj poruci. Trenutno nisam uredu. Odgovorit ću na vaš -mail čim budem mogućnosti. Za hitne slučajeve molim vas da kontaktirate . Nikolu Pažanina ( ) ili . Olivera Stanića ( ). Thank you for your email. am currently out of the office. will respond to your message as soon as possible. For urgent matters, please contact Mr. Nikola Pažanin ( ) or Mr. Oliver Stanić ( ).",
+  "analysis_result": {
+    "summary": "Automatic out-of-office reply providing alternative contacts for urgent matters while the recipient is unavailable.",
+    "deadline": null,
+    "has_deadline": false,
+    "mail_type": "NOTIFICATION",
+    "keywords": [
+      "automatic reply",
+      "out of office",
+      "urgent matters",
+      "alternative contacts",
+      "unavailable"
+    ],
+    "keywords_count": 5,
+    "pl_patterns": [
+      {
+        "full_pattern": "PL25008aKRd",
+        "panel_name": "PL",
+        "year": "25",
+        "agenda_number": "008",
+        "round_version": "a",
+        "organization_code": "KR",
+        "sequence": null,
+        "organization_name": "Korea",
+        "reply_version": "d"
+      }
+    ],
+    "pl_patterns_count": 1
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-07-02T16:16:26.842630",
+  "subject": "",
+  "body_content": "RE: PL25013_RIa:3rd IACS Safe Digital Transformation Panel - Meeting Dates (Fall) (2nd SDTP Meeting, FUA 14) Date: 27 May 2025 To: SDTP Chair To: SDTP Members Subject: PL25013_RIa: Third IACS Safe Digital Transformation Panel - Meeting Dates (Fall)(2nd SDTP Meeting, FUA 14) Dear Chair and Panel members, Reference is made to the Chair email message (PL25013_ILa) dated 14 May 2025. 1.Regarding item 3 of PL25013_ILa, RINA is available to attend on the option 2 dates. Best Regards, Luca Carrà RINA SDTP member The information contained in this -mail is intended only for the individual or entity to whom it is addressed. Its contents (including any attachments) are confidential and privileged: if you are not an intended recipient you must not use, disclose, disseminate, copy or print its contents. If you have received this email by mistake please notify us by emailing the sender, and then delete and or destroy the -mail and any copies from your system",
+  "analysis_result": {
+    "summary": "RINA confirms availability for option 2 dates for the Third IACS Safe Digital Transformation Panel meeting in response to Chair's email.",
+    "deadline": null,
+    "has_deadline": false,
+    "mail_type": "RESPONSE",
+    "keywords": [
+      "SDTP",
+      "meeting dates",
+      "availability",
+      "RINA",
+      "option 2"
+    ],
+    "keywords_count": 5,
+    "pl_patterns": [
+      {
+        "full_pattern": "PL25013_RIa",
+        "panel_name": "PL",
+        "year": "25",
+        "agenda_number": "013",
+        "round_version": null,
+        "organization_code": "RI",
+        "sequence": "a",
+        "organization_name": "RINA",
+        "reply_version": null
+      }
+    ],
+    "pl_patterns_count": 1
+  }
+}

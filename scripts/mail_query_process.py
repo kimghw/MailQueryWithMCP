@@ -5,6 +5,7 @@
 
 import sys
 import os
+import sqlite3
 
 # Python 경로에 프로젝트 루트 추가
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -520,9 +521,27 @@ class AllAccountsFullProcessTester:
             logger.debug(f"mail_processor 정리 중 오류 (무시): {e}")
 
 
+def clear_mail_history():
+    """mail_history 테이블 초기화"""
+    db_path = "./data/iacsgraph.db"
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM mail_history;")
+        conn.commit()
+        conn.close()
+        print(f"✅ mail_history 테이블이 초기화되었습니다.")
+    except Exception as e:
+        print(f"❌ mail_history 테이블 초기화 중 오류 발생: {e}")
+
 async def main():
     """메인 실행 함수"""
     import sys
+    
+    # mail_history 테이블 자동 초기화
+    print("🗑️  mail_history 테이블 초기화 중...")
+    clear_mail_history()
+    print()
     
     # 명령행 인수 처리
     days_back = 60

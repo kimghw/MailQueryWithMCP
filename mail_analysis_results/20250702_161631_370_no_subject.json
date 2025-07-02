@@ -1,0 +1,33 @@
+{
+  "timestamp": "2025-07-02T16:16:31.370061",
+  "subject": "",
+  "body_content": "PL25008dILc: IMO MSC 110 5 -IMO MSC 110 5 - Paper 5 13 - IACS Brief Date: 27 May 2025 TO: SDT Panel Members CC: PT EMA01 PM, Mr. Morelos (LR) Attached Files: PL25008aILc - IMO MSC 110 Papers_IACS Position for Brief.xls Subject: PL25008dILc: IMO MSC 110 5 -IMO MSC 110 5 - Paper 5 13 - IACS Brief Dear SDT Panel Members, 1. Reference is made to PL25008aILc, item 4. 1. Further to item 1, the following were received: Three (3) members (CRS, NK, PRS) had no comments on the paper Six (6) members (BV, CCS, DNV, IRS, KR, TL) provided comments, mainly not supporting Japan proposal under paragraphs 4-10, while supporting paragraphs 11-13 No responses could be located for three (3) members (ABS, LR, RINA) 1. Additionally, Survey panel reviewed paragraphs 11-13 of the subject paper. Survey panel had no comments on paragraphs 11, 12 and supported paragraph 13. 1. Considering item 2, members responses were consolidated in the attached spreadsheet, which can also be found in the IACS SharePoint site under the folder PL25008dILc IACS Brief - MASS. IACS position for the brief to ARIMO can be found under column . 1. Members are invited to review the IACS position under column and provide their comments by 02 June 2025. Tacit acceptance applies. Please provide your responses within the spreadsheet at the IACS SharePoint site, under columns through (kindly utilize the column corresponding to your organization). Apologies for the tight timeline. With Kind Regards, Angeliki Zisimatou IACS Safe Digital Transformation Panel Chair",
+  "analysis_result": {
+    "summary": "IACS panel chair consolidates member responses on IMO MSC 110 Paper 5-13 and requests final review of IACS position by June 2, 2025.",
+    "deadline": "2025-06-02 23:59:59",
+    "has_deadline": true,
+    "mail_type": "REQUEST",
+    "keywords": [
+      "IMO",
+      "MSC",
+      "IACS",
+      "position",
+      "review"
+    ],
+    "keywords_count": 5,
+    "pl_patterns": [
+      {
+        "full_pattern": "PL25008dILc",
+        "panel_name": "PL",
+        "year": "25",
+        "agenda_number": "008",
+        "round_version": "d",
+        "organization_code": "IL",
+        "sequence": "c",
+        "organization_name": "IACS",
+        "reply_version": null
+      }
+    ],
+    "pl_patterns_count": 1
+  }
+}
