@@ -6,8 +6,9 @@ USER_PROMPT_TEMPLATE: Extract the following information and return ONLY valid JS
   "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
   "has_deadline": true or false,
   "mail_type": "REQUEST" or "RESPONSE" or "NOTIFICATION" or "COMPLETED" or "OTHER",
+  "decision_status" : "created" or "comment" or "consolidated", "review", "decision"
   "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "pl_patterns": [
+  "agenda_id": [
     {{
       "full_pattern": "Complete pattern like PL25003_ILa",
       "panel_name": "Panel code (e.g., PL)",
@@ -16,32 +17,60 @@ USER_PROMPT_TEMPLATE: Extract the following information and return ONLY valid JS
       "round_version": "Round letter or null (e.g., null, a, b, c)",
       "organization_code": "Organization code (e.g., IL)",
       "sequence": "Sequence letter or null (e.g., a, b, c)",
-      "organization_name": "Full organization name",
       "reply_version": "Reply version or null (e.g., null, a, b, c)"
     }}
   ]
 }}
 Rules:
-1. Extract up to 5 most relevant keywords
-2. For pl_patterns:
-   - Look for patterns like: PL25003_ILa, MSC108/3/1, MEPC81/INF.23
+0. SDTP Panel Structure and Decision-Making Process
+   - The SDTP panel consists of 12 IACS members - ABS, BV, CCS, CRS, DNV, IRS, KR, NK, PRS, RINA, IL, and TL - with IL serving as the panel chair. In this structure, the IL chair creates and distributes agendas to all panel members, who then reply with their opinions to both the chair and other members.
+   - The panel follows a systematic decision-making process with five distinct steps. First, the chair creates an agenda for discussion. Second, panel members provide their comments and feedback on the agenda items. Third, the chair consolidates all member responses into a unified document. Fourth, members review the consolidated positions to ensure accuracy and agreement. Finally, the chair makes the final decision based on the member consensus achieved through this process.
+   - This structured approach ensures that all members have an opportunity to contribute their expertise while maintaining an efficient and transparent decision-making framework within the IACS Safe Digital Transformation Panel.
+1. Extract up to 5 most relevant topic_categories
+2. For agenda_id_patterns:
+   - Look for patterns like: PL25003_ILa, PL25004aILb
    - Extract PL patterns from the email's Subject line
 3. If no patterns found, return empty array for pl_patterns
 4. Email chain handling:
-   - ONLY analyze the MOST RECENT message (before any "From:", "Sent:", "Subject:" headers)
    - Ignore quoted or forwarded content below the main message
 5. Parse deadlines carefully:
    - ONLY consider deadlines mentioned in the current sender's message
    - If email is addressed to "Chair" or "Panel Chair", do NOT treat dates as deadlines
    - Only extract deadlines directly requested by the current email sender
 6. Determine mail_type:
-   - REQUEST: asking for action, response, or submission
-   - RESPONSE: replying to a request (e.g., "I prefer option 2", "Here are my comments", "Dear Chair")
-   - NOTIFICATION: informing about events, decisions, or updates
-   - COMPLETED: summarizing or compiling multiple opinions/responses from different parties (e.g., "Following are the compiled comments from members", "Summary of responses received", "Consolidated feedback from all parties")
-   - OTHER: doesn't fit above categories
+   - REQUEST: Asking for action, response, or submission
+   --Keywords: "kindly requested to", "please provide", "members are invited to", "provide your comments by", "review and provide"
+   --Examples: Requests for document review, feedback submission, preference indication, nominations
+
+   - RESPONSE: Replying to a request or providing individual feedback
+   -- Keywords: "Reference is made to", "Regarding item", "please note the comment from", "has no comments", "supports"
+   -- Examples: Individual member responses, single organization feedback, preference statements
+   - NOTIFICATION: Informing about events, decisions, or updates
+
+   -- Keywords: "kindly note", "please be advised", "for your information", "attached herein", "will be forwarded"
+   -- Examples: Meeting announcements, document distributions, status updates, final decisions
+
+   - COMPLETED: Summarizing or compiling multiple responses/actions
+
+   -- Keywords: "members responded as follows", "responses were consolidated", "following were received", "responses were summarized", "Further to item 1"
+   -- Characteristics: Contains aggregated feedback from multiple members (e.g., "Three (3) members... Two (2) members...")
+      Shows voting results or consensus
+      Presents consolidated positions or compiled comments
+      Often includes phrases like "No responses could be located for X members"
+
+     - OTHER: Doesn't fit above categories
+     --Examples: Out-of-office replies, system messages, acknowledgments without specific content
+     emails typically show the Chair/coordinator role in gathering and summarizing member inputs
+
 7. Return ONLY the JSON object, no additional text
 
 Email Subject: {subject}
 Email Content:
 {content}
+
+note
+Key Differentiators:
+
+REQUEST vs NOTIFICATION: Requests have clear deadlines and action items; Notifications are informational only
+RESPONSE vs COMPLETED: Response is from single entity; Completed aggregates multiple responses
+COMPLETED emails typically show the Chair/coordinator role in gathering and summarizing member inputs

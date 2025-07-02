@@ -449,10 +449,10 @@ Email Content:
                             self.logger.debug(f"메일 타입: {result.get('mail_type', 'N/A')}")
                             
                             # PL 패턴 로깅
-                            pl_patterns = result.get('pl_patterns', [])
-                            if pl_patterns:
-                                self.logger.debug(f"PL 패턴 수: {len(pl_patterns)}")
-                                for idx, pattern in enumerate(pl_patterns):
+                            agenda_id = result.get('agenda_id', [])
+                            if agenda_id:
+                                self.logger.debug(f"PL 패턴 수: {len(agenda_id)}")
+                                for idx, pattern in enumerate(agenda_id):
                                     self.logger.debug(f"  패턴 {idx+1}: {pattern.get('full_pattern', 'N/A')}")
                             
                             # 키워드 검증 및 정제
@@ -701,12 +701,12 @@ Email Content:
     def _save_analysis_result(self, result: Dict, subject: str, content: str):
         """분석 결과를 파일로 저장"""
         try:
-            import os
             from datetime import datetime
+            import fcntl  # 파일 잠금을 위해 추가
             
-            # 저장 디렉토리 생성
-            save_dir = Path("mail_analysis_results")
-            save_dir.mkdir(exist_ok=True)
+            # 저장 디렉토리 생성 (변경된 경로)
+            save_dir = Path("data/mail_analysis_results")
+            save_dir.mkdir(parents=True, exist_ok=True)
             
             # 타임스탬프 생성
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
@@ -723,8 +723,8 @@ Email Content:
                     "mail_type": result.get('mail_type', 'UNKNOWN'),
                     "keywords": result.get('keywords', []),
                     "keywords_count": len(result.get('keywords', [])),
-                    "pl_patterns": result.get('pl_patterns', []),
-                    "pl_patterns_count": len(result.get('pl_patterns', []))
+                    "agenda_id": result.get('agenda_id', []),
+                    "agenda_id_count": len(result.get('agenda_id', []))
                 }
             }
             
@@ -732,17 +732,24 @@ Email Content:
             if 'token_usage' in result:
                 save_data['token_usage'] = result['token_usage']
             
-            # 파일명 생성 (특수문자 제거)
-            safe_subject = "".join(c for c in subject[:50] if c.isalnum() or c in (' ', '-', '_')).strip()
-            if not safe_subject:
-                safe_subject = "no_subject"
-            
-            filename = f"{timestamp}_{safe_subject}.json"
+            # 오늘 날짜로 파일명 생성 (하나의 파일에 누적)
+            today = datetime.now().strftime("%Y%m%d")
+            filename = f"mail_analysis_results_{today}.jsonl"
             filepath = save_dir / filename
             
-            # JSON 파일로 저장
-            with open(filepath, 'w', encoding='utf-8') as f:
-                json.dump(save_data, f, ensure_ascii=False, indent=2)
+            # JSONL 파일에 추가 (파일 잠금 사용)
+            with open(filepath, 'a', encoding='utf-8') as f:
+                try:
+                    # 파일 잠금 획득
+                    fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                    
+                    # JSONL 형식으로 저장 (한 줄에 하나의 JSON)
+                    json.dump(save_data, f, ensure_ascii=False)
+                    f.write('\n')
+                    
+                finally:
+                    # 파일 잠금 해제
+                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
             
             self.logger.debug(f"분석 결과 저장됨: {filepath}")
             
