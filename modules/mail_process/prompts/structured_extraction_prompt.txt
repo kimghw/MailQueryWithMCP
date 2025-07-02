@@ -1,0 +1,52 @@
+Analyze the following email and extract structured information in JSON format.
+
+Subject: {subject}
+Content: {content}
+
+Extract the following information and return ONLY valid JSON:
+{
+  "summary": "Brief summary of the email content (1-2 sentences)",
+  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
+  "has_deadline": true or false,
+  "response_required": "MANDATORY" or "OPTIONAL" or "NONE",
+  "mail_type": "REQUEST" or "RESPONSE" or "NOTIFICATION" or "COMPLETED" or "OTHER",
+  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
+  "pl_patterns": [
+    {
+      "full_pattern": "Complete pattern like PL25003_ILa",
+      "panel_name": "Panel code (e.g., PL)",
+      "year": "2-digit year (e.g., 25)",
+      "agenda_number": "3-digit number (e.g., 003)",
+      "round_version": "Round letter or null (e.g., null, a, b, c)",
+      "organization_code": "Organization code (e.g., IL)",
+      "sequence": "Sequence letter or null (e.g., a, b, c)",
+      "organization_name": "Full organization name",
+      "reply_version": "Reply version or null (e.g., null, a, b, c)"
+    }
+  ]
+}
+
+Rules:
+1. Extract up to 5 most relevant keywords
+2. For pl_patterns:
+   - Look for patterns like: PL25003_ILa, MSC108/3/1, MEPC81/INF.23
+   - Extract PL patterns from the email's Subject line
+3. If no patterns found, return empty array for pl_patterns
+4. Email chain handling:
+   - ONLY analyze the MOST RECENT message (before any "From:", "Sent:", "Subject:" headers)
+   - Ignore quoted or forwarded content below the main message
+5. Parse deadlines carefully:
+   - ONLY consider deadlines mentioned in the current sender's message
+   - If email is addressed to "Chair" or "Panel Chair", do NOT treat dates as deadlines
+   - Only extract deadlines directly requested by the current email sender
+6. Determine response_required:
+   - MANDATORY: Must respond (e.g., "please provide", "members shall", "response required")
+   - OPTIONAL: Response is voluntary (e.g., "tacit acceptance applies", "if you have comments", "comments welcome", "no response means agreement")
+   - NONE: No response expected (notifications, FYI emails)
+7. Determine mail_type:
+   - REQUEST: asking for action, response, or submission
+   - RESPONSE: replying to a request (e.g., "I prefer option 2", "Here are my comments", "Dear Chair")
+   - NOTIFICATION: informing about events, decisions, or updates
+   - COMPLETED: summarizing/compiling multiple opinions AND may request final review (e.g., "consolidated responses", "summary received from members", "compilation of feedback")
+   - OTHER: doesn't fit above categories
+8. Return ONLY the JSON object, no additional text
