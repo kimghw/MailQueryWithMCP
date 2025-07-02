@@ -1,18 +1,19 @@
-"""키워드 추출 서비스"""
+"""키워드 추출 서비스 (배치 처리 지원)"""
 
 import re
 import time
 import json
+import asyncio
 import aiohttp
 from collections import Counter
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
 from infra.core.config import get_config
 from infra.core.logger import get_logger
 from modules.mail_process.mail_processor_schema import KeywordExtractionResponse
 
 
 class MailKeywordService:
-    """메일 키워드 추출 서비스"""
+    """메일 키워드 추출 서비스 (배치 처리 지원)"""
 
     def __init__(self):
         self.config = get_config()
@@ -24,8 +25,18 @@ class MailKeywordService:
         self.base_url = "https://openrouter.ai/api/v1"
         self.max_keywords = int(getattr(self.config, "max_keywords_per_mail", 5))
 
+        # 배치 처리 설정
+        self.batch_size = int(self.config.get_setting("KEYWORD_EXTRACTION_BATCH_SIZE", "50"))
+        self.concurrent_requests = int(self.config.get_setting("KEYWORD_EXTRACTION_CONCURRENT_REQUESTS", "5"))
+        self.batch_timeout = int(self.config.get_setting("KEYWORD_EXTRACTION_BATCH_TIMEOUT", "60"))
+        
         # 재사용 가능한 세션
         self._session: Optional[aiohttp.ClientSession] = None
+        
+        self.logger.info(
+            f"키워드 서비스 초기화: batch_size={self.batch_size}, "
+            f"concurrent_requests={self.concurrent_requests}"
+        )
 
     async def __aenter__(self):
         """비동기 컨텍스트 매니저 진입"""
@@ -45,9 +56,131 @@ class MailKeywordService:
             self.logger.debug("키워드 서비스 세션 정리됨")
             self._session = None
 
+    async def extract_keywords_batch(self, contents: List[str]) -> List[List[str]]:
+        """
+        여러 텍스트의 키워드를 배치로 추출
+        
+        Args:
+            contents: 텍스트 리스트
+            
+        Returns:
+            각 텍스트별 키워드 리스트
+        """
+        if not contents:
+            return []
+        
+        start_time = time.time()
+        self.logger.info(f"키워드 배치 추출 시작: {len(contents)}개 텍스트")
+        
+        # 너무 짧은 텍스트 사전 필터링
+        valid_indices = []
+        valid_contents = []
+        
+        for i, content in enumerate(contents):
+            if content and len(content.strip()) >= 10:
+                valid_indices.append(i)
+                valid_contents.append(content)
+        
+        # 모든 텍스트가 너무 짧은 경우
+        if not valid_contents:
+            self.logger.warning("모든 텍스트가 너무 짧음")
+            return [[] for _ in contents]
+        
+        # 결과 초기화
+        results = [[] for _ in contents]
+        
+        try:
+            # OpenRouter API 사용 가능한 경우
+            if self.api_key:
+                # 배치를 더 작은 청크로 나누어 처리
+                for chunk_start in range(0, len(valid_contents), self.batch_size):
+                    chunk_end = min(chunk_start + self.batch_size, len(valid_contents))
+                    chunk_contents = valid_contents[chunk_start:chunk_end]
+                    chunk_indices = valid_indices[chunk_start:chunk_end]
+                    
+                    # 동시 처리
+                    chunk_results = await self._process_chunk_concurrent(chunk_contents)
+                    
+                    # 결과 저장
+                    for i, keywords in enumerate(chunk_results):
+                        original_index = chunk_indices[i]
+                        results[original_index] = keywords
+                    
+                    # API 속도 제한 고려
+                    if chunk_end < len(valid_contents):
+                        await asyncio.sleep(0.5)
+                        
+            else:
+                # Fallback: 동기적 처리
+                self.logger.warning("API 키 없음, fallback 사용")
+                for i, content in zip(valid_indices, valid_contents):
+                    results[i] = self._fallback_keyword_extraction(content)
+            
+        except Exception as e:
+            self.logger.error(f"배치 키워드 추출 실패: {str(e)}")
+            # 실패 시 모든 텍스트에 대해 fallback 사용
+            for i, content in zip(valid_indices, valid_contents):
+                if not results[i]:  # 아직 처리되지 않은 경우
+                    results[i] = self._fallback_keyword_extraction(content)
+        
+        elapsed = time.time() - start_time
+        self.logger.info(
+            f"키워드 배치 추출 완료: {len(contents)}개 텍스트, "
+            f"{elapsed:.2f}초 소요"
+        )
+        
+        return results
+
+    async def _process_chunk_concurrent(self, contents: List[str]) -> List[List[str]]:
+        """
+        청크를 동시에 처리
+        
+        Args:
+            contents: 처리할 텍스트 청크
+            
+        Returns:
+            각 텍스트의 키워드 리스트
+        """
+        # 세마포어로 동시 요청 수 제한
+        semaphore = asyncio.Semaphore(self.concurrent_requests)
+        
+        async def process_with_semaphore(content: str) -> List[str]:
+            async with semaphore:
+                try:
+                    keywords, _ = await self._call_openrouter_api(content)
+                    return keywords if keywords else self._fallback_keyword_extraction(content)
+                except Exception as e:
+                    self.logger.warning(f"개별 API 호출 실패: {str(e)}")
+                    return self._fallback_keyword_extraction(content)
+        
+        # 모든 태스크를 동시에 실행
+        tasks = [process_with_semaphore(content) for content in contents]
+        
+        # 타임아웃 설정
+        try:
+            results = await asyncio.wait_for(
+                asyncio.gather(*tasks, return_exceptions=True),
+                timeout=self.batch_timeout
+            )
+        except asyncio.TimeoutError:
+            self.logger.error(f"배치 처리 타임아웃 ({self.batch_timeout}초)")
+            # 타임아웃 시 fallback 사용
+            results = [self._fallback_keyword_extraction(content) for content in contents]
+        
+        # 예외 처리
+        processed_results = []
+        for i, result in enumerate(results):
+            if isinstance(result, Exception):
+                self.logger.warning(f"태스크 {i} 실패: {str(result)}")
+                processed_results.append(self._fallback_keyword_extraction(contents[i]))
+            else:
+                processed_results.append(result)
+        
+        return processed_results
+
     async def extract_keywords(self, clean_content: str) -> List[str]:
         """
-        정제된 내용에서 키워드 추출
+        단일 텍스트에서 키워드 추출 (기존 메서드 유지)
         
         Args:
             clean_content: 이미 정제된 메일 내용
@@ -216,6 +349,16 @@ class MailKeywordService:
                 cleaned_keywords.append(kw)
 
         return cleaned_keywords
+
+    def get_batch_statistics(self) -> Dict[str, Any]:
+        """배치 처리 통계 반환"""
+        return {
+            "batch_size": self.batch_size,
+            "concurrent_requests": self.concurrent_requests,
+            "batch_timeout": self.batch_timeout,
+            "api_enabled": bool(self.api_key),
+            "model": self.model if self.api_key else "fallback"
+        }
 
     def __del__(self):
         """소멸자 - 세션 정리 시도 (최후의 수단)"""

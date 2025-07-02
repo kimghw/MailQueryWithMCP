@@ -182,7 +182,8 @@ class MailProcessorOrchestrator:
                 del event_mail['_processed']
             
             # 중복 필드들 제거
-            fields_to_remove = ['keywords', 'clean_content', 'sent_time', 'processing_status']
+            fields_to_remove = ['keywords', 'clean_content', 'sent_time', 'processing_status', 
+                               'sender_address', 'sender_name']  # ✅ sender 필드도 제거
             for field in fields_to_remove:
                 if field in event_mail:
                     del event_mail[field]
@@ -197,6 +198,8 @@ class MailProcessorOrchestrator:
                 mail['keywords'] = processed_info.get('keywords', [])
                 mail['clean_content'] = processed_info.get('clean_content', '')
                 mail['sent_time'] = processed_info.get('sent_time')
+                mail['sender_address'] = processed_info.get('sender_address', '')  # ✅ 추가
+                mail['sender_name'] = processed_info.get('sender_name', '')      # ✅ 추가
                 mail['processing_status'] = 'SUCCESS'
         
         # 수정된 persist_mails 호출 (이벤트용 데이터 전달)

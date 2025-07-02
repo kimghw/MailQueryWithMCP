@@ -1,4 +1,3 @@
-## 3. utilities/mail_parser.py
 """메일 파싱 유틸리티"""
 
 from typing import Dict, Optional
@@ -57,6 +56,44 @@ class MailParser:
             "has_from_address": bool(mail.get('from_address')),
             "subject": mail.get('subject', '')[:50]
         })
+        
+        return ''
+
+    def extract_sender_name(self, mail: Dict) -> str:
+        """
+        발신자 이름 추출
+        
+        Args:
+            mail: 메일 딕셔너리
+            
+        Returns:
+            발신자 이름 또는 빈 문자열
+        """
+        # 1. from 필드에서 이름 확인
+        from_field = mail.get('from', {})
+        if from_field and isinstance(from_field, dict):
+            email_addr = from_field.get('emailAddress', {})
+            if email_addr and email_addr.get('name'):
+                return email_addr['name']
+        
+        # 2. sender 필드에서 이름 확인
+        sender_field = mail.get('sender', {})
+        if sender_field and isinstance(sender_field, dict):
+            email_addr = sender_field.get('emailAddress', {})
+            if email_addr and email_addr.get('name'):
+                return email_addr['name']
+        
+        # 3. from_address 필드에서 이름 확인
+        from_address = mail.get('from_address', {})
+        if from_address and isinstance(from_address, dict):
+            email_addr = from_address.get('emailAddress', {})
+            if email_addr and email_addr.get('name'):
+                return email_addr['name']
+        
+        # 4. 이름이 없으면 이메일 주소의 로컬 부분 반환
+        sender_address = self.extract_sender_address(mail)
+        if sender_address and '@' in sender_address:
+            return sender_address.split('@')[0]
         
         return ''
 
