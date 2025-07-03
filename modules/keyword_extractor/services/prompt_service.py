@@ -39,27 +39,21 @@ class PromptService:
         
         # structured_extraction_prompt.txt 형식 파싱
         if prompt_type == "structured_extraction_prompt":
+            print(f"Loading structured_extraction_prompt from {file_path}")
+            print(f"File content length: {len(content)}")
+            print(f"First 500 chars: {content[:500]}")
+            
             # SYSTEM_PROMPT 추출
             system_match = re.search(r'## SYSTEM_PROMPT\s*\n(.*?)(?=\n##|\n#|$)', content, re.DOTALL)
             system_prompt = system_match.group(1).strip() if system_match else ""
             
-            # USER_PROMPT_TEMPLATE 추출
-            user_match = re.search(r'## USER_PROMPT_TEMPLATE\s*\n(.*?)$', content, re.DOTALL)
-            user_template_content = user_match.group(1).strip() if user_match else ""
+            # USER_PROMPT_TEMPLATE 추출 - # Rules 섹션 전까지
+            user_match = re.search(r'## USER_PROMPT_TEMPLATE\s*\n(.*?)(?=\n# Rules)', content, re.DOTALL)
+            user_prompt_template = user_match.group(1).strip() if user_match else ""
             
-            # Rules 섹션 추출
-            rules_match = re.search(r'# Rules\s*\n(.*?)(?=## USER_PROMPT_TEMPLATE)', content, re.DOTALL)
-            rules_content = rules_match.group(1).strip() if rules_match else ""
-            
-            # 프롬프트 조합
-            if rules_content and user_template_content:
-                user_prompt_template = f"""Follow these rules to analyze the text:
-
-{rules_content}
-
-{user_template_content}"""
-            else:
-                user_prompt_template = user_template_content or ""
+            print(f"Extracted system_prompt length: {len(system_prompt)}")
+            print(f"Extracted user_prompt_template length: {len(user_prompt_template)}")
+            print(f"user_prompt_template first 200 chars: {user_prompt_template[:200]}")
             
             self.prompts_cache[prompt_type] = {
                 'system_prompt': system_prompt,
@@ -74,9 +68,24 @@ class PromptService:
     
     async def get_prompt_data(self, prompt_type: str) -> Dict[str, Any]:
         """프롬프트 데이터 가져오기"""
-        if prompt_type in self.prompts_cache:
-            return self.prompts_cache[prompt_type].copy()
+        print(f"get_prompt_data called with prompt_type: {prompt_type}")
+        print(f"Available prompts in cache: {list(self.prompts_cache.keys())}")
         
+        # 타입 매핑 처리
+        actual_prompt_type = prompt_type
+        if prompt_type == "structured":
+            actual_prompt_type = "structured_extraction_prompt"
+        elif prompt_type == "simple":
+            actual_prompt_type = "simple_extraction_prompt"
+        
+        if actual_prompt_type in self.prompts_cache:
+            data = self.prompts_cache[actual_prompt_type].copy()
+            print(f"Returning cached data for {actual_prompt_type}")
+            print(f"Cached system_prompt length: {len(data.get('system_prompt', ''))}")
+            print(f"Cached user_prompt_template length: {len(data.get('user_prompt_template', ''))}")
+            return data
+        
+        print(f"Prompt type {prompt_type} not found in cache, returning default")
         # 기본 프롬프트
         return {
             'system_prompt': "You are a keyword extraction expert. Extract the most relevant keywords from the given text.",

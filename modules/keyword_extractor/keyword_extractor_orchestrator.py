@@ -3,7 +3,6 @@
 from typing import Dict, List, Any, Optional
 from infra.core.logger import get_logger
 from .services import ExtractionService, PromptService
-from .utilities import StructuredResponseSaver
 from .keyword_extractor_schema import (
     KeywordExtractionRequest, 
     KeywordExtractionResponse,
@@ -32,7 +31,6 @@ class KeywordExtractorOrchestrator:
         # 서비스 초기화 (의존성 주입 지원)
         self.extraction_service = extraction_service or ExtractionService()
         self.prompt_service = prompt_service or PromptService()
-        self.response_saver = StructuredResponseSaver()
     
     async def __aenter__(self):
         """컨텍스트 매니저 진입"""
@@ -63,7 +61,7 @@ class KeywordExtractorOrchestrator:
             # Phase 2: 프롬프트 준비
             prompt_data = await self._prepare_prompt(request)
             
-            # Phase 3: 키워드 추출
+            # Phase 3: 키워드 추출 (저장은 ExtractionService에서 처리)
             response = await self._extract_keywords(request, prompt_data)
             
             self.logger.debug(f"키워드 추출 완료: {len(response.keywords)}개")
@@ -139,7 +137,7 @@ class KeywordExtractorOrchestrator:
         request: KeywordExtractionRequest,
         prompt_data: Dict[str, Any]
     ) -> KeywordExtractionResponse:
-        """실제 키워드 추출"""
+        """실제 키워드 추출 - 저장 로직 제거"""
         response = await self.extraction_service.extract(
             text=request.text,
             subject=request.subject,
@@ -149,34 +147,7 @@ class KeywordExtractorOrchestrator:
             use_structured_response=request.use_structured_response
         )
         
-        # 구조화된 응답이 있고 mail_type이 있는 경우 저장
-        if (request.use_structured_response and 
-            hasattr(response, 'mail_type') and 
-            response.mail_type):
-            
-            # 구조화된 응답 데이터 구성
-            structured_data = {
-                'keywords': response.keywords,
-                'summary': getattr(response, 'summary', None),
-                'deadline': getattr(response, 'deadline', None),
-                'has_deadline': getattr(response, 'has_deadline', None),
-                'mail_type': getattr(response, 'mail_type', None),
-                'decision_status': getattr(response, 'decision_status', None),
-                'sender_type': getattr(response, 'sender_type', None),
-                'sender_organization': getattr(response, 'sender_organization', None),
-                'agenda_no': getattr(response, 'agenda_no', None),
-                'agenda_info': getattr(response, 'agenda_info', None)
-            }
-            
-            # 저장 실행
-            self.response_saver.save_response(
-                text=request.text,
-                subject=request.subject or "",
-                sent_time=request.sent_time,
-                result=structured_data,
-                model=response.model
-            )
-        
+        # 저장은 ExtractionService에서 자동으로 처리됨
         return response
     
     def _prepare_batch_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
