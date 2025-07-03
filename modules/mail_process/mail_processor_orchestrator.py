@@ -2,12 +2,10 @@
 
 from typing import Dict, List, Any, Optional, Tuple
 from infra.core import get_logger
-from .services import (
-    FilteringService,
-    ProcessingService, 
-    PersistenceService,
-    StatisticsService
-)
+from .services.filtering_service import FilteringService
+from .services.processing_service import ProcessingService
+from .services.persistence_service import PersistenceService
+from .services.statistics_service import StatisticsService
 from .mail_processor_schema import ProcessingStatus
 
 logger = get_logger(__name__)

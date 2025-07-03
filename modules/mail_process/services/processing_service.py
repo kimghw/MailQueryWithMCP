@@ -3,9 +3,8 @@
 from typing import List, Dict, Optional
 from infra.core import get_logger, get_config
 from ..utilities import TextCleaner, MailParser
-# from .keyword_service import MailKeywordService  # 제거
-from keyword_extractor import KeywordExtractorOrchestrator  # 추가
-from keyword_extractor.keyword_extractor_schema import (  # 추가
+from modules.keyword_extractor.keyword_extractor_orchestrator import KeywordExtractorOrchestrator
+from modules.keyword_extractor.keyword_extractor_schema import (
     KeywordExtractionRequest,
     BatchExtractionRequest
 )

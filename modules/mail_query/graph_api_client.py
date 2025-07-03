@@ -10,7 +10,7 @@ from datetime import datetime
 from infra.core.config import get_config
 from infra.core.logger import get_logger
 from infra.core.exceptions import APIConnectionError, TokenExpiredError
-from .mail_query_helpers import (  # 언더스코어 제거됨
+from .mail_query_helpers import (
     parse_graph_mail_item, 
     parse_graph_error_response,
     calculate_retry_delay,
