@@ -298,7 +298,9 @@ Email Content:
         
         Args:
             clean_content: 이미 정제된 메일 내용
+        sent_time: 메일 발송 시간 (선택사항)
             subject: 메일 제목 (선택사항)
+        sent_time: 메일 발송 시간 (선택사항)
             sent_time: 메일 발송 시간 (선택사항)  #
             
         Returns:
@@ -358,6 +360,7 @@ Email Content:
         Args:
             content: 메일 본문
             subject: 메일 제목 (선택사항)
+        sent_time: 메일 발송 시간 (선택사항)
             sent_time: 메일 발송 시간 (선택사항) 
             
         Returns:
@@ -369,6 +372,9 @@ Email Content:
 
         # 텍스트 길이 제한
         limited_content = content[:2000] if len(content) > 2000 else content
+        
+        # 발송 시간 포맷팅
+        sent_time_str = sent_time.isoformat() if sent_time else "Unknown"
         original_content = content  # 전체 내용 보존
         sent_time_str = sent_time.isoformat() if sent_time else "Unknown" 
         
