@@ -399,15 +399,14 @@ Email Content:
         sent_time_str = sent_time.isoformat() if sent_time else "Unknown"
         original_content = content  # 전체 내용 보존
         
-        # 프롬프트 템플릿에 값 채우기
+        # 프롬프트 템플릿에 값 채우기 - format() 대신 replace() 사용
         try:
-            user_prompt = self.user_prompt_template.format(
-                subject=subject if subject else "No subject",
-                content=limited_content,
-                sent_time=sent_time_str
-            )
-        except KeyError as e:
-            self.logger.error(f"프롬프트 템플릿 포맷팅 오류: {str(e)}")
+            user_prompt = self.user_prompt_template
+            user_prompt = user_prompt.replace('{subject}', subject if subject else "No subject")
+            user_prompt = user_prompt.replace('{content}', limited_content)
+            user_prompt = user_prompt.replace('{sent_time}', sent_time_str)
+        except Exception as e:
+            self.logger.error(f"프롬프트 템플릿 처리 오류: {str(e)}")
             # 기본 프롬프트 사용
             user_prompt = f"""Extract keywords from this email and return JSON:
 Subject: {subject}
@@ -480,38 +479,41 @@ Content: {limited_content}"""
                         
                         # JSON 파싱 시도
                         try:
-                            result = json.loads(content_response)
+                            result = self._parse_json_response(content_response)
+                            
+                            # 응답 검증 및 필드 보정
+                            validated_result = self._validate_and_fix_response(result, subject, sent_time_str)
                             
                             # 응답받은 JSON 전체를 로그로 출력 (디버그 레벨로 변경)
-                            self.logger.debug("=== OpenRouter API 응답 JSON ===")
-                            self.logger.debug(json.dumps(result, ensure_ascii=False, indent=2))
+                            self.logger.debug("=== 검증된 API 응답 JSON ===")
+                            self.logger.debug(json.dumps(validated_result, ensure_ascii=False, indent=2))
                             self.logger.debug("================================")
                             
                             # 각 필드별 상세 로깅
-                            self.logger.debug(f"요약: {result.get('summary', 'N/A')}")
-                            self.logger.debug(f"마감일: {result.get('deadline', 'N/A')}")
-                            self.logger.debug(f"마감일 존재: {result.get('has_deadline', False)}")
-                            self.logger.debug(f"메일 타입: {result.get('mail_type', 'N/A')}")
+                            self.logger.debug(f"요약: {validated_result.get('summary', 'N/A')}")
+                            self.logger.debug(f"마감일: {validated_result.get('deadline', 'N/A')}")
+                            self.logger.debug(f"마감일 존재: {validated_result.get('has_deadline', False)}")
+                            self.logger.debug(f"메일 타입: {validated_result.get('mail_type', 'N/A')}")
                             
                             # 키워드 검증 및 정제
-                            keywords = result.get('keywords', [])
+                            keywords = validated_result.get('keywords', [])
                             if isinstance(keywords, list):
                                 # 키워드 개수 제한
                                 keywords = keywords[:self.max_keywords]
                                 # 빈 문자열 제거
                                 keywords = [k.strip() for k in keywords if k and k.strip()]
-                                result['keywords'] = keywords
+                                validated_result['keywords'] = keywords
                                 self.logger.debug(f"추출된 키워드: {keywords}")
                             else:
-                                result['keywords'] = []
+                                validated_result['keywords'] = []
                                 self.logger.warning("키워드가 리스트 형식이 아님")
                             
                             # 사용된 프롬프트 추가 (전체 대신 길이만)
-                            result['prompt_used'] = full_prompt
+                            validated_result['prompt_used'] = full_prompt
                             
                             # 토큰 사용량 정보 추가
                             if "usage" in data:
-                                result['token_usage'] = data["usage"]
+                                validated_result['token_usage'] = data["usage"]
                                 self.logger.debug(
                                     f"토큰 사용량 - "
                                     f"입력: {data['usage'].get('prompt_tokens', 0)}, "
@@ -520,71 +522,12 @@ Content: {limited_content}"""
                                 )
                             
                             # 결과를 파일로 저장
-                            self._save_analysis_result(result, subject, original_content)
+                            self._save_analysis_result(validated_result, subject, original_content)
                             
-                            return result
+                            return validated_result
                             
                         except json.JSONDecodeError as e:
-                            self.logger.debug(f"첫 번째 JSON 파싱 시도 실패 (정상적인 경우일 수 있음): {str(e)}")
-                            
-                            # content_response가 실제로 존재하는지 확인
-                            if not content_response:
-                                self.logger.error("content_response가 None 또는 빈 문자열")
-                                return {
-                                    'keywords': [],
-                                    'prompt_used': full_prompt
-                                }
-                            
-                            # JSON이 코드 블록으로 감싸져 있는지 확인
-                            if content_response and content_response.strip().startswith('```'):
-                                self.logger.debug("JSON이 코드 블록으로 감싸져 있음, 추출 시도")
-                                self.logger.debug(f"응답 길이: {len(content_response)}")
-                                
-                                # ```json 또는 ``` 제거
-                                lines = content_response.strip().split('\n')
-                                if lines[0].strip() in ['```json', '```']:
-                                    lines = lines[1:]
-                                if lines and lines[-1].strip() == '```':
-                                    lines = lines[:-1]
-                                clean_json = '\n'.join(lines)
-                                
-                                # clean_json이 비어있는지 확인
-                                if not clean_json.strip():
-                                    self.logger.error("코드 블록 제거 후 빈 문자열")
-                                    return {
-                                        'keywords': [],
-                                        'prompt_used': full_prompt
-                                    }
-                                
-                                try:
-                                    result = json.loads(clean_json)
-                                    self.logger.debug("JSON 파싱 성공 (코드 블록 제거 후)")
-                                    
-                                    # 키워드 처리
-                                    keywords = result.get('keywords', [])
-                                    if isinstance(keywords, list):
-                                        keywords = keywords[:self.max_keywords]
-                                        keywords = [k.strip() for k in keywords if k and k.strip()]
-                                        result['keywords'] = keywords
-                                    else:
-                                        result['keywords'] = []
-                                    
-                                    result['prompt_used'] = full_prompt
-                                    
-                                    # 결과를 파일로 저장
-                                    self._save_analysis_result(result, subject, original_content)
-                                    
-                                    return result
-                                    
-                                except json.JSONDecodeError as e2:
-                                    self.logger.error(f"코드 블록 제거 후에도 JSON 파싱 실패: {str(e2)}")
-                                    self.logger.error(f"정제된 JSON (처음 200자): {repr(clean_json[:200])}")
-                            else:
-                                # 코드 블록이 없는 경우에만 상세 로그 출력
-                                self.logger.warning(f"JSON 파싱 실패 (코드 블록 없음): {str(e)}")
-                                self.logger.warning(f"응답 타입: {type(content_response)}")
-                                self.logger.warning(f"응답 내용 (처음 200자): {repr(content_response[:200]) if content_response else 'None'}...")
-                            
+                            self.logger.warning(f"JSON 파싱 실패: {str(e)}")
                             # JSON 파싱 실패 시 기존 방식으로 파싱
                             keywords = self._parse_keywords(content_response)
                             return {
@@ -734,6 +677,151 @@ Content: {limited_content}"""
 
         return cleaned_keywords
 
+    def _parse_json_response(self, content_response: str) -> Dict:
+        """JSON 응답 파싱 (코드 블록 처리 포함)"""
+        if not content_response:
+            raise json.JSONDecodeError("Empty response", "", 0)
+        
+        # 첫 번째 시도: 직접 파싱
+        try:
+            return json.loads(content_response)
+        except json.JSONDecodeError:
+            pass
+        
+        # 두 번째 시도: 코드 블록 제거
+        if content_response.strip().startswith('```'):
+            lines = content_response.strip().split('\n')
+            if lines[0].strip() in ['```json', '```']:
+                lines = lines[1:]
+            if lines and lines[-1].strip() == '```':
+                lines = lines[:-1]
+            clean_json = '\n'.join(lines)
+            
+            if clean_json.strip():
+                return json.loads(clean_json)
+        
+        raise json.JSONDecodeError("Failed to parse JSON", content_response, 0)
+
+    def _validate_and_fix_response(self, result: Dict, subject: str, sent_time_str: str) -> Dict:
+        """응답 검증 및 누락된 필드 추가/수정"""
+        
+        # 필수 필드 목록
+        required_fields = {
+            'summary': '',
+            'deadline': None,
+            'has_deadline': False,
+            'mail_type': 'OTHER',
+            'decision_status': 'comment',
+            'keywords': [],
+            'sender_type': 'MEMBER',
+            'sender_organization': None,
+            'send_time': sent_time_str,
+            'agenda_no': None,
+            'agenda_info': {
+                'full_pattern': None,
+                'panel_name': None,
+                'year': None,
+                'round_no': None,
+                'round_version': None,
+                'organization_code': None,
+                'sequence': None,
+                'reply_version': None
+            }
+        }
+        
+        # 검증된 결과 초기화
+        validated_result = {}
+        
+        # 1. 필수 필드 확인 및 기본값 설정
+        for field, default_value in required_fields.items():
+            if field in result:
+                validated_result[field] = result[field]
+            else:
+                validated_result[field] = default_value
+                self.logger.debug(f"누락된 필드 '{field}' 추가 (기본값: {default_value})")
+        
+        # 2. agenda_id를 agenda_no로 변환 (API가 잘못된 필드명 반환 시)
+        if 'agenda_id' in result and 'agenda_no' not in result:
+            # agenda_id가 리스트인 경우 첫 번째 요소 사용
+            if isinstance(result['agenda_id'], list) and result['agenda_id']:
+                validated_result['agenda_no'] = result['agenda_id'][0]
+            elif isinstance(result['agenda_id'], str):
+                validated_result['agenda_no'] = result['agenda_id']
+        
+        # 3. 제목에서 정보 추출하여 누락된 필드 보완
+        if subject:
+            # agenda 패턴 추출 (예: PL25015_ABa)
+            agenda_pattern = self._extract_agenda_pattern(subject)
+            if agenda_pattern:
+                # agenda_no가 없으면 패턴에서 추출
+                if not validated_result['agenda_no']:
+                    validated_result['agenda_no'] = agenda_pattern['base_pattern']
+                
+                # agenda_info가 비어있으면 패턴에서 추출
+                if not validated_result['agenda_info']['full_pattern']:
+                    validated_result['agenda_info'] = agenda_pattern
+                
+                # sender_organization이 없으면 패턴에서 추출
+                if not validated_result['sender_organization'] and agenda_pattern.get('organization_code'):
+                    validated_result['sender_organization'] = agenda_pattern['organization_code']
+        
+        # 4. mail_type 검증 (유효한 값인지 확인)
+        valid_mail_types = ['REQUEST', 'RESPONSE', 'NOTIFICATION', 'COMPLETED', 'OTHER']
+        if validated_result['mail_type'] not in valid_mail_types:
+            validated_result['mail_type'] = 'OTHER'
+        
+        # 5. decision_status 검증
+        valid_decision_statuses = ['created', 'comment', 'consolidated', 'review', 'decision']
+        if validated_result['decision_status'] not in valid_decision_statuses:
+            validated_result['decision_status'] = 'comment'
+        
+        # 6. sender_type 검증
+        valid_sender_types = ['CHAIR', 'MEMBER']
+        if validated_result['sender_type'] not in valid_sender_types:
+            validated_result['sender_type'] = 'MEMBER'
+        
+        # 7. send_time이 "Unknown"인 경우 sent_time_str로 대체
+        if validated_result['send_time'] == 'Unknown':
+            validated_result['send_time'] = sent_time_str
+        
+        # 8. 불필요한 필드 제거 (프롬프트에 없는 필드들)
+        fields_to_remove = ['keywords_count', 'agenda_id_count']
+        for field in fields_to_remove:
+            if field in result:
+                self.logger.debug(f"불필요한 필드 '{field}' 제거")
+        
+        self.logger.debug(f"응답 검증 완료 - 누락된 필드 {len(required_fields) - len([f for f in required_fields if f in result])}개 추가됨")
+        
+        return validated_result
+
+    def _extract_agenda_pattern(self, text: str) -> Optional[Dict]:
+        """텍스트에서 agenda 패턴 추출"""
+        import re
+        
+        # 패턴: PL25015_ABa 형식
+        pattern = r'(PL|JWG-\w+)(\d{2})(\d{3})([a-z]?)(?:_([A-Z]{2,3})([a-z]?)([a-z]?))?'
+        match = re.search(pattern, text)
+        
+        if match:
+            groups = match.groups()
+            base_pattern = f"{groups[0]}{groups[1]}{groups[2]}"
+            if groups[3]:  # round_version이 있으면 추가
+                base_pattern += groups[3]
+            
+            return {
+                'full_pattern': match.group(0),
+                'panel_name': groups[0],
+                'year': groups[1],
+                'round_no': groups[2],
+                'round_version': groups[3] if groups[3] else None,
+                'organization_code': groups[4] if groups[4] else None,
+                'sequence': groups[5] if groups[5] else None,
+                'reply_version': groups[6] if groups[6] else None,
+                'base_pattern': base_pattern  # agenda_no로 사용할 기본 패턴
+            }
+        
+        return None
+
     def _save_analysis_result(self, result: Dict, subject: str, content: str):
         """분석 결과를 파일로 저장"""
         try:
@@ -757,10 +845,14 @@ Content: {limited_content}"""
                     "deadline": result.get('deadline'),
                     "has_deadline": result.get('has_deadline', False),
                     "mail_type": result.get('mail_type', 'UNKNOWN'),
+                    "decision_status": result.get('decision_status', 'unknown'),
                     "keywords": result.get('keywords', []),
                     "keywords_count": len(result.get('keywords', [])),
-                    "agenda_id": result.get('agenda_id', []),
-                    "agenda_id_count": len(result.get('agenda_id', []))
+                    "sender_type": result.get('sender_type', 'UNKNOWN'),
+                    "sender_organization": result.get('sender_organization'),
+                    "send_time": result.get('send_time'),
+                    "agenda_no": result.get('agenda_no'),
+                    "agenda_info": result.get('agenda_info', {})
                 }
             }
             

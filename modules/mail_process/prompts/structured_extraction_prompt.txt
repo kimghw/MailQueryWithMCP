@@ -6,7 +6,7 @@ You are an email analysis expert. Extract information from emails and return ONL
 ## USER_PROMPT_TEMPLATE
 Extract the following information and return ONLY valid JSON:
 ```json
-{
+{{
   "summary": "Brief summary of the email content (1-2 sentences)",
   "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
   "has_deadline": true or false,
@@ -17,7 +17,7 @@ Extract the following information and return ONLY valid JSON:
   "sender_organization": "ABS" or "BV" or "CCS" or "CRS" or "DNV" or "IRS" or "KR" or "NK" or "PRS" or "RINA" or "IL" or "TL" or null,
   "send_time": "YYYY-MM-DD HH:MM:SS format (when email was sent)",
   "agenda_no": "panel_name + year + round_no (e.g., PL25003, PL25003a)",
-  "agenda_info": {
+  "agenda_info": {{
     "full_pattern": "Complete pattern like PL25003_ILa",
     "panel_name": "Panel code (e.g., PL)",
     "year": "2-digit year (e.g., 25)",
@@ -26,9 +26,14 @@ Extract the following information and return ONLY valid JSON:
     "organization_code": "Organization code (e.g., IL)",
     "sequence": "Sequence letter or null (e.g., a, b, c)",
     "reply_version": "Reply version or null (e.g., null, a, b, c)"
-  }
-}
+  }}
+}}
 ```
+
+Email Subject: {subject}
+Email Sent Time: {sent_time}
+Email Content:
+{content}
 
 # Rules
 
@@ -195,7 +200,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
 
 ### Standard Pattern: `PL25008aILa`
 ```json
-{
+{{
   "full_pattern": "PL25008aILa",
   "panel_name": "PL",
   "year": "25",
@@ -204,12 +209,12 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "organization_code": "IL",
   "sequence": "a",
   "reply_version": null
-}
+}}
 ```
 
 ### Special Case Pattern: `PL25008aNKb`
 ```json
-{
+{{
   "full_pattern": "PL25008aNKb",
   "panel_name": "PL",
   "year": "25",
@@ -218,7 +223,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "organization_code": "NK",
   "sequence": null,
   "reply_version": "b"
-}
+}}
 ```
 
 ### Parsing Rules
@@ -234,7 +239,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
 
 ### Required JSON Structure
 ```json
-{
+{{
   "summary": "Brief summary of the email content (1-2 sentences)",
   "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
   "has_deadline": true or false,
@@ -243,8 +248,9 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
   "sender_type": "CHAIR|MEMBER",
   "sender_organization": "Organization code or null",
+  "send_time": "YYYY-MM-DD HH:MM:SS format (when email was sent)",
   "agenda_no": "panel_name + year + round_no (e.g., PL25003, PL25003a)",
-  "agenda_info": {
+  "agenda_info": {{
     "full_pattern": "Complete pattern",
     "panel_name": "Panel code",
     "year": "2-digit year",
@@ -253,8 +259,8 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
     "organization_code": "Organization code",
     "sequence": "Sequence letter or null",
     "reply_version": "Reply version or null"
-  }
-}
+  }}
+}}
 ```
 
 ### Important Notes
