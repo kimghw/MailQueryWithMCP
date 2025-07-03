@@ -3,7 +3,12 @@
 from typing import List, Dict, Optional
 from infra.core import get_logger, get_config
 from ..utilities import TextCleaner, MailParser
-from .keyword_service import MailKeywordService
+# from .keyword_service import MailKeywordService  # 제거
+from keyword_extractor import KeywordExtractorOrchestrator  # 추가
+from keyword_extractor.keyword_extractor_schema import (  # 추가
+    KeywordExtractionRequest,
+    BatchExtractionRequest
+)
 
 logger = get_logger(__name__)
 
@@ -14,7 +19,8 @@ class ProcessingService:
     def __init__(self):
         self.text_cleaner = TextCleaner()
         self.mail_parser = MailParser()
-        self.keyword_service = MailKeywordService()
+        # self.keyword_service = MailKeywordService()  # 제거
+        self.keyword_extractor = KeywordExtractorOrchestrator()  # 추가
         self.config = get_config()
         self.logger = get_logger(__name__)
         
@@ -83,14 +89,22 @@ class ProcessingService:
         
         # 3단계: 키워드 배치 추출
         if mail_data_for_keywords:
-            async with self.keyword_service:
+            async with self.keyword_extractor as extractor:
                 try:
-                    all_keywords = await self.keyword_service.extract_keywords_batch(mail_data_for_keywords)
+                    # BatchExtractionRequest 생성
+                    batch_request = BatchExtractionRequest(
+                        items=mail_data_for_keywords,
+                        batch_size=50,  # 설정에서 가져올 수도 있음
+                        concurrent_requests=5
+                    )
+                    
+                    # 배치 추출 실행
+                    batch_response = await extractor.extract_keywords_batch(batch_request)
                     
                     # 4단계: 결과 병합
                     for i, prepared_mail in enumerate(prepared_mails):
-                        if i < len(all_keywords):
-                            keywords = all_keywords[i]
+                        if i < len(batch_response.results):
+                            keywords = batch_response.results[i]
                             prepared_mail['_processed']['keywords'] = keywords
                             if keywords:
                                 stats['keyword_extracted'] += 1
@@ -112,7 +126,7 @@ class ProcessingService:
         """개별 방식으로 메일 처리 (기존 방식)"""
         processed_mails = []
         
-        async with self.keyword_service:
+        async with self.keyword_extractor as extractor:
             for mail in mails:
                 try:
                     processed_mail = await self._process_single_mail(mail)
@@ -182,17 +196,18 @@ class ProcessingService:
         if not prepared_mail:
             return None
         
-        # 키워드 추출
-        clean_content = prepared_mail['_processed']['clean_content']
-        sent_time = prepared_mail['_processed']['sent_time']
-        subject = prepared_mail['_processed']['refined_mail'].get('subject', '')
-        
-        keywords = await self.keyword_service.extract_keywords(
-            clean_content,
-            subject,
-            sent_time  
+        # 키워드 추출 요청 생성
+        extraction_request = KeywordExtractionRequest(
+            text=prepared_mail['_processed']['clean_content'],
+            subject=prepared_mail['_processed']['refined_mail'].get('subject', ''),
+            sent_time=prepared_mail['_processed']['sent_time'],
+            max_keywords=int(self.config.get_setting("max_keywords_per_mail", "5")),
+            use_structured_response=self.config.get_setting("USE_STRUCTURED_KEYWORD_RESPONSE", "true").lower() == "true"
         )
-        prepared_mail['_processed']['keywords'] = keywords
+        
+        # 키워드 추출 실행
+        response = await self.keyword_extractor.extract_keywords(extraction_request)
+        prepared_mail['_processed']['keywords'] = response.keywords
         
         return prepared_mail
     
@@ -208,6 +223,6 @@ class ProcessingService:
     async def close(self):
         """리소스 정리"""
         try:
-            await self.keyword_service.close()
+            await self.keyword_extractor.close()
         except Exception as e:
-            self.logger.warning(f"키워드 서비스 정리 중 오류: {str(e)}")
+            self.logger.warning(f"키워드 추출기 정리 중 오류: {str(e)}")
