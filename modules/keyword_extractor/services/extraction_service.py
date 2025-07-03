@@ -60,11 +60,22 @@ class ExtractionService:
             # 메서드 호출 확인용 로그 추가
             self.logger.info(f"구조화된 응답 저장 시작 - subject: {subject}")
             
-            # 저장 디렉토리 설정
-            base_dir = Path("/home/kimghw/IACSGRAPH/data/mail_analysis_results")
+            # 프로젝트 루트 기준 상대 경로 사용
+            from pathlib import Path
+            import os
+            
+            # config에서 DATABASE_PATH를 참고하여 data 디렉토리 찾기
+            db_path = self.config.database_path  # ./data/iacsgraph.db
+            data_dir = Path(db_path).parent  # ./data
+            base_dir = data_dir / "mail_analysis_results"
+            
+            # 또는 환경변수로 설정 가능하게
+            # base_dir = Path(os.getenv("MAIL_ANALYSIS_DIR", "./data/mail_analysis_results"))
+            
             base_dir.mkdir(parents=True, exist_ok=True)
             
             # 디렉토리 생성 확인
+            self.logger.info(f"저장 디렉토리: {base_dir.absolute()}")
             self.logger.info(f"저장 디렉토리 존재 여부: {base_dir.exists()}")
             
             # 파일명 생성 (날짜 기반)
@@ -83,7 +94,7 @@ class ExtractionService:
             }
             
             # 저장 직전 로그
-            self.logger.info(f"파일 저장 시도: {filepath}")
+            self.logger.info(f"파일 저장 시도: {filepath.absolute()}")
             
             # JSONL 파일에 추가 모드로 저장
             with open(filepath, 'a', encoding='utf-8') as f:
@@ -91,7 +102,7 @@ class ExtractionService:
                 f.write('\n')
             
             # 저장 성공 로그
-            self.logger.info(f"구조화된 응답 저장 완료: {filepath}")
+            self.logger.info(f"구조화된 응답 저장 완료: {filepath.absolute()}")
             
         except Exception as e:
             self.logger.error(f"구조화된 응답 저장 실패: {str(e)}", exc_info=True)
@@ -287,7 +298,10 @@ class ExtractionService:
         prompt_data: Dict[str, Any]
     ) -> Optional[Dict]:
         """OpenRouter API 호출 (구조화된 응답)"""
+        print(f"=== 구조화된 API 호출 시작 - subject: {subject} ===")
+        
         if not self.api_key:
+            print("API 키가 설정되지 않음")
             return None
 
         # 텍스트 길이 제한
@@ -301,11 +315,21 @@ class ExtractionService:
             system_prompt = prompt_data.get('system_prompt', '')
             user_prompt_template = prompt_data.get('user_prompt_template', '')
             
-            user_prompt = user_prompt_template
-            user_prompt = user_prompt.replace('{subject}', subject if subject else "No subject")
+            print(f"원본 user_prompt_template 길이: {len(user_prompt_template)}")
+            print(f"원본 user_prompt_template 처음 200자: {user_prompt_template[:200]}")
+            
+            # 플레이스홀더 치환
+            user_prompt = user_prompt_template.replace('{subject}', subject if subject else "No subject")
             user_prompt = user_prompt.replace('{content}', limited_content)
             user_prompt = user_prompt.replace('{sent_time}', sent_time_str)
+            
+            # 디버깅을 위한 로그
+            print(f"System prompt length: {len(system_prompt)}")
+            print(f"User prompt length: {len(user_prompt)}")
+            print(f"치환 후 user prompt 처음 500자: {user_prompt[:500]}")
+            
         except Exception as e:
+            print(f"프롬프트 템플릿 처리 오류: {str(e)}")
             self.logger.error(f"프롬프트 템플릿 처리 오류: {str(e)}")
             return None
 
@@ -324,12 +348,14 @@ class ExtractionService:
             "temperature": 0.1,
         }
 
-        # response_format이 지원되는 모델인 경우 추가
-        if "gpt-4" in self.model or "gpt-3.5-turbo" in self.model:
+        # response_format이 지원되는 모델인 경우 추가 (Claude 모델 제외)
+        if ("gpt-4" in self.model or "gpt-3.5-turbo" in self.model) and "anthropic" not in self.model:
             payload["response_format"] = {"type": "json_object"}
 
         try:
             session = await self._get_session()
+            
+            self.logger.debug(f"API 요청 시작 - model: {self.model}")
             
             async with session.post(
                 f"{self.base_url}/chat/completions",
@@ -338,12 +364,15 @@ class ExtractionService:
                 timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
 
+                self.logger.debug(f"API 응답 상태 코드: {response.status}")
+                
                 if response.status != 200:
                     response_text = await response.text()
                     self.logger.error(f"API 오류: Status {response.status}, Response: {response_text}")
                     return None
 
                 data = await response.json()
+                self.logger.debug("API 응답 수신 완료")
                 
                 # 응답에서 컨텐츠 추출
                 if "choices" in data and data["choices"]:
@@ -351,41 +380,49 @@ class ExtractionService:
                     if "message" in choice and "content" in choice["message"]:
                         content_response = choice["message"]["content"]
                         
+                        self.logger.debug(f"응답 컨텐츠 길이: {len(content_response) if content_response else 0}")
+                        self.logger.debug(f"실제 응답 컨텐츠: {content_response[:500]}...")
+                        
                         if not content_response:
+                            self.logger.warning("응답 컨텐츠가 비어있음")
                             return None
                         
                         # JSON 파싱 시도
                         try:
                             result = self._parse_json_response(content_response)
                             
-                            # 디버깅 로그 추가
-                            self.logger.debug(f"Parsed result: {result}")
-                            self.logger.debug(f"Has mail_type: {'mail_type' in result if result else False}")
+                            # 파싱 결과 로깅
+                            self.logger.info(f"JSON 파싱 성공 - keys: {list(result.keys()) if result else 'None'}")
                             
-                            # 토큰 사용량 정보 추가
-                            if "usage" in data:
-                                result['token_usage'] = data["usage"]
-                            
-                            # 구조화된 응답 저장 (API 응답이 있으면 항상 저장)
                             if result:
-                                self._save_structured_response(limited_content, subject, sent_time, result)
+                                # 토큰 사용량 정보 추가
+                                if "usage" in data:
+                                    result['token_usage'] = data["usage"]
+                                
+                                # 구조화된 응답 저장
+                                self._save_structured_response(content, subject, sent_time, result)
+                                
                             else:
-                                self.logger.warning(f"Not saving: result={bool(result)}, has_mail_type={'mail_type' in result if result else False}")
+                                self.logger.warning("파싱된 result가 None 또는 빈 값")
                             
                             return result
                             
-                        except json.JSONDecodeError:
+                        except json.JSONDecodeError as e:
+                            self.logger.error(f"JSON 파싱 실패: {str(e)}")
+                            self.logger.debug(f"파싱 실패한 컨텐츠: {content_response[:200]}...")
                             # JSON 파싱 실패 시 기존 방식으로 파싱
                             keywords = self._parse_keywords(content_response)
                             return {
                                 'keywords': keywords[:max_keywords],
                                 'token_usage': data.get("usage", {})
                             }
+                else:
+                    self.logger.warning("API 응답에 choices가 없음")
 
                 return None
 
         except Exception as e:
-            self.logger.error(f"OpenRouter 구조화된 API 호출 실패: {str(e)}")
+            self.logger.error(f"OpenRouter 구조화된 API 호출 실패: {str(e)}", exc_info=True)
             return None
 
     async def _call_openrouter_api(self, text: str, max_keywords: int) -> Tuple[List[str], dict]:
