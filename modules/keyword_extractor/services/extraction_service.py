@@ -12,7 +12,8 @@ from pathlib import Path
 
 from infra.core.config import get_config
 from infra.core.logger import get_logger
-from ..keyword_extractor_schema import KeywordExtractionResponse, ExtractionMethod
+from modules.keyword_extractor.keyword_extractor_schema import KeywordExtractionResponse, ExtractionMethod
+
 
 
 class ExtractionService:
@@ -53,13 +54,18 @@ class ExtractionService:
         """비동기 컨텍스트 매니저 종료"""
         await self.close()
 
-
     def _save_structured_response(self, text: str, subject: str, sent_time: Optional[datetime], result: Dict[str, Any]) -> None:
         """구조화된 응답을 파일로 저장"""
         try:
+            # 메서드 호출 확인용 로그 추가
+            self.logger.info(f"구조화된 응답 저장 시작 - subject: {subject}")
+            
             # 저장 디렉토리 설정
             base_dir = Path("/home/kimghw/IACSGRAPH/data/mail_analysis_results")
             base_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 디렉토리 생성 확인
+            self.logger.info(f"저장 디렉토리 존재 여부: {base_dir.exists()}")
             
             # 파일명 생성 (날짜 기반)
             date_str = datetime.now().strftime("%Y%m%d")
@@ -76,16 +82,19 @@ class ExtractionService:
                 "analysis_result": result
             }
             
+            # 저장 직전 로그
+            self.logger.info(f"파일 저장 시도: {filepath}")
+            
             # JSONL 파일에 추가 모드로 저장
             with open(filepath, 'a', encoding='utf-8') as f:
                 json.dump(analysis_data, f, ensure_ascii=False)
                 f.write('\n')
             
-            self.logger.debug(f"구조화된 응답 저장: {filepath}")
+            # 저장 성공 로그
+            self.logger.info(f"구조화된 응답 저장 완료: {filepath}")
             
         except Exception as e:
-            self.logger.error(f"구조화된 응답 저장 실패: {str(e)}")
-
+            self.logger.error(f"구조화된 응답 저장 실패: {str(e)}", exc_info=True)
 
     async def close(self):
         """세션 정리"""
@@ -164,7 +173,8 @@ class ExtractionService:
         self,
         items: List[Dict[str, Any]],
         batch_size: int = 50,
-        concurrent_requests: int = 5
+        concurrent_requests: int = 5,
+        prompt_data: Dict[str, Any] = None
     ) -> List[List[str]]:
         """
         배치 키워드 추출
@@ -173,6 +183,7 @@ class ExtractionService:
             items: 추출할 아이템 리스트
             batch_size: 배치 크기
             concurrent_requests: 동시 요청 수
+            prompt_data: 프롬프트 데이터 (구조화된 응답용)
             
         Returns:
             각 아이템의 키워드 리스트
@@ -186,7 +197,7 @@ class ExtractionService:
             
             # 동시 처리
             chunk_results = await self._process_chunk_concurrent(
-                chunk_items, concurrent_requests
+                chunk_items, concurrent_requests, prompt_data
             )
             results.extend(chunk_results)
             
@@ -199,7 +210,8 @@ class ExtractionService:
     async def _process_chunk_concurrent(
         self, 
         items: List[Dict[str, Any]],
-        concurrent_requests: int
+        concurrent_requests: int,
+        prompt_data: Dict[str, Any] = None
     ) -> List[List[str]]:
         """청크를 동시에 처리"""
         semaphore = asyncio.Semaphore(concurrent_requests)
@@ -208,7 +220,18 @@ class ExtractionService:
             async with semaphore:
                 try:
                     content = item.get('content', '') if isinstance(item, dict) else str(item)
+                    subject = item.get('subject', '') if isinstance(item, dict) else ""
+                    sent_time = item.get('sent_time') if isinstance(item, dict) else None
                     
+                    # 구조화된 응답 사용 시도
+                    if self.api_key and prompt_data and self.use_structured_response:
+                        result = await self._call_openrouter_structured_api(
+                            content, subject, sent_time, 5, prompt_data
+                        )
+                        if result and 'keywords' in result:
+                            return result['keywords']
+                    
+                    # 기본 API 호출
                     if self.api_key:
                         keywords, _ = await self._call_openrouter_api(content, 5)
                         if keywords:
@@ -335,14 +358,19 @@ class ExtractionService:
                         try:
                             result = self._parse_json_response(content_response)
                             
+                            # 디버깅 로그 추가
+                            self.logger.debug(f"Parsed result: {result}")
+                            self.logger.debug(f"Has mail_type: {'mail_type' in result if result else False}")
+                            
                             # 토큰 사용량 정보 추가
                             if "usage" in data:
                                 result['token_usage'] = data["usage"]
                             
-                            
-                            # 구조화된 응답 저장
-                            if result and 'mail_type' in result:
+                            # 구조화된 응답 저장 (API 응답이 있으면 항상 저장)
+                            if result:
                                 self._save_structured_response(limited_content, subject, sent_time, result)
+                            else:
+                                self.logger.warning(f"Not saving: result={bool(result)}, has_mail_type={'mail_type' in result if result else False}")
                             
                             return result
                             
