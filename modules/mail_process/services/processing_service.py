@@ -59,16 +59,12 @@ class ProcessingService:
         """배치 방식으로 메일 처리"""
         # 1단계: 모든 메일 정제 및 준비
         prepared_mails = []
-        clean_contents = []
-        valid_indices = []
         
         for i, mail in enumerate(mails):
             try:
                 prepared_mail = self._prepare_mail_for_processing(mail)
                 if prepared_mail:
                     prepared_mails.append(prepared_mail)
-                    clean_contents.append(prepared_mail['_processed']['clean_content'])
-                    valid_indices.append(i)
                 else:
                     stats['too_short'] += 1
             except Exception as e:
@@ -76,13 +72,22 @@ class ProcessingService:
                 self.logger.error(f"메일 준비 중 오류: {str(e)}")
                 continue
         
-        # 2단계: 키워드 배치 추출
-        if clean_contents:
+        # 2단계: 배치 키워드 추출을 위한 데이터 준비
+        mail_data_for_keywords = []
+        for prepared_mail in prepared_mails:
+            mail_data_for_keywords.append({
+                'content': prepared_mail['_processed']['clean_content'],
+                'subject': prepared_mail['_processed']['refined_mail'].get('subject', ''),
+                'sent_time': prepared_mail['_processed']['sent_time']
+            })
+        
+        # 3단계: 키워드 배치 추출
+        if mail_data_for_keywords:
             async with self.keyword_service:
                 try:
-                    all_keywords = await self.keyword_service.extract_keywords_batch(clean_contents)
+                    all_keywords = await self.keyword_service.extract_keywords_batch(mail_data_for_keywords)
                     
-                    # 3단계: 결과 병합
+                    # 4단계: 결과 병합
                     for i, prepared_mail in enumerate(prepared_mails):
                         if i < len(all_keywords):
                             keywords = all_keywords[i]
@@ -133,7 +138,7 @@ class ProcessingService:
         mail_id = self.mail_parser.extract_mail_id(mail)
         sent_time = self.mail_parser.extract_sent_time(mail)
         
-        # ✅ 발신자 정보 추출 추가
+        # 발신자 정보 추출 추가
         sender_address = self.mail_parser.extract_sender_address(mail)
         sender_name = self.mail_parser.extract_sender_name(mail)
         
@@ -157,14 +162,14 @@ class ProcessingService:
         mail['_processed'] = {
             'mail_id': mail_id,
             'sent_time': sent_time,
-            'sender_address': sender_address,  # ✅ 추가
-            'sender_name': sender_name,        # ✅ 추가
+            'sender_address': sender_address,
+            'sender_name': sender_name,
             'clean_content': clean_content,
             'refined_mail': refined_mail,
             'keywords': []  # 나중에 채워질 예정
         }
         
-        # ✅ 최상위 레벨에도 저장 (호환성을 위해)
+        # 최상위 레벨에도 저장 (호환성을 위해)
         mail['sender_address'] = sender_address
         mail['sender_name'] = sender_name
         
@@ -179,7 +184,14 @@ class ProcessingService:
         
         # 키워드 추출
         clean_content = prepared_mail['_processed']['clean_content']
-        keywords = await self.keyword_service.extract_keywords(clean_content)
+        sent_time = prepared_mail['_processed']['sent_time']
+        subject = prepared_mail['_processed']['refined_mail'].get('subject', '')
+        
+        keywords = await self.keyword_service.extract_keywords(
+            clean_content,
+            subject,
+            sent_time  
+        )
         prepared_mail['_processed']['keywords'] = keywords
         
         return prepared_mail

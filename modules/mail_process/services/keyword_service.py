@@ -233,11 +233,17 @@ Email Content:
                         if isinstance(mail_data, dict):
                             content = mail_data.get('content', '')
                             subject = mail_data.get('subject', '')
+                            sent_time = mail_data.get('sent_time')  # ✅ 추가
                         else:
                             content = str(mail_data)
                             subject = ''
+                            sent_time = None  # ✅ 추가
                         
-                        result = await self._call_openrouter_structured_api(content, subject)
+                        result = await self._call_openrouter_structured_api(
+                            content, 
+                            subject, 
+                            sent_time  # ✅ 추가
+                        )
                         if result and 'keywords' in result:
                             keywords = result['keywords']
                             # 프롬프트 로깅
@@ -286,13 +292,14 @@ Email Content:
         
         return processed_results
 
-    async def extract_keywords(self, clean_content: str, subject: str = "") -> List[str]:
+    async def extract_keywords(self, clean_content: str, subject: str = "", sent_time: datetime = None) -> List[str]:
         """
         단일 텍스트에서 키워드 추출 (기존 메서드 유지)
         
         Args:
             clean_content: 이미 정제된 메일 내용
             subject: 메일 제목 (선택사항)
+            sent_time: 메일 발송 시간 (선택사항)  #
             
         Returns:
             추출된 키워드 리스트
@@ -306,7 +313,7 @@ Email Content:
 
             # 구조화된 응답 사용
             if self.use_structured_response and self.api_key:
-                result = await self._call_openrouter_structured_api(clean_content, subject)
+                result = await self._call_openrouter_structured_api(clean_content, subject, sent_time)  # ✅ sent_time 전달
                 if result and 'keywords' in result:
                     keywords = result['keywords']
                     # 프롬프트 로깅
@@ -344,13 +351,14 @@ Email Content:
             self.logger.debug("새로운 키워드 서비스 세션 생성")
         return self._session
 
-    async def _call_openrouter_structured_api(self, content: str, subject: str = "") -> Optional[Dict]:
+    async def _call_openrouter_structured_api(self, content: str, subject: str = "", sent_time: datetime = None) -> Optional[Dict]:
         """
         OpenRouter API 호출 (구조화된 응답)
         
         Args:
             content: 메일 본문
             subject: 메일 제목 (선택사항)
+            sent_time: 메일 발송 시간 (선택사항) 
             
         Returns:
             {'keywords': [...], 'mail_type': ..., 'has_deadline': ..., 'prompt_used': ...}
@@ -362,11 +370,13 @@ Email Content:
         # 텍스트 길이 제한
         limited_content = content[:2000] if len(content) > 2000 else content
         original_content = content  # 전체 내용 보존
+        sent_time_str = sent_time.isoformat() if sent_time else "Unknown" 
         
         # 프롬프트 템플릿에 값 채우기
         user_prompt = self.user_prompt_template.format(
             subject=subject if subject else "No subject",
-            content=limited_content
+            content=limited_content,
+            sent_time=sent_time_str
         )
 
         headers = {
