@@ -17,7 +17,8 @@ from datetime import datetime
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-from infra.core import get_logger, get_config
+from infra.core.logger import get_logger
+from infra.core.config import get_config
 from modules.account import get_account_orchestrator
 
 

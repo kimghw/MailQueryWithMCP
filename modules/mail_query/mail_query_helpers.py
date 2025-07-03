@@ -7,7 +7,7 @@ from datetime import datetime
 import re
 
 from .mail_query_schema import GraphMailItem
-from infra.core import get_logger
+from infra.core.logger import get_logger
 
 logger = get_logger(__name__)
 

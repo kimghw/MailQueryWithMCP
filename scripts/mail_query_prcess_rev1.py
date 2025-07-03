@@ -39,7 +39,7 @@ from modules.mail_query.mail_query_schema import MailQueryRequest, MailQueryFilt
 from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
 
 from infra.core.database import get_database_manager
-from infra.core.logger import get_logger, update_all_loggers_level
+from infra.core.logger import get_logger
 from infra.core.config import get_config
 
 # 로그 레벨 설정

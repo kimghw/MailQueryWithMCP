@@ -2,7 +2,7 @@
 
 import os
 from typing import List, Dict, Set, Tuple
-from infra.core import get_logger
+from infra.core.logger import get_logger
 from ..utilities.mail_parser import MailParser
 
 

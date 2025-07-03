@@ -10,7 +10,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, List, Dict, Any, Tuple
 import time
 
-from infra.core import (
+
     get_database_manager,
     get_logger,
     get_config,

@@ -8,6 +8,7 @@ import aiohttp
 from collections import Counter
 from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime
+from pathlib import Path
 
 from infra.core.config import get_config
 from infra.core.logger import get_logger
@@ -51,6 +52,40 @@ class ExtractionService:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         """비동기 컨텍스트 매니저 종료"""
         await self.close()
+
+
+    def _save_structured_response(self, text: str, subject: str, sent_time: Optional[datetime], result: Dict[str, Any]) -> None:
+        """구조화된 응답을 파일로 저장"""
+        try:
+            # 저장 디렉토리 설정
+            base_dir = Path("/home/kimghw/IACSGRAPH/data/mail_analysis_results")
+            base_dir.mkdir(parents=True, exist_ok=True)
+            
+            # 파일명 생성 (날짜 기반)
+            date_str = datetime.now().strftime("%Y%m%d")
+            filename = f"mail_analysis_results_{date_str}.jsonl"
+            filepath = base_dir / filename
+            
+            # 저장할 데이터 구성
+            analysis_data = {
+                "timestamp": datetime.now().isoformat(),
+                "subject": subject,
+                "sent_time": sent_time.isoformat() if sent_time and hasattr(sent_time, 'isoformat') else str(sent_time),
+                "body_content": text[:2000],  # 처음 2000자만
+                "model": self.model,
+                "analysis_result": result
+            }
+            
+            # JSONL 파일에 추가 모드로 저장
+            with open(filepath, 'a', encoding='utf-8') as f:
+                json.dump(analysis_data, f, ensure_ascii=False)
+                f.write('\n')
+            
+            self.logger.debug(f"구조화된 응답 저장: {filepath}")
+            
+        except Exception as e:
+            self.logger.error(f"구조화된 응답 저장 실패: {str(e)}")
+
 
     async def close(self):
         """세션 정리"""
@@ -303,6 +338,11 @@ class ExtractionService:
                             # 토큰 사용량 정보 추가
                             if "usage" in data:
                                 result['token_usage'] = data["usage"]
+                            
+                            
+                            # 구조화된 응답 저장
+                            if result and 'mail_type' in result:
+                                self._save_structured_response(limited_content, subject, sent_time, result)
                             
                             return result
                             

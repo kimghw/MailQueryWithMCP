@@ -1,7 +1,8 @@
 """처리 서비스 - 메일 정제 및 키워드 추출 (배치 처리 지원)"""
 
 from typing import List, Dict, Optional
-from infra.core import get_logger, get_config
+from infra.core.logger import get_logger
+from infra.core.config import get_config
 from ..utilities import TextCleaner, MailParser
 from modules.keyword_extractor.keyword_extractor_orchestrator import KeywordExtractorOrchestrator
 from modules.keyword_extractor.keyword_extractor_schema import (

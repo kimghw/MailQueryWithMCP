@@ -3,7 +3,9 @@
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import uuid
-from infra.core import get_logger, get_database_manager, get_kafka_client
+from infra.core.logger import get_logger
+from infra.core.database import get_database_manager
+from infra.core.kafka_client import get_kafka_client
 
 logger = get_logger(__name__)
 

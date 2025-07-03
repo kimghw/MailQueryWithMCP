@@ -1,7 +1,7 @@
 """메일 처리 오케스트레이터 - 순수 흐름 제어만 담당"""
 
 from typing import Dict, List, Any, Optional, Tuple
-from infra.core import get_logger
+from infra.core.logger import get_logger
 from .services.filtering_service import FilteringService
 from .services.processing_service import ProcessingService
 from .services.persistence_service import PersistenceService
