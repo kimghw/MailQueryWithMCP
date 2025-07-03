@@ -26,8 +26,15 @@ class ExtractionService:
         self.model = getattr(self.config, "openrouter_model", "openai/gpt-3.5-turbo")
         self.base_url = "https://openrouter.ai/api/v1"
         
-        # 배치 처리 설정
+        # 기존 배치 처리 설정 사용 (이미 존재함)
+        self.batch_size = int(self.config.get_setting("KEYWORD_EXTRACTION_BATCH_SIZE", "50"))
+        self.concurrent_requests = int(self.config.get_setting("KEYWORD_EXTRACTION_CONCURRENT_REQUESTS", "5"))
         self.batch_timeout = int(self.config.get_setting("KEYWORD_EXTRACTION_BATCH_TIMEOUT", "60"))
+        
+        # 구조화된 응답 사용 여부 - 기존 설정 사용
+        self.use_structured_response = self.config.get_setting(
+            "ENABLE_STRUCTURED_EXTRACTION", "true"
+        ).lower() == "true"
         
         # 재사용 가능한 세션
         self._session: Optional[aiohttp.ClientSession] = None

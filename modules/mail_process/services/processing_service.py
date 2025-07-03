@@ -201,8 +201,8 @@ class ProcessingService:
             text=prepared_mail['_processed']['clean_content'],
             subject=prepared_mail['_processed']['refined_mail'].get('subject', ''),
             sent_time=prepared_mail['_processed']['sent_time'],
-            max_keywords=int(self.config.get_setting("max_keywords_per_mail", "5")),
-            use_structured_response=self.config.get_setting("USE_STRUCTURED_KEYWORD_RESPONSE", "true").lower() == "true"
+            max_keywords=int(self.config.get_setting("MAX_KEYWORDS_PER_MAIL", "5")),
+            use_structured_response=self.config.get_setting("ENABLE_STRUCTURED_EXTRACTION", "true").lower() == "true"
         )
         
         # 키워드 추출 실행
