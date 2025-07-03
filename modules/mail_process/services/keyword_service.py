@@ -48,7 +48,7 @@ class MailKeywordService:
         )
 
     def _load_prompts(self):
-        """프롬프트 파일 로드"""
+        """프롬프트 파일 로드 - Rules를 USER_PROMPT에 포함"""
         try:
             # 현재 파일의 디렉토리를 기준으로 프롬프트 파일 경로 찾기
             current_dir = Path(__file__).parent.parent
@@ -57,33 +57,65 @@ class MailKeywordService:
             if prompt_file.exists():
                 content = prompt_file.read_text(encoding='utf-8')
                 
-                # 프롬프트 파싱
-                self.system_prompt = ""
-                self.user_prompt_template = ""
+                # 1. SYSTEM_PROMPT 추출
+                system_match = re.search(r'## SYSTEM_PROMPT\s*\n(.*?)(?=\n##|\n#|$)', content, re.DOTALL)
+                if system_match:
+                    self.system_prompt = system_match.group(1).strip()
+                else:
+                    self.system_prompt = "You are an email analysis expert. Extract information from emails and return ONLY valid JSON."
                 
-                lines = content.split('\n')
-                current_section = None
-                buffer = []
+                # 2. USER_PROMPT_TEMPLATE 추출 (Email Subject: 부분까지 포함)
+                user_match = re.search(r'## USER_PROMPT_TEMPLATE\s*\n(.*?)$', content, re.DOTALL)
+                if user_match:
+                    user_template_content = user_match.group(1).strip()
+                else:
+                    user_template_content = ""
                 
-                for line in lines:
-                    if line.startswith('SYSTEM_PROMPT:'):
-                        if current_section and buffer:
-                            self._save_section(current_section, '\n'.join(buffer))
-                        current_section = 'system'
-                        buffer = [line.replace('SYSTEM_PROMPT:', '').strip()]
-                    elif line.startswith('USER_PROMPT_TEMPLATE:'):
-                        if current_section and buffer:
-                            self._save_section(current_section, '\n'.join(buffer))
-                        current_section = 'user'
-                        buffer = [line.replace('USER_PROMPT_TEMPLATE:', '').strip()]
+                # 3. Rules 섹션 추출 (# Rules부터 ## USER_PROMPT_TEMPLATE 전까지)
+                rules_match = re.search(r'# Rules\s*\n(.*?)(?=## USER_PROMPT_TEMPLATE)', content, re.DOTALL)
+                if rules_match:
+                    rules_content = rules_match.group(1).strip()
+                else:
+                    rules_content = ""
+                
+                # 4. Rules와 USER_PROMPT_TEMPLATE을 결합
+                # 프롬프트 파일에 이미 플레이스홀더가 있는지 확인
+                if '{subject}' in user_template_content and '{content}' in user_template_content:
+                    # 이미 플레이스홀더가 있으면 Rules만 추가
+                    if rules_content:
+                        self.user_prompt_template = f"""Follow these rules to analyze the email:
+
+{rules_content}
+
+{user_template_content}"""
                     else:
-                        buffer.append(line)
-                
-                # 마지막 섹션 저장
-                if current_section and buffer:
-                    self._save_section(current_section, '\n'.join(buffer))
+                        self.user_prompt_template = user_template_content
+                else:
+                    # 플레이스홀더가 없으면 추가
+                    if rules_content:
+                        self.user_prompt_template = f"""Follow these rules to analyze the email:
+
+{rules_content}
+
+{user_template_content}
+
+Email Subject: {{subject}}
+Email Sent Time: {{sent_time}}
+Email Content:
+{{content}}"""
+                    else:
+                        self.user_prompt_template = f"""{user_template_content}
+
+Email Subject: {{subject}}
+Email Sent Time: {{sent_time}}
+Email Content:
+{{content}}"""
                 
                 self.logger.info("프롬프트 파일 로드 완료")
+                self.logger.debug(f"System prompt 길이: {len(self.system_prompt)}자")
+                self.logger.debug(f"User prompt template 길이: {len(self.user_prompt_template)}자")
+                self.logger.debug(f"Rules 포함 여부: {'예' if rules_content else '아니오'}")
+                
             else:
                 self.logger.warning(f"프롬프트 파일을 찾을 수 없음: {prompt_file}")
                 self._use_default_prompts()
@@ -91,14 +123,6 @@ class MailKeywordService:
         except Exception as e:
             self.logger.error(f"프롬프트 파일 로드 실패: {str(e)}")
             self._use_default_prompts()
-    
-    def _save_section(self, section: str, content: str):
-        """프롬프트 섹션 저장"""
-        content = content.strip()
-        if section == 'system':
-            self.system_prompt = content
-        elif section == 'user':
-            self.user_prompt_template = content
     
     def _use_default_prompts(self):
         """기본 프롬프트 사용 (파일 로드 실패 시)"""
@@ -113,6 +137,7 @@ class MailKeywordService:
 }}
 
 Email Subject: {subject}
+Email Sent Time: {sent_time}
 Email Content:
 {content}"""
 
@@ -233,16 +258,16 @@ Email Content:
                         if isinstance(mail_data, dict):
                             content = mail_data.get('content', '')
                             subject = mail_data.get('subject', '')
-                            sent_time = mail_data.get('sent_time')  # ✅ 추가
+                            sent_time = mail_data.get('sent_time')
                         else:
                             content = str(mail_data)
                             subject = ''
-                            sent_time = None  # ✅ 추가
+                            sent_time = None
                         
                         result = await self._call_openrouter_structured_api(
                             content, 
                             subject, 
-                            sent_time  # ✅ 추가
+                            sent_time
                         )
                         if result and 'keywords' in result:
                             keywords = result['keywords']
@@ -298,10 +323,8 @@ Email Content:
         
         Args:
             clean_content: 이미 정제된 메일 내용
-        sent_time: 메일 발송 시간 (선택사항)
             subject: 메일 제목 (선택사항)
-        sent_time: 메일 발송 시간 (선택사항)
-            sent_time: 메일 발송 시간 (선택사항)  #
+            sent_time: 메일 발송 시간 (선택사항)
             
         Returns:
             추출된 키워드 리스트
@@ -315,7 +338,7 @@ Email Content:
 
             # 구조화된 응답 사용
             if self.use_structured_response and self.api_key:
-                result = await self._call_openrouter_structured_api(clean_content, subject, sent_time)  # ✅ sent_time 전달
+                result = await self._call_openrouter_structured_api(clean_content, subject, sent_time)
                 if result and 'keywords' in result:
                     keywords = result['keywords']
                     # 프롬프트 로깅
@@ -360,8 +383,7 @@ Email Content:
         Args:
             content: 메일 본문
             subject: 메일 제목 (선택사항)
-        sent_time: 메일 발송 시간 (선택사항)
-            sent_time: 메일 발송 시간 (선택사항) 
+            sent_time: 메일 발송 시간 (선택사항)
             
         Returns:
             {'keywords': [...], 'mail_type': ..., 'has_deadline': ..., 'prompt_used': ...}
@@ -376,14 +398,21 @@ Email Content:
         # 발송 시간 포맷팅
         sent_time_str = sent_time.isoformat() if sent_time else "Unknown"
         original_content = content  # 전체 내용 보존
-        sent_time_str = sent_time.isoformat() if sent_time else "Unknown" 
         
         # 프롬프트 템플릿에 값 채우기
-        user_prompt = self.user_prompt_template.format(
-            subject=subject if subject else "No subject",
-            content=limited_content,
-            sent_time=sent_time_str
-        )
+        try:
+            user_prompt = self.user_prompt_template.format(
+                subject=subject if subject else "No subject",
+                content=limited_content,
+                sent_time=sent_time_str
+            )
+        except KeyError as e:
+            self.logger.error(f"프롬프트 템플릿 포맷팅 오류: {str(e)}")
+            # 기본 프롬프트 사용
+            user_prompt = f"""Extract keywords from this email and return JSON:
+Subject: {subject}
+Sent: {sent_time_str}
+Content: {limited_content}"""
 
         headers = {
             "Authorization": f"Bearer {self.api_key}",
@@ -464,13 +493,6 @@ Email Content:
                             self.logger.debug(f"마감일 존재: {result.get('has_deadline', False)}")
                             self.logger.debug(f"메일 타입: {result.get('mail_type', 'N/A')}")
                             
-                            # PL 패턴 로깅
-                            agenda_id = result.get('agenda_id', [])
-                            if agenda_id:
-                                self.logger.debug(f"PL 패턴 수: {len(agenda_id)}")
-                                for idx, pattern in enumerate(agenda_id):
-                                    self.logger.debug(f"  패턴 {idx+1}: {pattern.get('full_pattern', 'N/A')}")
-                            
                             # 키워드 검증 및 정제
                             keywords = result.get('keywords', [])
                             if isinstance(keywords, list):
@@ -546,8 +568,6 @@ Email Content:
                                         result['keywords'] = keywords
                                     else:
                                         result['keywords'] = []
-                                    
-                                    result['prompt_used'] = full_prompt
                                     
                                     result['prompt_used'] = full_prompt
                                     
