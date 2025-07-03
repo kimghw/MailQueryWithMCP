@@ -1,4 +1,4 @@
-"""처리 서비스 - 메일 정제 및 키워드 추출 (배치 처리 지원)"""
+"""처리 서비스 - 메일 정제 및 키워드 추출 완전한 파일"""
 
 from typing import List, Dict, Optional
 from infra.core.logger import get_logger
@@ -19,8 +19,7 @@ class ProcessingService:
     def __init__(self):
         self.text_cleaner = TextCleaner()
         self.mail_parser = MailParser()
-        # self.keyword_service = MailKeywordService()  # 제거
-        self.keyword_extractor = KeywordExtractorOrchestrator()  # 추가
+        self.keyword_extractor = KeywordExtractorOrchestrator()
         self.config = get_config()
         self.logger = get_logger(__name__)
         
@@ -62,7 +61,7 @@ class ProcessingService:
         return processed_mails
     
     async def _process_mails_batch(self, mails: List[Dict], stats: Dict) -> List[Dict]:
-        """배치 방식으로 메일 처리"""
+        """배치 방식으로 메일 처리 (대시보드 이벤트 포함)"""
         # 1단계: 모든 메일 정제 및 준비
         prepared_mails = []
         
@@ -82,12 +81,13 @@ class ProcessingService:
         mail_data_for_keywords = []
         for prepared_mail in prepared_mails:
             mail_data_for_keywords.append({
+                'mail_id': prepared_mail.get('id', 'unknown'),  # 메일 ID 추가
                 'content': prepared_mail['_processed']['clean_content'],
                 'subject': prepared_mail['_processed']['refined_mail'].get('subject', ''),
                 'sent_time': prepared_mail['_processed']['sent_time']
             })
         
-        # 3단계: 키워드 배치 추출
+        # 3단계: 키워드 배치 추출 (대시보드 이벤트 자동 발행)
         if mail_data_for_keywords:
             async with self.keyword_extractor as extractor:
                 try:
@@ -98,7 +98,7 @@ class ProcessingService:
                         concurrent_requests=5
                     )
                     
-                    # 배치 추출 실행
+                    # 배치 추출 실행 (대시보드 이벤트 포함)
                     batch_response = await extractor.extract_keywords_batch(batch_request)
                     
                     # 4단계: 결과 병합
@@ -190,12 +190,16 @@ class ProcessingService:
         return mail
     
     async def _process_single_mail(self, mail: Dict) -> Optional[Dict]:
-        """개별 메일 처리 (기존 방식 유지)"""
+        """개별 메일 처리 (대시보드 이벤트 포함)"""
         # 메일 준비
         prepared_mail = self._prepare_mail_for_processing(mail)
         if not prepared_mail:
             return None
-        
+
+        # 🎯 키워드 추출 전에 메일 ID 설정
+        mail_id = prepared_mail.get('id', 'unknown')
+        self.keyword_extractor.extraction_service.set_current_mail_id(mail_id)
+
         # 키워드 추출 요청 생성
         extraction_request = KeywordExtractionRequest(
             text=prepared_mail['_processed']['clean_content'],
@@ -205,7 +209,7 @@ class ProcessingService:
             use_structured_response=self.config.get_setting("ENABLE_STRUCTURED_EXTRACTION", "true").lower() == "true"
         )
         
-        # 키워드 추출 실행
+        # 키워드 추출 실행 (대시보드 이벤트 자동 발행)
         response = await self.keyword_extractor.extract_keywords(extraction_request)
         prepared_mail['_processed']['keywords'] = response.keywords
         

@@ -1,4 +1,4 @@
-"""키워드 추출 오케스트레이터 - 순수 흐름 제어만 담당"""
+"""키워드 추출 오케스트레이터 - 완전한 파일 (대시보드 이벤트 포함)"""
 
 from typing import Dict, List, Any, Optional
 from infra.core.logger import get_logger
@@ -73,7 +73,7 @@ class KeywordExtractorOrchestrator:
     
     async def extract_keywords_batch(self, request: BatchExtractionRequest) -> BatchExtractionResponse:
         """
-        배치 키워드 추출 메인 플로우
+        배치 키워드 추출 메인 플로우 (대시보드 이벤트 포함)
         
         Args:
             request: 배치 추출 요청
@@ -90,7 +90,7 @@ class KeywordExtractorOrchestrator:
             # Phase 1: 배치 준비 및 검증
             valid_items = self._prepare_batch_items(request.items)
             
-            # Phase 2: 배치 추출 실행
+            # Phase 2: 배치 추출 실행 (대시보드 이벤트 자동 발행)
             results = await self._execute_batch_extraction(
                 valid_items, 
                 request.batch_size,
@@ -167,16 +167,32 @@ class KeywordExtractorOrchestrator:
         batch_size: int,
         concurrent_requests: int
     ) -> List[List[str]]:
-        """배치 추출 실행 (구조화된 응답 포함)"""
+        """배치 추출 실행 (대시보드 이벤트 자동 발행)"""
+        
         # 구조화된 응답을 위한 프롬프트 데이터 준비
         prompt_data = await self.prompt_service.get_prompt_data("structured")
         
-        return await self.extraction_service.extract_batch(
-            items,
+        # 메일 ID 정보 추가 (대시보드 이벤트용)
+        enriched_items = []
+        for i, item in enumerate(items):
+            enriched_item = item.copy()
+            
+            # 메일 ID가 없으면 생성
+            if 'mail_id' not in enriched_item:
+                enriched_item['mail_id'] = item.get('id', f'batch_item_{i}_{id(item)}')
+            
+            enriched_items.append(enriched_item)
+        
+        # 배치 추출 실행 (대시보드 이벤트 자동 수집됨)
+        results = await self.extraction_service.extract_batch(
+            enriched_items,
             batch_size,
             concurrent_requests,
             prompt_data
         )
+        
+        self.logger.info(f"배치 추출 완료: {len(results)}개 결과")
+        return results
     
     def _compile_batch_results(
         self,
