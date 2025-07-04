@@ -6,8 +6,9 @@ Pydantic 모델을 사용하여 계정 관련 데이터 구조와 검증 규칙�
 
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field, EmailStr, validator, model_validator
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, EmailStr, Field, model_validator, validator
 
 
 class AccountStatus(str, Enum):

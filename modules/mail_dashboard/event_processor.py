@@ -5,11 +5,13 @@ Email Dashboard Event Processor
 """
 
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 from infra.core import get_logger
-from infra.core.exceptions import ValidationError, BusinessLogicError
+from infra.core.exceptions import BusinessLogicError, ValidationError
+
 from .repository import EmailDashboardRepository
-from .schema import EmailDashboardEvent, ORGANIZATIONS
+from .schema import ORGANIZATIONS, EmailDashboardEvent
 
 
 class EmailDashboardEventProcessor:

@@ -18,9 +18,9 @@ python mail_query_process.py --test-duplicate user123
 
 """
 
-import sys
 import os
 import sqlite3
+import sys
 
 # Python 경로에 프로젝트 루트 추가
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,23 +28,23 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 import asyncio
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
 import json
-from collections import defaultdict, Counter
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta
+from typing import Any, Dict, List, Optional
+
+from infra.core.config import get_config
+from infra.core.database import get_database_manager
+from infra.core.logger import get_logger
+from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
 
 # 직접 import
 from modules.mail_query.mail_query_orchestrator import MailQueryOrchestrator
 from modules.mail_query.mail_query_schema import (
-    MailQueryRequest,
     MailQueryFilters,
+    MailQueryRequest,
     PaginationOptions,
 )
-from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
-
-from infra.core.database import get_database_manager
-from infra.core.logger import get_logger
-from infra.core.config import get_config
 
 # 로그 레벨 설정
 update_all_loggers_level("INFO")

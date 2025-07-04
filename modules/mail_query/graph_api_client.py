@@ -3,19 +3,21 @@ Microsoft Graph API 클라이언트
 메일 데이터 조회를 위한 Graph API 호출 처리
 """
 
-import aiohttp
 import asyncio
-from typing import Optional, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, Optional
+
+import aiohttp
 
 from infra.core.config import get_config
-from infra.core.logger import get_logger
 from infra.core.exceptions import APIConnectionError, TokenExpiredError
+from infra.core.logger import get_logger
+
 from .mail_query_helpers import (
-    parse_graph_mail_item,
-    parse_graph_error_response,
     calculate_retry_delay,
     is_transient_error,
+    parse_graph_error_response,
+    parse_graph_mail_item,
 )
 
 logger = get_logger(__name__)

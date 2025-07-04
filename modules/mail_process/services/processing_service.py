@@ -1,16 +1,18 @@
 """처리 서비스 - 메일 정제 및 키워드 추출 완전한 파일"""
 
-from typing import List, Dict, Optional
-from infra.core.logger import get_logger
+from typing import Dict, List, Optional
+
 from infra.core.config import get_config
-from ..utilities import TextCleaner, MailParser
+from infra.core.logger import get_logger
 from modules.keyword_extractor.keyword_extractor_orchestrator import (
     KeywordExtractorOrchestrator,
 )
 from modules.keyword_extractor.keyword_extractor_schema import (
-    KeywordExtractionRequest,
     BatchExtractionRequest,
+    KeywordExtractionRequest,
 )
+
+from ..utilities import MailParser, TextCleaner
 
 logger = get_logger(__name__)
 

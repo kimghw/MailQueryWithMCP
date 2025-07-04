@@ -1,8 +1,10 @@
 """필터링 서비스 - 메일 필터링 로직 통합"""
 
 import os
-from typing import List, Dict, Set, Tuple
+from typing import Dict, List, Set, Tuple
+
 from infra.core.logger import get_logger
+
 from ..utilities.mail_parser import MailParser
 
 

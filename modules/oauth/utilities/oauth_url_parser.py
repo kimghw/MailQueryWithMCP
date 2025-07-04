@@ -1,7 +1,8 @@
 """URL 파싱 및 검증 유틸리티"""
 
 from typing import Dict
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import parse_qs, urlparse
+
 from infra.core.logger import get_logger
 
 

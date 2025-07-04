@@ -1,11 +1,12 @@
 """통계 서비스 - 처리 통계 관리 및 기록 (중복 체크 개선)"""
 
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
 import uuid
-from infra.core.logger import get_logger
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional
+
 from infra.core.database import get_database_manager
 from infra.core.kafka_client import get_kafka_client
+from infra.core.logger import get_logger
 
 logger = get_logger(__name__)
 

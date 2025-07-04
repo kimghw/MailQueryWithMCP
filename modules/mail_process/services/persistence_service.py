@@ -1,13 +1,14 @@
 """지속성 서비스 - 중복 체크 및 저장"""
 
-import os
 import json
-from typing import Dict, List, Tuple
+import os
 from datetime import datetime
+from typing import Dict, List, Tuple
+
 from infra.core.logger import get_logger
+from modules.mail_process.mail_processor_schema import ProcessedMailData
 from modules.mail_process.services.db_service import MailDatabaseService
 from modules.mail_process.services.event_service import MailEventService
-from modules.mail_process.mail_processor_schema import ProcessedMailData
 
 
 class PersistenceService:

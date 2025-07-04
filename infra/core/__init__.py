@@ -18,24 +18,33 @@ Email Dashboard 모듈
 
 # 안전한 import를 위한 예외 처리
 try:
-    from .schema import (
-        EmailDashboardEvent,
-        EmailAgendaChair,
-        EmailAgendaMemberResponse,
-        EmailAgendaMemberResponseTime,
-        DashboardStats,
-        AgendaStatusSummary,
-        ORGANIZATIONS,
+    # 핵심 인프라 컴포넌트 import
+    from .config import config, get_config
+    from .database import db, get_database_manager
+    from .exceptions import (
+        APIConnectionError,
+        AuthenticationError,
+        BusinessLogicError,
+        ConfigurationError,
+        ConnectionError,
+        DatabaseError,
+        IACSGraphError,
+        KafkaConnectionError,
+        KafkaConsumerError,
+        KafkaError,
+        KafkaProducerError,
+        TokenError,
+        TokenExpiredError,
+        TokenRefreshError,
+        ValidationError,
     )
-
-    from .repository import EmailDashboardRepository
-    from .query import EmailDashboardQuery
-    from .event_processor import EmailDashboardEventProcessor
-    from .orchestrator import EmailDashboardOrchestrator
-    from .service import EmailDashboardService
+    from .kafka_client import get_kafka_client, kafka_client
+    from .logger import get_logger
+    from .oauth_client import get_oauth_client, oauth_client
+    from .token_service import get_token_service, token_service
 
 except ImportError as e:
-    print(f"Email Dashboard 모듈 import 오류: {e}")
+    print(f"Infra core 모듈 import 오류: {e}")
     print("의존성 확인:")
     print("1. infra.core 모듈이 올바르게 설정되었는지 확인")
     print("2. 프로젝트 루트에서 실행하고 있는지 확인")
@@ -43,72 +52,37 @@ except ImportError as e:
     raise
 
 __all__ = [
-    "EmailDashboardOrchestrator",
-    "EmailDashboardEventProcessor",
-    "EmailDashboardRepository",
-    "EmailDashboardQuery",
-    "EmailDashboardService",
-    "EmailDashboardEvent",
-    "EmailAgendaChair",
-    "EmailAgendaMemberResponse",
-    "EmailAgendaMemberResponseTime",
-    "DashboardStats",
-    "AgendaStatusSummary",
-    "ORGANIZATIONS",
+    # Configuration
+    "get_config",
+    "config",
+    # Database
+    "get_database_manager",
+    "db",
+    # Logging
+    "get_logger",
+    # Exceptions
+    "IACSGraphError",
+    "DatabaseError",
+    "ConnectionError",
+    "KafkaError",
+    "KafkaConnectionError",
+    "KafkaProducerError",
+    "KafkaConsumerError",
+    "APIConnectionError",
+    "AuthenticationError",
+    "TokenError",
+    "TokenExpiredError",
+    "TokenRefreshError",
+    "ConfigurationError",
+    "ValidationError",
+    "BusinessLogicError",
+    # Kafka
+    "get_kafka_client",
+    "kafka_client",
+    # OAuth
+    "get_oauth_client",
+    "oauth_client",
+    # Token Service
+    "get_token_service",
+    "token_service",
 ]
-
-# 모듈 레벨에서 서비스 인스턴스 생성 (싱글톤 방식)
-_dashboard_service = None
-
-
-def get_dashboard_service() -> EmailDashboardService:
-    """Email Dashboard 서비스 인스턴스를 반환합니다 (싱글톤)"""
-    global _dashboard_service
-    if _dashboard_service is None:
-        _dashboard_service = EmailDashboardService()
-    return _dashboard_service
-
-
-def initialize_dashboard_module() -> bool:
-    """
-    Email Dashboard 모듈을 초기화합니다.
-
-    Returns:
-        초기화 성공 여부
-    """
-    try:
-        service = get_dashboard_service()
-        return service.initialize()
-    except Exception as e:
-        print(f"Email Dashboard 모듈 초기화 실패: {str(e)}")
-        return False
-
-
-def start_dashboard_event_subscription() -> bool:
-    """
-    Email Dashboard 이벤트 구독을 시작합니다.
-
-    Returns:
-        구독 시작 성공 여부
-    """
-    try:
-        service = get_dashboard_service()
-        return service.start_event_subscription()
-    except Exception as e:
-        print(f"Email Dashboard 이벤트 구독 시작 실패: {str(e)}")
-        return False
-
-
-def stop_dashboard_event_subscription() -> bool:
-    """
-    Email Dashboard 이벤트 구독을 중지합니다.
-
-    Returns:
-        구독 중지 성공 여부
-    """
-    try:
-        service = get_dashboard_service()
-        return service.stop_event_subscription()
-    except Exception as e:
-        print(f"Email Dashboard 이벤트 구독 중지 실패: {str(e)}")
-        return False

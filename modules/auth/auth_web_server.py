@@ -6,27 +6,29 @@ OAuth 2.0 인증 콜백을 처리하는 임시 웹서버입니다.
 """
 
 import asyncio
-import threading
 import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional, Dict, Any, Callable, List
+import threading
 from datetime import datetime, timedelta
-from urllib.parse import urlparse, parse_qs
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any, Callable, Dict, List, Optional
+from urllib.parse import parse_qs, urlparse
+
 import requests
 
-from infra.core.logger import get_logger
 from infra.core.config import get_config
+from infra.core.database import get_database_manager
+from infra.core.logger import get_logger
 from infra.core.oauth_client import get_oauth_client
 from infra.core.token_service import get_token_service
-from infra.core.database import get_database_manager
-from .auth_schema import AuthCallback, AuthState
+
 from ._auth_helpers import (
-    auth_parse_callback_params,
-    auth_generate_callback_success_html,
     auth_generate_callback_error_html,
+    auth_generate_callback_success_html,
     auth_log_session_activity,
+    auth_parse_callback_params,
     auth_validate_token_info,
 )
+from .auth_schema import AuthCallback, AuthState
 
 logger = get_logger(__name__)
 
@@ -360,6 +362,7 @@ class AuthWebServer:
             토큰 정보 딕셔너리
         """
         from urllib.parse import urlencode
+
         from cryptography.fernet import Fernet
 
         # 클라이언트 시크릿 복호화

@@ -3,9 +3,9 @@
 mail_history 테이블에서 subject, sender, keywords 데이터를 txt 파일로 추출하는 스크립트
 """
 
-import sqlite3
-import os
 import json
+import os
+import sqlite3
 from datetime import datetime
 from pathlib import Path
 

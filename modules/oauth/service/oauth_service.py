@@ -1,9 +1,11 @@
 """OAuth URL 생성 및 토큰 교환 서비스"""
 
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
+from infra.core.config import get_config
 from infra.core.logger import get_logger
 from infra.core.oauth_client import get_oauth_client
-from infra.core.config import get_config
+
 from ..utilities.oauth_config_parser import OAuthConfigParser
 
 

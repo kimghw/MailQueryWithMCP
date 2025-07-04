@@ -6,12 +6,13 @@
 인증이 필요한 계정들을 자동으로 처리합니다.
 """
 
-import asyncio
 import argparse
-import webbrowser
+import asyncio
 import time
-from typing import List, Dict, Any
-from modules.auth import get_auth_orchestrator, AuthStartRequest, AuthBulkRequest
+import webbrowser
+from typing import Any, Dict, List
+
+from modules.auth import AuthBulkRequest, AuthStartRequest, get_auth_orchestrator
 
 
 class SimpleAutoAuth:

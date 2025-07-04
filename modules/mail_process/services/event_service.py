@@ -3,9 +3,10 @@
 import uuid
 from datetime import datetime
 from typing import Dict, List, Optional
-from infra.core.logger import get_logger
-from infra.core.kafka_client import get_kafka_client
+
 from infra.core.config import get_config
+from infra.core.kafka_client import get_kafka_client
+from infra.core.logger import get_logger
 
 
 class MailEventService:

@@ -5,7 +5,8 @@ Email Dashboard SQL 스크립트 관리
 """
 
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 from infra.core import get_logger
 
 logger = get_logger(__name__)
@@ -16,12 +17,21 @@ SQL_DIR = Path(__file__).parent
 
 def get_create_tables_sql() -> str:
     """테이블 생성 SQL을 반환합니다"""
-    sql_file = SQL_DIR / "create_tables.sql"
+    # migrations 폴더에서 create_tables.sql 파일을 찾습니다
+    sql_file = SQL_DIR / "migrations" / "create_tables.sql"
     if sql_file.exists():
         with open(sql_file, "r", encoding="utf-8") as f:
             return f.read()
     else:
-        raise FileNotFoundError(f"SQL 파일을 찾을 수 없습니다: {sql_file}")
+        # 혹시 루트에 있는지도 확인
+        fallback_sql_file = SQL_DIR / "create_tables.sql"
+        if fallback_sql_file.exists():
+            with open(fallback_sql_file, "r", encoding="utf-8") as f:
+                return f.read()
+        else:
+            raise FileNotFoundError(
+                f"SQL 파일을 찾을 수 없습니다: {sql_file} 또는 {fallback_sql_file}"
+            )
 
 
 def get_migration_files() -> List[Path]:

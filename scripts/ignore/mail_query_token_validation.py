@@ -4,19 +4,19 @@ Mail Query 모듈 통합 테스트
 """
 import asyncio
 import sys
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
 # 프로젝트 루트 경로 추가
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+from infra.core.logger import get_logger
 from modules.mail_query import (
+    MailQueryFilters,
     MailQueryOrchestrator,
     MailQueryRequest,
-    MailQueryFilters,
     PaginationOptions,
 )
-from infra.core.logger import get_logger
 
 logger = get_logger(__name__)
 

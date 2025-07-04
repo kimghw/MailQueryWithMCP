@@ -3,12 +3,13 @@ Mail Query 모듈 헬퍼 함수들
 mail_query_user_emails에 필요한 유틸리티 함수만 포함
 """
 
-from typing import Dict, Any, Optional
-from datetime import datetime
 import re
+from datetime import datetime
+from typing import Any, Dict, Optional
+
+from infra.core.logger import get_logger
 
 from .mail_query_schema import GraphMailItem
-from infra.core.logger import get_logger
 
 logger = get_logger(__name__)
 

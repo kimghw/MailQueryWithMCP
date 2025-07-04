@@ -18,20 +18,19 @@ Email Dashboard 모듈
 
 # 안전한 import를 위한 예외 처리
 try:
+    from .event_processor import EmailDashboardEventProcessor
+    from .orchestrator import EmailDashboardOrchestrator
+    from .query import EmailDashboardQuery
+    from .repository import EmailDashboardRepository
     from .schema import (
-        EmailDashboardEvent,
+        ORGANIZATIONS,
+        AgendaStatusSummary,
+        DashboardStats,
         EmailAgendaChair,
         EmailAgendaMemberResponse,
         EmailAgendaMemberResponseTime,
-        DashboardStats,
-        AgendaStatusSummary,
-        ORGANIZATIONS,
+        EmailDashboardEvent,
     )
-
-    from .repository import EmailDashboardRepository
-    from .query import EmailDashboardQuery
-    from .event_processor import EmailDashboardEventProcessor
-    from .orchestrator import EmailDashboardOrchestrator
     from .service import EmailDashboardService
 
 except ImportError as e:

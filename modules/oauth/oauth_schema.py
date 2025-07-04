@@ -2,10 +2,11 @@
 OAuth Pydantic 모델
 """
 
-from typing import Optional, Dict, Any, List
 from datetime import datetime
-from pydantic import BaseModel, Field
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 
 class OAuthState(str, Enum):

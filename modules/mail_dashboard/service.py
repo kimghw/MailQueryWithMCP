@@ -10,10 +10,12 @@ Email Dashboard Service - 업데이트 버전
 
 import asyncio
 import threading
-from typing import Dict, Any, Optional
 from pathlib import Path
-from infra.core import get_database_manager, get_logger, get_config, get_kafka_client
+from typing import Any, Dict, Optional
+
+from infra.core import get_config, get_database_manager, get_kafka_client, get_logger
 from infra.core.exceptions import DatabaseError, KafkaError
+
 from .orchestrator import EmailDashboardOrchestrator
 from .repository import EmailDashboardRepository
 from .sql import get_create_tables_sql, get_required_tables

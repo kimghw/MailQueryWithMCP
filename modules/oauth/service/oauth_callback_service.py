@@ -1,18 +1,20 @@
 """OAuth 콜백 처리 서비스"""
 
 import asyncio
-from typing import Dict, Any, Optional
 from datetime import datetime
+from typing import Any, Dict, Optional
+
 from infra.core.logger import get_logger
-from infra.core.token_service import get_token_service
 from infra.core.oauth_client import get_oauth_client
-from ..auth_schema import AuthCallback, AuthState, AuthSession
+from infra.core.token_service import get_token_service
+
 from .._auth_helpers import (
-    auth_generate_callback_success_html,
     auth_generate_callback_error_html,
+    auth_generate_callback_success_html,
     auth_log_session_activity,
     auth_validate_token_info,
 )
+from ..auth_schema import AuthCallback, AuthSession, AuthState
 from .account_service import AuthAccountService
 from .oauth_service import AuthOAuthService
 

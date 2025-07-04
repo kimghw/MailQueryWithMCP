@@ -3,11 +3,11 @@ OData 필터 문자열 생성기
 Microsoft Graph API용 OData 쿼리 필터 구성
 """
 
-from typing import Optional
 from datetime import datetime
+from typing import Optional
 
-from .mail_query_schema import MailQueryFilters
 from .mail_query_helpers import escape_odata_string  # 언더스코어 제거됨
+from .mail_query_schema import MailQueryFilters
 
 
 class ODataFilterBuilder:

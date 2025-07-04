@@ -1,9 +1,10 @@
 """Mail Processor 모듈 스키마 정의"""
 
-from pydantic import BaseModel, Field
-from typing import List, Optional, Dict, Any
 from datetime import datetime
 from enum import Enum
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 # 데이터 스키마 객체에 대해서 가각 설명해주는 주석을 추가합니다.
 ## GrapMailItem 클래스는 Microsoft Graph API를 통해 가져온 메일 아이템을 표현합니다.

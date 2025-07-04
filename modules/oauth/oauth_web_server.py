@@ -3,15 +3,16 @@ OAuth 콜백 처리 웹서버
 """
 
 import asyncio
-import threading
 import json
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from typing import Optional, Dict, Any
-from urllib.parse import urlparse, parse_qs
+import threading
 from datetime import datetime
+from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import Any, Dict, Optional
+from urllib.parse import parse_qs, urlparse
 
-from infra.core.logger import get_logger
 from infra.core.config import get_config
+from infra.core.logger import get_logger
+
 from .service.oauth_callback_service import OAuthCallbackService
 
 logger = get_logger(__name__)

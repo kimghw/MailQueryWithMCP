@@ -1,12 +1,13 @@
 """데이터베이스 서비스 - 중복 확인 및 저장"""
 
-import json
 import hashlib
+import json
 from datetime import datetime
-from typing import Tuple, List, Optional, Dict, Any
-from infra.core.logger import get_logger
-from infra.core.database import get_database_manager
+from typing import Any, Dict, List, Optional, Tuple
+
 from infra.core.config import get_config
+from infra.core.database import get_database_manager
+from infra.core.logger import get_logger
 from modules.mail_process.mail_processor_schema import ProcessedMailData
 
 

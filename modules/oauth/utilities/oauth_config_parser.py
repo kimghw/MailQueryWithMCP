@@ -2,9 +2,11 @@
 
 import json
 from typing import List, Optional
+
 from cryptography.fernet import Fernet
-from infra.core.logger import get_logger
+
 from infra.core.config import get_config
+from infra.core.logger import get_logger
 
 
 class OAuthConfigParser:

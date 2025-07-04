@@ -1,7 +1,9 @@
 """인증 활동 로깅 유틸리티"""
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from infra.core.logger import get_logger
+
 from .response_generator import AuthResponseGenerator
 
 

@@ -6,8 +6,8 @@ Email Dashboard 모듈 시작 스크립트
 독립적으로 실행할 수 있는 서비스 형태로 구성되어 있습니다.
 """
 
-import sys
 import signal
+import sys
 import time
 from pathlib import Path
 
@@ -15,13 +15,13 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
+from infra.core import get_config, get_logger
 from modules.mail_dashboard import (
     get_dashboard_service,
     initialize_dashboard_module,
     start_dashboard_event_subscription,
     stop_dashboard_event_subscription,
 )
-from infra.core import get_logger, get_config
 
 logger = get_logger(__name__)
 config = get_config()

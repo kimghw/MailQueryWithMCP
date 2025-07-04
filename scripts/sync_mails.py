@@ -6,19 +6,19 @@
 """
 import asyncio
 import sys
-from datetime import datetime, timedelta, timezone
-from typing import Optional, List, Dict, Any, Tuple
 import time
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional, Tuple
 
-from infra.core import get_database_manager, get_logger, get_config, get_token_service
-from infra.core.exceptions import TokenExpiredError, DatabaseError
+from infra.core import get_config, get_database_manager, get_logger, get_token_service
+from infra.core.exceptions import DatabaseError, TokenExpiredError
+from modules.mail_process import MailProcessorOrchestrator
 from modules.mail_query import (
+    MailQueryFilters,
     MailQueryOrchestrator,
     MailQueryRequest,
-    MailQueryFilters,
     PaginationOptions,
 )
-from modules.mail_process import MailProcessorOrchestrator
 
 logger = get_logger(__name__)
 

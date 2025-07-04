@@ -6,19 +6,21 @@ Email Dashboard 모듈의 메인 오케스트레이터입니다.
 """
 
 from datetime import datetime
-from typing import Dict, Any, List, Optional
+from typing import Any, Dict, List, Optional
+
 from infra.core import get_logger
 from infra.core.exceptions import BusinessLogicError, ValidationError
+
 from .event_processor import EmailDashboardEventProcessor
-from .repository import EmailDashboardRepository
 from .query import EmailDashboardQuery
+from .repository import EmailDashboardRepository
 from .schema import (
-    AgendaSearchFilter,
-    DashboardRequest,
     AgendaDetail,
-    DashboardStats,
+    AgendaSearchFilter,
     AgendaStatusSummary,
     AgendaTimeline,
+    DashboardRequest,
+    DashboardStats,
 )
 
 

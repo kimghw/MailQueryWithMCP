@@ -1,7 +1,8 @@
 """메일 파싱 유틸리티"""
 
-from typing import Dict, Optional
 from datetime import datetime
+from typing import Dict, Optional
+
 from infra.core.logger import get_logger
 
 

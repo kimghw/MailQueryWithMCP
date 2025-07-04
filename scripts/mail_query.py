@@ -1,16 +1,16 @@
 # test_all_accounts_mail_query.py
 import asyncio
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import Any, Dict, List
 
-from modules.mail_query import (
-    MailQueryOrchestrator,
-    MailQueryRequest,
-    MailQueryFilters,
-    PaginationOptions,
-)
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
+from modules.mail_query import (
+    MailQueryFilters,
+    MailQueryOrchestrator,
+    MailQueryRequest,
+    PaginationOptions,
+)
 
 logger = get_logger(__name__)
 

@@ -9,19 +9,19 @@ import asyncio
 import base64
 import json
 import urllib.parse
-from typing import Optional, Dict, Any, List
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from typing import Any, Dict, List, Optional
 
 import aiohttp
 
 from .config import get_config
 from .exceptions import (
+    APIConnectionError,
     AuthenticationError,
     TokenError,
     TokenExpiredError,
     TokenRefreshError,
-    APIConnectionError,
 )
 from .logger import get_logger
 

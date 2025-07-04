@@ -5,14 +5,16 @@ Email Dashboard Repository
 """
 
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
 from infra.core import get_database_manager, get_logger
 from infra.core.exceptions import DatabaseError, ValidationError
+
 from .schema import (
+    ORGANIZATIONS,
     EmailAgendaChair,
     EmailAgendaMemberResponse,
     EmailAgendaMemberResponseTime,
-    ORGANIZATIONS,
 )
 
 

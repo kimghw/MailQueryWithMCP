@@ -5,9 +5,9 @@ Email Dashboard 모듈의 데이터 스키마 정의
 """
 
 from datetime import datetime
-from typing import Optional, List, Dict, Any
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Optional
 
+from pydantic import BaseModel, Field
 
 # =============================================================================
 # 이벤트 관련 스키마

@@ -1,6 +1,7 @@
 """인증 관련 검증 유틸리티"""
 
-from typing import Dict, Any
+from typing import Any, Dict
+
 from infra.core.logger import get_logger
 
 

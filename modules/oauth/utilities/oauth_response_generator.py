@@ -1,6 +1,7 @@
 """인증 응답 생성 유틸리티"""
 
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 from infra.core.logger import get_logger
 
 

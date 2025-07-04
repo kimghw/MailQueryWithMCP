@@ -4,20 +4,22 @@ Email Dashboard Query
 대시보드 조회 및 통계 기능을 제공합니다.
 """
 
-from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Any
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
 from infra.core import get_database_manager, get_logger
 from infra.core.exceptions import DatabaseError
+
 from .schema import (
-    AgendaDetail,
-    AgendaStatusSummary,
-    DashboardStats,
-    OrganizationStats,
-    OrganizationResponse,
-    AgendaSearchFilter,
-    TimelineEvent,
-    AgendaTimeline,
     ORGANIZATIONS,
+    AgendaDetail,
+    AgendaSearchFilter,
+    AgendaStatusSummary,
+    AgendaTimeline,
+    DashboardStats,
+    OrganizationResponse,
+    OrganizationStats,
+    TimelineEvent,
 )
 
 

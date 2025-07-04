@@ -1,20 +1,22 @@
 """키워드 추출 서비스 - 대시보드 이벤트 통합된 완전한 파일"""
 
+import asyncio
+import json
 import re
 import time
-import json
-import asyncio
-import aiohttp
 from collections import Counter
-from typing import List, Optional, Tuple, Dict, Any
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Tuple
+
+import aiohttp
 
 from infra.core.config import get_config
 from infra.core.logger import get_logger
 from modules.keyword_extractor.keyword_extractor_schema import (
-    KeywordExtractionResponse,
     ExtractionMethod,
+    KeywordExtractionResponse,
 )
+
 from .dashboard_event_service import DashboardEventService
 
 
