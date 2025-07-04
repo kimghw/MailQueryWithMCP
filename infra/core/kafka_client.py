@@ -385,12 +385,15 @@ class KafkaClient:
         try:
             logger.info(f"이벤트 소비 시작: topics={topics}, group={consumer_group_id}")
 
+            # 폴링 타임아웃 설정 (1초)
+            poll_timeout_ms = 1000
+
             for message in consumer:
                 try:
                     # 메시지 처리
-                    topic = message.topic
+                       topic = message.topic
                     value = message.value
-
+  
                     # DEBUG 레벨에서만 상세 로그
                     if logger.isEnabledFor(logging.DEBUG):
                         logger.debug(
@@ -420,7 +423,12 @@ class KafkaClient:
             ) from e
         finally:
             consumer.close()
-            logger.info(f"이벤트 소비 완료: {processed_count}개 메시지 처리")
+            # 메시지가 처리된 경우에만 로그 출력
+            if processed_count > 0:
+                logger.info(f"이벤트 소비 완료: {processed_count}개 메시지 처리")
+            else:
+                # DEBUG 레벨로 변경하여 노이즈 줄이기
+                logger.debug(f"이벤트 소비 완료: {processed_count}개 메시지 처리")
 
     def publish_email_event(
         self,
