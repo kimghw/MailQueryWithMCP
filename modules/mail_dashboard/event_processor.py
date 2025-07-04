@@ -2,8 +2,10 @@
 Email Dashboard Event Processor
 
 이메일 관련 이벤트를 처리하여 데이터베이스에 저장합니다.
+조건에 맞지 않는 이벤트도 별도 테이블에 저장합니다.
 """
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -39,18 +41,41 @@ class EmailDashboardEventProcessor:
 
             # 추출 성공 여부 확인
             if not event.data.extraction_metadata.success:
+                # 추출 실패한 이벤트도 저장
+                self._save_unprocessed_event(
+                    event, "extraction_failed", "키워드 추출 실패"
+                )
                 self.logger.warning(
-                    f"추출 실패한 이벤트 무시: {event.event_id}, "
+                    f"추출 실패한 이벤트 저장: {event.event_id}, "
                     f"mail_id={event.data.mail_id}"
                 )
                 return {
                     "success": True,
-                    "action": "ignored",
+                    "action": "saved_as_unprocessed",
                     "reason": "extraction_failed",
-                    "message": "추출 실패한 이벤트는 처리하지 않음",
+                    "message": "추출 실패한 이벤트를 미처리 테이블에 저장",
                 }
 
             extraction_result = event.data.extraction_result
+
+            # 대시보드 처리 가능 여부 확인
+            is_worthy, reason = self._check_dashboard_worthiness(extraction_result)
+
+            if not is_worthy:
+                # 조건에 맞지 않는 이벤트 저장
+                self._save_unprocessed_event(
+                    event, reason, self._get_reason_description(reason)
+                )
+                self.logger.info(
+                    f"미처리 이벤트 저장: event_id={event.event_id}, "
+                    f"reason={reason}, org={extraction_result.sender_organization}"
+                )
+                return {
+                    "success": True,
+                    "action": "saved_as_unprocessed",
+                    "reason": reason,
+                    "message": f"조건 불충족 이벤트를 미처리 테이블에 저장: {reason}",
+                }
 
             # 발신자 타입에 따른 처리 분기
             if extraction_result.sender_type == "CHAIR":
@@ -58,27 +83,169 @@ class EmailDashboardEventProcessor:
             elif extraction_result.sender_type == "MEMBER":
                 return self._email_dashboard_process_member_mail(event)
             else:
+                # 알 수 없는 발신자 타입도 저장
+                self._save_unprocessed_event(
+                    event,
+                    "unknown_sender_type",
+                    f"알 수 없는 발신자 타입: {extraction_result.sender_type}",
+                )
                 self.logger.warning(
                     f"알 수 없는 발신자 타입: {extraction_result.sender_type}, "
                     f"event_id={event.event_id}"
                 )
                 return {
                     "success": True,
-                    "action": "ignored",
+                    "action": "saved_as_unprocessed",
                     "reason": "unknown_sender_type",
                     "message": f"알 수 없는 발신자 타입: {extraction_result.sender_type}",
                 }
 
         except ValidationError as e:
             self.logger.error(f"이벤트 검증 실패: {str(e)}")
+            # 검증 실패 이벤트도 원본 데이터와 함께 저장 시도
+            try:
+                self._save_raw_unprocessed_event(event_data, "validation_error", str(e))
+            except Exception as save_error:
+                self.logger.error(f"미처리 이벤트 저장 실패: {str(save_error)}")
             return {"success": False, "error": "validation_error", "message": str(e)}
         except Exception as e:
             self.logger.error(f"이벤트 처리 중 예상치 못한 오류: {str(e)}")
+            # 예외 발생 이벤트도 저장 시도
+            try:
+                self._save_raw_unprocessed_event(event_data, "other", str(e))
+            except Exception as save_error:
+                self.logger.error(f"미처리 이벤트 저장 실패: {str(save_error)}")
             return {
                 "success": False,
                 "error": "processing_error",
                 "message": f"이벤트 처리 실패: {str(e)}",
             }
+
+    def _check_dashboard_worthiness(self, extraction_result) -> tuple[bool, str]:
+        """
+        대시보드 처리 가능 여부 확인
+
+        Returns:
+            (처리 가능 여부, 불가능한 경우 사유)
+        """
+        # 조건 1: 아젠다 번호 확인
+        if not extraction_result.agenda_no:
+            return False, "no_agenda_number"
+
+        # 조건 2: 발신자 조직 확인
+        sender_org = extraction_result.sender_organization
+        if not sender_org:
+            return False, "invalid_organization"
+
+        # 조건 3: IACS 멤버 확인
+        if sender_org not in ORGANIZATIONS:
+            return False, "not_iacs_member"
+
+        return True, ""
+
+    def _get_reason_description(self, reason: str) -> str:
+        """미처리 사유에 대한 설명"""
+        descriptions = {
+            "no_agenda_number": "아젠다 번호 없음",
+            "invalid_organization": "발신 기관 정보 없음",
+            "not_iacs_member": "IACS 멤버가 아닌 기관",
+            "unknown_sender_type": "알 수 없는 발신자 타입",
+            "extraction_failed": "키워드 추출 실패",
+            "validation_error": "이벤트 데이터 검증 실패",
+            "other": "기타 오류",
+        }
+        return descriptions.get(reason, reason)
+
+    def _save_unprocessed_event(
+        self, event: EmailDashboardEvent, reason: str, description: str
+    ):
+        """미처리 이벤트 저장"""
+        try:
+            extraction = event.data.extraction_result
+
+            # 날짜 파싱
+            send_time = None
+            if extraction.send_time:
+                try:
+                    send_time = datetime.fromisoformat(
+                        extraction.send_time.replace(" ", "T")
+                    )
+                    if send_time.tzinfo is None:
+                        send_time = send_time.replace(tzinfo=timezone.utc)
+                except Exception:
+                    pass
+
+            deadline = None
+            if extraction.deadline:
+                try:
+                    deadline = datetime.fromisoformat(
+                        extraction.deadline.replace(" ", "T")
+                    )
+                    if deadline.tzinfo is None:
+                        deadline = deadline.replace(tzinfo=timezone.utc)
+                except Exception:
+                    pass
+
+            # 이벤트 전체 데이터를 JSON으로 저장
+            raw_event_data = json.dumps(event.model_dump(), ensure_ascii=False)
+
+            # 데이터베이스에 저장
+            self.repository.email_dashboard_save_unprocessed_event(
+                event_id=event.event_id,
+                event_type=event.event_type,
+                mail_id=event.data.mail_id,
+                sender_type=extraction.sender_type,
+                sender_organization=extraction.sender_organization,
+                agenda_no=extraction.agenda_no,
+                send_time=send_time,
+                subject=None,  # 현재 스키마에는 subject가 없음
+                summary=extraction.summary,
+                keywords=extraction.keywords,
+                mail_type=extraction.mail_type,
+                decision_status=extraction.decision_status,
+                has_deadline=extraction.has_deadline,
+                deadline=deadline,
+                unprocessed_reason=reason,
+                raw_event_data=raw_event_data,
+            )
+
+        except Exception as e:
+            self.logger.error(f"미처리 이벤트 저장 실패: {str(e)}")
+
+    def _save_raw_unprocessed_event(
+        self, event_data: Dict[str, Any], reason: str, description: str
+    ):
+        """원본 이벤트 데이터를 미처리 테이블에 저장 (파싱 실패 시)"""
+        try:
+            # 최소한의 정보 추출 시도
+            event_id = event_data.get(
+                "event_id", f"unknown_{datetime.now().timestamp()}"
+            )
+            event_type = event_data.get("event_type", "unknown")
+
+            # 전체 데이터를 JSON으로 저장
+            raw_event_data = json.dumps(event_data, ensure_ascii=False)
+
+            self.repository.email_dashboard_save_unprocessed_event(
+                event_id=event_id,
+                event_type=event_type,
+                mail_id=None,
+                sender_type=None,
+                sender_organization=None,
+                agenda_no=None,
+                send_time=None,
+                subject=None,
+                summary=description,
+                keywords=[],
+                mail_type=None,
+                decision_status=None,
+                has_deadline=False,
+                deadline=None,
+                unprocessed_reason=reason,
+                raw_event_data=raw_event_data,
+            )
+        except Exception as e:
+            self.logger.error(f"원본 미처리 이벤트 저장 실패: {str(e)}")
 
     def _email_dashboard_validate_and_parse_event(
         self, event_data: Dict[str, Any]
@@ -147,7 +314,6 @@ class EmailDashboardEventProcessor:
             # 회차 번호 및 버전 추출
             round_no = None
             round_version = None
-            agenda_version = None  # sequence 필드가 없으므로 항상 None
 
             if extraction.agenda_info:
                 if extraction.agenda_info.round_no:
@@ -310,7 +476,7 @@ class EmailDashboardEventProcessor:
         if extraction.agenda_info and extraction.agenda_info.full_pattern:
             return extraction.agenda_info.full_pattern
 
-        # 3. 개별 정보로 구성 (sequence 없이)
+        # 3. 개별 정보로 구성
         if extraction.agenda_info:
             info = extraction.agenda_info
             if info.panel_name and info.round_no:
@@ -363,7 +529,6 @@ class EmailDashboardEventProcessor:
 
             round_no = None
             round_version = None
-            agenda_version = None  # sequence 필드가 없으므로 항상 None
 
             if extraction.agenda_info:
                 if extraction.agenda_info.round_no:
@@ -409,6 +574,7 @@ class EmailDashboardEventProcessor:
             results = []
             success_count = 0
             error_count = 0
+            unprocessed_count = 0
 
             for i, event_data in enumerate(events):
                 try:
@@ -422,7 +588,10 @@ class EmailDashboardEventProcessor:
                     )
 
                     if result["success"]:
-                        success_count += 1
+                        if result.get("action") == "saved_as_unprocessed":
+                            unprocessed_count += 1
+                        else:
+                            success_count += 1
                     else:
                         error_count += 1
 
@@ -446,16 +615,18 @@ class EmailDashboardEventProcessor:
                     )
 
             self.logger.info(
-                f"배치 처리 완료: 총 {len(events)}개, 성공 {success_count}개, 실패 {error_count}개"
+                f"배치 처리 완료: 총 {len(events)}개, "
+                f"성공 {success_count}개, 미처리 {unprocessed_count}개, 실패 {error_count}개"
             )
 
             return {
                 "success": True,
                 "total_events": len(events),
                 "success_count": success_count,
+                "unprocessed_count": unprocessed_count,
                 "error_count": error_count,
                 "results": results,
-                "message": f"배치 처리 완료: {success_count}/{len(events)} 성공",
+                "message": f"배치 처리 완료: {success_count}/{len(events)} 성공, {unprocessed_count} 미처리",
             }
 
         except Exception as e:
@@ -464,4 +635,73 @@ class EmailDashboardEventProcessor:
                 "success": False,
                 "error": "batch_processing_failure",
                 "message": f"배치 처리 전체 실패: {str(e)}",
+            }
+
+    def email_dashboard_reprocess_unprocessed_events(
+        self, filter_params: Optional[Dict[str, Any]] = None
+    ) -> Dict[str, Any]:
+        """
+        미처리 이벤트 재처리
+
+        Args:
+            filter_params: 필터 조건
+
+        Returns:
+            재처리 결과
+        """
+        try:
+            # 미처리 이벤트 조회
+            unprocessed_events = self.repository.email_dashboard_get_unprocessed_events(
+                filter_params
+            )
+
+            if not unprocessed_events:
+                return {
+                    "success": True,
+                    "message": "재처리할 미처리 이벤트가 없습니다",
+                    "processed_count": 0,
+                }
+
+            processed_count = 0
+            success_count = 0
+
+            for event in unprocessed_events:
+                try:
+                    # 원본 이벤트 데이터 파싱
+                    raw_event = json.loads(event.raw_event_data)
+
+                    # 재처리
+                    result = self.email_dashboard_process_event(raw_event)
+
+                    if (
+                        result.get("success")
+                        and result.get("action") != "saved_as_unprocessed"
+                    ):
+                        # 성공적으로 처리된 경우 processed 플래그 업데이트
+                        self.repository.email_dashboard_mark_event_processed(
+                            event.event_id
+                        )
+                        success_count += 1
+
+                    processed_count += 1
+
+                except Exception as e:
+                    self.logger.error(
+                        f"미처리 이벤트 재처리 실패: event_id={event.event_id}, error={str(e)}"
+                    )
+
+            return {
+                "success": True,
+                "total_events": len(unprocessed_events),
+                "processed_count": processed_count,
+                "success_count": success_count,
+                "message": f"{success_count}/{len(unprocessed_events)}개 이벤트 재처리 성공",
+            }
+
+        except Exception as e:
+            self.logger.error(f"미처리 이벤트 재처리 실패: {str(e)}")
+            return {
+                "success": False,
+                "error": "reprocess_failure",
+                "message": f"미처리 이벤트 재처리 실패: {str(e)}",
             }

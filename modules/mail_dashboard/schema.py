@@ -121,6 +121,7 @@ class EmailAgendaMemberResponse(BaseModel):
     PRS: Optional[str] = None
     RINA: Optional[str] = None
     IL: Optional[str] = None
+    TL: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -143,8 +144,37 @@ class EmailAgendaMemberResponseTime(BaseModel):
     PRS: Optional[datetime] = None
     RINA: Optional[datetime] = None
     IL: Optional[datetime] = None
+    TL: Optional[datetime] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+
+class EmailEventUnprocessed(BaseModel):
+    """미처리 이벤트 정보"""
+
+    id: Optional[int] = None
+    event_id: str
+    event_type: str
+    mail_id: Optional[str] = None
+    sender_type: Optional[str] = None
+    sender_organization: Optional[str] = None
+    agenda_no: Optional[str] = None
+    send_time: Optional[datetime] = None
+    subject: Optional[str] = None
+    summary: Optional[str] = None
+    keywords: Optional[List[str]] = None
+    mail_type: Optional[str] = None
+    decision_status: Optional[str] = None
+    has_deadline: bool = False
+    deadline: Optional[datetime] = None
+    unprocessed_reason: str
+    raw_event_data: str  # JSON string
+    created_at: Optional[datetime] = None
+    processed: bool = False
+    processed_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
@@ -179,7 +209,7 @@ class AgendaDetail(BaseModel):
     summary: Optional[str] = None
     responses: List[OrganizationResponse] = []
     response_count: int = 0
-    total_organizations: int = 11
+    total_organizations: int = 12  # IL 포함하여 12개
 
 
 class AgendaStatusSummary(BaseModel):
@@ -213,6 +243,7 @@ class DashboardStats(BaseModel):
     today_deadline_agendas: int
     overall_response_rate: float
     organization_stats: List[OrganizationStats] = []
+    unprocessed_events_count: int = 0  # 추가
 
 
 class TimelineEvent(BaseModel):
@@ -229,6 +260,15 @@ class AgendaTimeline(BaseModel):
 
     agenda_no: str
     events: List[TimelineEvent] = []
+
+
+class UnprocessedEventSummary(BaseModel):
+    """미처리 이벤트 요약"""
+
+    total_count: int
+    by_reason: Dict[str, int]
+    by_organization: Dict[str, int]
+    recent_events: List[EmailEventUnprocessed] = []
 
 
 # =============================================================================
@@ -253,19 +293,32 @@ class AgendaSearchFilter(BaseModel):
     response_status: Optional[str] = None  # "responded", "not_responded"
 
 
+class UnprocessedEventFilter(BaseModel):
+    """미처리 이벤트 검색 필터"""
+
+    unprocessed_reason: Optional[str] = None
+    sender_organization: Optional[str] = None
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    processed: Optional[bool] = None
+    limit: int = 100
+    offset: int = 0
+
+
 class DashboardRequest(BaseModel):
     """대시보드 요청"""
 
     date_range_days: int = 30  # 최근 며칠간의 데이터
     include_organization_stats: bool = True
     include_overdue: bool = True
+    include_unprocessed: bool = True  # 추가
 
 
 # =============================================================================
 # 상수 정의
 # =============================================================================
 
-# 조직/기관 코드 목록
+# 조직/기관 코드 목록 (TL 추가)
 ORGANIZATIONS = [
     "ABS",
     "BV",
@@ -278,6 +331,8 @@ ORGANIZATIONS = [
     "PRS",
     "RINA",
     "IL",
+    "TL",
+    "IACS",
 ]
 
 # 메일 타입
@@ -288,3 +343,14 @@ DECISION_STATUSES = ["created", "comment", "consolidated", "review", "decision"]
 
 # 발신자 타입
 SENDER_TYPES = ["CHAIR", "MEMBER"]
+
+# 미처리 사유
+UNPROCESSED_REASONS = [
+    "no_agenda_number",
+    "invalid_organization",
+    "not_iacs_member",
+    "unknown_sender_type",
+    "extraction_failed",
+    "validation_error",
+    "other",
+]

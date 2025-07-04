@@ -69,4 +69,5 @@ def get_required_tables() -> List[str]:
         "email_agendas_chair",
         "email_agenda_member_responses",
         "email_agenda_member_response_times",
+        "email_events_unprocessed",  # 추가
     ]

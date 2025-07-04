@@ -1,7 +1,7 @@
 -- Email Dashboard 모듈 테이블 생성 스크립트
--- 버전: 3.0.0
+-- 버전: 4.0.0
 -- 생성일: 2025-01-04
--- 변경사항: agenda_sequence/agenda_version 제거, round_version만 유지
+-- 변경사항: 미처리 이벤트 저장 테이블 추가
 
 -- 1. 의장 발송 아젠다 정보 테이블
 CREATE TABLE IF NOT EXISTS email_agendas_chair (
@@ -64,6 +64,38 @@ CREATE TABLE IF NOT EXISTS email_agenda_member_response_times (
     
     -- 외래키 제약
     FOREIGN KEY (agenda_no) REFERENCES email_agendas_chair (agenda_no) ON DELETE CASCADE
+);
+
+-- 4. 미처리 이벤트 테이블 (신규)
+CREATE TABLE IF NOT EXISTS email_events_unprocessed (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT NOT NULL UNIQUE,
+    event_type TEXT NOT NULL,
+    mail_id TEXT,
+    sender_type TEXT,
+    sender_organization TEXT,
+    agenda_no TEXT,
+    send_time TIMESTAMP,
+    subject TEXT,
+    summary TEXT,
+    keywords TEXT, -- JSON 배열로 저장
+    mail_type TEXT,
+    decision_status TEXT,
+    has_deadline BOOLEAN DEFAULT FALSE,
+    deadline TIMESTAMP,
+    unprocessed_reason TEXT NOT NULL, -- 미처리 사유
+    raw_event_data TEXT NOT NULL, -- 전체 이벤트 JSON
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    processed BOOLEAN DEFAULT FALSE,
+    processed_at TIMESTAMP,
+    
+    -- 인덱스를 위한 필드
+    INDEX idx_unprocessed_event_id (event_id),
+    INDEX idx_unprocessed_sender_org (sender_organization),
+    INDEX idx_unprocessed_agenda_no (agenda_no),
+    INDEX idx_unprocessed_reason (unprocessed_reason),
+    INDEX idx_unprocessed_processed (processed),
+    INDEX idx_unprocessed_created_at (created_at)
 );
 
 -- 기본 인덱스 생성

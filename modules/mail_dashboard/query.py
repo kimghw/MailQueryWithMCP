@@ -2,6 +2,7 @@
 Email Dashboard Query
 
 대시보드 조회 및 통계 기능을 제공합니다.
+미처리 이벤트 조회 기능 추가
 """
 
 from datetime import datetime, timedelta, timezone
@@ -17,9 +18,12 @@ from .schema import (
     AgendaStatusSummary,
     AgendaTimeline,
     DashboardStats,
+    EmailEventUnprocessed,
     OrganizationResponse,
     OrganizationStats,
     TimelineEvent,
+    UnprocessedEventFilter,
+    UnprocessedEventSummary,
 )
 
 
@@ -99,7 +103,7 @@ class EmailDashboardQuery:
 
             # 기본 쿼리
             query = f"""
-                SELECT c.panel_id, c.agenda_no, c.round_no, c.round_version, c.agenda_version,
+                SELECT c.panel_id, c.agenda_no, c.round_no, c.round_version,
                        c.send_time, c.deadline, c.mail_type, c.decision_status, c.summary
                 FROM email_agendas_chair c
                 WHERE {where_clause}
@@ -147,7 +151,6 @@ class EmailDashboardQuery:
             panel_id=row["panel_id"],
             round_no=row["round_no"],
             round_version=row["round_version"],
-            agenda_version=row["agenda_version"],
             send_time=datetime.fromisoformat(row["send_time"]),
             deadline=(
                 datetime.fromisoformat(row["deadline"]) if row["deadline"] else None
@@ -408,6 +411,11 @@ class EmailDashboardQuery:
                 start_date
             )
 
+            # 미처리 이벤트 수 추가
+            unprocessed_events_count = (
+                self._email_dashboard_query_get_unprocessed_count()
+            )
+
             return DashboardStats(
                 total_agendas=total_agendas,
                 pending_agendas=pending_agendas,
@@ -416,6 +424,7 @@ class EmailDashboardQuery:
                 today_deadline_agendas=today_deadline_agendas,
                 overall_response_rate=overall_response_rate,
                 organization_stats=organization_stats,
+                unprocessed_events_count=unprocessed_events_count,
             )
 
         except Exception as e:
@@ -479,6 +488,13 @@ class EmailDashboardQuery:
             WHERE deadline >= ? AND deadline < ?
             """,
             (today_start.isoformat(), today_end.isoformat()),
+        )
+        return result["count"] if result else 0
+
+    def _email_dashboard_query_get_unprocessed_count(self) -> int:
+        """미처리 이벤트 수"""
+        result = self.db.fetch_one(
+            "SELECT COUNT(*) as count FROM email_events_unprocessed WHERE processed = 0"
         )
         return result["count"] if result else 0
 
@@ -673,3 +689,132 @@ class EmailDashboardQuery:
             raise DatabaseError(
                 f"아젠다 타임라인 조회 실패: {str(e)}", operation="get_agenda_timeline"
             ) from e
+
+    # =========================================================================
+    # 미처리 이벤트 조회 (신규)
+    # =========================================================================
+
+    def email_dashboard_query_get_unprocessed_events_summary(
+        self, filter_params: Optional[UnprocessedEventFilter] = None
+    ) -> UnprocessedEventSummary:
+        """
+        미처리 이벤트 요약 조회
+
+        Args:
+            filter_params: 필터 조건
+
+        Returns:
+            미처리 이벤트 요약
+        """
+        try:
+            # 전체 미처리 수
+            total_count = self.db.fetch_one(
+                "SELECT COUNT(*) as count FROM email_events_unprocessed WHERE processed = 0"
+            )["count"]
+
+            # 사유별 통계
+            by_reason = {}
+            reason_rows = self.db.fetch_all(
+                """
+                SELECT unprocessed_reason, COUNT(*) as count 
+                FROM email_events_unprocessed 
+                WHERE processed = 0
+                GROUP BY unprocessed_reason
+                """
+            )
+            for row in reason_rows:
+                by_reason[row["unprocessed_reason"]] = row["count"]
+
+            # 기관별 통계
+            by_organization = {}
+            org_rows = self.db.fetch_all(
+                """
+                SELECT sender_organization, COUNT(*) as count 
+                FROM email_events_unprocessed 
+                WHERE processed = 0 AND sender_organization IS NOT NULL
+                GROUP BY sender_organization
+                ORDER BY count DESC
+                """
+            )
+            for row in org_rows:
+                by_organization[row["sender_organization"]] = row["count"]
+
+            # 최근 이벤트 10개
+            recent_query = """
+                SELECT id, event_id, event_type, mail_id, sender_type, 
+                       sender_organization, agenda_no, send_time, subject, 
+                       summary, keywords, mail_type, decision_status, 
+                       has_deadline, deadline, unprocessed_reason, 
+                       raw_event_data, created_at, processed, processed_at
+                FROM email_events_unprocessed
+                WHERE processed = 0
+                ORDER BY created_at DESC
+                LIMIT 10
+            """
+
+            recent_rows = self.db.fetch_all(recent_query)
+            recent_events = []
+
+            for row in recent_rows:
+                # 키워드 JSON 파싱
+                import json
+
+                keywords = []
+                if row["keywords"]:
+                    try:
+                        keywords = json.loads(row["keywords"])
+                    except json.JSONDecodeError:
+                        keywords = []
+
+                event = EmailEventUnprocessed(
+                    id=row["id"],
+                    event_id=row["event_id"],
+                    event_type=row["event_type"],
+                    mail_id=row["mail_id"],
+                    sender_type=row["sender_type"],
+                    sender_organization=row["sender_organization"],
+                    agenda_no=row["agenda_no"],
+                    send_time=(
+                        datetime.fromisoformat(row["send_time"])
+                        if row["send_time"]
+                        else None
+                    ),
+                    subject=row["subject"],
+                    summary=row["summary"],
+                    keywords=keywords,
+                    mail_type=row["mail_type"],
+                    decision_status=row["decision_status"],
+                    has_deadline=bool(row["has_deadline"]),
+                    deadline=(
+                        datetime.fromisoformat(row["deadline"])
+                        if row["deadline"]
+                        else None
+                    ),
+                    unprocessed_reason=row["unprocessed_reason"],
+                    raw_event_data=row["raw_event_data"],
+                    created_at=(
+                        datetime.fromisoformat(row["created_at"])
+                        if row["created_at"]
+                        else None
+                    ),
+                    processed=bool(row["processed"]),
+                    processed_at=(
+                        datetime.fromisoformat(row["processed_at"])
+                        if row["processed_at"]
+                        else None
+                    ),
+                )
+                recent_events.append(event)
+
+            return UnprocessedEventSummary(
+                total_count=total_count,
+                by_reason=by_reason,
+                by_organization=by_organization,
+                recent_events=recent_events,
+            )
+
+        except Exception as e:
+            self.logger.error(f"미처리 이벤트 요약 조회 실패: {str(e)}")
+            return UnprocessedEventSummary(
+                total_count=0, by_reason={}, by_organization={}, recent_events=[]
+            )

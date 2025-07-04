@@ -2,8 +2,10 @@
 Email Dashboard Repository
 
 데이터베이스 접근 및 CRUD 작업을 담당합니다.
+미처리 이벤트 저장 기능 추가
 """
 
+import json
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -15,6 +17,7 @@ from .schema import (
     EmailAgendaChair,
     EmailAgendaMemberResponse,
     EmailAgendaMemberResponseTime,
+    EmailEventUnprocessed,
 )
 
 
@@ -405,6 +408,292 @@ class EmailDashboardRepository:
             ) from e
 
     # =========================================================================
+    # 미처리 이벤트 관리 (신규)
+    # =========================================================================
+
+    def email_dashboard_save_unprocessed_event(
+        self,
+        event_id: str,
+        event_type: str,
+        mail_id: Optional[str],
+        sender_type: Optional[str],
+        sender_organization: Optional[str],
+        agenda_no: Optional[str],
+        send_time: Optional[datetime],
+        subject: Optional[str],
+        summary: Optional[str],
+        keywords: List[str],
+        mail_type: Optional[str],
+        decision_status: Optional[str],
+        has_deadline: bool,
+        deadline: Optional[datetime],
+        unprocessed_reason: str,
+        raw_event_data: str,
+    ) -> bool:
+        """
+        미처리 이벤트 저장
+
+        Args:
+            event_id: 이벤트 ID
+            event_type: 이벤트 타입
+            mail_id: 메일 ID
+            sender_type: 발신자 타입
+            sender_organization: 발신 기관
+            agenda_no: 아젠다 번호
+            send_time: 발송 시간
+            subject: 제목
+            summary: 요약
+            keywords: 키워드 목록
+            mail_type: 메일 타입
+            decision_status: 결정 상태
+            has_deadline: 마감일 여부
+            deadline: 마감일
+            unprocessed_reason: 미처리 사유
+            raw_event_data: 원본 이벤트 데이터 (JSON)
+
+        Returns:
+            저장 성공 여부
+        """
+        try:
+            current_time = datetime.now(timezone.utc)
+
+            # 키워드를 JSON 문자열로 변환
+            keywords_json = (
+                json.dumps(keywords, ensure_ascii=False) if keywords else "[]"
+            )
+
+            self.db.insert(
+                table="email_events_unprocessed",
+                data={
+                    "event_id": event_id,
+                    "event_type": event_type,
+                    "mail_id": mail_id,
+                    "sender_type": sender_type,
+                    "sender_organization": sender_organization,
+                    "agenda_no": agenda_no,
+                    "send_time": send_time.isoformat() if send_time else None,
+                    "subject": subject,
+                    "summary": summary,
+                    "keywords": keywords_json,
+                    "mail_type": mail_type,
+                    "decision_status": decision_status,
+                    "has_deadline": has_deadline,
+                    "deadline": deadline.isoformat() if deadline else None,
+                    "unprocessed_reason": unprocessed_reason,
+                    "raw_event_data": raw_event_data,
+                    "created_at": current_time.isoformat(),
+                    "processed": False,
+                    "processed_at": None,
+                },
+            )
+
+            self.logger.info(
+                f"미처리 이벤트 저장 완료: event_id={event_id}, "
+                f"reason={unprocessed_reason}, org={sender_organization}"
+            )
+            return True
+
+        except Exception as e:
+            self.logger.error(
+                f"미처리 이벤트 저장 실패: event_id={event_id}, error={str(e)}"
+            )
+            return False
+
+    def email_dashboard_get_unprocessed_events(
+        self, filter_params: Optional[Dict[str, Any]] = None
+    ) -> List[EmailEventUnprocessed]:
+        """
+        미처리 이벤트 조회
+
+        Args:
+            filter_params: 필터 조건
+
+        Returns:
+            미처리 이벤트 목록
+        """
+        try:
+            # WHERE 조건 구성
+            where_conditions = ["1=1"]  # 항상 참인 조건으로 시작
+            params = []
+
+            if filter_params:
+                if filter_params.get("unprocessed_reason"):
+                    where_conditions.append("unprocessed_reason = ?")
+                    params.append(filter_params["unprocessed_reason"])
+
+                if filter_params.get("sender_organization"):
+                    where_conditions.append("sender_organization = ?")
+                    params.append(filter_params["sender_organization"])
+
+                if filter_params.get("start_date"):
+                    where_conditions.append("created_at >= ?")
+                    params.append(filter_params["start_date"].isoformat())
+
+                if filter_params.get("end_date"):
+                    where_conditions.append("created_at <= ?")
+                    params.append(filter_params["end_date"].isoformat())
+
+                if filter_params.get("processed") is not None:
+                    where_conditions.append("processed = ?")
+                    params.append(1 if filter_params["processed"] else 0)
+
+            where_clause = " AND ".join(where_conditions)
+
+            # 쿼리 실행
+            query = f"""
+                SELECT id, event_id, event_type, mail_id, sender_type, 
+                       sender_organization, agenda_no, send_time, subject, 
+                       summary, keywords, mail_type, decision_status, 
+                       has_deadline, deadline, unprocessed_reason, 
+                       raw_event_data, created_at, processed, processed_at
+                FROM email_events_unprocessed
+                WHERE {where_clause}
+                ORDER BY created_at DESC
+                LIMIT ? OFFSET ?
+            """
+
+            limit = filter_params.get("limit", 100) if filter_params else 100
+            offset = filter_params.get("offset", 0) if filter_params else 0
+            params.extend([limit, offset])
+
+            rows = self.db.fetch_all(query, params)
+
+            events = []
+            for row in rows:
+                # 키워드 JSON 파싱
+                keywords = []
+                if row["keywords"]:
+                    try:
+                        keywords = json.loads(row["keywords"])
+                    except json.JSONDecodeError:
+                        keywords = []
+
+                event = EmailEventUnprocessed(
+                    id=row["id"],
+                    event_id=row["event_id"],
+                    event_type=row["event_type"],
+                    mail_id=row["mail_id"],
+                    sender_type=row["sender_type"],
+                    sender_organization=row["sender_organization"],
+                    agenda_no=row["agenda_no"],
+                    send_time=(
+                        datetime.fromisoformat(row["send_time"])
+                        if row["send_time"]
+                        else None
+                    ),
+                    subject=row["subject"],
+                    summary=row["summary"],
+                    keywords=keywords,
+                    mail_type=row["mail_type"],
+                    decision_status=row["decision_status"],
+                    has_deadline=bool(row["has_deadline"]),
+                    deadline=(
+                        datetime.fromisoformat(row["deadline"])
+                        if row["deadline"]
+                        else None
+                    ),
+                    unprocessed_reason=row["unprocessed_reason"],
+                    raw_event_data=row["raw_event_data"],
+                    created_at=(
+                        datetime.fromisoformat(row["created_at"])
+                        if row["created_at"]
+                        else None
+                    ),
+                    processed=bool(row["processed"]),
+                    processed_at=(
+                        datetime.fromisoformat(row["processed_at"])
+                        if row["processed_at"]
+                        else None
+                    ),
+                )
+                events.append(event)
+
+            return events
+
+        except Exception as e:
+            self.logger.error(f"미처리 이벤트 조회 실패: {str(e)}")
+            return []
+
+    def email_dashboard_mark_event_processed(self, event_id: str) -> bool:
+        """
+        미처리 이벤트를 처리됨으로 표시
+
+        Args:
+            event_id: 이벤트 ID
+
+        Returns:
+            업데이트 성공 여부
+        """
+        try:
+            current_time = datetime.now(timezone.utc)
+
+            self.db.update(
+                table="email_events_unprocessed",
+                data={"processed": True, "processed_at": current_time.isoformat()},
+                where_clause="event_id = ?",
+                where_params=(event_id,),
+            )
+
+            self.logger.info(f"미처리 이벤트 처리 완료 표시: event_id={event_id}")
+            return True
+
+        except Exception as e:
+            self.logger.error(
+                f"미처리 이벤트 업데이트 실패: event_id={event_id}, error={str(e)}"
+            )
+            return False
+
+    def email_dashboard_get_unprocessed_stats(self) -> Dict[str, Any]:
+        """
+        미처리 이벤트 통계 조회
+
+        Returns:
+            통계 정보
+        """
+        try:
+            # 전체 미처리 수
+            total_count = self.db.fetch_one(
+                "SELECT COUNT(*) as count FROM email_events_unprocessed WHERE processed = 0"
+            )["count"]
+
+            # 사유별 통계
+            by_reason = {}
+            reason_rows = self.db.fetch_all(
+                """
+                SELECT unprocessed_reason, COUNT(*) as count 
+                FROM email_events_unprocessed 
+                WHERE processed = 0
+                GROUP BY unprocessed_reason
+                """
+            )
+            for row in reason_rows:
+                by_reason[row["unprocessed_reason"]] = row["count"]
+
+            # 기관별 통계
+            by_organization = {}
+            org_rows = self.db.fetch_all(
+                """
+                SELECT sender_organization, COUNT(*) as count 
+                FROM email_events_unprocessed 
+                WHERE processed = 0 AND sender_organization IS NOT NULL
+                GROUP BY sender_organization
+                ORDER BY count DESC
+                """
+            )
+            for row in org_rows:
+                by_organization[row["sender_organization"]] = row["count"]
+
+            return {
+                "total_count": total_count,
+                "by_reason": by_reason,
+                "by_organization": by_organization,
+            }
+
+        except Exception as e:
+            self.logger.error(f"미처리 이벤트 통계 조회 실패: {str(e)}")
+            return {"total_count": 0, "by_reason": {}, "by_organization": {}}
+
+    # =========================================================================
     # 유틸리티 메서드
     # =========================================================================
 
@@ -423,6 +712,7 @@ class EmailDashboardRepository:
         """모든 Email Dashboard 데이터 삭제 (개발/테스트용)"""
         try:
             tables = [
+                "email_events_unprocessed",  # 추가
                 "email_agenda_member_response_times",
                 "email_agenda_member_responses",
                 "email_agendas_chair",
