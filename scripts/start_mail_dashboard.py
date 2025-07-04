@@ -3,7 +3,7 @@
 Email Dashboard 모듈 시작 스크립트 (주기적 처리 방식)
 
 백그라운드 이벤트 구독 대신 5분마다 주기적으로 대기 중인 이벤트를 처리합니다.
-더 안정적이고 리소스 효율적인 방식입니다.
+시작 시 즉시 처리를 수행합니다.
 
 실행 방법:
     python scripts/start_mail_dashboard.py
@@ -208,9 +208,11 @@ def periodic_event_processor():
         f"📋 주기적 처리 설정: {processing_interval}초 간격, 최대 {max_messages_per_batch}개 메시지"
     )
 
-    next_processing_time = time.time() + processing_interval
+    # 🔧 수정: 시작 시 즉시 처리를 위해 next_processing_time을 0으로 설정
+    next_processing_time = 0  # 즉시 처리
     kafka_error_count = 0
     max_kafka_errors = 3
+    first_run = True  # 첫 실행 여부 플래그
 
     while is_running:
         try:
@@ -218,7 +220,11 @@ def periodic_event_processor():
 
             # 처리 시간이 되었는지 확인
             if current_time >= next_processing_time:
-                logger.info("🔄 주기적 이벤트 처리 시작...")
+                if first_run:
+                    logger.info("🚀 시작 시 즉시 이벤트 처리 실행...")
+                    first_run = False
+                else:
+                    logger.info("🔄 주기적 이벤트 처리 시작...")
 
                 # 이벤트 처리 실행
                 try:
@@ -277,6 +283,43 @@ def periodic_event_processor():
             time.sleep(10)  # 10초 후 재시도
 
     logger.info("주기적 이벤트 처리 워커 종료")
+
+
+def run_immediate_processing():
+    """즉시 이벤트 처리 실행 (초기 실행용)"""
+    global service_instance
+
+    try:
+        logger.info("🚀 초기 이벤트 처리 시작...")
+
+        max_messages_per_batch = int(
+            config.get_setting("DASHBOARD_MAX_MESSAGES_PER_BATCH", "100")
+        )
+        processing_timeout = int(
+            config.get_setting("DASHBOARD_PROCESSING_TIMEOUT", "30")
+        )
+
+        result = simple_event_processor(
+            service_instance, max_messages_per_batch, processing_timeout
+        )
+
+        if result["success"]:
+            processed = result["processed_count"]
+            success_count = result.get("success_count", 0)
+            error_count = result.get("error_count", 0)
+
+            if processed > 0:
+                logger.info(
+                    f"✅ 초기 이벤트 처리 완료: 총 {processed}개 처리 "
+                    f"(성공 {success_count}개, 실패 {error_count}개)"
+                )
+            else:
+                logger.info("💡 처리할 이벤트가 없습니다")
+        else:
+            logger.error(f"❌ 초기 이벤트 처리 실패: {result.get('message')}")
+
+    except Exception as e:
+        logger.error(f"초기 이벤트 처리 중 오류: {str(e)}")
 
 
 def main():
@@ -344,7 +387,7 @@ def main():
             print(f"   오류: {health_status.get('error', 'Unknown')}")
 
         # 4단계: 주기적 처리 시작
-        print("\n4단계: 주기적 이벤트 처리 시작")
+        print("\n4단계: 이벤트 처리 시작")
         is_running = True
 
         # 처리 설정 정보 출력
@@ -365,6 +408,10 @@ def main():
         print(f"   - 처리 간격: {processing_interval}초 ({processing_interval//60}분)")
         print(f"   - 배치 크기: 최대 {max_messages}개 메시지")
         print(f"   - 처리 타임아웃: 30초")
+
+        # 🔧 수정: 즉시 이벤트 처리 실행
+        print("\n🚀 즉시 이벤트 처리 실행 중...")
+        run_immediate_processing()
 
         # 주기적 처리 스레드 시작
         processing_thread = threading.Thread(

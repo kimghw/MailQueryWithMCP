@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS email_agenda_member_response_times (
 );
 
 -- 4. 미처리 이벤트 테이블 (신규)
+-- 4. 미처리 이벤트 테이블 (신규)
 CREATE TABLE IF NOT EXISTS email_events_unprocessed (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id TEXT NOT NULL UNIQUE,
@@ -87,15 +88,7 @@ CREATE TABLE IF NOT EXISTS email_events_unprocessed (
     raw_event_data TEXT NOT NULL, -- 전체 이벤트 JSON
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed BOOLEAN DEFAULT FALSE,
-    processed_at TIMESTAMP,
-    
-    -- 인덱스를 위한 필드
-    INDEX idx_unprocessed_event_id (event_id),
-    INDEX idx_unprocessed_sender_org (sender_organization),
-    INDEX idx_unprocessed_agenda_no (agenda_no),
-    INDEX idx_unprocessed_reason (unprocessed_reason),
-    INDEX idx_unprocessed_processed (processed),
-    INDEX idx_unprocessed_created_at (created_at)
+    processed_at TIMESTAMP
 );
 
 -- 기본 인덱스 생성
@@ -125,3 +118,22 @@ ON email_agenda_member_responses (agenda_no);
 
 CREATE INDEX IF NOT EXISTS idx_email_agenda_member_response_times_agenda_no 
 ON email_agenda_member_response_times (agenda_no);
+
+-- 미처리 이벤트 테이블 인덱스 (신규)
+CREATE INDEX IF NOT EXISTS idx_unprocessed_event_id 
+ON email_events_unprocessed (event_id);
+
+CREATE INDEX IF NOT EXISTS idx_unprocessed_sender_org 
+ON email_events_unprocessed (sender_organization);
+
+CREATE INDEX IF NOT EXISTS idx_unprocessed_agenda_no 
+ON email_events_unprocessed (agenda_no);
+
+CREATE INDEX IF NOT EXISTS idx_unprocessed_reason 
+ON email_events_unprocessed (unprocessed_reason);
+
+CREATE INDEX IF NOT EXISTS idx_unprocessed_processed 
+ON email_events_unprocessed (processed);
+
+CREATE INDEX IF NOT EXISTS idx_unprocessed_created_at 
+ON email_events_unprocessed (created_at);
