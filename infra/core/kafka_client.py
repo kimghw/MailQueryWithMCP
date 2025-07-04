@@ -391,9 +391,9 @@ class KafkaClient:
             for message in consumer:
                 try:
                     # 메시지 처리
-                       topic = message.topic
+                    topic = message.topic
                     value = message.value
-  
+
                     # DEBUG 레벨에서만 상세 로그
                     if logger.isEnabledFor(logging.DEBUG):
                         logger.debug(
@@ -413,7 +413,7 @@ class KafkaClient:
 
                 except Exception as e:
                     logger.error(f"메시지 처리 실패: {str(e)}")
-                    # 계속 진행 (메시지 하나 실패해도 전체 중단하지 않음)
+                # 계속 진행 (메시지 하나 실패해도 전체 중단하지 않음)
 
         except KeyboardInterrupt:
             logger.info("사용자 중단 요청으로 이벤트 소비 중단")
