@@ -389,3 +389,190 @@ class EmailDashboardService:
         except Exception as e:
             self.logger.error(f"모듈 종료 실패: {str(e)}")
             return False
+
+    def process_pending_events(
+        self, max_messages: int = 100, timeout_seconds: int = 5
+    ) -> Dict[str, Any]:
+        """
+        대기 중인 이벤트를 수동으로 처리합니다 (주기적 호출용)
+
+        Args:
+            max_messages: 한 번에 처리할 최대 메시지 수
+            timeout_seconds: 타임아웃 시간 (초)
+
+        Returns:
+            처리 결과
+        """
+        try:
+            # Dashboard 이벤트 활성화 확인
+            enable_dashboard_events = self.config.get_setting(
+                "ENABLE_DASHBOARD_EVENTS", "true"
+            ).lower() in ("true", "1", "yes", "on")
+
+            if not enable_dashboard_events:
+                return {
+                    "success": True,
+                    "processed_count": 0,
+                    "message": "Dashboard 이벤트가 비활성화되어 있습니다",
+                }
+
+            # 구독할 토픽 설정
+            dashboard_topic = self.config.get_setting(
+                "KAFKA_TOPIC_DASHBOARD_EVENTS", "email.api.response"
+            )
+            topics = [dashboard_topic]
+
+            self.logger.debug(f"수동 이벤트 처리 시작: 최대 {max_messages}개 메시지")
+
+            processed_messages = []
+            error_count = 0
+
+            def message_handler(topic: str, message: Dict[str, Any]):
+                """메시지 처리 핸들러"""
+                nonlocal error_count
+                try:
+                    # 이벤트 타입 확인
+                    event_type = message.get("event_type")
+                    if event_type == "email-dashboard":
+                        # Email Dashboard 이벤트 처리
+                        result = self.orchestrator.email_dashboard_handle_email_event(
+                            message
+                        )
+                        processed_messages.append(
+                            {
+                                "event_id": message.get("event_id", "unknown"),
+                                "event_type": event_type,
+                                "result": result,
+                            }
+                        )
+
+                        if result.get("success"):
+                            self.logger.debug(
+                                f"이벤트 처리 성공: {result.get('action')}"
+                            )
+                        else:
+                            self.logger.warning(
+                                f"이벤트 처리 실패: {result.get('message')}"
+                            )
+                            error_count += 1
+                    else:
+                        self.logger.debug(f"처리하지 않는 이벤트 타입: {event_type}")
+
+                except Exception as e:
+                    self.logger.error(f"메시지 처리 중 오류: {str(e)}")
+                    error_count += 1
+
+            # 컨슈머 생성 및 메시지 처리
+            consumer_group_id = f"{self.config.kafka_consumer_group_id}-dashboard"
+            consumer = self.kafka_client.create_consumer(topics, consumer_group_id)
+
+            try:
+                # 지정된 시간 동안 메시지 폴링
+                import time
+
+                start_time = time.time()
+                processed_count = 0
+
+                while (
+                    time.time() - start_time
+                ) < timeout_seconds and processed_count < max_messages:
+                    # 100ms 타임아웃으로 폴링
+                    message_batch = consumer.poll(timeout_ms=100)
+
+                    if not message_batch:
+                        continue  # 메시지가 없으면 계속 폴링
+
+                    for topic_partition, messages in message_batch.items():
+                        for message in messages:
+                            if processed_count >= max_messages:
+                                break
+
+                            try:
+                                # 메시지 역직렬화
+                                if message.value:
+                                    import json
+
+                                    event_data = json.loads(
+                                        message.value.decode("utf-8")
+                                    )
+                                    message_handler(message.topic, event_data)
+                                    processed_count += 1
+
+                            except Exception as e:
+                                self.logger.error(f"메시지 역직렬화 실패: {str(e)}")
+                                error_count += 1
+
+                        if processed_count >= max_messages:
+                            break
+
+                # 수동으로 오프셋 커밋
+                consumer.commit()
+
+            finally:
+                consumer.close()
+
+            success_count = len(processed_messages) - error_count
+
+            if processed_count > 0:
+                self.logger.info(
+                    f"수동 이벤트 처리 완료: {processed_count}개 처리, {success_count}개 성공, {error_count}개 실패"
+                )
+            else:
+                self.logger.debug("처리할 이벤트가 없습니다")
+
+            return {
+                "success": True,
+                "processed_count": processed_count,
+                "success_count": success_count,
+                "error_count": error_count,
+                "processed_messages": processed_messages,
+                "message": f"{processed_count}개 이벤트 처리 완료",
+            }
+
+        except Exception as e:
+            self.logger.error(f"수동 이벤트 처리 실패: {str(e)}")
+            return {
+                "success": False,
+                "processed_count": 0,
+                "error": str(e),
+                "message": f"수동 이벤트 처리 중 오류 발생: {str(e)}",
+            }
+
+    def disable_background_event_subscription(self) -> bool:
+        """
+        백그라운드 이벤트 구독을 비활성화합니다
+
+        Returns:
+            비활성화 성공 여부
+        """
+        return self.stop_event_subscription()
+
+    def get_pending_event_count(self) -> Dict[str, Any]:
+        """
+        대기 중인 이벤트 수를 확인합니다 (대략적인 수치)
+
+        Returns:
+            대기 중인 이벤트 정보
+        """
+        try:
+            dashboard_topic = self.config.get_setting(
+                "KAFKA_TOPIC_DASHBOARD_EVENTS", "email.api.response"
+            )
+
+            # 간단한 메타데이터 확인
+            metadata = self.kafka_client.get_topic_metadata(dashboard_topic)
+
+            return {
+                "success": True,
+                "topic": dashboard_topic,
+                "partitions": metadata.get("partitions", 0),
+                "message": f"토픽 {dashboard_topic}의 파티션 수: {metadata.get('partitions', 0)}",
+            }
+
+        except Exception as e:
+            self.logger.error(f"대기 이벤트 수 확인 실패: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": "대기 이벤트 수 확인 실패",
+            }
