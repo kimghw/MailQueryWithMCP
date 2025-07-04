@@ -2,18 +2,18 @@
     "editor.formatOnSave": true,
     "editor.formatOnPaste": true,
     "editor.formatOnType": true,
-    "python.formatting.provider": "black",
-    "python.formatting.blackArgs": [
-        "--line-length",
-        "88"
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.organizeImports": "explicit"
+        }
+    },
+    "black-formatter.args": [
+        "--line-length=88"
     ],
-    "python.sortImports.args": [
+    "isort.args": [
         "--profile",
         "black"
-    ],
-    "[python]": {
-        "editor.codeActionsOnSave": {
-            "source.organizeImports": true
-        }
-    }
+    ]
 }

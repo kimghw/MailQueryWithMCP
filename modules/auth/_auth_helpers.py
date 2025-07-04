@@ -20,17 +20,17 @@ logger = get_logger(__name__)
 def auth_generate_session_id(user_id: str) -> str:
     """
     OAuth 세션 고유 ID를 생성합니다.
-    
+
     Args:
         user_id: 사용자 ID
-        
+
     Returns:
         세션 ID
     """
     timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     random_part = secrets.token_hex(8)
     user_hash = hashlib.md5(user_id.encode()).hexdigest()[:8]
-    
+
     session_id = f"auth_{timestamp}_{user_hash}_{random_part}"
     logger.debug(f"세션 ID 생성: {session_id}")
     return session_id
@@ -39,7 +39,7 @@ def auth_generate_session_id(user_id: str) -> str:
 def auth_generate_state_token() -> str:
     """
     CSRF 방지용 상태 토큰을 생성합니다.
-    
+
     Returns:
         상태 토큰
     """
@@ -51,23 +51,23 @@ def auth_generate_state_token() -> str:
 def auth_validate_callback_url(callback_url: str, expected_redirect_uri: str) -> bool:
     """
     OAuth 콜백 URL의 유효성을 검증합니다.
-    
+
     Args:
         callback_url: 수신된 콜백 URL
         expected_redirect_uri: 예상 리다이렉트 URI
-        
+
     Returns:
         유효성 여부
     """
     try:
         callback_parsed = urlparse(callback_url)
         expected_parsed = urlparse(expected_redirect_uri)
-        
+
         # 스키마, 호스트, 포트, 경로가 일치하는지 확인
         return (
-            callback_parsed.scheme == expected_parsed.scheme and
-            callback_parsed.netloc == expected_parsed.netloc and
-            callback_parsed.path == expected_parsed.path
+            callback_parsed.scheme == expected_parsed.scheme
+            and callback_parsed.netloc == expected_parsed.netloc
+            and callback_parsed.path == expected_parsed.path
         )
     except Exception as e:
         logger.error(f"콜백 URL 검증 실패: {str(e)}")
@@ -77,23 +77,23 @@ def auth_validate_callback_url(callback_url: str, expected_redirect_uri: str) ->
 def auth_parse_callback_params(callback_url: str) -> Dict[str, str]:
     """
     OAuth 콜백 URL에서 매개변수를 파싱합니다.
-    
+
     Args:
         callback_url: 콜백 URL
-        
+
     Returns:
         파싱된 매개변수 딕셔너리
     """
     try:
         parsed_url = urlparse(callback_url)
         params = parse_qs(parsed_url.query)
-        
+
         # 단일 값으로 변환
         result = {}
         for key, value_list in params.items():
             if value_list:
                 result[key] = value_list[0]
-        
+
         logger.debug(f"콜백 매개변수 파싱: {list(result.keys())}")
         return result
     except Exception as e:
@@ -104,38 +104,38 @@ def auth_parse_callback_params(callback_url: str) -> Dict[str, str]:
 def auth_sanitize_user_id(user_id: str) -> str:
     """
     사용자 ID를 정리하고 유효성을 검증합니다.
-    
+
     Args:
         user_id: 원본 사용자 ID
-        
+
     Returns:
         정리된 사용자 ID
     """
     if not user_id or not isinstance(user_id, str):
         raise ValueError("사용자 ID가 유효하지 않습니다")
-    
+
     # 공백 제거 및 소문자 변환
     sanitized = user_id.strip().lower()
-    
+
     # 이메일 형식인지 확인 (간단한 검증)
     if "@" in sanitized and "." in sanitized:
         return sanitized
-    
+
     # 일반 문자열인 경우 영숫자와 일부 특수문자만 허용
     allowed_chars = set("abcdefghijklmnopqrstuvwxyz0123456789.-_")
     if all(c in allowed_chars for c in sanitized):
         return sanitized
-    
+
     raise ValueError(f"사용자 ID 형식이 유효하지 않습니다: {user_id}")
 
 
 def auth_create_session_expiry(minutes: int = 10) -> datetime:
     """
     세션 만료 시간을 생성합니다.
-    
+
     Args:
         minutes: 만료까지의 분
-        
+
     Returns:
         만료 시간
     """
@@ -147,11 +147,11 @@ def auth_create_session_expiry(minutes: int = 10) -> datetime:
 def auth_format_error_message(error: str, description: Optional[str] = None) -> str:
     """
     OAuth 오류 메시지를 포맷팅합니다.
-    
+
     Args:
         error: 오류 코드
         description: 오류 설명
-        
+
     Returns:
         포맷팅된 오류 메시지
     """
@@ -162,56 +162,56 @@ def auth_format_error_message(error: str, description: Optional[str] = None) -> 
         "unsupported_response_type": "지원하지 않는 응답 타입입니다",
         "invalid_scope": "잘못된 권한 범위입니다",
         "server_error": "인증 서버 오류가 발생했습니다",
-        "temporarily_unavailable": "인증 서비스가 일시적으로 사용할 수 없습니다"
+        "temporarily_unavailable": "인증 서비스가 일시적으로 사용할 수 없습니다",
     }
-    
+
     base_message = error_messages.get(error, f"알 수 없는 오류: {error}")
-    
+
     if description:
         return f"{base_message} - {description}"
-    
+
     return base_message
 
 
 def auth_validate_token_info(token_info: Dict[str, Any]) -> bool:
     """
     토큰 정보의 유효성을 검증합니다.
-    
+
     Args:
         token_info: 토큰 정보
-        
+
     Returns:
         유효성 여부
     """
     required_fields = ["access_token", "refresh_token", "expires_in"]
-    
+
     for field in required_fields:
         if field not in token_info or not token_info[field]:
             logger.warning(f"토큰 정보에 필수 필드가 없음: {field}")
             return False
-    
+
     # 만료 시간 검증
     expires_in = token_info.get("expires_in")
     if not isinstance(expires_in, int) or expires_in <= 0:
         logger.warning(f"잘못된 expires_in 값: {expires_in}")
         return False
-    
+
     return True
 
 
 def auth_mask_sensitive_data(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     민감한 데이터를 마스킹합니다.
-    
+
     Args:
         data: 원본 데이터
-        
+
     Returns:
         마스킹된 데이터
     """
     masked = data.copy()
     sensitive_fields = ["access_token", "refresh_token", "client_secret", "password"]
-    
+
     for field in sensitive_fields:
         if field in masked and masked[field]:
             value = str(masked[field])
@@ -219,18 +219,18 @@ def auth_mask_sensitive_data(data: Dict[str, Any]) -> Dict[str, Any]:
                 masked[field] = f"{value[:4]}...{value[-4:]}"
             else:
                 masked[field] = "***"
-    
+
     return masked
 
 
 def auth_calculate_session_timeout(user_count: int, base_timeout: int = 10) -> int:
     """
     사용자 수에 따른 적절한 세션 타임아웃을 계산합니다.
-    
+
     Args:
         user_count: 사용자 수
         base_timeout: 기본 타임아웃(분)
-        
+
     Returns:
         계산된 타임아웃(분)
     """
@@ -243,11 +243,11 @@ def auth_calculate_session_timeout(user_count: int, base_timeout: int = 10) -> i
 def auth_generate_callback_success_html(user_id: str, session_id: str) -> str:
     """
     OAuth 콜백 성공 페이지 HTML을 생성합니다.
-    
+
     Args:
         user_id: 사용자 ID
         session_id: 세션 ID
-        
+
     Returns:
         HTML 문자열
     """
@@ -283,19 +283,21 @@ def auth_generate_callback_success_html(user_id: str, session_id: str) -> str:
     """
 
 
-def auth_generate_callback_error_html(error: str, description: Optional[str] = None) -> str:
+def auth_generate_callback_error_html(
+    error: str, description: Optional[str] = None
+) -> str:
     """
     OAuth 콜백 오류 페이지 HTML을 생성합니다.
-    
+
     Args:
         error: 오류 코드
         description: 오류 설명
-        
+
     Returns:
         HTML 문자열
     """
     error_message = auth_format_error_message(error, description)
-    
+
     return f"""
     <!DOCTYPE html>
     <html>
@@ -327,18 +329,23 @@ def auth_generate_callback_error_html(error: str, description: Optional[str] = N
     """
 
 
-def auth_log_session_activity(session_id: str, activity: str, details: Optional[Dict[str, Any]] = None):
+def auth_log_session_activity(
+    session_id: str, activity: str, details: Optional[Dict[str, Any]] = None
+):
     """
     세션 활동을 로깅합니다.
-    
+
     Args:
         session_id: 세션 ID
         activity: 활동 타입
         details: 추가 세부 정보
     """
     masked_details = auth_mask_sensitive_data(details or {})
-    logger.info(f"세션 활동 [{session_id[:16]}...]: {activity}", extra={
-        "session_id": session_id,
-        "activity": activity,
-        "details": masked_details
-    })
+    logger.info(
+        f"세션 활동 [{session_id[:16]}...]: {activity}",
+        extra={
+            "session_id": session_id,
+            "activity": activity,
+            "details": masked_details,
+        },
+    )

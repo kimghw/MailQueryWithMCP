@@ -9,9 +9,9 @@ from .oauth_url_parser import AuthUrlParser
 
 __all__ = [
     "SessionManager",
-    "OAuthConfigParser", 
+    "OAuthConfigParser",
     "AuthValidator",
     "AuthResponseGenerator",
     "AuthActivityLogger",
-    "AuthUrlParser"
+    "AuthUrlParser",
 ]

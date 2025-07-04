@@ -6,9 +6,9 @@ OAuth 2.0 인증 플로우를 조정하고, 세션을 관리하며, 콜백 웹�
 
 from .oauth_orchestrator import OAuthOrchestrator, get_oauth_orchestrator
 from .oauth_web_server import (
-    OAuthWebServer, 
-    OAuthWebServerManager, 
-    get_auth_web_server_manager
+    OAuthWebServer,
+    OAuthWebServerManager,
+    get_auth_web_server_manager,
 )
 from .oauth_session_manager import OAuthSessionManager, get_oauth_session_manager
 from .oauth_schema import (
@@ -23,7 +23,7 @@ from .oauth_schema import (
     OAuthBulkResponse,
     OAuthBulkStatus,
     OAuthCleanupRequest,
-    OAuthCleanupResponse
+    OAuthCleanupResponse,
 )
 
 __all__ = [
@@ -33,16 +33,15 @@ __all__ = [
     "OAuthSessionManager",
     "get_oauth_session_manager",
     "OAuthWebServer",
-    "OAuthWebServerManager", 
+    "OAuthWebServerManager",
     "get_auth_web_server_manager",
-    
     # 스키마
     "OAuthState",
     "OAuthSession",
     "OAuthCallback",
     "OAuthTokens",
     "OAuthStartRequest",
-    "OAuthStartResponse", 
+    "OAuthStartResponse",
     "OAuthStatusResponse",
     "OAuthBulkRequest",
     "OAuthBulkResponse",
@@ -65,23 +64,23 @@ def oauth_module_info() -> dict:
         "version": "3.0.0",
         "dependencies": [
             "infra.core.token_service",
-            "infra.core.oauth_client", 
+            "infra.core.oauth_client",
             "infra.core.database",
             "infra.core.logger",
-            "infra.core.config"
+            "infra.core.config",
         ],
         "features": [
             "OAuth 플로우 조정",
             "메모리 세션 관리",
             "일괄 인증 처리",
             "콜백 웹서버",
-            "서비스 계층 분리"
+            "서비스 계층 분리",
         ],
         "architecture": {
             "orchestrator": "인증 플로우 조정",
             "session_manager": "세션 라이프사이클 관리",
             "services": "개별 도메인 로직 처리 (세션, OAuth, 계정, 콜백)",
             "utilities": "검증, 파싱 등 공통 기능",
-            "web_server": "HTTP 콜백 엔드포인트"
-        }
+            "web_server": "HTTP 콜백 엔드포인트",
+        },
     }

@@ -45,14 +45,14 @@ class DatabaseError(IACSGraphError):
         message: str,
         operation: Optional[str] = None,
         table: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         details = kwargs.get("details", {})
         if operation:
             details["operation"] = operation
         if table:
             details["table"] = table
-        
+
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "DB_ERROR"),
@@ -67,7 +67,7 @@ class ConnectionError(DatabaseError):
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "DB_CONNECTION_ERROR"),
-            **kwargs
+            **kwargs,
         )
 
 
@@ -79,14 +79,14 @@ class KafkaError(IACSGraphError):
         message: str,
         topic: Optional[str] = None,
         operation: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ):
         details = kwargs.get("details", {})
         if topic:
             details["topic"] = topic
         if operation:
             details["operation"] = operation
-            
+
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "KAFKA_ERROR"),
@@ -101,7 +101,7 @@ class KafkaConnectionError(KafkaError):
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "KAFKA_CONNECTION_ERROR"),
-            **kwargs
+            **kwargs,
         )
 
 
@@ -113,7 +113,7 @@ class KafkaProducerError(KafkaError):
             message=message,
             error_code=kwargs.get("error_code", "KAFKA_PRODUCER_ERROR"),
             operation="produce",
-            **kwargs
+            **kwargs,
         )
 
 
@@ -125,7 +125,7 @@ class KafkaConsumerError(KafkaError):
             message=message,
             error_code=kwargs.get("error_code", "KAFKA_CONSUMER_ERROR"),
             operation="consume",
-            **kwargs
+            **kwargs,
         )
 
 
@@ -137,14 +137,14 @@ class APIConnectionError(IACSGraphError):
         message: str,
         api_endpoint: Optional[str] = None,
         status_code: Optional[int] = None,
-        **kwargs
+        **kwargs,
     ):
         details = kwargs.get("details", {})
         if api_endpoint:
             details["api_endpoint"] = api_endpoint
         if status_code:
             details["status_code"] = status_code
-            
+
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "API_CONNECTION_ERROR"),
@@ -155,19 +155,14 @@ class APIConnectionError(IACSGraphError):
 class AuthenticationError(IACSGraphError):
     """인증 관련 오류"""
 
-    def __init__(
-        self,
-        message: str,
-        auth_type: Optional[str] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str, auth_type: Optional[str] = None, **kwargs):
         details = kwargs.get("details", {})
         if auth_type:
             details["auth_type"] = auth_type
-        
+
         # error_code를 kwargs에서 제거하여 중복 전달 방지
         error_code = kwargs.pop("error_code", "AUTH_ERROR")
-        
+
         super().__init__(
             message=message,
             error_code=error_code,
@@ -181,12 +176,9 @@ class TokenError(AuthenticationError):
     def __init__(self, message: str, **kwargs):
         # error_code를 kwargs에서 제거하여 중복 전달 방지
         error_code = kwargs.pop("error_code", "TOKEN_ERROR")
-        
+
         super().__init__(
-            message=message,
-            auth_type="oauth",
-            error_code=error_code,
-            **kwargs
+            message=message, auth_type="oauth", error_code=error_code, **kwargs
         )
 
 
@@ -196,12 +188,8 @@ class TokenExpiredError(TokenError):
     def __init__(self, message: str = "액세스 토큰이 만료되었습니다", **kwargs):
         # error_code를 kwargs에서 제거하여 중복 전달 방지
         error_code = kwargs.pop("error_code", "TOKEN_EXPIRED")
-        
-        super().__init__(
-            message=message,
-            error_code=error_code,
-            **kwargs
-        )
+
+        super().__init__(message=message, error_code=error_code, **kwargs)
 
 
 class TokenRefreshError(TokenError):
@@ -210,27 +198,18 @@ class TokenRefreshError(TokenError):
     def __init__(self, message: str = "토큰 갱신에 실패했습니다", **kwargs):
         # error_code를 kwargs에서 제거하여 중복 전달 방지
         error_code = kwargs.pop("error_code", "TOKEN_REFRESH_ERROR")
-        
-        super().__init__(
-            message=message,
-            error_code=error_code,
-            **kwargs
-        )
+
+        super().__init__(message=message, error_code=error_code, **kwargs)
 
 
 class ConfigurationError(IACSGraphError):
     """설정 관련 오류"""
 
-    def __init__(
-        self,
-        message: str,
-        config_key: Optional[str] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str, config_key: Optional[str] = None, **kwargs):
         details = kwargs.get("details", {})
         if config_key:
             details["config_key"] = config_key
-            
+
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "CONFIG_ERROR"),
@@ -246,14 +225,14 @@ class ValidationError(IACSGraphError):
         message: str,
         field: Optional[str] = None,
         value: Optional[Any] = None,
-        **kwargs
+        **kwargs,
     ):
         details = kwargs.get("details", {})
         if field:
             details["field"] = field
         if value is not None:
             details["value"] = str(value)
-            
+
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "VALIDATION_ERROR"),
@@ -264,16 +243,11 @@ class ValidationError(IACSGraphError):
 class BusinessLogicError(IACSGraphError):
     """비즈니스 로직 관련 오류"""
 
-    def __init__(
-        self,
-        message: str,
-        operation: Optional[str] = None,
-        **kwargs
-    ):
+    def __init__(self, message: str, operation: Optional[str] = None, **kwargs):
         details = kwargs.get("details", {})
         if operation:
             details["operation"] = operation
-            
+
         super().__init__(
             message=message,
             error_code=kwargs.get("error_code", "BUSINESS_LOGIC_ERROR"),

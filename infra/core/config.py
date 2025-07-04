@@ -28,7 +28,7 @@ class Config:
         # 프로젝트 루트에서 .env 파일 찾기
         project_root = Path(__file__).parent.parent.parent
         env_file = project_root / ".env"
-        
+
         if env_file.exists():
             load_dotenv(env_file)
         else:
@@ -42,16 +42,16 @@ class Config:
             "KAFKA_BOOTSTRAP_SERVERS",
             "ENCRYPTION_KEY",
         ]
-        
+
         missing_settings = []
         for setting in required_settings:
             if not getattr(self, setting.lower(), None):
                 missing_settings.append(setting)
-        
+
         if missing_settings:
             raise ConfigurationError(
                 f"필수 설정값이 누락되었습니다: {', '.join(missing_settings)}",
-                details={"missing_settings": missing_settings}
+                details={"missing_settings": missing_settings},
             )
 
     # 데이터베이스 설정
@@ -225,7 +225,12 @@ class Config:
     @property
     def enable_mail_history(self) -> bool:
         """메일 히스토리 저장 기능 활성화 여부"""
-        return os.getenv("ENABLE_MAIL_HISTORY", "true").lower() in ("true", "1", "yes", "on")
+        return os.getenv("ENABLE_MAIL_HISTORY", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+            "on",
+        )
 
     @property
     def max_keywords_per_mail(self) -> int:
@@ -282,7 +287,7 @@ class Config:
 def get_config() -> Config:
     """
     설정 인스턴스를 반환하는 레이지 싱글톤 함수
-    
+
     Returns:
         Config: 설정 인스턴스
     """

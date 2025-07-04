@@ -6,18 +6,18 @@ from infra.core.logger import get_logger
 
 class AuthResponseGenerator:
     """OAuth 인증 응답 HTML 생성 유틸리티"""
-    
+
     def __init__(self):
         self.logger = get_logger(__name__)
-    
+
     def generate_callback_success_html(self, user_id: str, session_id: str) -> str:
         """
         OAuth 콜백 성공 페이지 HTML을 생성합니다.
-        
+
         Args:
             user_id: 사용자 ID
             session_id: 세션 ID
-            
+
         Returns:
             HTML 문자열
         """
@@ -51,20 +51,22 @@ class AuthResponseGenerator:
         </body>
         </html>
         """
-    
-    def generate_callback_error_html(self, error: str, description: Optional[str] = None) -> str:
+
+    def generate_callback_error_html(
+        self, error: str, description: Optional[str] = None
+    ) -> str:
         """
         OAuth 콜백 오류 페이지 HTML을 생성합니다.
-        
+
         Args:
             error: 오류 코드
             description: 오류 설명
-            
+
         Returns:
             HTML 문자열
         """
         error_message = self.format_error_message(error, description)
-        
+
         return f"""
         <!DOCTYPE html>
         <html>
@@ -94,15 +96,17 @@ class AuthResponseGenerator:
         </body>
         </html>
         """
-    
-    def format_error_message(self, error: str, description: Optional[str] = None) -> str:
+
+    def format_error_message(
+        self, error: str, description: Optional[str] = None
+    ) -> str:
         """
         OAuth 오류 메시지를 포맷팅합니다.
-        
+
         Args:
             error: 오류 코드
             description: 오류 설명
-            
+
         Returns:
             포맷팅된 오류 메시지
         """
@@ -113,29 +117,34 @@ class AuthResponseGenerator:
             "unsupported_response_type": "지원하지 않는 응답 타입입니다",
             "invalid_scope": "잘못된 권한 범위입니다",
             "server_error": "인증 서버 오류가 발생했습니다",
-            "temporarily_unavailable": "인증 서비스가 일시적으로 사용할 수 없습니다"
+            "temporarily_unavailable": "인증 서비스가 일시적으로 사용할 수 없습니다",
         }
-        
+
         base_message = error_messages.get(error, f"알 수 없는 오류: {error}")
-        
+
         if description:
             return f"{base_message} - {description}"
-        
+
         return base_message
-    
+
     def mask_sensitive_data(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         민감한 데이터를 마스킹합니다.
-        
+
         Args:
             data: 원본 데이터
-            
+
         Returns:
             마스킹된 데이터
         """
         masked = data.copy()
-        sensitive_fields = ["access_token", "refresh_token", "client_secret", "password"]
-        
+        sensitive_fields = [
+            "access_token",
+            "refresh_token",
+            "client_secret",
+            "password",
+        ]
+
         for field in sensitive_fields:
             if field in masked and masked[field]:
                 value = str(masked[field])
@@ -143,5 +152,5 @@ class AuthResponseGenerator:
                     masked[field] = f"{value[:4]}...{value[-4:]}"
                 else:
                     masked[field] = "***"
-        
+
         return masked

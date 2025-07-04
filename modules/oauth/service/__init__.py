@@ -4,8 +4,4 @@ from .oauth_service import AuthOAuthService
 from .account_service import AuthAccountService
 from .callback_service import AuthCallbackService
 
-__all__ = [
-    "AuthOAuthService",
-    "AuthAccountService",
-    "AuthCallbackService"
-]
+__all__ = ["AuthOAuthService", "AuthAccountService", "AuthCallbackService"]

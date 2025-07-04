@@ -2,12 +2,15 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 import datetime
 
+
 class EmailAddress(BaseModel):
     name: Optional[str] = None
     address: str
 
+
 class Recipient(BaseModel):
     emailAddress: EmailAddress
+
 
 class Email(BaseModel):
     id: str
@@ -16,9 +19,10 @@ class Email(BaseModel):
     sender: Recipient
     from_address: Optional[Recipient] = Field(None, alias="from")
     bodyPreview: str
-    body: dict # OData 'body' is complex
+    body: dict  # OData 'body' is complex
     isRead: bool
     webLink: str
+
 
 class MailQueryResponse(BaseModel):
     odata_context: str = Field(..., alias="@odata.context")

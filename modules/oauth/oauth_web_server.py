@@ -23,10 +23,10 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         """GET 요청 처리"""
         parsed_path = urlparse(self.path)
-        
-        if parsed_path.path == '/health':
+
+        if parsed_path.path == "/health":
             self._handle_health_check()
-        elif parsed_path.path == '/auth/callback':
+        elif parsed_path.path == "/auth/callback":
             self._handle_oauth_callback()
         else:
             self.send_response(404)
@@ -36,12 +36,12 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
     def _handle_health_check(self):
         """헬스체크 처리"""
         self.send_response(200)
-        self.send_header('Content-type', 'application/json')
+        self.send_header("Content-type", "application/json")
         self.end_headers()
         response = {
             "status": "ok",
             "timestamp": datetime.utcnow().isoformat(),
-            "server": "oauth_callback_server"
+            "server": "oauth_callback_server",
         }
         self.wfile.write(json.dumps(response).encode())
 
@@ -49,22 +49,22 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         """OAuth 콜백 처리"""
         parsed_url = urlparse(self.path)
         query_params = parse_qs(parsed_url.query)
-        
+
         params = {key: values[0] for key, values in query_params.items() if values}
         logger.debug(f"OAuth 콜백 수신: {list(params.keys())}")
-        
-        if hasattr(self.server, 'oauth_server'):
+
+        if hasattr(self.server, "oauth_server"):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             response_html = loop.run_until_complete(
                 self.server.oauth_server.process_callback_async(params)
             )
             loop.close()
-            
+
             self.send_response(200)
-            self.send_header('Content-type', 'text/html; charset=utf-8')
+            self.send_header("Content-type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(response_html.encode('utf-8'))
+            self.wfile.write(response_html.encode("utf-8"))
         else:
             self.send_response(500)
             self.end_headers()
@@ -82,12 +82,12 @@ class OAuthWebServer:
         """웹서버 초기화"""
         self.config = get_config()
         self.callback_service = OAuthCallbackService()
-        
+
         self.httpd: Optional[HTTPServer] = None
         self.server_thread: Optional[threading.Thread] = None
         self.is_running = False
         self.port = 5000
-        
+
         self.session_store: Optional[Dict[str, Any]] = None
 
     def set_session_store(self, session_store: Dict[str, Any]):
@@ -102,24 +102,24 @@ class OAuthWebServer:
         """
         try:
             self.port = port
-            
-            server_address = ('localhost', port)
+
+            server_address = ("localhost", port)
             self.httpd = HTTPServer(server_address, OAuthCallbackHandler)
             self.httpd.oauth_server = self
-            
+
             def run_server():
                 logger.info(f"OAuth 콜백 웹서버 시작: http://localhost:{port}")
                 self.httpd.serve_forever()
-            
+
             self.server_thread = threading.Thread(target=run_server, daemon=True)
             self.server_thread.start()
-            
+
             self.is_running = True
             server_url = f"http://localhost:{port}"
-            
+
             logger.info(f"OAuth 콜백 웹서버 시작됨: {server_url}")
             return server_url
-            
+
         except Exception as e:
             logger.error(f"웹서버 시작 실패: {str(e)}")
             self._cleanup()
@@ -141,7 +141,7 @@ class OAuthWebServer:
         if not self.session_store:
             logger.error("세션 저장소가 설정되지 않음")
             return "<h1>서버 오류</h1><p>세션 저장소가 없습니다.</p>"
-        
+
         return await self.callback_service.process_callback(query_params)
 
     def _cleanup(self):
@@ -150,11 +150,11 @@ class OAuthWebServer:
             if self.httpd:
                 self.httpd.shutdown()
                 self.httpd = None
-            
+
             if self.server_thread and self.server_thread.is_alive():
                 self.server_thread.join(timeout=5)
                 self.server_thread = None
-            
+
         except Exception as e:
             logger.error(f"웹서버 정리 실패: {str(e)}")
 
@@ -169,15 +169,13 @@ class OAuthWebServer:
 
 class OAuthWebServerManager:
     """웹서버 생명주기 관리 클래스"""
-    
+
     def __init__(self):
         self.server: Optional[OAuthWebServer] = None
         self.server_url: Optional[str] = None
-    
+
     async def start_server(
-        self, 
-        session_store: Dict[str, Any], 
-        port: int = 5000
+        self, session_store: Dict[str, Any], port: int = 5000
     ) -> str:
         """
         웹서버를 시작하고 세션 저장소를 설정합니다.
@@ -185,14 +183,14 @@ class OAuthWebServerManager:
         if self.server and self.server.is_running:
             logger.warning("웹서버가 이미 실행 중입니다")
             return self.server_url
-        
+
         self.server = OAuthWebServer()
         self.server.set_session_store(session_store)
         self.server_url = await self.server.start_server(port)
-        
+
         logger.info(f"웹서버 관리자 시작: {self.server_url}")
         return self.server_url
-    
+
     async def stop_server(self):
         """웹서버를 중지합니다."""
         if self.server:
@@ -200,7 +198,7 @@ class OAuthWebServerManager:
             self.server = None
             self.server_url = None
             logger.info("웹서버 관리자 중지됨")
-    
+
     @property
     def is_running(self) -> bool:
         """실행 상태 확인"""
@@ -214,7 +212,7 @@ _web_server_manager = OAuthWebServerManager()
 def get_auth_web_server_manager() -> OAuthWebServerManager:
     """
     웹서버 관리자 인스턴스를 반환합니다.
-    
+
     Returns:
         OAuthWebServerManager 인스턴스
     """

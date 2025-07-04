@@ -13,9 +13,9 @@ infra 서비스들을 최대 활용하여 토큰 저장/갱신/상태확인을 �
 
 from .auth_orchestrator import AuthOrchestrator, get_auth_orchestrator
 from .auth_web_server import (
-    AuthWebServer, 
-    AuthWebServerManager, 
-    get_auth_web_server_manager
+    AuthWebServer,
+    AuthWebServerManager,
+    get_auth_web_server_manager,
 )
 from .auth_schema import (
     AuthState,
@@ -29,7 +29,7 @@ from .auth_schema import (
     AuthBulkResponse,
     AuthBulkStatus,
     AuthCleanupRequest,
-    AuthCleanupResponse
+    AuthCleanupResponse,
 )
 from ._auth_helpers import (
     auth_generate_session_id,
@@ -44,7 +44,7 @@ from ._auth_helpers import (
     auth_calculate_session_timeout,
     auth_generate_callback_success_html,
     auth_generate_callback_error_html,
-    auth_log_session_activity
+    auth_log_session_activity,
 )
 
 __all__ = [
@@ -52,23 +52,21 @@ __all__ = [
     "AuthOrchestrator",
     "get_auth_orchestrator",
     "AuthWebServer",
-    "AuthWebServerManager", 
+    "AuthWebServerManager",
     "get_auth_web_server_manager",
-    
     # 스키마
     "AuthState",
     "AuthSession",
     "AuthCallback",
     "TokenData",
     "AuthStartRequest",
-    "AuthStartResponse", 
+    "AuthStartResponse",
     "AuthStatusResponse",
     "AuthBulkRequest",
     "AuthBulkResponse",
     "AuthBulkStatus",
     "AuthCleanupRequest",
     "AuthCleanupResponse",
-    
     # 헬퍼 함수
     "auth_generate_session_id",
     "auth_generate_state_token",
@@ -82,7 +80,7 @@ __all__ = [
     "auth_calculate_session_timeout",
     "auth_generate_callback_success_html",
     "auth_generate_callback_error_html",
-    "auth_log_session_activity"
+    "auth_log_session_activity",
 ]
 
 
@@ -99,16 +97,16 @@ def auth_module_info() -> dict:
         "version": "1.0.0",
         "dependencies": [
             "infra.core.token_service",
-            "infra.core.oauth_client", 
+            "infra.core.oauth_client",
             "infra.core.database",
             "infra.core.logger",
-            "infra.core.config"
+            "infra.core.config",
         ],
         "features": [
             "OAuth 플로우 조정",
             "메모리 세션 관리",
             "일괄 인증 처리",
             "콜백 웹서버",
-            "infra 서비스 연동"
-        ]
+            "infra 서비스 연동",
+        ],
     }
