@@ -23,7 +23,6 @@ class AgendaInfo(BaseModel):
     round_no: Optional[str] = None
     round_version: Optional[str] = None
     organization_code: Optional[str] = None
-    sequence: Optional[str] = None
     reply_version: Optional[str] = None
 
 
@@ -93,7 +92,8 @@ class EmailAgendaChair(BaseModel):
     panel_id: str
     agenda_no: str
     round_no: Optional[str] = None
-    agenda_sequence: Optional[int] = None
+    round_version: Optional[str] = None
+    agenda_version: Optional[str] = None
     send_time: datetime
     deadline: Optional[datetime] = None
     mail_type: str
@@ -170,7 +170,8 @@ class AgendaDetail(BaseModel):
     agenda_no: str
     panel_id: str
     round_no: Optional[str] = None
-    agenda_sequence: Optional[int] = None
+    round_version: Optional[str] = None
+    agenda_version: Optional[str] = None
     send_time: datetime
     deadline: Optional[datetime] = None
     mail_type: str
@@ -240,6 +241,7 @@ class AgendaSearchFilter(BaseModel):
 
     panel_id: Optional[str] = None
     round_no: Optional[str] = None
+    round_version: Optional[str] = None
     decision_status: Optional[str] = None
     mail_type: Optional[str] = None
     start_date: Optional[datetime] = None

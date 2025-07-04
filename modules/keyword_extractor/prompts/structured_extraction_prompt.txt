@@ -24,7 +24,6 @@ Extract the following information and return ONLY valid JSON:
     "round_no": "3-digit number (e.g., 003)",
     "round_version": "Round letter or null (e.g., null, a, b, c)",
     "organization_code": "Organization code (e.g., IL)",
-    "sequence": "Sequence letter or null (e.g., a, b, c)",
     "reply_version": "Reply version or null (e.g., null, a, b, c)"
   }}
 }}
@@ -70,8 +69,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
 - **008**: Agenda number (3 digits)
 - **a**: Round version (optional)
 - **IL**: Organization code
-- **a**: Sequence (optional)
-- **Reply version**: (if present after the sequence)
+- **a**: reply_version (optional, if present after the Organization code)
 
 ### Alternative Pattern Format
 `JWG-[type][YY][NNN][seq]`
@@ -179,8 +177,8 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
 ## 6. Sender Organization Detection Rules
 
 ### Organization Codes
-- **Members**: ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, TL
-- **Chair**: IL (IACS Panel Chair)
+- **Members**: ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, TL, IACS
+- **Chair**: IL (PL/SDTP Panel Chair)
 
 ### Detection Method
 - Extract from agenda ID pattern
@@ -207,7 +205,6 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "round_no": "008",
   "round_version": "a",
   "organization_code": "IL",
-  "sequence": "a",
   "reply_version": null
 }}
 ```
@@ -221,7 +218,6 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "round_no": "008",
   "round_version": "a",
   "organization_code": "NK",
-  "sequence": null,
   "reply_version": "b"
 }}
 ```
@@ -232,8 +228,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
 3. Round number: Next 3 digits
 4. Round version: Optional letter after round number
 5. Organization code: 2-letter code after underscore
-6. Sequence: Optional letter after organization code
-7. Reply version: Final letter (only if sequence exists)
+6. Reply version: Final letter (Optional letter after organization code)
 
 ## 9. Output Format
 
@@ -257,7 +252,6 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
     "round_no": "3-digit number",
     "round_version": "Round letter or null",
     "organization_code": "Organization code",
-    "sequence": "Sequence letter or null",
     "reply_version": "Reply version or null"
   }}
 }}

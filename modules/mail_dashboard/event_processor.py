@@ -144,10 +144,16 @@ class EmailDashboardEventProcessor:
                         f"마감 시간 파싱 실패: {extraction.deadline}, error={str(e)}"
                     )
 
-            # 회차 번호 추출
+            # 회차 번호 및 버전 추출
             round_no = None
-            if extraction.agenda_info and extraction.agenda_info.round_no:
-                round_no = extraction.agenda_info.round_no
+            round_version = None
+            agenda_version = None  # sequence 필드가 없으므로 항상 None
+
+            if extraction.agenda_info:
+                if extraction.agenda_info.round_no:
+                    round_no = extraction.agenda_info.round_no
+                if extraction.agenda_info.round_version:
+                    round_version = extraction.agenda_info.round_version
 
             # 아젠다 생성/업데이트
             success = self.repository.email_dashboard_create_or_update_agenda(
@@ -159,6 +165,7 @@ class EmailDashboardEventProcessor:
                 decision_status=extraction.decision_status,
                 summary=extraction.summary,
                 round_no=round_no,
+                round_version=round_version,
             )
 
             if success:
@@ -303,11 +310,15 @@ class EmailDashboardEventProcessor:
         if extraction.agenda_info and extraction.agenda_info.full_pattern:
             return extraction.agenda_info.full_pattern
 
-        # 3. 개별 정보로 구성
+        # 3. 개별 정보로 구성 (sequence 없이)
         if extraction.agenda_info:
             info = extraction.agenda_info
-            if info.panel_name and info.round_no and info.sequence:
-                return f"{info.panel_name}-{info.round_no}-{info.sequence}"
+            if info.panel_name and info.round_no:
+                # round_version이 있으면 포함
+                if info.round_version:
+                    return f"{info.panel_name}{info.year}{info.round_no}{info.round_version}"
+                else:
+                    return f"{info.panel_name}{info.year}{info.round_no}"
 
         return None
 
@@ -351,8 +362,14 @@ class EmailDashboardEventProcessor:
                     deadline = send_time + timedelta(days=7)
 
             round_no = None
-            if extraction.agenda_info and extraction.agenda_info.round_no:
-                round_no = extraction.agenda_info.round_no
+            round_version = None
+            agenda_version = None  # sequence 필드가 없으므로 항상 None
+
+            if extraction.agenda_info:
+                if extraction.agenda_info.round_no:
+                    round_no = extraction.agenda_info.round_no
+                if extraction.agenda_info.round_version:
+                    round_version = extraction.agenda_info.round_version
 
             self.repository.email_dashboard_create_or_update_agenda(
                 panel_id=panel_id,
@@ -363,6 +380,7 @@ class EmailDashboardEventProcessor:
                 decision_status="comment",  # 이미 응답이 있으므로 comment 상태
                 summary=f"자동 생성된 아젠다 (응답 기반): {agenda_no}",
                 round_no=round_no,
+                round_version=round_version,
             )
 
             self.logger.info(f"누락된 아젠다 자동 생성 완료: {agenda_no}")

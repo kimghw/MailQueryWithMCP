@@ -39,6 +39,7 @@ class EmailDashboardRepository:
         decision_status: str = "created",
         summary: Optional[str] = None,
         round_no: Optional[str] = None,
+        round_version: Optional[str] = None,
     ) -> bool:
         """
         아젠다 생성 또는 업데이트
@@ -52,6 +53,7 @@ class EmailDashboardRepository:
             decision_status: 결정 상태
             summary: 요약 내용
             round_no: 회차 번호
+            round_version: 회차 버전
 
         Returns:
             생성/업데이트 성공 여부
@@ -78,6 +80,7 @@ class EmailDashboardRepository:
                             "decision_status": decision_status,
                             "summary": summary,
                             "round_no": round_no,
+                            "round_version": round_version,
                             "updated_at": current_time.isoformat(),
                         },
                         where_clause="agenda_no = ?",
@@ -85,11 +88,6 @@ class EmailDashboardRepository:
                     )
                     self.logger.info(f"아젠다 업데이트 완료: {agenda_no}")
                 else:
-                    # 회차 내 순서 계산
-                    agenda_sequence = self._email_dashboard_calculate_agenda_sequence(
-                        panel_id, round_no
-                    )
-
                     # 새 아젠다 생성
                     self.db.insert(
                         table="email_agendas_chair",
@@ -97,7 +95,7 @@ class EmailDashboardRepository:
                             "panel_id": panel_id,
                             "agenda_no": agenda_no,
                             "round_no": round_no,
-                            "agenda_sequence": agenda_sequence,
+                            "round_version": round_version,
                             "send_time": send_time.isoformat(),
                             "deadline": deadline.isoformat() if deadline else None,
                             "mail_type": mail_type,
@@ -121,24 +119,6 @@ class EmailDashboardRepository:
                 operation="create_or_update_agenda",
                 table="email_agendas_chair",
             ) from e
-
-    def _email_dashboard_calculate_agenda_sequence(
-        self, panel_id: str, round_no: Optional[str]
-    ) -> int:
-        """회차 내 아젠다 순서 계산"""
-        if not round_no:
-            return 1
-
-        result = self.db.fetch_one(
-            """
-            SELECT COALESCE(MAX(agenda_sequence), 0) + 1 as next_sequence
-            FROM email_agendas_chair 
-            WHERE panel_id = ? AND round_no = ?
-            """,
-            (panel_id, round_no),
-        )
-
-        return result["next_sequence"] if result else 1
 
     def _email_dashboard_initialize_response_tables(self, agenda_no: str) -> None:
         """응답 테이블 초기화"""
@@ -169,7 +149,7 @@ class EmailDashboardRepository:
         try:
             row = self.db.fetch_one(
                 """
-                SELECT panel_id, agenda_no, round_no, agenda_sequence, 
+                SELECT panel_id, agenda_no, round_no, round_version,
                        send_time, deadline, mail_type, decision_status, summary,
                        created_at, updated_at
                 FROM email_agendas_chair 
@@ -185,7 +165,7 @@ class EmailDashboardRepository:
                 panel_id=row["panel_id"],
                 agenda_no=row["agenda_no"],
                 round_no=row["round_no"],
-                agenda_sequence=row["agenda_sequence"],
+                round_version=row["round_version"],
                 send_time=datetime.fromisoformat(row["send_time"]),
                 deadline=(
                     datetime.fromisoformat(row["deadline"]) if row["deadline"] else None

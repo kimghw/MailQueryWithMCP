@@ -61,6 +61,10 @@ class EmailDashboardQuery:
                 where_conditions.append("c.round_no = ?")
                 params.append(filter_params.round_no)
 
+            if filter_params.round_version:
+                where_conditions.append("c.round_version = ?")
+                params.append(filter_params.round_version)
+
             if filter_params.decision_status:
                 where_conditions.append("c.decision_status = ?")
                 params.append(filter_params.decision_status)
@@ -95,7 +99,7 @@ class EmailDashboardQuery:
 
             # 기본 쿼리
             query = f"""
-                SELECT c.panel_id, c.agenda_no, c.round_no, c.agenda_sequence,
+                SELECT c.panel_id, c.agenda_no, c.round_no, c.round_version, c.agenda_version,
                        c.send_time, c.deadline, c.mail_type, c.decision_status, c.summary
                 FROM email_agendas_chair c
                 WHERE {where_clause}
@@ -142,7 +146,8 @@ class EmailDashboardQuery:
             agenda_no=agenda_no,
             panel_id=row["panel_id"],
             round_no=row["round_no"],
-            agenda_sequence=row["agenda_sequence"],
+            round_version=row["round_version"],
+            agenda_version=row["agenda_version"],
             send_time=datetime.fromisoformat(row["send_time"]),
             deadline=(
                 datetime.fromisoformat(row["deadline"]) if row["deadline"] else None

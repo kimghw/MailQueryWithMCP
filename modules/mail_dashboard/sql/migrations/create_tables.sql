@@ -1,13 +1,14 @@
 -- Email Dashboard 모듈 테이블 생성 스크립트
--- 버전: 1.0.0
+-- 버전: 3.0.0
 -- 생성일: 2025-01-04
+-- 변경사항: agenda_sequence/agenda_version 제거, round_version만 유지
 
 -- 1. 의장 발송 아젠다 정보 테이블
 CREATE TABLE IF NOT EXISTS email_agendas_chair (
     panel_id TEXT NOT NULL,
     agenda_no TEXT NOT NULL PRIMARY KEY,
     round_no TEXT,
-    agenda_sequence INTEGER,
+    round_version TEXT,
     send_time TIMESTAMP NOT NULL,
     deadline TIMESTAMP,
     mail_type TEXT NOT NULL,
@@ -83,8 +84,8 @@ ON email_agendas_chair (panel_id, send_time);
 CREATE INDEX IF NOT EXISTS idx_email_agendas_chair_status_deadline 
 ON email_agendas_chair (decision_status, deadline);
 
-CREATE INDEX IF NOT EXISTS idx_email_agendas_chair_round_sequence 
-ON email_agendas_chair (panel_id, round_no, agenda_sequence);
+CREATE INDEX IF NOT EXISTS idx_email_agendas_chair_round_version 
+ON email_agendas_chair (panel_id, round_no, round_version);
 
 -- 응답 테이블 인덱스
 CREATE INDEX IF NOT EXISTS idx_email_agenda_member_responses_agenda_no 
