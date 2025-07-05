@@ -2,7 +2,7 @@
 Email Dashboard 테이블 생성 스크립트
 
 migrations/create_tables.sql 파일을 읽어서 테이블을 생성합니다.
-기존 테이블이 있으면 건너뜁니다.
+기존 테이블이 있으면 삭제하고 새로 생성합니다.
 """
 
 import sys
@@ -18,8 +18,35 @@ from infra.core import get_database_manager, get_logger
 logger = get_logger(__name__)
 
 
-def create_email_dashboard_tables():
-    """Email Dashboard 테이블 생성"""
+def drop_existing_tables(db, tables_to_drop):
+    """기존 테이블 삭제"""
+    dropped_tables = []
+
+    for table in tables_to_drop:
+        try:
+            if db.table_exists(table):
+                db.execute_query(f"DROP TABLE IF EXISTS {table}")
+                dropped_tables.append(table)
+                logger.info(f"기존 테이블 삭제 완료: {table}")
+        except Exception as e:
+            logger.error(f"테이블 삭제 실패 {table}: {str(e)}")
+            raise
+
+    if dropped_tables:
+        logger.info(f"삭제된 테이블: {dropped_tables}")
+    else:
+        logger.info("삭제할 기존 테이블이 없습니다.")
+
+    return dropped_tables
+
+
+def create_email_dashboard_tables(force_recreate=False):
+    """
+    Email Dashboard 테이블 생성
+
+    Args:
+        force_recreate: True일 경우 기존 테이블 삭제 후 재생성
+    """
     db = get_database_manager()
 
     try:
@@ -46,24 +73,36 @@ def create_email_dashboard_tables():
             "email_events_unprocessed",
         ]
 
-        # 이미 존재하는 테이블 확인
+        # 기존 테이블 확인
         existing_tables = []
-        missing_tables = []
-
         for table in required_tables:
             if db.table_exists(table):
                 existing_tables.append(table)
-            else:
-                missing_tables.append(table)
 
-        if existing_tables:
-            logger.info(f"이미 존재하는 테이블: {existing_tables}")
+        # force_recreate가 True이거나 기존 테이블이 있으면 삭제
+        if force_recreate or existing_tables:
+            if existing_tables:
+                logger.warning(f"기존 테이블 발견: {existing_tables}")
 
-        if not missing_tables:
-            logger.info("모든 테이블이 이미 존재합니다.")
-            return True
+                if not force_recreate:
+                    response = input(
+                        "\n기존 테이블을 삭제하고 새로 생성하시겠습니까? (yes/no): "
+                    )
+                    if response.lower() != "yes":
+                        logger.info("테이블 생성 취소됨")
+                        return False
 
-        logger.info(f"생성할 테이블: {missing_tables}")
+                # 테이블 삭제 (외래키 제약 때문에 역순으로)
+                tables_to_drop = [
+                    "email_events_unprocessed",
+                    "email_agenda_member_response_times",
+                    "email_agenda_member_responses",
+                    "email_agendas_chair",
+                ]
+
+                logger.info("\n기존 테이블 삭제 중...")
+                dropped_tables = drop_existing_tables(db, tables_to_drop)
+                logger.info(f"총 {len(dropped_tables)}개 테이블 삭제 완료\n")
 
         # SQL 문장별로 분리하여 실행
         statements = [stmt.strip() for stmt in schema_sql.split(";") if stmt.strip()]
@@ -71,25 +110,24 @@ def create_email_dashboard_tables():
         success_count = 0
         error_count = 0
 
-        # 디버깅: SQL 문장 확인
-        logger.debug(f"총 {len(statements)}개의 SQL 문장을 실행합니다.")
+        logger.info(f"총 {len(statements)}개의 SQL 문장을 실행합니다.")
 
         with db.transaction():
             for i, statement in enumerate(statements):
                 if statement:
                     try:
-                        # email_events_unprocessed 테이블인 경우 전체 SQL 출력
-                        if (
-                            "email_events_unprocessed" in statement
-                            and "CREATE TABLE" in statement
-                        ):
-                            logger.debug(
-                                f"email_events_unprocessed 테이블 생성 SQL:\n{statement}"
+                        # 디버깅용 로그
+                        if "CREATE TABLE" in statement:
+                            table_name = (
+                                statement.split("CREATE TABLE IF NOT EXISTS")[1]
+                                .split("(")[0]
+                                .strip()
                             )
+                            logger.info(f"테이블 생성 중: {table_name}")
 
                         db.execute_query(statement)
                         success_count += 1
-                        logger.debug(f"SQL 문장 {i+1}/{len(statements)} 실행 완료")
+
                     except Exception as e:
                         # CREATE IF NOT EXISTS는 오류가 아님
                         if "already exists" in str(e):
@@ -98,24 +136,10 @@ def create_email_dashboard_tables():
                         else:
                             error_count += 1
                             logger.error(f"SQL 문장 {i+1} 실행 실패: {str(e)}")
-                            logger.error(f"실패한 SQL:\n{statement}")
-                            # SQL 파일 수정 안내
-                            if 'near "INDEX"' in str(e):
-                                logger.error(
-                                    "\n⚠️  SQLite는 CREATE TABLE 내부에 INDEX를 정의할 수 없습니다."
-                                )
-                                logger.error(
-                                    "해결 방법: INDEX 구문을 테이블 생성 후 별도의 CREATE INDEX 문으로 이동하세요.\n"
-                                )
-                            elif 'near ")"' in str(e):
-                                logger.error(
-                                    "\n⚠️  SQL 구문 오류: 마지막 컬럼 뒤에 쉼표가 있거나 구문이 잘못되었습니다."
-                                )
-                                logger.error(
-                                    "해결 방법: CREATE TABLE 문의 마지막 컬럼 정의를 확인하세요.\n"
-                                )
+                            logger.error(f"실패한 SQL:\n{statement[:200]}...")
+                            raise
 
-        logger.info(f"SQL 실행 완료: 성공 {success_count}개, 실패 {error_count}개")
+        logger.info(f"\nSQL 실행 완료: 성공 {success_count}개, 실패 {error_count}개")
 
         # 생성 결과 확인
         verify_result = verify_tables()
@@ -148,11 +172,24 @@ def verify_tables():
                 result = db.fetch_one(f"SELECT COUNT(*) as count FROM {table_name}")
                 row_count = result["count"] if result else 0
                 logger.info(f"✓ {table_name} - {description} (레코드: {row_count}개)")
+
+                # TL 컬럼 확인 (email_agenda_member_responses, email_agenda_member_response_times)
+                if table_name in [
+                    "email_agenda_member_responses",
+                    "email_agenda_member_response_times",
+                ]:
+                    columns = db.fetch_all(f"PRAGMA table_info({table_name})")
+                    has_tl = any(col["name"] == "TL" for col in columns)
+                    if has_tl:
+                        logger.info(f"  └─ TL 컬럼 확인: ✓")
+                    else:
+                        logger.error(f"  └─ TL 컬럼 확인: ✗ (누락됨)")
+                        all_created = False
             else:
                 logger.error(f"✗ {table_name} - 생성 실패")
                 all_created = False
 
-        # 인덱스 확인 (선택사항)
+        # 인덱스 확인
         if all_created:
             verify_indices()
 
@@ -184,11 +221,18 @@ def verify_indices():
 
         if indices:
             current_table = None
+            index_count = 0
             for idx in indices:
                 if current_table != idx["tbl_name"]:
+                    if current_table:
+                        logger.info(f"  └─ 총 {index_count}개 인덱스")
                     current_table = idx["tbl_name"]
+                    index_count = 0
                     logger.info(f"\n{current_table}:")
                 logger.info(f"  - {idx['name']}")
+                index_count += 1
+            if current_table:
+                logger.info(f"  └─ 총 {index_count}개 인덱스")
         else:
             logger.warning("생성된 인덱스가 없습니다.")
 
@@ -224,12 +268,23 @@ if __name__ == "__main__":
     print("=" * 60)
     print()
 
+    # 명령줄 인자 확인
+    force_recreate = False
+    show_schema = False
+
+    if len(sys.argv) > 1:
+        if "--force" in sys.argv:
+            force_recreate = True
+            print("강제 재생성 모드: 기존 테이블을 삭제하고 새로 생성합니다.")
+        if "--schema" in sys.argv:
+            show_schema = True
+
     # 테이블 생성
-    if create_email_dashboard_tables():
+    if create_email_dashboard_tables(force_recreate=force_recreate):
         print("\n✅ Email Dashboard 테이블 생성 완료")
 
-        # 특정 테이블의 스키마를 보고 싶은 경우
-        if len(sys.argv) > 1 and sys.argv[1] == "--schema":
+        # 테이블 스키마 정보 출력
+        if show_schema:
             print("\n테이블 스키마 정보:")
             show_table_schema("email_agendas_chair")
             show_table_schema("email_agenda_member_responses")

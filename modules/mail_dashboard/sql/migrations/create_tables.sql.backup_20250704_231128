@@ -1,7 +1,7 @@
 -- Email Dashboard 모듈 테이블 생성 스크립트
--- 버전: 4.0.1
+-- 버전: 4.0.0
 -- 생성일: 2025-01-04
--- 변경사항: TL (Türk Loydu) 컬럼 추가
+-- 변경사항: 미처리 이벤트 저장 테이블 추가
 
 -- 1. 의장 발송 아젠다 정보 테이블
 CREATE TABLE IF NOT EXISTS email_agendas_chair (
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS email_agendas_chair (
 -- 2. 멤버 기관 응답 내용 테이블
 CREATE TABLE IF NOT EXISTS email_agenda_member_responses (
     agenda_no TEXT NOT NULL PRIMARY KEY,
-    -- 12개 기관의 응답 내용 (텍스트)
+    -- 11개 기관의 응답 내용 (텍스트)
     ABS TEXT,
     BV TEXT,
     CCS TEXT,
@@ -37,7 +37,6 @@ CREATE TABLE IF NOT EXISTS email_agenda_member_responses (
     PRS TEXT,
     RINA TEXT,
     IL TEXT,
-    TL TEXT,  -- Türk Loydu 추가
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
@@ -48,7 +47,7 @@ CREATE TABLE IF NOT EXISTS email_agenda_member_responses (
 -- 3. 멤버 기관 응답 시간 테이블
 CREATE TABLE IF NOT EXISTS email_agenda_member_response_times (
     agenda_no TEXT NOT NULL PRIMARY KEY,
-    -- 12개 기관의 응답 수신 시간
+    -- 11개 기관의 응답 수신 시간
     ABS TIMESTAMP,
     BV TIMESTAMP,
     CCS TIMESTAMP,
@@ -60,7 +59,6 @@ CREATE TABLE IF NOT EXISTS email_agenda_member_response_times (
     PRS TIMESTAMP,
     RINA TIMESTAMP,
     IL TIMESTAMP,
-    TL TIMESTAMP,  -- Türk Loydu 추가
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
@@ -68,7 +66,7 @@ CREATE TABLE IF NOT EXISTS email_agenda_member_response_times (
     FOREIGN KEY (agenda_no) REFERENCES email_agendas_chair (agenda_no) ON DELETE CASCADE
 );
 
--- 4. 미처리 이벤트 테이블
+-- 4. 미처리 이벤트 테이블 (신규)
 CREATE TABLE IF NOT EXISTS email_events_unprocessed (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     event_id TEXT NOT NULL UNIQUE,
@@ -89,7 +87,8 @@ CREATE TABLE IF NOT EXISTS email_events_unprocessed (
     raw_event_data TEXT NOT NULL, -- 전체 이벤트 JSON
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed BOOLEAN DEFAULT FALSE,
-    processed_at TIMESTAMP
+    processed_at TIMESTAMP,
+    
 );
 
 -- 기본 인덱스 생성
@@ -119,22 +118,3 @@ ON email_agenda_member_responses (agenda_no);
 
 CREATE INDEX IF NOT EXISTS idx_email_agenda_member_response_times_agenda_no 
 ON email_agenda_member_response_times (agenda_no);
-
--- 미처리 이벤트 테이블 인덱스
-CREATE INDEX IF NOT EXISTS idx_unprocessed_event_id 
-ON email_events_unprocessed (event_id);
-
-CREATE INDEX IF NOT EXISTS idx_unprocessed_sender_org 
-ON email_events_unprocessed (sender_organization);
-
-CREATE INDEX IF NOT EXISTS idx_unprocessed_agenda_no 
-ON email_events_unprocessed (agenda_no);
-
-CREATE INDEX IF NOT EXISTS idx_unprocessed_reason 
-ON email_events_unprocessed (unprocessed_reason);
-
-CREATE INDEX IF NOT EXISTS idx_unprocessed_processed 
-ON email_events_unprocessed (processed);
-
-CREATE INDEX IF NOT EXISTS idx_unprocessed_created_at 
-ON email_events_unprocessed (created_at);

@@ -121,7 +121,7 @@ class EmailAgendaMemberResponse(BaseModel):
     PRS: Optional[str] = None
     RINA: Optional[str] = None
     IL: Optional[str] = None
-    TL: Optional[str] = None
+    TL: Optional[str] = None  # Türk Loydu 추가
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -144,7 +144,7 @@ class EmailAgendaMemberResponseTime(BaseModel):
     PRS: Optional[datetime] = None
     RINA: Optional[datetime] = None
     IL: Optional[datetime] = None
-    TL: Optional[datetime] = None
+    TL: Optional[datetime] = None  # Türk Loydu 추가
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -209,7 +209,7 @@ class AgendaDetail(BaseModel):
     summary: Optional[str] = None
     responses: List[OrganizationResponse] = []
     response_count: int = 0
-    total_organizations: int = 12  # IL 포함하여 12개
+    total_organizations: int = 12  # TL 포함하여 12개
 
 
 class AgendaStatusSummary(BaseModel):
@@ -318,21 +318,22 @@ class DashboardRequest(BaseModel):
 # 상수 정의
 # =============================================================================
 
-# 조직/기관 코드 목록 (TL 추가)
+# 조직/기관 코드 목록
+# 주의: 이 리스트는 데이터베이스 테이블의 컬럼과 정확히 일치해야 합니다!
+# IACS는 개별 기관이 아닌 연합회이므로 응답 테이블에는 포함되지 않습니다.
 ORGANIZATIONS = [
-    "ABS",
-    "BV",
-    "CCS",
-    "CRS",
-    "DNV",
-    "IRS",
-    "KR",
-    "NK",
-    "PRS",
-    "RINA",
-    "IL",
-    "TL",
-    "IACS",
+    "ABS",  # American Bureau of Shipping
+    "BV",  # Bureau Veritas
+    "CCS",  # China Classification Society
+    "CRS",  # Croatian Register of Shipping
+    "DNV",  # Det Norske Veritas
+    "IRS",  # Indian Register of Shipping
+    "KR",  # Korean Register
+    "NK",  # Nippon Kaiji Kyokai
+    "PRS",  # Polish Register of Shipping
+    "RINA",  # Registro Italiano Navale
+    "IL",  # Registro Italiano Navale (IL?)
+    "TL",  # Türk Loydu
 ]
 
 # 메일 타입

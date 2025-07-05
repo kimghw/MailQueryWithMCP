@@ -16,15 +16,14 @@ Extract the following information and return ONLY valid JSON:
   "sender_type": "CHAIR" or "MEMBER",
   "sender_organization": "ABS" or "BV" or "CCS" or "CRS" or "DNV" or "IRS" or "KR" or "NK" or "PRS" or "RINA" or "IL" or "TL" or null,
   "send_time": "YYYY-MM-DD HH:MM:SS format (when email was sent)",
-  "agenda_no": "panel_name + year + round_no (e.g., PL25003, PL25003a)",
+  "agenda_no": "panel_name + year + round_no + round_version ((between round_no and organization_code))",
   "agenda_info": {{
     "full_pattern": "Complete pattern like PL25003_ILa",
     "panel_name": "Panel code (e.g., PL)",
     "year": "2-digit year (e.g., 25)",
     "round_no": "3-digit number (e.g., 003)",
-    "round_version": "Round letter or null (e.g., null, a, b, c)",
+    "round_version": "letter or null(between round_no and organization_code)",
     "organization_code": "Organization code (e.g., IL)",
-    "sequence": "Sequence letter or null (e.g., a, b, c)",
     "reply_version": "Reply version or null (e.g., null, a, b, c)"
   }}
 }}
@@ -62,15 +61,14 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
 ## 2. ID Pattern (Agenda) Extraction Rules
 
 ### Primary Pattern Format
-`PL[YY][NNN][version]_[ORG][seq][reply]`
+`PL[YY][NNN][version]_[ORG][reply]`
 
 #### Example: `PL25008aILa`
 - **PL**: Panel name
 - **25**: Year (2025)
-- **008**: Agenda number (3 digits)
-- **a**: Round version (optional)
+- **008**: round number (3 digits)
+- **a**: Round version (optional), (between round_no and organization_code)
 - **IL**: Organization code
-- **a**: Sequence (optional)
 - **Reply version**: (if present after the sequence)
 
 ### Alternative Pattern Format
@@ -205,7 +203,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "panel_name": "PL",
   "year": "25",
   "round_no": "008",
-  "round_version": "a",
+  "round_version": "a",(between round_no and organization_code)
   "organization_code": "IL",
   "sequence": "a",
   "reply_version": null
@@ -219,7 +217,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "panel_name": "PL",
   "year": "25",
   "round_no": "008",
-  "round_version": "a",
+  "round_version": "a",(between round_no and organization_code)
   "organization_code": "NK",
   "sequence": null,
   "reply_version": "b"
@@ -230,9 +228,8 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
 1. Panel name: First 2-3 letters
 2. Year: Next 2 digits
 3. Round number: Next 3 digits
-4. Round version: Optional letter after round number
+4. Round version: between round_no and organization_code
 5. Organization code: 2-letter code after underscore
-6. Sequence: Optional letter after organization code
 7. Reply version: Final letter (only if sequence exists)
 
 ## 9. Output Format
@@ -255,7 +252,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
     "panel_name": "Panel code",
     "year": "2-digit year",
     "round_no": "3-digit number",
-    "round_version": "Round letter or null",
+    "round_version": "Round letter or null", "between round_no and organization_code"
     "organization_code": "Organization code",
     "sequence": "Sequence letter or null",
     "reply_version": "Reply version or null"
