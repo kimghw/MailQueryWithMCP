@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS email_agendas_chair (
     panel_id TEXT NOT NULL,
     agenda_no TEXT NOT NULL PRIMARY KEY,
     round_no TEXT,
-    round_version TEXT,
+    agenda_version TEXT,
     send_time TIMESTAMP NOT NULL,
     deadline TIMESTAMP,
     mail_type TEXT NOT NULL,
@@ -109,8 +109,8 @@ ON email_agendas_chair (panel_id, send_time);
 CREATE INDEX IF NOT EXISTS idx_email_agendas_chair_status_deadline 
 ON email_agendas_chair (decision_status, deadline);
 
-CREATE INDEX IF NOT EXISTS idx_email_agendas_chair_round_version 
-ON email_agendas_chair (panel_id, round_no, round_version);
+CREATE INDEX IF NOT EXISTS idx_email_agendas_chair_agenda_version 
+ON email_agendas_chair (panel_id, round_no, agenda_version);
 
 -- 응답 테이블 인덱스
 CREATE INDEX IF NOT EXISTS idx_email_agenda_member_responses_agenda_no 

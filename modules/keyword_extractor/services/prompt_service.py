@@ -35,37 +35,63 @@ class PromptService:
                 self.logger.error(f"프롬프트 로드 실패 ({prompt_type}): {str(e)}")
 
     def _load_prompt_file(self, prompt_type: str, file_path: Path):
-        """개별 프롬프트 파일 로드"""
+        """개별 프롬프트 파일 로드 - Claude 최적화 버전"""
         content = file_path.read_text(encoding="utf-8")
 
-        # structured_extraction_prompt.txt 형식 파싱
         if prompt_type == "structured_extraction_prompt":
-            print(f"Loading structured_extraction_prompt from {file_path}")
-            print(f"File content length: {len(content)}")
-            print(f"First 500 chars: {content[:500]}")
-
-            # SYSTEM_PROMPT 추출
+            # 1. SYSTEM_PROMPT 섹션 추출
             system_match = re.search(
-                r"## SYSTEM_PROMPT\s*\n(.*?)(?=\n##|\n#|$)", content, re.DOTALL
+                r"## SYSTEM_PROMPT\s*\n(.*?)(?=\n##)", content, re.DOTALL
             )
-            system_prompt = system_match.group(1).strip() if system_match else ""
+            base_system_prompt = system_match.group(1).strip() if system_match else ""
 
-            # USER_PROMPT_TEMPLATE 추출 - # Rules 섹션 전까지
+            # 2. OUTPUT_FORMAT 섹션 추출
+            format_match = re.search(
+                r"## OUTPUT_FORMAT\s*\n(.*?)(?=\n##)", content, re.DOTALL
+            )
+            output_format = format_match.group(1).strip() if format_match else ""
+
+            # 3. RULES 섹션 추출
+            rules_match = re.search(r"## RULES\s*\n(.*?)(?=$)", content, re.DOTALL)
+            rules_content = rules_match.group(1).strip() if rules_match else ""
+
+            # 4. USER_PROMPT_TEMPLATE 섹션 추출
             user_match = re.search(
-                r"## USER_PROMPT_TEMPLATE\s*\n(.*?)(?=\n# Rules)", content, re.DOTALL
+                r"## USER_PROMPT_TEMPLATE\s*\n(.*?)(?=\n##)", content, re.DOTALL
             )
             user_prompt_template = user_match.group(1).strip() if user_match else ""
 
-            print(f"Extracted system_prompt length: {len(system_prompt)}")
-            print(f"Extracted user_prompt_template length: {len(user_prompt_template)}")
-            print(f"user_prompt_template first 200 chars: {user_prompt_template[:200]}")
+            # 5. Claude에 최적화된 System Prompt 구성
+            # 시스템 프롬프트에 모든 규칙과 포맷을 포함
+            enhanced_system_prompt = f"""{base_system_prompt}
+
+    ## Expected Output Format:
+    {output_format}
+
+    ## Extraction Rules and Guidelines:
+    {rules_content}
+
+    ## CRITICAL: You must respond with ONLY valid JSON matching the format above. No explanations, no additional text, no markdown formatting - just the JSON object."""
 
             self.prompts_cache[prompt_type] = {
-                "system_prompt": system_prompt,
+                "system_prompt": enhanced_system_prompt,
                 "user_prompt_template": user_prompt_template,
+                "output_format": output_format,  # 디버깅용
+                "rules": rules_content,  # 디버깅용
             }
+
+            # 디버깅 로그
+            self.logger.debug(f"Loaded {prompt_type}:")
+            self.logger.debug(f"- Base system prompt length: {len(base_system_prompt)}")
+            self.logger.debug(f"- Output format length: {len(output_format)}")
+            self.logger.debug(f"- Rules length: {len(rules_content)}")
+            self.logger.debug(f"- User template length: {len(user_prompt_template)}")
+            self.logger.debug(
+                f"- Enhanced system prompt length: {len(enhanced_system_prompt)}"
+            )
+
         else:
-            # 일반 프롬프트 파일
+            # 일반 프롬프트 파일 처리
             self.prompts_cache[prompt_type] = {
                 "system_prompt": "You are a keyword extraction expert.",
                 "user_prompt_template": content,

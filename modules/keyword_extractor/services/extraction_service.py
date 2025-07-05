@@ -236,13 +236,18 @@ class ExtractionService:
         max_keywords: int,
         prompt_data: Dict[str, Any],
     ) -> Optional[Dict]:
-        """OpenRouter API 호출 (구조화된 응답) - 대시보드 이벤트 통합"""
+        """OpenRouter API 호출 (구조화된 응답) - Claude 최적화"""
 
         if not self.api_key:
             return None
 
-        # 텍스트 길이 제한
-        limited_content = content[:2000] if len(content) > 2000 else content
+        # 텍스트 길이 제한 (Claude는 더 긴 컨텍스트 처리 가능)
+        max_content_length = 4000 if "claude" in self.model.lower() else 2000
+        limited_content = (
+            content[:max_content_length]
+            if len(content) > max_content_length
+            else content
+        )
 
         # 발송 시간 포맷팅
         sent_time_str = sent_time.isoformat() if sent_time else "Unknown"
@@ -254,7 +259,7 @@ class ExtractionService:
 
             # 플레이스홀더 치환
             user_prompt = user_prompt_template.replace(
-                "{subject}", subject if subject else "No subject"
+                "{subject}", subject or "No subject"
             )
             user_prompt = user_prompt.replace("{content}", limited_content)
             user_prompt = user_prompt.replace("{sent_time}", sent_time_str)
@@ -263,26 +268,32 @@ class ExtractionService:
             self.logger.error(f"프롬프트 템플릿 처리 오류: {str(e)}")
             return None
 
+        # Claude 모델 확인
+        is_claude = "claude" in self.model.lower()
+
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
 
+        # Claude에 최적화된 파라미터
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
-            "max_tokens": 500,
-            "temperature": 0.1,
+            "max_tokens": 800,  # Claude는 구조화된 출력에 더 많은 토큰 필요
+            "temperature": 0.0,  # Claude는 0.0이 가장 일관된 JSON 출력 생성
         }
 
-        # response_format이 지원되는 모델인 경우 추가
-        if (
-            "gpt-4" in self.model or "gpt-3.5-turbo" in self.model
-        ) and "anthropic" not in self.model:
+        # Claude는 response_format을 지원하지 않음
+        if "gpt" in self.model.lower() and not is_claude:
             payload["response_format"] = {"type": "json_object"}
+
+        # Claude 전용 파라미터
+        if is_claude:
+            payload["stop_sequences"] = ["\n\n", "```"]  # JSON 블록 후 중단
 
         start_time = time.time()
 
@@ -293,7 +304,7 @@ class ExtractionService:
                 f"{self.base_url}/chat/completions",
                 headers=headers,
                 json=payload,
-                timeout=aiohttp.ClientTimeout(total=30),
+                timeout=aiohttp.ClientTimeout(total=45),  # Claude는 더 긴 타임아웃
             ) as response:
 
                 extraction_time_ms = int((time.time() - start_time) * 1000)
@@ -319,6 +330,7 @@ class ExtractionService:
 
                         # JSON 파싱 시도
                         try:
+                            # Claude의 응답에서 JSON 추출
                             result = self._parse_json_response(content_response)
 
                             if result:
@@ -326,37 +338,39 @@ class ExtractionService:
                                 if "usage" in data:
                                     result["token_usage"] = data["usage"]
 
-                                # 파일 저장 (기존 설정에 따라)
-                                if self.save_structured_data:
-                                    self._save_structured_response(
-                                        content, subject, sent_time, result
+                                # 필수 필드 검증
+                                required_fields = [
+                                    "keywords",
+                                    "mail_type",
+                                    "decision_status",
+                                ]
+                                if all(field in result for field in required_fields):
+                                    # 저장 및 이벤트 발행
+                                    if self.save_structured_data:
+                                        self._save_structured_response(
+                                            content, subject, sent_time, result
+                                        )
+
+                                    await self._publish_dashboard_event(
+                                        result,
+                                        extraction_time_ms,
+                                        data.get("usage", {}),
                                     )
-                                    self.logger.debug("구조화된 응답 저장 완료")
 
-                                # 🎯 대시보드 이벤트 즉시 발행
-                                await self._publish_dashboard_event(
-                                    result, extraction_time_ms, data.get("usage", {})
-                                )
-
-                            return result
+                                    return result
+                                else:
+                                    self.logger.warning(
+                                        f"응답에 필수 필드 누락: {[f for f in required_fields if f not in result]}"
+                                    )
 
                         except json.JSONDecodeError as e:
                             self.logger.error(f"JSON 파싱 실패: {str(e)}")
-                            # JSON 파싱 실패 시 기존 방식으로 파싱
-                            keywords = self._parse_keywords(content_response)
-                            return {
-                                "keywords": keywords[:max_keywords],
-                                "token_usage": data.get("usage", {}),
-                            }
-                else:
-                    self.logger.warning("API 응답에 choices가 없음")
+                            self.logger.debug(f"응답 내용: {content_response[:500]}")
 
                 return None
 
         except Exception as e:
-            self.logger.error(
-                f"OpenRouter 구조화된 API 호출 실패: {str(e)}", exc_info=True
-            )
+            self.logger.error(f"OpenRouter API 호출 실패: {str(e)}", exc_info=True)
             return None
 
     async def _publish_dashboard_event(

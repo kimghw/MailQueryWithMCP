@@ -42,7 +42,7 @@ class EmailDashboardRepository:
         decision_status: str = "created",
         summary: Optional[str] = None,
         round_no: Optional[str] = None,
-        round_version: Optional[str] = None,
+        agenda_version: Optional[str] = None,
     ) -> bool:
         """
         아젠다 생성 또는 업데이트
@@ -56,7 +56,7 @@ class EmailDashboardRepository:
             decision_status: 결정 상태
             summary: 요약 내용
             round_no: 회차 번호
-            round_version: 회차 버전
+            agenda_version: 회차 버전
 
         Returns:
             생성/업데이트 성공 여부
@@ -83,7 +83,7 @@ class EmailDashboardRepository:
                             "decision_status": decision_status,
                             "summary": summary,
                             "round_no": round_no,
-                            "round_version": round_version,
+                            "agenda_version": agenda_version,
                             "updated_at": current_time.isoformat(),
                         },
                         where_clause="agenda_no = ?",
@@ -98,7 +98,7 @@ class EmailDashboardRepository:
                             "panel_id": panel_id,
                             "agenda_no": agenda_no,
                             "round_no": round_no,
-                            "round_version": round_version,
+                            "agenda_version": agenda_version,
                             "send_time": send_time.isoformat(),
                             "deadline": deadline.isoformat() if deadline else None,
                             "mail_type": mail_type,
@@ -152,7 +152,7 @@ class EmailDashboardRepository:
         try:
             row = self.db.fetch_one(
                 """
-                SELECT panel_id, agenda_no, round_no, round_version,
+                SELECT panel_id, agenda_no, round_no, agenda_version,
                        send_time, deadline, mail_type, decision_status, summary,
                        created_at, updated_at
                 FROM email_agendas_chair 
@@ -168,7 +168,7 @@ class EmailDashboardRepository:
                 panel_id=row["panel_id"],
                 agenda_no=row["agenda_no"],
                 round_no=row["round_no"],
-                round_version=row["round_version"],
+                agenda_version=row["agenda_version"],
                 send_time=datetime.fromisoformat(row["send_time"]),
                 deadline=(
                     datetime.fromisoformat(row["deadline"]) if row["deadline"] else None

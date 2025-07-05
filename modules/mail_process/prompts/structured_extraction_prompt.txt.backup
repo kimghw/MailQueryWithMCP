@@ -21,7 +21,7 @@ Extract the following information and return ONLY valid JSON:
     "panel_name": "Panel code (e.g., PL)",
     "year": "2-digit year (e.g., 25)",
     "round_no": "3-digit number (e.g., 003)",
-    "round_version": "Round letter or null (e.g., null, a, b, c)",
+    "agenda_version": "Round letter or null (e.g., null, a, b, c)",
     "organization_code": "Organization code (e.g., IL)",
     "sequence": "Sequence letter or null (e.g., a, b, c)",
     "reply_version": "Reply version or null (e.g., null, a, b, c)"
@@ -199,7 +199,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "panel_name": "PL",
   "year": "25",
   "round_no": "008",
-  "round_version": "a",
+  "agenda_version": "a",
   "organization_code": "IL",
   "sequence": "a",
   "reply_version": null
@@ -213,7 +213,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   "panel_name": "PL",
   "year": "25",
   "round_no": "008",
-  "round_version": "a",
+  "agenda_version": "a",
   "organization_code": "NK",
   "sequence": null,
   "reply_version": "b"
@@ -248,7 +248,7 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
     "panel_name": "Panel code",
     "year": "2-digit year",
     "round_no": "3-digit number",
-    "round_version": "Round letter or null",
+    "agenda_version": "Round letter or null",
     "organization_code": "Organization code",
     "sequence": "Sequence letter or null",
     "reply_version": "Reply version or null"
