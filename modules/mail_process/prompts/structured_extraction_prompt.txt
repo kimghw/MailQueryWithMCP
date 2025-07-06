@@ -1,12 +1,20 @@
-# Email Parsing Rules
+# Email Parsing Configuration
 
 ## SYSTEM_PROMPT
-You are an email analysis expert. Extract information from emails and return ONLY valid JSON.
+You are an expert email analyst specializing in IACS (International Association of Classification Societies) maritime communications. You analyze emails from the SDTP panel and extract structured information.
+
+Your response must be ONLY valid JSON with no additional text, explanations, or formatting.
 
 ## USER_PROMPT_TEMPLATE
-Extract the following information and return ONLY valid JSON:
-```json
-{{
+Extract information from this email and return ONLY valid JSON:
+
+Subject: {subject}
+Sent Time: {sent_time}
+Content:
+{content}
+
+## OUTPUT_FORMAT
+{
   "summary": "Brief summary of the email content (1-2 sentences)",
   "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
   "has_deadline": true or false,
@@ -14,254 +22,14 @@ Extract the following information and return ONLY valid JSON:
   "decision_status": "created" or "comment" or "consolidated" or "review" or "decision",
   "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
   "sender_type": "CHAIR" or "MEMBER",
-  "sender_organization": "ABS" or "BV" or "CCS" or "CRS" or "DNV" or "IRS" or "KR" or "NK" or "PRS" or "RINA" or "IL" or "TL" or null,
+  "sender_organization": "ABS" or "BV" or "CCS" or "CRS" or "DNV" or "IRS" or "KR" or "LR" or "NK" or "PRS" or "RINA" or "IL" or "TL" or null,
   "send_time": "YYYY-MM-DD HH:MM:SS format (when email was sent)",
-  "agenda_no": "panel_name + year + round_no + agenda_version ((between round_no and organization_code))",
-  "agenda_info": {{
-    "full_pattern": "Complete pattern like PL25003_ILa",
-    "panel_name": "Panel code (e.g., PL)",
-    "year": "2-digit year (e.g., 25)",
-    "round_no": "3-digit number (e.g., 003)",
-    "agenda_version": "letter or null(between round_no and organization_code)",
-    "organization_code": "Organization code (e.g., IL)",
-    "reply_version": "Reply version or null (e.g., null, a, b, c)"
-  }}
-}}
-```
-
-Email Subject: {subject}
-Email Sent Time: {sent_time}
-Email Content:
-{content}
+  "agenda_Reference": "Complete pattern like PL25003_ILa",
+  "agenda_number": "PL25003_, PL24004a, PL25006a"
+  "agenda_reponseid" : "KRa, KRb, KRc, NKa, NKb"
+}
 
 # Rules
 
 ## Overview
 The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, and TL as IACS members, with IL serving as the panel chair. The IL chair creates agendas and panel members reply with their opinions to the chair and other members.
-
-## 1. Keyword Extraction Rules
-
-### Guidelines
-- Extract up to 5 most relevant technical/topic keywords from the main content
-- Focus on maritime/shipping terms, technical concepts, and document types
-- Ignore generic words like "reference", "kindly", "please"
-
-### Common Keywords
-- IMO MSC
-- MASS (Maritime Autonomous Surface Ships)
-- cybersecurity
-- meeting dates
-- review
-- IACS
-- panel
-- recommendation
-- vessel asset inventory
-- data quality
-
-## 2. ID Pattern (Agenda) Extraction Rules
-
-### Primary Pattern Format
-`PL[YY][NNN][version]_[ORG][reply]`
-
-#### Example: `PL25008aILa`
-- **PL**: Panel name
-- **25**: Year (2025)
-- **008**: round number (3 digits)
-- **a**: Round version (optional), (between round_no and organization_code)
-- **IL**: Organization code
-- **Reply version**: (if present after the sequence)
-
-### Alternative Pattern Format
-`JWG-[type][YY][NNN][seq]`
-
-#### Example: `JWG-SDT25001a`
-
-### Extraction Guidelines
-- Extract ALL patterns mentioned in subject AND body
-- Multiple patterns can exist in one email
-- Look for patterns in both subject line and email content
-
-## 3. Email Chain Handling Rules
-
-### Focus Area
-- Process ONLY the topmost/current message
-- Ignore all forwarded or quoted content
-
-### Chain Indicators (Stop Reading)
-- `From:` followed by email headers
-- `----` horizontal lines
-- `>` quoted text
-- `Od:`, `Wysłane:` (Polish email headers)
-- `差出人:`, `送信:` (Japanese email headers)
-- `보낸 사람:` (Korean email headers)
-
-## 4. Deadline Extraction Rules
-
-### Valid Deadline Patterns
-- "by [date]"
-- "no later than [date]"
-- "provide comments by [date]"
-- "requested to [action] by [date]"
-- "kindly requested to confirm by [date]"
-
-### Format Conversion
-- Convert to `YYYY-MM-DD HH:MM:SS` format
-- Set to `23:59:59` if no time specified
-- Return `null` if no deadline found
-
-### Ignore These Dates
-- Meeting dates
-- Historical references
-- Dates in forwarded content
-- Dates mentioned as examples
-
-## 5. Mail Type Classification Rules
-
-### REQUEST
-**Characteristics:**
-- Has explicit action request with deadline
-- Requires response from recipients
-
-**Key Phrases:**
-- "kindly requested to review"
-- "please provide comments by"
-- "members are invited to"
-- "provide your comments by"
-- "review and provide"
-
-### RESPONSE
-**Characteristics:**
-- Individual member/organization replying to a request
-- Single sender responding to chair or panel
-
-**Key Phrases:**
-- "Reference is made to"
-- "has no comments"
-- "supports"
-- "agrees with"
-- "Regarding item"
-- "please note the comment from"
-
-### NOTIFICATION
-**Characteristics:**
-- Information sharing without action required
-- No deadline for response
-
-**Key Phrases:**
-- "kindly note"
-- "for your information"
-- "members are kindly requested to note as above"
-- "please be advised"
-- "attached herein"
-
-### COMPLETED
-**Characteristics:**
-- Consolidation of multiple member responses
-- Shows aggregated results or summary
-
-**Key Patterns:**
-- "members responded as follows"
-- "responses were consolidated"
-- "following were received"
-- "X members provided comments"
-- "Y members had no comments"
-- "No responses could be located for Z members"
-
-### OTHER
-**Examples:**
-- Out-of-office replies
-- Automatic responses
-- Test messages
-- Messages not fitting above categories
-
-## 6. Sender Organization Detection Rules
-
-### Organization Codes
-- **Members**: ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, TL
-- **Chair**: IL (IACS Panel Chair)
-
-### Detection Method
-- Extract from agenda ID pattern
-- If agenda pattern contains organization code, that's typically the sender
-- Example: `PL25008aNKa` → Sender is NK
-
-## 7. Decision Status Rules
-
-### Status Types
-- **created**: Initial request or notification
-- **comment**: Individual responses/feedback
-- **consolidated**: Summary of multiple responses
-- **review**: Request for review of documents
-- **decision**: Final decision communicated
-
-## 8. Agenda Info Parsing Rules
-
-### Standard Pattern: `PL25008aILa`
-```json
-{{
-  "full_pattern": "PL25008aILa",
-  "panel_name": "PL",
-  "year": "25",
-  "round_no": "008",
-  "agenda_version": "a",(between round_no and organization_code)
-  "organization_code": "IL",
-  "sequence": "a",
-  "reply_version": null
-}}
-```
-
-### Special Case Pattern: `PL25008aNKb`
-```json
-{{
-  "full_pattern": "PL25008aNKb",
-  "panel_name": "PL",
-  "year": "25",
-  "round_no": "008",
-  "agenda_version": "a",(between round_no and organization_code)
-  "organization_code": "NK",
-  "sequence": null,
-  "reply_version": "b"
-}}
-```
-
-### Parsing Rules
-1. Panel name: First 2-3 letters
-2. Year: Next 2 digits
-3. Round number: Next 3 digits
-4. Round version: between round_no and organization_code
-5. Organization code: 2-letter code after underscore
-7. Reply version: Final letter (only if sequence exists)
-
-## 9. Output Format
-
-### Required JSON Structure
-```json
-{{
-  "summary": "Brief summary of the email content (1-2 sentences)",
-  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
-  "has_deadline": true or false,
-  "mail_type": "REQUEST|RESPONSE|NOTIFICATION|COMPLETED|OTHER",
-  "decision_status": "created|comment|consolidated|review|decision",
-  "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
-  "sender_type": "CHAIR|MEMBER",
-  "sender_organization": "Organization code or null",
-  "send_time": "YYYY-MM-DD HH:MM:SS format (when email was sent)",
-  "agenda_no": "panel_name + year + round_no (e.g., PL25003, PL25003a)",
-  "agenda_info": {{
-    "full_pattern": "Complete pattern",
-    "panel_name": "Panel code",
-    "year": "2-digit year",
-    "round_no": "3-digit number",
-    "agenda_version": "Round letter or null", "between round_no and organization_code"
-    "organization_code": "Organization code",
-    "sequence": "Sequence letter or null",
-    "reply_version": "Reply version or null"
-  }}
-}}
-```
-
-### Important Notes
-- Return ONLY the JSON object, no additional text
-- All fields are required
-- Use null for missing values
-- Ensure valid JSON syntax
