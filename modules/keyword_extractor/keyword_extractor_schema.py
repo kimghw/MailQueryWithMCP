@@ -22,6 +22,8 @@ class KeywordExtractionRequest(BaseModel):
     text: str = Field(..., description="추출할 텍스트")
     subject: str = Field(default="", description="제목 (이메일 등)")
     sent_time: Optional[datetime] = Field(default=None, description="발송 시간")
+    sender_address: str = Field(default="", description="발신자 이메일 주소")
+    sender_name: str = Field(default="", description="발신자 이름")
     max_keywords: int = Field(default=5, description="최대 키워드 수")
     use_structured_response: bool = Field(
         default=True, description="구조화된 응답 사용"

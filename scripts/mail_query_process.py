@@ -50,7 +50,7 @@ class AllAccountsFullProcessTester:
         )
 
     async def get_all_active_accounts(self) -> List[Dict[str, Any]]:
-        """활성화된 모든 계정 조회 (테스트 계정 제외)"""
+        """활성화된 모든 계정 조회 (테스트 계정 및 kimghw 제외)"""
         query = """
             SELECT 
                 user_id, 
@@ -61,7 +61,7 @@ class AllAccountsFullProcessTester:
                 last_sync_time
             FROM accounts 
             WHERE is_active = 1
-            AND user_id NOT IN ('test_user', 'test', 'nonexistent', 'temp_user', 'demo_user')  -- 테스트 계정 제외
+            AND user_id NOT IN ('test_user', 'test', 'nonexistent', 'temp_user', 'demo_user', 'kimghw')  -- 테스트 계정 및 kimghw 제외
             AND user_id NOT LIKE 'test_%'  -- test_로 시작하는 계정 제외
             AND user_id NOT LIKE 'temp_%'  -- temp_로 시작하는 계정 제외
             ORDER BY user_id

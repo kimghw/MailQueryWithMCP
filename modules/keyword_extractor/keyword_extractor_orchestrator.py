@@ -145,6 +145,8 @@ class KeywordExtractorOrchestrator:
             text=request.text,
             subject=request.subject,
             sent_time=request.sent_time,
+            sender_address=request.sender_address,
+            sender_name=request.sender_name,
             max_keywords=request.max_keywords,
             prompt_data=prompt_data,
             use_structured_response=request.use_structured_response,

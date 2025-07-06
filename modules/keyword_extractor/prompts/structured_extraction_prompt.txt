@@ -9,6 +9,8 @@ Your response must be ONLY valid JSON with no additional text, explanations, or 
 Extract information from this email and return ONLY valid JSON:
 
 Subject: {subject}
+Sender Email: {sender_address}
+Sender Name: {sender_name}
 Sent Time: {sent_time}
 Content: {content}
 
@@ -44,6 +46,24 @@ The SDTP panel consists of ABS, BV, CCS, CRS, DNV, IRS, KR, LR, NK, PRS, RINA, a
   - Extract the ACTUAL sender's organization from the email content, not from the subject line
   - The agenda_Reference should be based on the original email being replied to or forwarded
   - The agenda_reponseid should reflect the ACTUAL SENDER's organization code + reply version
+
+## Sender Organization Detection
+- Extract organization from the sender's email domain (e.g., @kr.org → KR, @lr.org → LR)
+- If domain is not clear, look for organization signatures in the email content
+- Common domain patterns:
+  - @kr.org, @krs.co.kr → KR
+  - @lr.org → LR
+  - @dnv.com, @dnvgl.com → DNV
+  - @classnk.or.jp → NK
+  - @eagle.org → ABS
+  - @bureauveritas.com → BV
+  - @ccs.org.cn → CCS
+  - @rina.org → RINA
+  - @prs.pl → PRS
+  - @iscsmaritime.com, @iacs.org.uk → IL (Chair)
+  - @tasneef.ae → TL
+  - @crs.hr → CRS
+  - @irclass.org → IRS
 
 ## Agenda Reference Pattern
 - Standard format: [Panel][Year][Number]_[OrgCode][ReplyVersion]

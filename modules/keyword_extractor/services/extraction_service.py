@@ -82,6 +82,8 @@ class ExtractionService:
         text: str,
         subject: str = "",
         sent_time: Optional[datetime] = None,
+        sender_address: str = "",
+        sender_name: str = "",
         max_keywords: int = 5,
         prompt_data: Optional[Dict[str, Any]] = None,
         use_structured_response: bool = True,
@@ -93,6 +95,8 @@ class ExtractionService:
             text: 추출할 텍스트
             subject: 제목
             sent_time: 발송 시간
+            sender_address: 발신자 이메일 주소
+            sender_name: 발신자 이름
             max_keywords: 최대 키워드 수
             prompt_data: 프롬프트 데이터
             use_structured_response: 구조화된 응답 사용 여부
@@ -109,6 +113,8 @@ class ExtractionService:
                     content=text,
                     subject=subject,
                     sent_time=sent_time,
+                    sender_address=sender_address,
+                    sender_name=sender_name,
                     max_keywords=max_keywords,
                     prompt_data=prompt_data or {},
                 )
@@ -208,12 +214,16 @@ class ExtractionService:
             content = item.get("content", "")
             subject = item.get("subject", "")
             sent_time = item.get("sent_time")
+            sender_address = item.get("sender_address", "")
+            sender_name = item.get("sender_name", "")
 
             # 구조화된 API 호출 (대시보드 이벤트 자동 발행됨)
             result = await self._call_openrouter_structured_api(
                 content=content,
                 subject=subject,
                 sent_time=sent_time,
+                sender_address=sender_address,
+                sender_name=sender_name,
                 max_keywords=5,
                 prompt_data=prompt_data,
             )
@@ -233,6 +243,8 @@ class ExtractionService:
         content: str,
         subject: str,
         sent_time: Optional[datetime],
+        sender_address: str,
+        sender_name: str,
         max_keywords: int,
         prompt_data: Dict[str, Any],
     ) -> Optional[Dict]:
@@ -263,6 +275,10 @@ class ExtractionService:
             )
             user_prompt = user_prompt.replace("{content}", limited_content)
             user_prompt = user_prompt.replace("{sent_time}", sent_time_str)
+            user_prompt = user_prompt.replace(
+                "{sender_address}", sender_address or "Unknown"
+            )
+            user_prompt = user_prompt.replace("{sender_name}", sender_name or "Unknown")
 
         except Exception as e:
             self.logger.error(f"프롬프트 템플릿 처리 오류: {str(e)}")
@@ -348,7 +364,12 @@ class ExtractionService:
                                     # 저장 및 이벤트 발행
                                     if self.save_structured_data:
                                         self._save_structured_response(
-                                            content, subject, sent_time, result
+                                            content,
+                                            subject,
+                                            sent_time,
+                                            result,
+                                            sender_address,
+                                            sender_name,
                                         )
 
                                     await self._publish_dashboard_event(
@@ -464,6 +485,8 @@ class ExtractionService:
         subject: str,
         sent_time: Optional[datetime],
         result: Dict[str, Any],
+        sender_address: str = "",
+        sender_name: str = "",
     ) -> None:
         """구조화된 응답을 파일로 저장 (설정에 따라 호출됨)"""
         try:
@@ -493,6 +516,8 @@ class ExtractionService:
                     if sent_time and hasattr(sent_time, "isoformat")
                     else str(sent_time)
                 ),
+                "sender_address": sender_address,
+                "sender_name": sender_name,
                 "body_content": text[:2000],  # 처음 2000자만
                 "model": self.model,
                 "analysis_result": result,
