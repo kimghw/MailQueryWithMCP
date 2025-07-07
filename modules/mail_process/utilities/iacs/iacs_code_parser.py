@@ -16,6 +16,7 @@ from .constants import (
 )
 from .pattern_matcher import PatternMatcher
 from .data_extractor import DataExtractor
+from .common import convert_to_unified_naming, extract_base_agenda_no
 
 
 class IACSCodeParser:
@@ -96,7 +97,7 @@ class IACSCodeParser:
         parsed_code = self.parse_line(subject)
         if parsed_code:
             result["iacs_code"] = parsed_code
-            result["extracted_info"] = self._convert_to_unified_naming(parsed_code)
+            result["extracted_info"] = convert_to_unified_naming(parsed_code)
 
             # 조직 정보 추출
             if parsed_code.organization:
@@ -131,31 +132,6 @@ class IACSCodeParser:
 
         return result
 
-    def _convert_to_unified_naming(self, parsed_code: ParsedCode) -> Dict:
-        """ParsedCode를 통일된 네이밍으로 변환"""
-        base_no = self.extract_base_agenda_no(parsed_code)
-
-        return {
-            "full_code": parsed_code.full_code,
-            "document_type": parsed_code.document_type,
-            "panel": parsed_code.panel,
-            "year": parsed_code.year,
-            "number": parsed_code.number,
-            "agenda_version": parsed_code.agenda_version,
-            "organization": parsed_code.organization,
-            "response_version": parsed_code.response_version,
-            "description": parsed_code.description,
-            "is_response": parsed_code.is_response,
-            "is_special": parsed_code.is_special,
-            "is_agenda": not parsed_code.is_response and not parsed_code.is_special,
-            "base_agenda_no": base_no,
-            "parsing_method": parsed_code.parsing_method,
-            # 통일된 네이밍 추가
-            "agenda_code": parsed_code.full_code,
-            "agenda_base": base_no,
-            "agenda_panel": parsed_code.panel,  # agenda_panel로 변경
-        }
-
     def _try_parse_from_body(self, body: str, result: Dict):
         """본문에서 IACS 코드 파싱 시도"""
         body_lines = body.split("\n")
@@ -165,9 +141,7 @@ class IACSCodeParser:
                 parsed_code = self.parse_line(line)
                 if parsed_code:
                     result["iacs_code"] = parsed_code
-                    result["extracted_info"] = self._convert_to_unified_naming(
-                        parsed_code
-                    )
+                    result["extracted_info"] = convert_to_unified_naming(parsed_code)
 
                     if parsed_code.organization:
                         result["response_org"] = parsed_code.organization
@@ -226,9 +200,7 @@ class IACSCodeParser:
 
     def extract_base_agenda_no(self, parsed_code: ParsedCode) -> Optional[str]:
         """기본 아젠다 번호 추출"""
-        if parsed_code.panel and parsed_code.year and parsed_code.number:
-            return f"{parsed_code.panel}{parsed_code.year}{parsed_code.number}"
-        return None
+        return extract_base_agenda_no(parsed_code)
 
     # 위임 메서드들
     def set_chair_emails(self, emails: List[str]):
@@ -249,7 +221,7 @@ class IACSCodeParser:
         """발신자 정보 추출"""
         return self.data_extractor.extract_sender_info(mail)
 
-    def extract_sent_time(self, mail: Dict) -> Optional[Any]:
+    def extract_sent_time(self, mail: Dict) -> Optional[datetime]:
         """발송 시간 추출"""
         return self.data_extractor.extract_sent_time(mail)
 

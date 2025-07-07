@@ -5,20 +5,39 @@ modules/mail_process/services/phase_processor.py
 
 import json
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Protocol
 
 from infra.core.logger import get_logger
 from ..mail_processor_schema import MailProcessingResult
 from .data_merger import MailTransformationRules
 
 
+class OrchestratorInterface(Protocol):
+    """오케스트레이터 인터페이스 - 순환 참조 방지"""
+
+    @property
+    def filtering_service(self): ...
+
+    @property
+    def persistence_service(self): ...
+
+    @property
+    def processing_service(self): ...
+
+    @property
+    def statistics_service(self): ...
+
+    @property
+    def iacs_parser(self): ...
+
+
 class PhaseProcessor:
     """메일 처리 단계별 프로세서"""
 
-    def __init__(self, orchestrator):
+    def __init__(self, orchestrator: OrchestratorInterface):
         """
         Args:
-            orchestrator: 메인 오케스트레이터 참조
+            orchestrator: 메인 오케스트레이터 인터페이스
         """
         self.orchestrator = orchestrator
         self.logger = get_logger(__name__)

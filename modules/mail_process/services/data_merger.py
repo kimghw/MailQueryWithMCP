@@ -145,36 +145,9 @@ class MailTransformationRules:
         return merged
 
     @staticmethod
-    def _convert_to_unified_naming(parsed_code: Dict) -> Dict:
-        """ParsedCode를 통일된 네이밍으로 변환"""
-        base_no = parsed_code.get("base_agenda_no", "")
-
-        return {
-            "full_code": parsed_code.get("full_code"),
-            "document_type": parsed_code.get("document_type"),
-            "panel": parsed_code.get("panel"),
-            "year": parsed_code.get("year"),
-            "number": parsed_code.get("number"),
-            "agenda_version": parsed_code.get("agenda_version"),
-            "organization": parsed_code.get("organization"),
-            "response_version": parsed_code.get("response_version"),
-            "description": parsed_code.get("description"),
-            "is_response": parsed_code.get("is_response", False),
-            "is_special": parsed_code.get("is_special", False),
-            "is_agenda": not parsed_code.get("is_response", False)
-            and not parsed_code.get("is_special", False),
-            "base_agenda_no": base_no,
-            "parsing_method": parsed_code.get("parsing_method", ""),
-            # 통일된 네이밍 추가
-            "agenda_code": parsed_code.get("full_code"),
-            "agenda_base": base_no,
-            "agenda_panel": parsed_code.get("panel"),  # agenda_panel로 변경
-        }
-
-    @staticmethod
     def format_datetime(dt: Any) -> str:
         """datetime 객체를 문자열로 포맷"""
-        if hasattr(dt, "isoformat"):
+        if isinstance(dt, datetime):
             return dt.isoformat()
         else:
             return str(dt)

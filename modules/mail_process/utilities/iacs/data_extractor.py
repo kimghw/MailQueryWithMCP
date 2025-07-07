@@ -26,8 +26,8 @@ class DataExtractor:
         self.separator_pattern = re.compile(r"[-=_*]{5,}")
 
         # Chair와 Member 이메일 주소 리스트
-        self.chair_emails = []
-        self.member_emails = {}  # {organization: [email_list]}
+        self.chair_emails: List[str] = []
+        self.member_emails: Dict[str, List[str]] = {}  # {organization: [email_list]}
 
     def set_chair_emails(self, emails: List[str]):
         """Chair 이메일 주소 설정"""
@@ -263,7 +263,7 @@ class DataExtractor:
 
     def analyze_reply_chain(self, subject: str) -> Dict[str, Any]:
         """회신 체인 분석"""
-        result = {}
+        result: Dict[str, Any] = {}
 
         # 회신 표시
         reply_prefixes = ["RE:", "Re:", "re:", "답장:", "Reply:", "回复:"]
@@ -308,12 +308,12 @@ class DataExtractor:
         combined = f"{subject} {text}".lower()
 
         # HIGH 우선 체크
-        for keyword in URGENCY_KEYWORDS.get("high", []):
+        for keyword in URGENCY_KEYWORDS.get("HIGH", []):
             if keyword in combined:
                 return "HIGH"
 
         # MEDIUM 체크
-        for keyword in URGENCY_KEYWORDS.get("medium", []):
+        for keyword in URGENCY_KEYWORDS.get("MEDIUM", []):
             if keyword in combined:
                 return "MEDIUM"
 
@@ -321,8 +321,8 @@ class DataExtractor:
 
     def extract_agenda_patterns(self, text: str) -> List[str]:
         """본문에서 추가 아젠다 참조 추출"""
-        patterns = []
-        seen = set()  # 중복 제거용
+        patterns: List[str] = []
+        seen: set[str] = set()  # 중복 제거용
 
         # 대소문자 구분 없이 패턴 검색
         agenda_patterns = [

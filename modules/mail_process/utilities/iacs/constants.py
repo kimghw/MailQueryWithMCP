@@ -6,110 +6,136 @@ modules/mail_process/utilities/iacs/constants.py
 from typing import Dict, List, Any
 from collections import defaultdict
 from dataclasses import dataclass
+from enum import Enum
 
 
-# 기관 코드 목록
-ORGANIZATION_CODES = {
-    "AB",
-    "ABS",
-    "BV",
-    "CC",
-    "CCS",
-    "CR",
-    "CRS",
-    "DNV",
-    "NV",
-    "IR",
-    "IRS",
-    "KR",
-    "LR",
-    "NK",
-    "PR",
-    "PRS",
-    "PL",
-    "RI",
-    "RINA",
-    "IL",
-    "TL",
-}
+class IACSConstants:
+    """IACS 관련 상수"""
 
-# 패널 타입
-PANEL_TYPES = {"PL", "PS", "JWG-SDT", "JWG-CS"}
+    # 기관 코드 목록
+    ORGANIZATION_CODES = {
+        "AB",
+        "ABS",
+        "BV",
+        "CC",
+        "CCS",
+        "CR",
+        "CRS",
+        "DNV",
+        "NV",
+        "IR",
+        "IRS",
+        "KR",
+        "LR",
+        "NK",
+        "PR",
+        "PRS",
+        "PL",
+        "RI",
+        "RINA",
+        "IL",
+        "TL",
+    }
 
-# 도메인-조직 매핑
-DOMAIN_ORG_MAP = {
-    # Korean Register
-    "kr.org": "KR",
-    "krs.co.kr": "KR",
-    "krs.com": "KR",
-    # Lloyd's Register
-    "lr.org": "LR",
-    "lr.com": "LR",
-    # DNV (Det Norske Veritas)
-    "dnv.com": "DNV",
-    "dnvgl.com": "DNV",
-    "dnv.no": "DNV",
-    # Nippon Kaiji Kyokai (ClassNK)
-    "classnk.or.jp": "NK",
-    "classnk.com": "NK",
-    "nk.org": "NK",
-    # American Bureau of Shipping
-    "eagle.org": "ABS",
-    "abs-group.com": "ABS",
-    # Bureau Veritas
-    "bureauveritas.com": "BV",
-    "bv.com": "BV",
-    "bureauveritas.fr": "BV",
-    # China Classification Society
-    "ccs.org.cn": "CCS",
-    "ccs.com.cn": "CCS",
-    # Registro Italiano Navale
-    "rina.org": "RINA",
-    "rina.it": "RINA",
-    # Polski Rejestr Statków
-    "prs.pl": "PRS",
-    "prs.com.pl": "PRS",
-    # IACS (IL - Chair)
-    "iscsmaritime.com": "IL",
-    "iacs.org.uk": "IL",
-    "iacs.org": "IL",
-    # Turk Loydu
-    "tasneef.ae": "TL",
-    "turkloydu.org": "TL",
-    # Croatian Register of Shipping
-    "crs.hr": "CRS",
-    "croatiaregister.com": "CRS",
-    # Indian Register of Shipping
-    "irclass.org": "IRS",
-    "irs.org.in": "IRS",
-}
+    # 패널 타입
+    PANEL_TYPES = {"PL", "PS", "JWG-SDT", "JWG-CS"}
 
-# 특수 접두사 패턴
-SPECIAL_PREFIXES = [
-    "Multilateral",
-    "Bilateral",
-    "RE:",
-    "Re:",
-    "re:",
-    "답장:",
-    "Reply:",
-    "回复:",
-    "FW:",
-    "Fw:",
-    "fw:",
-    "FWD:",
-    "Fwd:",
-    "fwd:",
-    "전달:",
-    "Forward:",
-    "转发:",
-    "Automatic reply:",
-    "IACS SDTP",
-]
+    # 최대 라인 길이 제한
+    MAX_LINE_LENGTH = 500
+
+
+class DomainMapping:
+    """도메인-조직 매핑"""
+
+    DOMAIN_ORG_MAP = {
+        # Korean Register
+        "kr.org": "KR",
+        "krs.co.kr": "KR",
+        "krs.com": "KR",
+        # Lloyd's Register
+        "lr.org": "LR",
+        "lr.com": "LR",
+        # DNV (Det Norske Veritas)
+        "dnv.com": "DNV",
+        "dnvgl.com": "DNV",
+        "dnv.no": "DNV",
+        # Nippon Kaiji Kyokai (ClassNK)
+        "classnk.or.jp": "NK",
+        "classnk.com": "NK",
+        "nk.org": "NK",
+        # American Bureau of Shipping
+        "eagle.org": "ABS",
+        "abs-group.com": "ABS",
+        # Bureau Veritas
+        "bureauveritas.com": "BV",
+        "bv.com": "BV",
+        "bureauveritas.fr": "BV",
+        # China Classification Society
+        "ccs.org.cn": "CCS",
+        "ccs.com.cn": "CCS",
+        # Registro Italiano Navale
+        "rina.org": "RINA",
+        "rina.it": "RINA",
+        # Polski Rejestr Statków
+        "prs.pl": "PRS",
+        "prs.com.pl": "PRS",
+        # IACS (IL - Chair)
+        "iscsmaritime.com": "IL",
+        "iacs.org.uk": "IL",
+        "iacs.org": "IL",
+        # Turk Loydu
+        "tasneef.ae": "TL",
+        "turkloydu.org": "TL",
+        # Croatian Register of Shipping
+        "crs.hr": "CRS",
+        "croatiaregister.com": "CRS",
+        # Indian Register of Shipping
+        "irclass.org": "IRS",
+        "irs.org.in": "IRS",
+    }
+
+
+class SpecialPatterns:
+    """특수 패턴 및 접두사"""
+
+    # 특수 접두사 패턴
+    SPECIAL_PREFIXES = [
+        "Multilateral",
+        "Bilateral",
+        "RE:",
+        "Re:",
+        "re:",
+        "답장:",
+        "Reply:",
+        "回复:",
+        "FW:",
+        "Fw:",
+        "fw:",
+        "FWD:",
+        "Fwd:",
+        "fwd:",
+        "전달:",
+        "Forward:",
+        "转发:",
+        "Automatic reply:",
+        "IACS SDTP",
+    ]
+
+    # 특수 케이스
+    SPECIAL_CASES = ["Multilateral", "MULTILATERAL", "multilateral"]
+
+
+class UrgencyLevel(Enum):
+    """긴급도 수준"""
+
+    HIGH = "HIGH"
+    MEDIUM = "MEDIUM"
+    NORMAL = "NORMAL"
+
 
 # 긴급도 키워드
 URGENCY_KEYWORDS = {
-    "high": [
+    UrgencyLevel.HIGH.value: [
         "urgent",
         "긴급",
         "asap",
@@ -118,14 +144,23 @@ URGENCY_KEYWORDS = {
         "急",
         "high priority",
     ],
-    "medium": ["important", "중요", "priority", "attention", "please review"],
+    UrgencyLevel.MEDIUM.value: [
+        "important",
+        "중요",
+        "priority",
+        "attention",
+        "please review",
+    ],
 }
 
-# 특수 케이스
-SPECIAL_CASES = ["Multilateral", "MULTILATERAL", "multilateral"]
 
-# 최대 라인 길이 제한
-MAX_LINE_LENGTH = 500
+# 기존 상수들을 클래스 외부에도 노출 (하위 호환성)
+ORGANIZATION_CODES = IACSConstants.ORGANIZATION_CODES
+PANEL_TYPES = IACSConstants.PANEL_TYPES
+MAX_LINE_LENGTH = IACSConstants.MAX_LINE_LENGTH
+DOMAIN_ORG_MAP = DomainMapping.DOMAIN_ORG_MAP
+SPECIAL_PREFIXES = SpecialPatterns.SPECIAL_PREFIXES
+SPECIAL_CASES = SpecialPatterns.SPECIAL_CASES
 
 
 @dataclass
