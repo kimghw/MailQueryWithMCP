@@ -1,4 +1,4 @@
-"""키워드 추출 서비스 - 대시보드 이벤트 통합된 완전한 파일"""
+"""키워드 추출 서비스 - 대시보드 이벤트 통합 및 sender 정보 처리 개선"""
 
 import asyncio
 import json
@@ -217,6 +217,13 @@ class ExtractionService:
             sender_address = item.get("sender_address", "")
             sender_name = item.get("sender_name", "")
 
+            # 디버깅: sender 정보 확인
+            self.logger.debug(
+                f"배치 아이템 처리 - mail_id: {mail_id}, "
+                f"sender_address: '{sender_address}', "
+                f"sender_name: '{sender_name}'"
+            )
+
             # 구조화된 API 호출 (대시보드 이벤트 자동 발행됨)
             result = await self._call_openrouter_structured_api(
                 content=content,
@@ -264,6 +271,15 @@ class ExtractionService:
         # 발송 시간 포맷팅
         sent_time_str = sent_time.isoformat() if sent_time else "Unknown"
 
+        # 디버깅: API 호출 전 정보 확인
+        self.logger.debug(
+            f"API 호출 준비 - "
+            f"subject: {subject[:50]}, "
+            f"sender_address: '{sender_address}', "
+            f"sender_name: '{sender_name}', "
+            f"sent_time: {sent_time_str}"
+        )
+
         # 프롬프트 준비
         try:
             system_prompt = prompt_data.get("system_prompt", "")
@@ -279,6 +295,9 @@ class ExtractionService:
                 "{sender_address}", sender_address or "Unknown"
             )
             user_prompt = user_prompt.replace("{sender_name}", sender_name or "Unknown")
+
+            # 디버깅: 최종 프롬프트 확인 (처음 500자만)
+            self.logger.debug(f"최종 user_prompt (일부): {user_prompt[:500]}...")
 
         except Exception as e:
             self.logger.error(f"프롬프트 템플릿 처리 오류: {str(e)}")
@@ -353,6 +372,13 @@ class ExtractionService:
                                 # 토큰 사용량 정보 추가
                                 if "usage" in data:
                                     result["token_usage"] = data["usage"]
+
+                                # 디버깅: 파싱된 결과 확인
+                                self.logger.debug(
+                                    f"API 응답 파싱 완료 - "
+                                    f"sender_organization: {result.get('sender_organization')}, "
+                                    f"keywords: {result.get('keywords', [])}"
+                                )
 
                                 # 필수 필드 검증
                                 required_fields = [

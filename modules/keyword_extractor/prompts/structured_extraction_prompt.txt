@@ -23,7 +23,7 @@ Content: {content}
   "decision_status": "created" or "comment" or "consolidated" or "review" or "decision" or null,
   "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
   "sender_type": "CHAIR" or "MEMBER" or "EXTERNAL",
-  "sender_organization": "ABS" or "BV" or "CCS" or "CRS" or "DNV" or "IRS" or "KR" or "LR" or "NK" or "PRS" or "RINA" or "IL" or "TL" or null,
+  "sender_organization": "Extract organization code from the sender's email domain(e.g., @kr.org → KR, @lr.org → LR)",
   "send_time": "YYYY-MM-DD HH:MM:SS format (when email was sent)",
   "agenda_Reference": "Complete pattern like PL25003_ILa or null",
   "agenda_number": "like PL25003_, PL24004a, PL25006a or null",
@@ -36,6 +36,24 @@ Content: {content}
   "reply_version": "Reply version or null (e.g., null, a, b, c, d, e, f)"
 }
 
+## Sender Organization Detection
+- Extract organization from the sender's email domain (e.g., @kr.org → KR, @lr.org → LR)
+- If domain is not clear, look for organization signatures in the email content
+- Common domain patterns:
+  - @kr.org, @krs.co.kr → KR
+  - @lr.org → LR
+  - @dnv.com, @dnvgl.com → DNV
+  - @classnk.or.jp → NK
+  - @eagle.org → ABS
+  - @bureauveritas.com → BV
+  - @ccs.org.cn → CCS
+  - @rina.org → RINA
+  - @prs.pl → PRS
+  - @iscsmaritime.com, @iacs.org.uk → IL (Chair)
+  - @tasneef.ae → TL
+  - @crs.hr → CRS
+  - @irclass.org → IRS
+  
 # Rules
 
 ## Overview

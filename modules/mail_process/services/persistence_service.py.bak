@@ -1,4 +1,4 @@
-"""처리 서비스 - 메일 정제 및 키워드 추출 (sender 정보 개선)"""
+"""처리 서비스 - 메일 정제 및 키워드 추출 완전한 파일"""
 
 from typing import Dict, List, Optional
 
@@ -74,10 +74,6 @@ class ProcessingService:
 
         for i, mail in enumerate(mails):
             try:
-                # 첫 번째 메일은 디버깅
-                if i == 0:
-                    self.mail_parser.debug_mail_structure(mail)
-
                 prepared_mail = self._prepare_mail_for_processing(mail)
                 if prepared_mail:
                     prepared_mails.append(prepared_mail)
@@ -85,7 +81,7 @@ class ProcessingService:
                     stats["too_short"] += 1
             except Exception as e:
                 stats["processing_errors"] += 1
-                self.logger.error(f"메일 준비 중 오류: {str(e)}", exc_info=True)
+                self.logger.error(f"메일 준비 중 오류: {str(e)}")
                 continue
 
         # 2단계: 배치 키워드 추출을 위한 데이터 준비
@@ -93,16 +89,14 @@ class ProcessingService:
         for prepared_mail in prepared_mails:
             mail_data_for_keywords.append(
                 {
-                    "mail_id": prepared_mail.get("id", "unknown"),
+                    "mail_id": prepared_mail.get("id", "unknown"),  # 메일 ID 추가
                     "content": prepared_mail["_processed"]["clean_content"],
                     "subject": prepared_mail["_processed"]["refined_mail"].get(
                         "subject", ""
                     ),
                     "sent_time": prepared_mail["_processed"]["sent_time"],
-                    "sender_address": prepared_mail["_processed"][
-                        "sender_address"
-                    ],  # 추가
-                    "sender_name": prepared_mail["_processed"]["sender_name"],  # 추가
+                    "sender_address": prepared_mail["_processed"]["sender_address"],
+                    "sender_name": prepared_mail["_processed"]["sender_name"],
                 }
             )
 
@@ -113,7 +107,7 @@ class ProcessingService:
                     # BatchExtractionRequest 생성
                     batch_request = BatchExtractionRequest(
                         items=mail_data_for_keywords,
-                        batch_size=50,
+                        batch_size=50,  # 설정에서 가져올 수도 있음
                         concurrent_requests=5,
                     )
 
@@ -135,7 +129,7 @@ class ProcessingService:
                         stats["processed"] += 1
 
                 except Exception as e:
-                    self.logger.error(f"배치 키워드 추출 실패: {str(e)}", exc_info=True)
+                    self.logger.error(f"배치 키워드 추출 실패: {str(e)}")
                     # 실패 시 모든 메일에 빈 키워드 할당
                     for prepared_mail in prepared_mails:
                         prepared_mail["_processed"]["keywords"] = []
@@ -150,12 +144,8 @@ class ProcessingService:
         processed_mails = []
 
         async with self.keyword_extractor as extractor:
-            for i, mail in enumerate(mails):
+            for mail in mails:
                 try:
-                    # 첫 번째 메일은 디버깅
-                    if i == 0:
-                        self.mail_parser.debug_mail_structure(mail)
-
                     processed_mail = await self._process_single_mail(mail)
                     if processed_mail:
                         processed_mails.append(processed_mail)
@@ -179,13 +169,9 @@ class ProcessingService:
         mail_id = self.mail_parser.extract_mail_id(mail)
         sent_time = self.mail_parser.extract_sent_time(mail)
 
-        # 발신자 정보 추출 (개선된 방식)
-        sender_address, sender_name = self.mail_parser.extract_sender_info(mail)
-
-        # 발신자 정보 로깅
-        self.logger.debug(
-            f"메일 {mail_id} - 발신자 주소: '{sender_address}', 이름: '{sender_name}'"
-        )
+        # 발신자 정보 추출 추가
+        sender_address = self.mail_parser.extract_sender_address(mail)
+        sender_name = self.mail_parser.extract_sender_name(mail)
 
         # 텍스트 정제
         refined_mail = self.text_cleaner.prepare_mail_content(mail)
@@ -216,8 +202,6 @@ class ProcessingService:
         # 최상위 레벨에도 저장 (호환성을 위해)
         mail["sender_address"] = sender_address
         mail["sender_name"] = sender_name
-        mail["sent_time"] = sent_time
-        mail["clean_content"] = clean_content
 
         return mail
 
@@ -228,17 +212,17 @@ class ProcessingService:
         if not prepared_mail:
             return None
 
-        # 키워드 추출 전에 메일 ID 설정
+        # 🎯 키워드 추출 전에 메일 ID 설정
         mail_id = prepared_mail.get("id", "unknown")
         self.keyword_extractor.extraction_service.set_current_mail_id(mail_id)
 
-        # 키워드 추출 요청 생성 (sender 정보 포함)
+        # 키워드 추출 요청 생성
         extraction_request = KeywordExtractionRequest(
             text=prepared_mail["_processed"]["clean_content"],
             subject=prepared_mail["_processed"]["refined_mail"].get("subject", ""),
             sent_time=prepared_mail["_processed"]["sent_time"],
-            sender_address=prepared_mail["_processed"]["sender_address"],  # 추가
-            sender_name=prepared_mail["_processed"]["sender_name"],  # 추가
+            sender_address=prepared_mail["_processed"]["sender_address"],
+            sender_name=prepared_mail["_processed"]["sender_name"],
             max_keywords=int(self.config.get_setting("MAX_KEYWORDS_PER_MAIL", "5")),
             use_structured_response=self.config.get_setting(
                 "ENABLE_STRUCTURED_EXTRACTION", "true"
