@@ -60,6 +60,54 @@ class IACSCodeParser:
     # 최대 라인 길이 제한
     MAX_LINE_LENGTH = 500
 
+    # 도메인-조직 매핑 (comprehensive mapping)
+    DOMAIN_ORG_MAP = {
+        # Korean Register
+        "kr.org": "KR",
+        "krs.co.kr": "KR",
+        "krs.com": "KR",
+        # Lloyd's Register
+        "lr.org": "LR",
+        "lr.com": "LR",
+        # DNV (Det Norske Veritas)
+        "dnv.com": "DNV",
+        "dnvgl.com": "DNV",
+        "dnv.no": "DNV",
+        # Nippon Kaiji Kyokai (ClassNK)
+        "classnk.or.jp": "NK",
+        "classnk.com": "NK",
+        "nk.org": "NK",
+        # American Bureau of Shipping
+        "eagle.org": "ABS",
+        "abs-group.com": "ABS",
+        # Bureau Veritas
+        "bureauveritas.com": "BV",
+        "bv.com": "BV",
+        "bureauveritas.fr": "BV",
+        # China Classification Society
+        "ccs.org.cn": "CCS",
+        "ccs.com.cn": "CCS",
+        # Registro Italiano Navale
+        "rina.org": "RINA",
+        "rina.it": "RINA",
+        # Polski Rejestr Statków
+        "prs.pl": "PRS",
+        "prs.com.pl": "PRS",
+        # IACS (IL - Chair)
+        "iscsmaritime.com": "IL",
+        "iacs.org.uk": "IL",
+        "iacs.org": "IL",
+        # Turk Loydu
+        "tasneef.ae": "TL",
+        "turkloydu.org": "TL",
+        # Croatian Register of Shipping
+        "crs.hr": "CRS",
+        "croatiaregister.com": "CRS",
+        # Indian Register of Shipping
+        "irclass.org": "IRS",
+        "irs.org.in": "IRS",
+    }
+
     def __init__(self):
         self.logger = get_logger(__name__)
 
@@ -127,6 +175,44 @@ class IACSCodeParser:
         self.member_emails[organization.upper()] = [email.lower() for email in emails]
         self.logger.info(f"{organization} 멤버 이메일 {len(emails)}개 설정됨")
 
+    def extract_organization_from_email(self, email_address: str) -> Optional[str]:
+        """
+        이메일 도메인에서 조직 코드 추출
+
+        Args:
+            email_address: 이메일 주소
+
+        Returns:
+            조직 코드 (KR, DNV, ABS 등) 또는 None
+        """
+        if not email_address or "@" not in email_address:
+            return None
+
+        # 이메일에서 도메인 추출
+        domain = email_address.split("@")[1].lower()
+
+        # 정확한 도메인 매칭 시도
+        for domain_pattern, org in self.DOMAIN_ORG_MAP.items():
+            if domain == domain_pattern:
+                self.logger.debug(f"도메인 {domain}에서 조직 {org} 추출 (정확한 매칭)")
+                return org
+
+        # 부분 도메인 매칭 시도 (서브도메인 고려)
+        for domain_pattern, org in self.DOMAIN_ORG_MAP.items():
+            if domain.endswith(f".{domain_pattern}") or domain == domain_pattern:
+                self.logger.debug(f"도메인 {domain}에서 조직 {org} 추출 (부분 매칭)")
+                return org
+
+        # 특수 케이스: 도메인에서 조직 코드 직접 추출 시도
+        # 예: someone@kr-shipping.com -> KR
+        for org in self.ORGANIZATION_CODES:
+            if org.lower() in domain and len(org) >= 2:
+                self.logger.debug(f"도메인 {domain}에서 조직 {org} 추출 (패턴 매칭)")
+                return org.upper()
+
+        self.logger.debug(f"도메인 {domain}에서 조직 코드를 찾을 수 없음")
+        return None
+
     def parse_line(self, line: str) -> Optional[ParsedCode]:
         """한 줄을 파싱하여 코드 정보 추출 (새로운 규칙 적용)"""
         try:
@@ -185,20 +271,25 @@ class IACSCodeParser:
             self.logger.error(f"파싱 중 예외 발생: {str(e)}, 라인: {line[:100]}")
             return None
 
-    def extract_sender_info(self, mail: Dict) -> Tuple[str, str, Optional[str]]:
+    def extract_sender_info(
+        self, mail: Dict
+    ) -> Tuple[str, str, Optional[str], Optional[str]]:
         """
-        발신자 정보 추출 및 sender_type 결정
+        발신자 정보 추출 및 sender_type, sender_organization 결정
 
         Returns:
-            (sender_address, sender_name, sender_type)
+            (sender_address, sender_name, sender_type, sender_organization)
         """
         sender_address, sender_name = self._extract_basic_sender_info(mail)
         sender_type = None
+        sender_organization = None
 
         if sender_address:
             sender_type = self._determine_sender_type(sender_address, mail)
+            # 이메일 도메인에서 조직 코드 추출
+            sender_organization = self.extract_organization_from_email(sender_address)
 
-        return sender_address, sender_name, sender_type
+        return sender_address, sender_name, sender_type, sender_organization
 
     def _extract_basic_sender_info(self, mail: Dict) -> Tuple[str, str]:
         """기본 발신자 정보 추출"""
@@ -248,7 +339,7 @@ class IACSCodeParser:
         return sender_address, sender_name
 
     def _determine_sender_type(self, sender_address: str, mail: Dict) -> Optional[str]:
-        """발신자 타입 결정"""
+        """발신자 타입 결정 (CHAIR/MEMBER)"""
         sender_address_lower = sender_address.lower()
 
         # Chair 확인
@@ -262,14 +353,14 @@ class IACSCodeParser:
                 self.logger.debug(f"{org} 멤버 이메일 감지: {sender_address}")
                 return "MEMBER"
 
-        # 도메인 기반 추정 (설정된 이메일이 없는 경우)
-        if "@" in sender_address:
-            domain = sender_address.split("@")[1].lower()
-            # IL 도메인은 보통 Chair
-            if "il." in domain or domain.endswith(".il"):
+        # 도메인 기반 추정
+        org_code = self.extract_organization_from_email(sender_address)
+        if org_code:
+            # IL은 보통 Chair
+            if org_code == "IL":
                 return "CHAIR"
-            # 다른 IACS 멤버 도메인 패턴 확인
-            elif any(org.lower() in domain for org in self.ORGANIZATION_CODES):
+            # 다른 IACS 멤버는 MEMBER
+            else:
                 return "MEMBER"
 
         # 제목에서 추가 단서 확인
@@ -878,13 +969,27 @@ class IACSCodeParser:
 
         # 5. 메일 정보가 제공된 경우 추가 정보 추출
         if mail:
-            # 발신자 정보 추출
-            sender_address, sender_name, sender_type = self.extract_sender_info(mail)
+            # 발신자 정보 추출 (organization 포함)
+            sender_address, sender_name, sender_type, sender_organization = (
+                self.extract_sender_info(mail)
+            )
             if sender_address:
                 result["sender_address"] = sender_address
                 result["sender_name"] = sender_name
                 if sender_type:
                     result["sender_type"] = sender_type
+
+                # sender_organization 설정 (우선순위 적용)
+                # 1. IACS 코드에서 추출된 organization이 있으면 사용
+                if parsed_code and parsed_code.organization:
+                    result["sender_organization"] = parsed_code.organization
+                # 2. 이메일 도메인에서 추출된 organization 사용
+                elif sender_organization:
+                    result["sender_organization"] = sender_organization
+                    self.logger.debug(
+                        f"이메일 도메인에서 sender_organization 추출: {sender_organization} "
+                        f"(from: {sender_address})"
+                    )
 
             # 발송 시간 추출
             sent_time = self.extract_sent_time(mail)
