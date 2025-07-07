@@ -416,9 +416,16 @@ class MailProcessorOrchestrator:
         if "extracted_info" in iacs_data:
             iacs_info = iacs_data["extracted_info"]
 
-            # 아젠다 번호
+            # 아젠다 번호와 버전을 결합한 agenda_code 생성
             if iacs_info.get("base_agenda_no"):
-                merged["agenda_no"] = iacs_info["base_agenda_no"]
+                base_no = iacs_info["base_agenda_no"]
+                agenda_version = iacs_info.get("agenda_version", "")
+                # agenda_code = base_agenda_no + agenda_version
+                merged["agenda_code"] = (
+                    f"{base_no}{agenda_version}" if agenda_version else base_no
+                )
+                # 원본 agenda_no도 유지 (호환성)
+                merged["agenda_no"] = base_no
 
             # 아젠다 상세 정보
             merged["agenda_info"] = {
@@ -432,16 +439,15 @@ class MailProcessorOrchestrator:
                 "parsing_method": iacs_info.get("parsing_method"),
             }
 
-            # 응답인 경우 추가 정보 (agenda_response_id 제거)
+            # 응답인 경우 추가 정보
             if iacs_info.get("is_response") and iacs_info.get("organization"):
                 merged["response_version"] = iacs_info.get("response_version")
 
-        # agenda_organization과 agenda_organization_round 처리
+        # agenda_organization 처리
         if iacs_data.get("agenda_organization"):
             merged["agenda_organization"] = iacs_data["agenda_organization"]
 
-        if iacs_data.get("agenda_organization_round"):
-            merged["agenda_organization_round"] = iacs_data["agenda_organization_round"]
+        # agenda_organization_round는 제거 (요청사항에 따라)
 
         # 메타 정보
         if iacs_data.get("urgency"):
@@ -512,7 +518,8 @@ class MailProcessorOrchestrator:
             merged["sender_organization"] = processed_info["sender_organization"]
 
         # 다른 파서에서 못 찾은 정보 보충
-        if not merged.get("agenda_no") and processed_info.get("agenda_no"):
+        if not merged.get("agenda_code") and processed_info.get("agenda_no"):
+            merged["agenda_code"] = processed_info["agenda_no"]
             merged["agenda_no"] = processed_info["agenda_no"]
 
         # OpenRouter에서 agenda_organization 관련 정보가 있으면 보충
@@ -529,8 +536,36 @@ class MailProcessorOrchestrator:
             return str(dt)
 
     def _prepare_mail_for_event(self, mail: Dict) -> Dict:
-        """이벤트 발행용 메일 데이터 준비"""
+        """이벤트 발행용 메일 데이터 준비 (수정된 필드 매핑 적용)"""
         event_mail = mail.copy()
+
+        # sender_organization과 sender_type은 그대로 유지
+        # (event_service에서 처리하지 않고 그대로 전달)
+
+        # agenda 정보 재구성
+        if "_iacs_parsed" in mail and "extracted_info" in mail["_iacs_parsed"]:
+            iacs_info = mail["_iacs_parsed"]["extracted_info"]
+
+            # agenda 객체 생성
+            event_mail["agenda"] = {
+                "fullCode": iacs_info.get("full_code"),
+                "documentType": iacs_info.get("document_type"),
+                "panel": iacs_info.get("panel"),
+                "year": iacs_info.get("year"),
+                "number": iacs_info.get("number"),
+                "version": iacs_info.get("agenda_version"),
+                "organization": iacs_info.get("organization"),
+                "responseVersion": iacs_info.get("response_version"),
+                # orgRound 제거 (요청사항에 따라)
+            }
+
+            # agenda_org는 별도 필드로
+            if "agenda_organization" in mail:
+                event_mail["agenda_org"] = mail["agenda_organization"]
+
+        # agenda_code 추가 (agenda_no 대체)
+        if "agenda_code" in mail:
+            event_mail["agenda_code"] = mail["agenda_code"]
 
         # _processed 정보는 제거 (이벤트에 불필요)
         if "_processed" in event_mail:
@@ -546,6 +581,11 @@ class MailProcessorOrchestrator:
             "sender_address",
             "sender_name",
             "extraction_metadata",
+            "agenda_info",
+            "agenda_organization",
+            "agenda_organization_round",
+            "response_version",
+            "agenda_no",  # agenda_code로 대체되므로 제거
         ]
 
         for field in fields_to_remove:

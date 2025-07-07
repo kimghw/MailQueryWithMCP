@@ -25,7 +25,7 @@ class MailEventService:
 
         Args:
             account_id: 계정 ID
-            mail: 원본 메일 데이터
+            mail: 원본 메일 데이터 (이미 필드 매핑이 적용된 상태)
             keywords: 추출된 키워드
             clean_content: 정제된 내용
         """
@@ -33,7 +33,7 @@ class MailEventService:
             # datetime 객체들을 문자열로 변환
             mail_copy = self._convert_datetime_to_string(mail.copy())
 
-            # 키워드 추가
+            # 키워드 추가 (extracted_keywords로 매핑)
             mail_copy["extracted_keywords"] = keywords
 
             # body.content를 clean_content로 교체
@@ -73,11 +73,21 @@ class MailEventService:
             subject = mail.get("subject", "")
             truncated_subject = subject[:50] + "..." if len(subject) > 50 else subject
 
+            # 필드 매핑이 적용되었는지 확인
+            sender_org = mail_copy.get("sender_organization", "N/A")
+            sender_type = mail_copy.get("sender_type", "N/A")
+            agenda_code = mail_copy.get("agenda_code", "N/A")
+            agenda_info = mail_copy.get("agenda", {})
+
             self.logger.info(
                 f"메일 처리 이벤트 발행 - "
                 f"계정: {account_id}, "
                 f"제목: {truncated_subject}, "
-                f"키워드: {len(keywords)}개"
+                f"키워드: {len(keywords)}개, "
+                f"발신자 조직: {sender_org}, "
+                f"발신자 타입: {sender_type}, "
+                f"아젠다 코드: {agenda_code}, "
+                f"아젠다 전체: {agenda_info.get('fullCode', 'N/A')}"
             )
 
         except Exception as e:

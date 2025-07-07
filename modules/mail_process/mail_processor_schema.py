@@ -68,6 +68,21 @@ class GraphMailItem(BaseModel):
         allow_population_by_field_name = True
 
 
+class AgendaInfo(BaseModel):
+    """아젠다 상세 정보"""
+
+    fullCode: Optional[str] = Field(None, description="전체 IACS 코드")
+    documentType: Optional[str] = Field(
+        None, description="문서 타입 (AGENDA/RESPONSE/SPECIAL)"
+    )
+    panel: Optional[str] = Field(None, description="패널 (PL/PS/JWG-SDT/JWG-CS)")
+    year: Optional[str] = Field(None, description="년도 (2자리)")
+    number: Optional[str] = Field(None, description="번호 (3-4자리)")
+    version: Optional[str] = Field(None, description="아젠다 버전")
+    organization: Optional[str] = Field(None, description="응답 조직 (응답인 경우)")
+    responseVersion: Optional[str] = Field(None, description="응답 버전 (응답인 경우)")
+
+
 class ProcessedMailData(BaseModel):
     """처리된 메일 데이터 (확장됨)"""
 
@@ -91,10 +106,11 @@ class ProcessedMailData(BaseModel):
     processing_status: ProcessingStatus
     error_message: Optional[str] = None
 
-    # IACS 관련 정보
-    agenda_no: Optional[str] = None
+    # IACS 관련 정보 (수정됨)
+    agenda_code: Optional[str] = None  # agenda_no + agenda_version
+    agenda_no: Optional[str] = None  # 기본 아젠다 번호 (호환성 유지)
     agenda_info: Optional[Dict[str, Any]] = None
-    agenda_response_id: Optional[str] = None  # 응답 ID (조직+버전)
+    agenda_org: Optional[str] = None  # agenda_organization 대체
     additional_agenda_references: List[str] = Field(default_factory=list)
 
     # 메일 메타정보
@@ -212,3 +228,34 @@ class MailFilterStatistics(BaseModel):
     filtered_by_no_sender: int = 0
     filtering_enabled: bool
     filter_configurations: Dict[str, Any]
+
+
+class ProcessedMailEvent(BaseModel):
+    """처리된 메일 이벤트 (이벤트 발행용)"""
+
+    # Graph API 필드
+    id: str
+    subject: str
+    from_address: Optional[Dict[str, Any]] = Field(alias="from")
+    receivedDateTime: datetime
+    bodyPreview: str
+    body: Dict[str, Any]
+
+    # 추가된 필드들
+    sender_organization: Optional[str] = None
+    sender_type: Optional[str] = None
+    agenda_code: Optional[str] = None
+    agenda_org: Optional[str] = None
+    agenda: Optional[AgendaInfo] = None
+    extracted_keywords: List[str] = Field(default_factory=list)
+    urgency: str = "NORMAL"
+    is_reply: bool = False
+    is_forward: bool = False
+    mail_type: str = "OTHER"
+    decision_status: str = "created"
+    has_deadline: bool = False
+    deadline: Optional[datetime] = None
+    summary: Optional[str] = None
+
+    class Config:
+        allow_population_by_field_name = True
