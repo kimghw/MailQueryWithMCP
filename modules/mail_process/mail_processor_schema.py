@@ -1,4 +1,7 @@
-"""Mail Processor 모듈 스키마 정의"""
+"""
+Mail Processor 모듈 스키마 정의 - 통일된 네이밍 적용
+modules/mail_process/mail_processor_schema.py
+"""
 
 from datetime import datetime
 from enum import Enum
@@ -13,7 +16,7 @@ class ProcessingStatus(str, Enum):
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
     SKIPPED = "SKIPPED"
-    PARTIAL = "PARTIAL"  # 부분 성공 추가
+    PARTIAL = "PARTIAL"
 
 
 class SenderType(str, Enum):
@@ -69,7 +72,7 @@ class GraphMailItem(BaseModel):
 
 
 class AgendaInfo(BaseModel):
-    """아젠다 상세 정보"""
+    """아젠다 상세 정보 - 통일된 네이밍"""
 
     fullCode: Optional[str] = Field(None, description="전체 IACS 코드")
     documentType: Optional[str] = Field(
@@ -84,7 +87,7 @@ class AgendaInfo(BaseModel):
 
 
 class ProcessedMailData(BaseModel):
-    """처리된 메일 데이터 (확장됨)"""
+    """처리된 메일 데이터 - 통일된 네이밍"""
 
     # 기본 정보
     mail_id: str
@@ -106,11 +109,14 @@ class ProcessedMailData(BaseModel):
     processing_status: ProcessingStatus
     error_message: Optional[str] = None
 
-    # IACS 관련 정보 (수정됨)
-    agenda_code: Optional[str] = None  # agenda_no + agenda_version
-    agenda_no: Optional[str] = None  # 기본 아젠다 번호 (호환성 유지)
+    # IACS 관련 정보 - 통일된 네이밍
+    agenda_code: Optional[str] = None  # 전체 코드 (PL25016a)
+    agenda_base: Optional[str] = None  # 기본 번호 (PL25016)
+    agenda_version: Optional[str] = None  # 버전 (a)
+    agenda_panel: Optional[str] = None  # 패널 (PL/PS/JWG-SDT 등) - agenda_org에서 변경
+    response_org: Optional[str] = None  # 응답 조직 (IR)
+    response_version: Optional[str] = None  # 응답 버전 (a)
     agenda_info: Optional[Dict[str, Any]] = None
-    agenda_org: Optional[str] = None  # agenda_organization 대체
     additional_agenda_references: List[str] = Field(default_factory=list)
 
     # 메일 메타정보
@@ -142,7 +148,7 @@ class MailReceivedEvent(BaseModel):
     request_params: Dict[str, Any]
     response_data: Dict[str, Any]
     response_timestamp: datetime
-    metadata: Optional[Dict[str, Any]] = None  # 추가 메타데이터
+    metadata: Optional[Dict[str, Any]] = None
 
 
 class MailProcessingResult(BaseModel):
@@ -167,17 +173,38 @@ class MailProcessingResult(BaseModel):
     warnings: List[str] = Field(default_factory=list)
 
 
-class AccountProcessingStatus(BaseModel):
-    """계정별 처리 상태"""
+class ProcessedMailEvent(BaseModel):
+    """처리된 메일 이벤트 - 통일된 네이밍"""
 
-    account_id: str
-    email: str
-    status: str
-    last_sync_at: Optional[datetime] = None
-    total_processed: int = 0
-    total_keywords: int = 0
-    error_message: Optional[str] = None
-    error_count: int = 0
+    # Graph API 필드
+    id: str
+    subject: str
+    from_address: Optional[Dict[str, Any]] = Field(alias="from")
+    receivedDateTime: datetime
+    bodyPreview: str
+    body: Dict[str, Any]
+
+    # 추가된 필드들 - 통일된 네이밍
+    sender_organization: Optional[str] = None
+    sender_type: Optional[str] = None
+    agenda_code: Optional[str] = None  # 전체 코드
+    agenda_base: Optional[str] = None  # 기본 번호
+    agenda_panel: Optional[str] = None  # 패널 (PL/PS/JWG-SDT 등) - agenda_org에서 변경
+    response_org: Optional[str] = None  # 응답 조직
+    response_version: Optional[str] = None  # 응답 버전
+    agenda: Optional[AgendaInfo] = None
+    extracted_keywords: List[str] = Field(default_factory=list)
+    urgency: str = "NORMAL"
+    is_reply: bool = False
+    is_forward: bool = False
+    mail_type: str = "OTHER"
+    decision_status: str = "created"
+    has_deadline: bool = False
+    deadline: Optional[datetime] = None
+    summary: Optional[str] = None
+
+    class Config:
+        allow_population_by_field_name = True
 
 
 class KeywordExtractionRequest(BaseModel):
@@ -204,58 +231,19 @@ class KeywordExtractionResponse(BaseModel):
     structured_data: Optional[Dict[str, Any]] = None  # 구조화된 추출 데이터
 
 
-class BatchProcessingEvent(BaseModel):
-    """배치 처리 완료 이벤트"""
+class BatchExtractionRequest(BaseModel):
+    """배치 키워드 추출 요청"""
 
-    event_type: str = "email.batch_processing_complete"
-    event_id: str
-    account_id: str
-    occurred_at: datetime
-    statistics: Dict[str, Any]
-    keywords: List[str] = Field(default_factory=list)
-    processing_metadata: Optional[Dict[str, Any]] = None
+    items: List[Dict[str, Any]]
+    batch_size: int = 50
+    concurrent_requests: int = 5
 
 
-class MailFilterStatistics(BaseModel):
-    """메일 필터링 통계"""
+class BatchExtractionResponse(BaseModel):
+    """배치 키워드 추출 응답"""
 
-    total_checked: int = 0
-    filtered_out: int = 0
-    passed: int = 0
-    filtered_by_domain: int = 0
-    filtered_by_pattern: int = 0
-    filtered_by_keyword: int = 0
-    filtered_by_no_sender: int = 0
-    filtering_enabled: bool
-    filter_configurations: Dict[str, Any]
-
-
-class ProcessedMailEvent(BaseModel):
-    """처리된 메일 이벤트 (이벤트 발행용)"""
-
-    # Graph API 필드
-    id: str
-    subject: str
-    from_address: Optional[Dict[str, Any]] = Field(alias="from")
-    receivedDateTime: datetime
-    bodyPreview: str
-    body: Dict[str, Any]
-
-    # 추가된 필드들
-    sender_organization: Optional[str] = None
-    sender_type: Optional[str] = None
-    agenda_code: Optional[str] = None
-    agenda_org: Optional[str] = None
-    agenda: Optional[AgendaInfo] = None
-    extracted_keywords: List[str] = Field(default_factory=list)
-    urgency: str = "NORMAL"
-    is_reply: bool = False
-    is_forward: bool = False
-    mail_type: str = "OTHER"
-    decision_status: str = "created"
-    has_deadline: bool = False
-    deadline: Optional[datetime] = None
-    summary: Optional[str] = None
-
-    class Config:
-        allow_population_by_field_name = True
+    results: List[List[str]]
+    total_items: int
+    successful_items: int
+    failed_items: int
+    execution_time_ms: int
