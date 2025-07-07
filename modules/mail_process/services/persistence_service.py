@@ -4,7 +4,7 @@ modules/mail_process/services/persistence_service.py
 """
 
 import os
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from infra.core.logger import get_logger
 from infra.core.config import get_config
