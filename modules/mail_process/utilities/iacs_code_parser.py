@@ -1,7 +1,4 @@
-"""IACS 코드 파서 - 이메일에서 IACS 코드 및 메타정보 추출
-
-modules/mail_process/utilities/iacs_code_parser.py
-"""
+"""수정된 IACS 코드 파서 - 실제 데이터 기반"""
 
 import re
 from typing import Dict, List, Optional, Any
@@ -24,26 +21,35 @@ class ParsedCode:
     organization: Optional[str] = None  # IR, KR, BV 등 (회신일 경우)
     response_version: Optional[str] = None  # 회신 버전 (a, b, c)
     description: Optional[str] = None  # 코드 뒤의 설명 텍스트
+    is_response: bool = False  # 응답 여부
 
 
 class IACSCodeParser:
-    """IACS 문서 코드 파서 - Regex Parser 기능 통합"""
+    """IACS 문서 코드 파서 - 실제 데이터 기반 수정 버전"""
 
-    # 기관 코드 목록 (email_dashboard의 ORGANIZATIONS와 동기화)
+    # 기관 코드 목록 (실제 데이터에서 발견된 모든 코드 포함)
     ORGANIZATION_CODES = {
+        "AB",
         "ABS",
         "BV",
+        "CC",
         "CCS",
+        "CR",
         "CRS",
         "DNV",
+        "NV",  # NV 추가
+        "IR",
         "IRS",
         "KR",
         "LR",
         "NK",
+        "PR",
         "PRS",
+        "PL",  # PR, PL 추가
+        "RI",
         "RINA",
         "IL",
-        "TL",
+        "TL",  # RI 추가 (RINA의 축약형)
     }
 
     # 패널 타입
@@ -52,127 +58,232 @@ class IACSCodeParser:
     def __init__(self):
         self.logger = get_logger(__name__)
 
-        # 의제 패턴: PL24016 또는 PL24016a
-        self.agenda_pattern = re.compile(r"^(PL|PS)(\d{2})(\d{3,4})([a-z])?$")
-
-        # 회신 패턴: PL24016_IRa
-        self.response_pattern = re.compile(
-            r"^(PL|PS)(\d{2})(\d{3,4})([a-z])?_([A-Z]{2,3})([a-z]+)?$"
-        )
-
-        # JWG 의제 패턴: JWG-SDT25001 또는 JWG-SDT25001a
-        self.jwg_agenda_pattern = re.compile(r"^(JWG)-(SDT|CS)(\d{2})(\d{3})([a-z])?$")
-
-        # JWG 회신 패턴: JWG-SDT25001_IRa
-        self.jwg_response_pattern = re.compile(
-            r"^(JWG)-(SDT|CS)(\d{2})(\d{3})_([A-Z]{2,3})([a-z]+)?$"
-        )
-
-        # 특수 접두사 패턴
+        # 특수 접두사 패턴 (개선: 다중 접두사 처리)
         self.special_prefixes = [
             "Multilateral",
             "Bilateral",
             "RE:",
             "Re:",
+            "re:",
             "Fw:",
             "FW:",
+            "fw:",
             "Fwd:",
+            "FWD:",
+            "fwd:",
             "Automatic reply:",
             "IACS SDTP",
             "답장:",
-            "전달:",
+            "전달:",  # 한글 접두사
+            "回复:",
+            "转发:",  # 중국어 접두사
         ]
 
         # 긴급도 키워드
         self.urgency_keywords = {
-            "high": ["urgent", "긴급", "asap", "immediately", "critical"],
-            "medium": ["important", "중요", "priority"],
+            "high": ["urgent", "긴급", "asap", "immediately", "critical", "急"],
+            "medium": ["important", "중요", "priority", "attention"],
         }
 
     def parse_line(self, line: str) -> Optional[ParsedCode]:
-        """한 줄을 파싱하여 코드 정보 추출"""
+        """한 줄을 파싱하여 코드 정보 추출 (완전 재작성)"""
         line = line.strip()
         if not line:
             return None
 
-        # 특수 접두사 제거
-        cleaned_line = line
-        for prefix in self.special_prefixes:
-            if line.upper().startswith(prefix.upper()):
-                cleaned_line = line[len(prefix) :].strip()
-                break
+        # 다중 특수 접두사 제거
+        cleaned_line = self._remove_prefixes(line)
 
-        # 코드와 설명 분리 (: 또는 공백으로)
-        parts = re.split(r"[:]\s*|\s+", cleaned_line, 1)
-        code_part = parts[0].strip()
-        description = parts[1].strip() if len(parts) > 1 else None
+        # 실제 데이터에서 발견된 패턴들을 모두 처리할 수 있는 정규식
+        # 패턴 1: PL25007bTLa (의제버전+조직+응답버전이 붙어있음)
+        # 패턴 2: PL25016_IRa (표준 응답 형식)
+        # 패턴 3: PL25016 (기본 의제)
+        # 패턴 4: PS25003pPLa (특수 버전)
 
-        # 회신 패턴 먼저 확인 (더 구체적이므로)
-        match = self.response_pattern.match(code_part)
-        if match:
-            panel, year, number, agenda_ver, org, response_ver = match.groups()
-            # 조직 코드 검증
-            if org in self.ORGANIZATION_CODES:
-                return ParsedCode(
-                    full_code=code_part,
-                    document_type="RESPONSE",
-                    panel=panel,
-                    year=year,
-                    number=number,
-                    agenda_version=agenda_ver if agenda_ver else None,
-                    organization=org,
-                    response_version=response_ver if response_ver else None,
-                    description=description,
+        # 먼저 전체 매칭을 시도
+        patterns = [
+            # 붙어있는 응답 패턴: PL25007bTLa
+            (
+                r"^(PL|PS)(\d{2})(\d{3,4})([a-z])?([A-Z]{2,4})([a-z])?(?:\s|:|$)",
+                "ATTACHED_RESPONSE",
+            ),
+            # 표준 응답 패턴: PL25016_IRa
+            (
+                r"^(PL|PS)(\d{2})(\d{3,4})([a-z])?_([A-Z]{2,4})([a-z])?(?:\s|:|$)",
+                "STANDARD_RESPONSE",
+            ),
+            # JWG 응답 패턴: JWG-SDT25001_BVa
+            (
+                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})_([A-Z]{2,4})([a-z])?(?:\s|:|$)",
+                "JWG_RESPONSE",
+            ),
+            # 기본 의제 패턴: PL25016a
+            (r"^(PL|PS)(\d{2})(\d{3,4})([a-z])?(?:\s|:|$)", "STANDARD_AGENDA"),
+            # JWG 의제 패턴: JWG-SDT25001a
+            (r"^(JWG)-(SDT|CS)(\d{2})(\d{3})([a-z])?(?:\s|:|$)", "JWG_AGENDA"),
+            # 특수 붙어있는 패턴 with underbar: JWG-CS25001b_PRa
+            (
+                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})([a-z])?_([A-Z]{2,4})([a-z])?(?:\s|:|$)",
+                "JWG_ATTACHED_RESPONSE",
+            ),
+        ]
+
+        for pattern, pattern_type in patterns:
+            match = re.match(pattern, cleaned_line, re.IGNORECASE)
+            if match:
+                # 설명 부분 추출
+                description = None
+                if ":" in cleaned_line:
+                    parts = cleaned_line.split(":", 1)
+                    if len(parts) > 1:
+                        description = parts[1].strip()
+                elif " " in cleaned_line and not cleaned_line.startswith("JWG"):
+                    # 공백으로 분리 (JWG가 아닌 경우만)
+                    parts = cleaned_line.split(" ", 1)
+                    if len(parts) > 1:
+                        description = parts[1].strip()
+
+                return self._parse_matched_pattern(
+                    match, pattern_type, cleaned_line, description
                 )
-
-        # 의제 패턴 확인
-        match = self.agenda_pattern.match(code_part)
-        if match:
-            panel, year, number, version = match.groups()
-            return ParsedCode(
-                full_code=code_part,
-                document_type="AGENDA",
-                panel=panel,
-                year=year,
-                number=number,
-                agenda_version=version if version else None,
-                description=description,
-            )
-
-        # JWG 회신 패턴 확인
-        match = self.jwg_response_pattern.match(code_part)
-        if match:
-            prefix, subtype, year, number, org, response_ver = match.groups()
-            if org in self.ORGANIZATION_CODES:
-                return ParsedCode(
-                    full_code=code_part,
-                    document_type="RESPONSE",
-                    panel=f"{prefix}-{subtype}",
-                    year=year,
-                    number=number,
-                    organization=org,
-                    response_version=response_ver if response_ver else None,
-                    description=description,
-                )
-
-        # JWG 의제 패턴 확인
-        match = self.jwg_agenda_pattern.match(code_part)
-        if match:
-            prefix, subtype, year, number, version = match.groups()
-            return ParsedCode(
-                full_code=code_part,
-                document_type="AGENDA",
-                panel=f"{prefix}-{subtype}",
-                year=year,
-                number=number,
-                agenda_version=version if version else None,
-                description=description,
-            )
 
         # 패턴에 맞지 않는 경우 로깅
-        if any(code_part.startswith(p) for p in ["PL", "PS", "JWG"]):
-            self.logger.debug(f"IACS 코드 파싱 실패: {code_part}")
+        if any(cleaned_line.upper().startswith(p) for p in ["PL", "PS", "JWG"]):
+            self.logger.debug(f"IACS 코드 파싱 실패: {cleaned_line}")
 
+        return None
+
+    def _remove_prefixes(self, line: str) -> str:
+        """다중 접두사 제거"""
+        cleaned_line = line
+        changed = True
+        while changed:
+            changed = False
+            for prefix in self.special_prefixes:
+                if cleaned_line.upper().startswith(prefix.upper()):
+                    cleaned_line = cleaned_line[len(prefix) :].strip()
+                    changed = True
+                    break
+        return cleaned_line
+
+    def _parse_matched_pattern(
+        self, match, pattern_type: str, full_line: str, description: str
+    ) -> ParsedCode:
+        """매칭된 패턴을 ParsedCode로 변환"""
+        groups = match.groups()
+
+        if pattern_type == "ATTACHED_RESPONSE":
+            # PL25007bTLa 형식
+            panel, year, number, agenda_ver, org, response_ver = groups
+            # 조직 코드 검증
+            if org.upper() in self.ORGANIZATION_CODES:
+                # full_code 재구성
+                base = f"{panel.upper()}{year}{number}"
+                if agenda_ver:
+                    base += agenda_ver.lower()
+                full_code = (
+                    f"{base}{org.upper()}{response_ver.lower() if response_ver else ''}"
+                )
+
+                return ParsedCode(
+                    full_code=full_code,
+                    document_type="RESPONSE",
+                    panel=panel.upper(),
+                    year=year,
+                    number=number,
+                    agenda_version=agenda_ver.lower() if agenda_ver else None,
+                    organization=org.upper(),
+                    response_version=response_ver.lower() if response_ver else None,
+                    description=description,
+                    is_response=True,
+                )
+
+        elif pattern_type == "STANDARD_RESPONSE":
+            # PL25016_IRa 형식
+            panel, year, number, agenda_ver, org, response_ver = groups
+            if org.upper() in self.ORGANIZATION_CODES:
+                base = f"{panel.upper()}{year}{number}"
+                if agenda_ver:
+                    base += agenda_ver.lower()
+                full_code = f"{base}_{org.upper()}{response_ver.lower() if response_ver else ''}"
+
+                return ParsedCode(
+                    full_code=full_code,
+                    document_type="RESPONSE",
+                    panel=panel.upper(),
+                    year=year,
+                    number=number,
+                    agenda_version=agenda_ver.lower() if agenda_ver else None,
+                    organization=org.upper(),
+                    response_version=response_ver.lower() if response_ver else None,
+                    description=description,
+                    is_response=True,
+                )
+
+        elif pattern_type == "JWG_RESPONSE" or pattern_type == "JWG_ATTACHED_RESPONSE":
+            # JWG-SDT25001_BVa 형식
+            if pattern_type == "JWG_RESPONSE":
+                prefix, subtype, year, number, org, response_ver = groups
+                agenda_ver = None
+            else:
+                prefix, subtype, year, number, agenda_ver, org, response_ver = groups
+
+            if org.upper() in self.ORGANIZATION_CODES:
+                base = f"{prefix.upper()}-{subtype.upper()}{year}{number}"
+                if agenda_ver:
+                    base += agenda_ver.lower()
+                full_code = f"{base}_{org.upper()}{response_ver.lower() if response_ver else ''}"
+
+                return ParsedCode(
+                    full_code=full_code,
+                    document_type="RESPONSE",
+                    panel=f"{prefix.upper()}-{subtype.upper()}",
+                    year=year,
+                    number=number,
+                    agenda_version=agenda_ver.lower() if agenda_ver else None,
+                    organization=org.upper(),
+                    response_version=response_ver.lower() if response_ver else None,
+                    description=description,
+                    is_response=True,
+                )
+
+        elif pattern_type == "STANDARD_AGENDA":
+            # PL25016a 형식
+            panel, year, number, version = groups
+            full_code = f"{panel.upper()}{year}{number}"
+            if version:
+                full_code += version.lower()
+
+            return ParsedCode(
+                full_code=full_code,
+                document_type="AGENDA",
+                panel=panel.upper(),
+                year=year,
+                number=number,
+                agenda_version=version.lower() if version else None,
+                description=description,
+                is_response=False,
+            )
+
+        elif pattern_type == "JWG_AGENDA":
+            # JWG-SDT25001a 형식
+            prefix, subtype, year, number, version = groups
+            full_code = f"{prefix.upper()}-{subtype.upper()}{year}{number}"
+            if version:
+                full_code += version.lower()
+
+            return ParsedCode(
+                full_code=full_code,
+                document_type="AGENDA",
+                panel=f"{prefix.upper()}-{subtype.upper()}",
+                year=year,
+                number=number,
+                agenda_version=version.lower() if version else None,
+                description=description,
+                is_response=False,
+            )
+
+        # 기본값으로 None 반환
         return None
 
     def extract_base_agenda_no(self, parsed_code: ParsedCode) -> Optional[str]:
@@ -185,18 +296,25 @@ class IACSCodeParser:
         return None
 
     def extract_agenda_patterns(self, text: str) -> List[str]:
-        """본문에서 추가 아젠다 참조 추출"""
+        """본문에서 추가 아젠다 참조 추출 (수정됨)"""
         patterns = []
 
-        # IACS 아젠다 패턴
-        agenda_pattern = (
-            r"\b(PL|PS|JWG-SDT|JWG-CS)\d{2}\d{3,4}[a-z]?(?:_[A-Z]{2,3}[a-z]?)?\b"
-        )
-        matches = re.findall(agenda_pattern, text)
+        # 더 정확한 패턴으로 수정
+        agenda_patterns = [
+            # PL/PS 패턴
+            r"\b((?:PL|PS)\d{2}\d{3,4}[a-z]?(?:_[A-Z]{2,4}[a-z]?)?)\b",
+            # JWG 패턴
+            r"\b(JWG-(?:SDT|CS)\d{2}\d{3}[a-z]?(?:_[A-Z]{2,4}[a-z]?)?)\b",
+            # 붙어있는 패턴
+            r"\b((?:PL|PS)\d{2}\d{3,4}[a-z]?[A-Z]{2,4}[a-z]?)\b",
+        ]
 
-        for match in matches:
-            if match not in patterns:
-                patterns.append(match)
+        for pattern in agenda_patterns:
+            matches = re.findall(pattern, text, re.IGNORECASE)
+            for match in matches:
+                normalized = match.upper()
+                if normalized not in patterns:
+                    patterns.append(normalized)
 
         return patterns
 
@@ -205,7 +323,7 @@ class IACSCodeParser:
         result = {}
 
         # 회신 표시
-        reply_prefixes = ["RE:", "Re:", "답장:", "Reply:"]
+        reply_prefixes = ["RE:", "Re:", "답장:", "Reply:", "回复:"]
         for prefix in reply_prefixes:
             if subject.upper().startswith(prefix.upper()):
                 result["is_reply"] = True
@@ -213,7 +331,7 @@ class IACSCodeParser:
                 break
 
         # 전달 표시
-        forward_prefixes = ["FW:", "Fw:", "FWD:", "Fwd:", "전달:", "Forward:"]
+        forward_prefixes = ["FW:", "Fw:", "FWD:", "Fwd:", "전달:", "Forward:", "转发:"]
         for prefix in forward_prefixes:
             if subject.upper().startswith(prefix.upper()):
                 result["is_forward"] = True
@@ -269,8 +387,8 @@ class IACSCodeParser:
             "response_version": parsed_code.response_version,
             "description": parsed_code.description,
             # 추가 유용한 정보
-            "is_response": parsed_code.document_type == "RESPONSE",
-            "is_agenda": parsed_code.document_type == "AGENDA",
+            "is_response": parsed_code.is_response,
+            "is_agenda": not parsed_code.is_response,
             "base_agenda_no": self.extract_base_agenda_no(parsed_code),
         }
 
@@ -288,35 +406,32 @@ class IACSCodeParser:
 
     def get_statistics(self, parsed_codes: List[ParsedCode]) -> Dict[str, any]:
         """파싱된 코드들의 통계 정보 생성"""
+        from collections import defaultdict
+
         stats = {
             "total": len(parsed_codes),
-            "by_type": {"AGENDA": 0, "RESPONSE": 0, "UNKNOWN": 0},
-            "by_panel": {},
-            "by_year": {},
-            "by_organization": {},
-            "agendas": {},  # 의제별 회신 수
+            "by_type": {"AGENDA": 0, "RESPONSE": 0},
+            "by_panel": defaultdict(int),
+            "by_year": defaultdict(int),
+            "by_organization": defaultdict(int),
+            "agendas": defaultdict(int),  # 의제별 회신 수
         }
 
         for code in parsed_codes:
             # 문서 타입별 집계
-            stats["by_type"][code.document_type] = (
-                stats["by_type"].get(code.document_type, 0) + 1
-            )
+            stats["by_type"][code.document_type] += 1
 
             # 패널별 집계
-            panel = code.panel
-            stats["by_panel"][panel] = stats["by_panel"].get(panel, 0) + 1
+            stats["by_panel"][code.panel] += 1
 
             # 연도별 집계
             if code.year:
                 year = f"20{code.year}"
-                stats["by_year"][year] = stats["by_year"].get(year, 0) + 1
+                stats["by_year"][year] += 1
 
             # 기관별 집계 (회신만)
             if code.organization:
-                stats["by_organization"][code.organization] = (
-                    stats["by_organization"].get(code.organization, 0) + 1
-                )
+                stats["by_organization"][code.organization] += 1
 
             # 의제별 회신 수 집계
             if (
@@ -326,6 +441,6 @@ class IACSCodeParser:
                 and code.number
             ):
                 agenda_key = f"{code.panel}{code.year}{code.number}"
-                stats["agendas"][agenda_key] = stats["agendas"].get(agenda_key, 0) + 1
+                stats["agendas"][agenda_key] += 1
 
         return stats
