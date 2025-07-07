@@ -289,7 +289,10 @@ class MailProcessorOrchestrator:
                         f"코드: {patterns.get('extracted_info', {}).get('full_code', 'N/A')}, "
                         f"긴급도: {patterns.get('urgency', 'NORMAL')}, "
                         f"회신: {patterns.get('is_reply', False)}, "
-                        f"발신자 타입: {patterns.get('sender_type', 'N/A')}"
+                        f"발신자 타입: {patterns.get('sender_type', 'N/A')}, "
+                        f"발신자 조직: {patterns.get('sender_organization', 'N/A')}, "
+                        f"아젠다 조직: {patterns.get('agenda_organization', 'N/A')}, "
+                        f"아젠다 라운드: {patterns.get('agenda_organization_round', 'N/A')}"
                     )
             except Exception as e:
                 self.logger.error(
@@ -323,6 +326,11 @@ class MailProcessorOrchestrator:
                 if m.get("_iacs_parsed", {})
                 .get("extracted_info", {})
                 .get("is_response")
+            ),
+            "with_agenda_org": sum(
+                1
+                for m in processed_mails
+                if m.get("_iacs_parsed", {}).get("agenda_organization")
             ),
         }
 
@@ -424,15 +432,16 @@ class MailProcessorOrchestrator:
                 "parsing_method": iacs_info.get("parsing_method"),
             }
 
-            # 응답인 경우 추가 정보
+            # 응답인 경우 추가 정보 (agenda_response_id 제거)
             if iacs_info.get("is_response") and iacs_info.get("organization"):
-                merged["sender_organization"] = iacs_info["organization"]
                 merged["response_version"] = iacs_info.get("response_version")
-                # agenda_response_id 추가 (대시보드에서 활용)
-                merged["agenda_response_id"] = (
-                    f"{iacs_info['organization']}"
-                    f"{iacs_info.get('response_version', '')}"
-                )
+
+        # agenda_organization과 agenda_organization_round 처리
+        if iacs_data.get("agenda_organization"):
+            merged["agenda_organization"] = iacs_data["agenda_organization"]
+
+        if iacs_data.get("agenda_organization_round"):
+            merged["agenda_organization_round"] = iacs_data["agenda_organization_round"]
 
         # 메타 정보
         if iacs_data.get("urgency"):
@@ -448,13 +457,15 @@ class MailProcessorOrchestrator:
                 "additional_agenda_references"
             ]
 
-        # 발신자 정보 (IACS 파서 우선)
+        # 발신자 정보 (IACS 파서에서 추출된 것 사용)
         if iacs_data.get("sender_address"):
             merged["sender_address"] = iacs_data["sender_address"]
         if iacs_data.get("sender_name"):
             merged["sender_name"] = iacs_data["sender_name"]
         if iacs_data.get("sender_type"):
             merged["sender_type"] = iacs_data["sender_type"]
+        if iacs_data.get("sender_organization"):
+            merged["sender_organization"] = iacs_data["sender_organization"]
 
         # 시간 정보 (IACS 파서 우선)
         if iacs_data.get("sent_time"):
@@ -503,6 +514,12 @@ class MailProcessorOrchestrator:
         # 다른 파서에서 못 찾은 정보 보충
         if not merged.get("agenda_no") and processed_info.get("agenda_no"):
             merged["agenda_no"] = processed_info["agenda_no"]
+
+        # OpenRouter에서 agenda_organization 관련 정보가 있으면 보충
+        if not merged.get("agenda_organization") and processed_info.get(
+            "agenda_organization"
+        ):
+            merged["agenda_organization"] = processed_info["agenda_organization"]
 
     def _format_datetime(self, dt: Any) -> str:
         """datetime 객체를 문자열로 포맷"""
