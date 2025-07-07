@@ -3,10 +3,15 @@
 import json
 import os
 from datetime import datetime
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 
 from infra.core.logger import get_logger
-from modules.mail_process.mail_processor_schema import ProcessedMailData
+from infra.core.config import get_config
+from modules.mail_process.mail_processor_schema import (
+    ProcessedMailData,
+    ProcessingStatus,
+    SenderType,
+)
 from modules.mail_process.services.db_service import MailDatabaseService
 from modules.mail_process.services.event_service import MailEventService
 
@@ -16,6 +21,7 @@ class PersistenceService:
 
     def __init__(self):
         self.logger = get_logger(__name__)
+        self.config = get_config()
         self.db_service = MailDatabaseService()
         self.event_service = MailEventService()
 
@@ -26,7 +32,26 @@ class PersistenceService:
             env_value = env_value.split("#")[0].strip()
 
         self.duplicate_check_enabled = env_value.lower() == "true"
-        self.logger.info(f"중복 체크 활성화: {self.duplicate_check_enabled}")
+
+        # 메일 히스토리 저장 활성화 여부
+        self.mail_history_enabled = (
+            os.getenv("ENABLE_MAIL_HISTORY", "true").lower() == "true"
+        )
+
+        # Kafka 이벤트 활성화 여부
+        self.kafka_events_enabled = (
+            os.getenv("ENABLE_KAFKA_EVENTS", "true").lower() == "true"
+        )
+
+        # 배치 처리 설정
+        self.batch_insert_size = int(os.getenv("DB_BATCH_INSERT_SIZE", "100"))
+
+        self.logger.info(
+            f"지속성 서비스 초기화 - "
+            f"중복체크: {self.duplicate_check_enabled}, "
+            f"히스토리: {self.mail_history_enabled}, "
+            f"Kafka: {self.kafka_events_enabled}"
+        )
 
     def get_existing_mail_ids(self, mail_ids: List[str]) -> List[str]:
         """여러 메일 ID의 존재 여부를 한 번에 확인 (배치 조회)"""
@@ -34,16 +59,21 @@ class PersistenceService:
             return []
 
         try:
-            # IN 절을 사용한 배치 조회
-            placeholders = ",".join(["?" for _ in mail_ids])
-            query = f"""
-                SELECT message_id 
-                FROM mail_history 
-                WHERE message_id IN ({placeholders})
-            """
+            # 배치 크기로 나누어 처리
+            existing_ids = []
+            for i in range(0, len(mail_ids), self.batch_insert_size):
+                batch = mail_ids[i : i + self.batch_insert_size]
 
-            results = self.db_service.db_manager.fetch_all(query, mail_ids)
-            existing_ids = [row["message_id"] for row in results]
+                # IN 절을 사용한 배치 조회
+                placeholders = ",".join(["?" for _ in batch])
+                query = f"""
+                    SELECT message_id 
+                    FROM mail_history 
+                    WHERE message_id IN ({placeholders})
+                """
+
+                results = self.db_service.db_manager.fetch_all(query, batch)
+                existing_ids.extend([row["message_id"] for row in results])
 
             self.logger.debug(
                 f"배치 중복 체크: {len(mail_ids)}개 중 {len(existing_ids)}개 존재"
@@ -72,15 +102,12 @@ class PersistenceService:
         self, account_id: str, mails: List[Dict], mails_for_events: List[Dict] = None
     ) -> Dict:
         """
-        메일 데이터 저장
-
-        ENABLE_MAIL_DUPLICATE_CHECK=false: DB 저장 없이 바로 이벤트 발행
-        ENABLE_MAIL_DUPLICATE_CHECK=true: 신규 메일만 DB 저장 및 이벤트 발행
+        메일 데이터 저장 (배치 처리 지원)
 
         Args:
             account_id: 계정 ID
-            mails: 처리된 메일 리스트 (DB 저장용, 이미 중복 체크된 신규 메일만)
-            mails_for_events: 이벤트 발행용 메일 리스트 (중복 필드 제거된 버전)
+            mails: 처리된 메일 리스트 (DB 저장용)
+            mails_for_events: 이벤트 발행용 메일 리스트
 
         Returns:
             저장 결과 통계
@@ -88,6 +115,10 @@ class PersistenceService:
         # 이벤트용 메일이 제공되지 않으면 기존 메일 사용
         if mails_for_events is None:
             mails_for_events = mails
+
+        # 배치 처리를 위한 리스트
+        mails_to_save = []
+        events_to_publish = []
 
         saved_count = 0
         failed_count = 0
@@ -100,37 +131,41 @@ class PersistenceService:
 
                 # 중복 체크가 비활성화된 경우
                 if not self.duplicate_check_enabled:
-                    # DB 저장 없이 바로 이벤트 발행
-                    await self._publish_event(account_id, event_mail, mail)
-                    event_published_count += 1
-                    saved_count += 1  # 통계상 성공으로 처리
-                    self.logger.debug(
-                        f"중복 체크 OFF - 이벤트만 발행: {mail.get('id')}"
-                    )
+                    # DB 저장 없이 이벤트만 준비
+                    if self.kafka_events_enabled:
+                        events_to_publish.append((account_id, event_mail, mail))
+                    saved_count += 1
                     continue
 
-                # 중복 체크가 활성화된 경우 (이미 Phase 2에서 중복 확인됨)
+                # ProcessedMailData 생성
                 processed_mail = self._create_processed_mail_data(account_id, mail)
 
-                # DB 저장
-                success = self._save_to_database(
-                    processed_mail, mail.get("clean_content", "")
-                )
-
-                if success:
-                    saved_count += 1
-                    # DB 저장 성공 시 이벤트 발행
-                    await self._publish_event(account_id, event_mail, mail)
-                    event_published_count += 1
-                    self.logger.debug(
-                        f"신규 메일 저장 및 이벤트 발행: {processed_mail.mail_id}"
+                # 메일 히스토리 저장이 활성화된 경우만 저장 준비
+                if self.mail_history_enabled:
+                    mails_to_save.append(
+                        (processed_mail, mail.get("clean_content", ""))
                     )
-                else:
-                    failed_count += 1
+
+                # 이벤트 준비
+                if self.kafka_events_enabled:
+                    events_to_publish.append((account_id, event_mail, mail))
+
+                saved_count += 1
 
             except Exception as e:
                 self.logger.error(f"메일 처리 실패: {str(e)}")
                 failed_count += 1
+
+        # 배치 DB 저장
+        if mails_to_save and self.mail_history_enabled:
+            db_results = await self._batch_save_to_database(mails_to_save)
+            saved_count = db_results["saved"]
+            failed_count += db_results["failed"]
+
+        # 배치 이벤트 발행
+        if events_to_publish and self.kafka_events_enabled:
+            event_results = await self._batch_publish_events(events_to_publish)
+            event_published_count = event_results["published"]
 
         results = {
             "saved": saved_count,
@@ -139,81 +174,154 @@ class PersistenceService:
             "total": len(mails),
             "events_published": event_published_count,
             "duplicate_check_enabled": self.duplicate_check_enabled,
+            "mail_history_enabled": self.mail_history_enabled,
+            "kafka_events_enabled": self.kafka_events_enabled,
         }
 
         self.logger.info(
             f"메일 처리 완료 - 저장: {saved_count}, "
             f"실패: {failed_count}, "
             f"이벤트 발행: {event_published_count}, "
-            f"중복체크: {'ON' if self.duplicate_check_enabled else 'OFF'}"
+            f"설정: 중복체크={self.duplicate_check_enabled}, "
+            f"히스토리={self.mail_history_enabled}, "
+            f"Kafka={self.kafka_events_enabled}"
         )
 
         return results
 
-    def _save_to_database(
-        self, processed_mail: ProcessedMailData, clean_content: str
-    ) -> bool:
-        """
-        데이터베이스에 저장 (중복 체크가 활성화된 경우에만 호출됨)
+    async def _batch_save_to_database(
+        self, mails_to_save: List[Tuple[ProcessedMailData, str]]
+    ) -> Dict:
+        """배치 DB 저장"""
+        saved = 0
+        failed = 0
 
-        Args:
-            processed_mail: 처리된 메일 데이터
-            clean_content: 정제된 메일 내용
-
-        Returns:
-            저장 성공 여부
-        """
         try:
-            return self.db_service.save_mail_with_hash(processed_mail, clean_content)
+            # 트랜잭션으로 배치 처리
+            with self.db_service.db_manager.transaction():
+                for processed_mail, clean_content in mails_to_save:
+                    try:
+                        success = self.db_service.save_mail_with_hash(
+                            processed_mail, clean_content
+                        )
+                        if success:
+                            saved += 1
+                        else:
+                            failed += 1
+                    except Exception as e:
+                        if "UNIQUE constraint failed" in str(e):
+                            self.logger.debug(
+                                f"중복 저장 시도: {processed_mail.mail_id}"
+                            )
+                        else:
+                            self.logger.error(f"DB 저장 오류: {str(e)}")
+                        failed += 1
+
         except Exception as e:
-            if "UNIQUE constraint failed" in str(e):
-                # 동시성으로 인한 중복 저장 시도
-                self.logger.warning(f"동시성 중복 발생: {processed_mail.mail_id}")
-                return False
-            else:
-                self.logger.error(f"DB 저장 오류: {str(e)}")
-                raise
+            self.logger.error(f"배치 DB 저장 실패: {str(e)}")
+            failed += len(mails_to_save)
+
+        return {"saved": saved, "failed": failed}
+
+    async def _batch_publish_events(
+        self, events_to_publish: List[Tuple[str, Dict, Dict]]
+    ) -> Dict:
+        """배치 이벤트 발행"""
+        published = 0
+
+        for account_id, event_mail, original_mail in events_to_publish:
+            try:
+                self.event_service.publish_mail_event(
+                    account_id=account_id,
+                    mail=event_mail,
+                    keywords=original_mail.get("keywords", []),
+                    clean_content=original_mail.get("clean_content", ""),
+                )
+                published += 1
+            except Exception as e:
+                self.logger.error(f"이벤트 발행 실패: {str(e)}")
+
+        return {"published": published}
 
     def _create_processed_mail_data(
         self, account_id: str, mail: Dict
     ) -> ProcessedMailData:
-        """ProcessedMailData 객체 생성"""
-        return ProcessedMailData(
-            mail_id=mail.get("id", "unknown"),
-            account_id=account_id,
-            sender_address=mail.get("sender_address", ""),
-            subject=mail.get("subject", ""),
-            body_preview=mail.get("bodyPreview", ""),
-            sent_time=mail.get("sent_time", datetime.now()),
-            keywords=mail.get("keywords", []),
-            processing_status=mail.get("processing_status", "SUCCESS"),
-            error_message=mail.get("error_message"),
-            processed_at=datetime.now(),
-        )
+        """ProcessedMailData 객체 생성 (확장된 버전)"""
+        # 기본 정보
+        mail_data = {
+            "mail_id": mail.get("id", "unknown"),
+            "account_id": account_id,
+            "subject": mail.get("subject", ""),
+            "body_preview": mail.get("bodyPreview", ""),
+            "sent_time": mail.get("sent_time", datetime.now()),
+            "processed_at": datetime.now(),
+            # 발신자 정보
+            "sender_address": mail.get("sender_address", ""),
+            "sender_name": mail.get("sender_name", ""),
+            "sender_type": self._parse_sender_type(mail.get("sender_type")),
+            "sender_organization": mail.get("sender_organization"),
+            # 처리 결과
+            "keywords": mail.get("keywords", []),
+            "summary": mail.get("summary"),
+            "processing_status": self._parse_processing_status(
+                mail.get("processing_status", "SUCCESS")
+            ),
+            "error_message": mail.get("error_message"),
+            # IACS 관련 정보
+            "agenda_no": mail.get("agenda_no"),
+            "agenda_info": mail.get("agenda_info"),
+            "agenda_response_id": mail.get("agenda_response_id"),
+            "additional_agenda_references": mail.get(
+                "additional_agenda_references", []
+            ),
+            # 메일 메타정보
+            "mail_type": mail.get("mail_type", "OTHER"),
+            "decision_status": mail.get("decision_status", "created"),
+            "urgency": mail.get("urgency", "NORMAL"),
+            "is_reply": mail.get("is_reply", False),
+            "reply_depth": mail.get("reply_depth"),
+            "is_forward": mail.get("is_forward", False),
+            "has_deadline": mail.get("has_deadline", False),
+            "deadline": mail.get("deadline"),
+            # 정제된 내용
+            "clean_content": mail.get("clean_content"),
+            # 추출 메타데이터
+            "extraction_metadata": mail.get("extraction_metadata"),
+        }
 
-    async def _publish_event(
-        self, account_id: str, event_mail: Dict, original_mail: Dict
-    ):
-        """
-        이벤트 발행
+        return ProcessedMailData(**mail_data)
 
-        Args:
-            account_id: 계정 ID
-            event_mail: 이벤트 발행용 메일 (중복 필드 제거됨)
-            original_mail: 원본 메일 (키워드와 clean_content 정보 포함)
-        """
+    def _parse_sender_type(self, sender_type: Optional[str]) -> Optional[SenderType]:
+        """발신자 타입 파싱"""
+        if not sender_type:
+            return None
+
         try:
-            self.event_service.publish_mail_event(
-                account_id=account_id,
-                mail=event_mail,
-                keywords=original_mail.get("keywords", []),
-                clean_content=original_mail.get("clean_content", ""),
-            )
-        except Exception as e:
-            # 이벤트 발행 실패는 전체 프로세스를 중단시키지 않음
-            self.logger.error(f"이벤트 발행 실패: {str(e)}")
-            raise  # 통계를 위해 예외를 다시 발생시킴
+            return SenderType(sender_type.upper())
+        except ValueError:
+            return None
+
+    def _parse_processing_status(self, status: str) -> ProcessingStatus:
+        """처리 상태 파싱"""
+        try:
+            return ProcessingStatus(status.upper())
+        except ValueError:
+            return ProcessingStatus.FAILED
 
     def get_duplicate_check_status(self) -> bool:
         """중복 체크 활성화 상태 반환"""
         return self.duplicate_check_enabled
+
+    def get_service_configuration(self) -> Dict[str, bool]:
+        """서비스 설정 상태 반환"""
+        return {
+            "duplicate_check_enabled": self.duplicate_check_enabled,
+            "mail_history_enabled": self.mail_history_enabled,
+            "kafka_events_enabled": self.kafka_events_enabled,
+        }
+
+    async def get_mail_statistics(
+        self, account_id: str, days: int = 30
+    ) -> Dict[str, Any]:
+        """계정의 메일 처리 통계 조회"""
+        return self.db_service.get_mail_statistics(account_id, days)

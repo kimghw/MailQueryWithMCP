@@ -57,6 +57,9 @@ class IACSCodeParser:
     # 패널 타입
     PANEL_TYPES = {"PL", "PS", "JWG-SDT", "JWG-CS"}
 
+    # 최대 라인 길이 제한
+    MAX_LINE_LENGTH = 500
+
     def __init__(self):
         self.logger = get_logger(__name__)
 
@@ -85,8 +88,16 @@ class IACSCodeParser:
 
         # 긴급도 키워드
         self.urgency_keywords = {
-            "high": ["urgent", "긴급", "asap", "immediately", "critical", "急"],
-            "medium": ["important", "중요", "priority", "attention"],
+            "high": [
+                "urgent",
+                "긴급",
+                "asap",
+                "immediately",
+                "critical",
+                "急",
+                "high priority",
+            ],
+            "medium": ["important", "중요", "priority", "attention", "please review"],
         }
 
         # 특수 케이스
@@ -103,6 +114,9 @@ class IACSCodeParser:
         self.url_pattern = re.compile(r"https?://[^\s]+|www\.[^\s]+")
         self.html_pattern = re.compile(r"<[^>]+>")
 
+        # 구분선 패턴
+        self.separator_pattern = re.compile(r"[-=_*]{5,}")
+
     def set_chair_emails(self, emails: List[str]):
         """Chair 이메일 주소 설정"""
         self.chair_emails = [email.lower() for email in emails]
@@ -115,49 +129,61 @@ class IACSCodeParser:
 
     def parse_line(self, line: str) -> Optional[ParsedCode]:
         """한 줄을 파싱하여 코드 정보 추출 (새로운 규칙 적용)"""
-        line = line.strip()
-        if not line:
-            return None
+        try:
+            line = line.strip()
+            if not line:
+                return None
 
-        # 특수 케이스 먼저 체크
-        for special in self.special_cases:
-            if special.lower() in line.lower():
-                return ParsedCode(
-                    full_code="Multilateral",
-                    document_type="SPECIAL",
-                    panel="MULTILATERAL",
-                    is_special=True,
-                    parsing_method="special_case",
+            # 길이 제한 체크
+            if len(line) > self.MAX_LINE_LENGTH:
+                self.logger.warning(f"너무 긴 라인 무시: {line[:50]}...")
+                return None
+
+            # 특수 케이스 먼저 체크
+            for special in self.special_cases:
+                if special.lower() in line.lower():
+                    return ParsedCode(
+                        full_code="Multilateral",
+                        document_type="SPECIAL",
+                        panel="MULTILATERAL",
+                        is_special=True,
+                        parsing_method="special_case",
+                    )
+
+            # 특수 접두사 제거
+            cleaned_line = self._remove_prefixes(line)
+
+            # 1단계: 기본 패턴 검색 (대소문자 구분)
+            result = self._parse_basic_patterns(cleaned_line, case_sensitive=True)
+            if result:
+                return result
+
+            # 2단계: JWG 패턴 검색 (대소문자 구분)
+            result = self._parse_jwg_patterns(cleaned_line, case_sensitive=True)
+            if result:
+                return result
+
+            # 3단계: 대소문자 구분 없이 재검색
+            result = self._parse_basic_patterns(cleaned_line, case_sensitive=False)
+            if result:
+                return result
+
+            # 4단계: JWG 패턴 대소문자 구분 없이 재검색
+            result = self._parse_jwg_patterns(cleaned_line, case_sensitive=False)
+            if result:
+                return result
+
+            # 파싱 실패 로깅 (IACS 관련 라인만)
+            if any(cleaned_line.upper().startswith(p) for p in ["PL", "PS", "JWG"]):
+                self.logger.debug(
+                    f"IACS 코드 파싱 실패 (예외 메일): {cleaned_line[:100]}"
                 )
 
-        # 특수 접두사 제거
-        cleaned_line = self._remove_prefixes(line)
+            return None
 
-        # 1단계: 기본 패턴 검색 (대소문자 구분)
-        result = self._parse_basic_patterns(cleaned_line, case_sensitive=True)
-        if result:
-            return result
-
-        # 2단계: JWG 패턴 검색 (대소문자 구분)
-        result = self._parse_jwg_patterns(cleaned_line, case_sensitive=True)
-        if result:
-            return result
-
-        # 3단계: 대소문자 구분 없이 재검색
-        result = self._parse_basic_patterns(cleaned_line, case_sensitive=False)
-        if result:
-            return result
-
-        # 4단계: JWG 패턴 대소문자 구분 없이 재검색
-        result = self._parse_jwg_patterns(cleaned_line, case_sensitive=False)
-        if result:
-            return result
-
-        # 파싱 실패 로깅
-        if any(cleaned_line.upper().startswith(p) for p in ["PL", "PS", "JWG"]):
-            self.logger.debug(f"IACS 코드 파싱 실패 (예외 메일): {cleaned_line}")
-
-        return None
+        except Exception as e:
+            self.logger.error(f"파싱 중 예외 발생: {str(e)}, 라인: {line[:100]}")
+            return None
 
     def extract_sender_info(self, mail: Dict) -> Tuple[str, str, Optional[str]]:
         """
@@ -166,9 +192,18 @@ class IACSCodeParser:
         Returns:
             (sender_address, sender_name, sender_type)
         """
+        sender_address, sender_name = self._extract_basic_sender_info(mail)
+        sender_type = None
+
+        if sender_address:
+            sender_type = self._determine_sender_type(sender_address, mail)
+
+        return sender_address, sender_name, sender_type
+
+    def _extract_basic_sender_info(self, mail: Dict) -> Tuple[str, str]:
+        """기본 발신자 정보 추출"""
         sender_address = ""
         sender_name = ""
-        sender_type = None
 
         # 가능한 모든 발신자 필드 확인
         sender_fields = [
@@ -210,33 +245,41 @@ class IACSCodeParser:
                         sender_name = name or addr.split("@")[0]
                         break
 
-        # sender_type 결정
-        if sender_address:
-            sender_address_lower = sender_address.lower()
+        return sender_address, sender_name
 
-            # Chair 확인
-            if sender_address_lower in self.chair_emails:
-                sender_type = "CHAIR"
-                self.logger.debug(f"Chair 이메일 감지: {sender_address}")
-            else:
-                # Member 조직 확인
-                for org, emails in self.member_emails.items():
-                    if sender_address_lower in emails:
-                        sender_type = "MEMBER"
-                        self.logger.debug(f"{org} 멤버 이메일 감지: {sender_address}")
-                        break
+    def _determine_sender_type(self, sender_address: str, mail: Dict) -> Optional[str]:
+        """발신자 타입 결정"""
+        sender_address_lower = sender_address.lower()
 
-                # 도메인 기반 추정 (설정된 이메일이 없는 경우)
-                if not sender_type and "@" in sender_address:
-                    domain = sender_address.split("@")[1].lower()
-                    # IL 도메인은 보통 Chair
-                    if "il." in domain or domain.endswith(".il"):
-                        sender_type = "CHAIR"
-                    # 다른 IACS 멤버 도메인 패턴 확인
-                    elif any(org.lower() in domain for org in self.ORGANIZATION_CODES):
-                        sender_type = "MEMBER"
+        # Chair 확인
+        if sender_address_lower in self.chair_emails:
+            self.logger.debug(f"Chair 이메일 감지: {sender_address}")
+            return "CHAIR"
 
-        return sender_address, sender_name, sender_type
+        # Member 조직 확인
+        for org, emails in self.member_emails.items():
+            if sender_address_lower in emails:
+                self.logger.debug(f"{org} 멤버 이메일 감지: {sender_address}")
+                return "MEMBER"
+
+        # 도메인 기반 추정 (설정된 이메일이 없는 경우)
+        if "@" in sender_address:
+            domain = sender_address.split("@")[1].lower()
+            # IL 도메인은 보통 Chair
+            if "il." in domain or domain.endswith(".il"):
+                return "CHAIR"
+            # 다른 IACS 멤버 도메인 패턴 확인
+            elif any(org.lower() in domain for org in self.ORGANIZATION_CODES):
+                return "MEMBER"
+
+        # 제목에서 추가 단서 확인
+        subject = mail.get("subject", "")
+        if subject:
+            parsed_code = self.parse_line(subject)
+            if parsed_code and parsed_code.is_response:
+                return "MEMBER"
+
+        return None
 
     def extract_sent_time(self, mail: Dict) -> Optional[datetime]:
         """발송 시간 추출"""
@@ -249,6 +292,7 @@ class IACSCodeParser:
             "SentDateTime",
             "dateTimeReceived",
             "dateTimeSent",
+            "sent_time",
         ]
 
         for field in time_fields:
@@ -271,7 +315,7 @@ class IACSCodeParser:
         return None
 
     def clean_content(self, text: str) -> str:
-        """텍스트 정제"""
+        """텍스트 정제 (향상된 버전)"""
         if not text:
             return ""
 
@@ -284,22 +328,33 @@ class IACSCodeParser:
         # 3. URL 제거
         clean = self.url_pattern.sub(" ", clean)
 
-        # 4. 줄바꿈 통일
+        # 4. 구분선 제거
+        clean = self.separator_pattern.sub(" ", clean)
+
+        # 5. 줄바꿈 통일
         clean = clean.replace("\r\n", "\n").replace("\r", "\n")
 
-        # 5. 연속된 줄바꿈을 하나의 공백으로
+        # 6. 메일 서명 제거 (일반적인 서명 패턴)
+        signature_patterns = [
+            r"--\s*\n.*$",  # -- 로 시작하는 서명
+            r"Best regards[\s\S]*$",  # Best regards로 시작
+            r"Sincerely[\s\S]*$",  # Sincerely로 시작
+            r"감사합니다[\s\S]*$",  # 한국어 서명
+        ]
+
+        for pattern in signature_patterns:
+            clean = re.sub(pattern, "", clean, flags=re.MULTILINE | re.IGNORECASE)
+
+        # 7. 연속된 줄바꿈을 하나의 공백으로
         clean = re.sub(r"\n+", " ", clean)
 
-        # 6. 탭을 공백으로
+        # 8. 탭을 공백으로
         clean = clean.replace("\t", " ")
 
-        # 7. 특수문자 정리
-        clean = re.sub(r"[^\w\s가-힣.,!?():;-]", " ", clean)
+        # 9. 특수문자 정리 (더 많은 허용 문자)
+        clean = re.sub(r"[^\w\s가-힣.,!?():;@#$%&*+=\-/]", " ", clean)
 
-        # 8. 구분선 제거
-        clean = re.sub(r"[-=]{5,}", " ", clean)
-
-        # 9. 과도한 공백 정리
+        # 10. 과도한 공백 정리
         clean = re.sub(r"\s+", " ", clean)
 
         return clean.strip()
@@ -322,7 +377,7 @@ class IACSCodeParser:
             body_content = mail.get("bodyPreview", mail.get("body_preview", ""))
 
         # 제목과 본문 결합 후 정제
-        full_content = f"{subject} {body_content}"
+        full_content = f"{subject}\n\n{body_content}"
         return self.clean_content(full_content)
 
     def _parse_basic_patterns(
@@ -459,7 +514,7 @@ class IACSCodeParser:
             )
 
         elif pattern_name == "pattern3_version_underscore":
-            # PL25016a_IRa - 소문자 우선, _ 삭제
+            # PL25016a_IRa
             panel, year, number, agenda_ver, org, response_ver = groups
             return self._create_response_code(
                 panel,
@@ -474,7 +529,7 @@ class IACSCodeParser:
             )
 
         elif pattern_name == "pattern4_underscore_version":
-            # PL25016_aIRa - 소문자 우선, _ 삭제
+            # PL25016_aIRa
             panel, year, number, agenda_ver, org, response_ver = groups
             return self._create_response_code(
                 panel,
@@ -592,15 +647,12 @@ class IACSCodeParser:
         if agenda_ver and agenda_ver != "*":
             base += agenda_ver.lower()
 
-        # agenda_version이 있으면 무조건 붙어있는 형식으로 처리 (underscore 삭제)
+        # agenda_version이 있으면 무조건 붙어있는 형식으로 처리
         if agenda_ver and agenda_ver != "*":
-            # 붙어있는 형식으로 강제
             full_code = f"{base}{org.upper()}{response_ver.lower() if response_ver and response_ver != '*' else ''}"
         elif attached:
-            # 붙어있는 형식
             full_code = f"{base}{org.upper()}{response_ver.lower() if response_ver and response_ver != '*' else ''}"
         else:
-            # 언더스코어 형식
             full_code = f"{base}_{org.upper()}{response_ver.lower() if response_ver and response_ver != '*' else ''}"
 
         return ParsedCode(
@@ -653,13 +705,20 @@ class IACSCodeParser:
         if ":" in line:
             parts = line.split(":", 1)
             if len(parts) > 1:
-                return parts[1].strip()
+                desc = parts[1].strip()
+                # 설명이 너무 길면 자르기
+                if len(desc) > 200:
+                    desc = desc[:197] + "..."
+                return desc
 
         # 공백으로 분리 (JWG가 아닌 경우만)
         if " " in line and not line.upper().startswith("JWG"):
             parts = line.split(" ", 1)
             if len(parts) > 1:
-                return parts[1].strip()
+                desc = parts[1].strip()
+                if len(desc) > 200:
+                    desc = desc[:197] + "..."
+                return desc
 
         return None
 
@@ -667,13 +726,18 @@ class IACSCodeParser:
         """특수 접두사 제거"""
         cleaned_line = line
         changed = True
-        while changed:
+        max_iterations = 5  # 무한 루프 방지
+        iterations = 0
+
+        while changed and iterations < max_iterations:
             changed = False
+            iterations += 1
             for prefix in self.special_prefixes:
                 if cleaned_line.upper().startswith(prefix.upper()):
                     cleaned_line = cleaned_line[len(prefix) :].strip()
                     changed = True
                     break
+
         return cleaned_line
 
     def extract_base_agenda_no(self, parsed_code: ParsedCode) -> Optional[str]:
@@ -688,6 +752,7 @@ class IACSCodeParser:
     def extract_agenda_patterns(self, text: str) -> List[str]:
         """본문에서 추가 아젠다 참조 추출"""
         patterns = []
+        seen = set()  # 중복 제거용
 
         # 대소문자 구분 없이 패턴 검색
         agenda_patterns = [
@@ -701,10 +766,12 @@ class IACSCodeParser:
             matches = re.findall(pattern, text, re.IGNORECASE)
             for match in matches:
                 normalized = match.upper()
-                if normalized not in patterns:
+                if normalized not in seen:
+                    seen.add(normalized)
                     patterns.append(normalized)
 
-        return patterns
+        # 최대 20개까지만 반환
+        return patterns[:20]
 
     def analyze_reply_chain(self, subject: str) -> Dict[str, Any]:
         """회신 체인 분석"""
@@ -715,7 +782,18 @@ class IACSCodeParser:
         for prefix in reply_prefixes:
             if subject.upper().startswith(prefix.upper()):
                 result["is_reply"] = True
-                result["reply_depth"] = subject.upper().count(prefix.upper())
+                # 회신 깊이 계산 (연속된 RE: 개수)
+                depth = 0
+                temp_subject = subject
+                while any(
+                    temp_subject.upper().startswith(p.upper()) for p in reply_prefixes
+                ):
+                    depth += 1
+                    for p in reply_prefixes:
+                        if temp_subject.upper().startswith(p.upper()):
+                            temp_subject = temp_subject[len(p) :].strip()
+                            break
+                result["reply_depth"] = depth
                 break
 
         # 전달 표시
@@ -741,9 +819,15 @@ class IACSCodeParser:
         """긴급도 추출"""
         combined = f"{subject} {text}".lower()
 
-        for level, keywords in self.urgency_keywords.items():
-            if any(keyword in combined for keyword in keywords):
-                return level.upper()
+        # HIGH 우선 체크
+        for keyword in self.urgency_keywords.get("high", []):
+            if keyword in combined:
+                return "HIGH"
+
+        # MEDIUM 체크
+        for keyword in self.urgency_keywords.get("medium", []):
+            if keyword in combined:
+                return "MEDIUM"
 
         return "NORMAL"
 
@@ -759,10 +843,25 @@ class IACSCodeParser:
             result["iacs_code"] = parsed_code
             result["extracted_info"] = self._convert_parsed_code_to_dict(parsed_code)
             self.logger.debug(
-                f"파싱 성공: {parsed_code.full_code} (방법: {parsed_code.parsing_method})"
+                f"파싱 성공: {parsed_code.full_code} "
+                f"(방법: {parsed_code.parsing_method})"
             )
         else:
-            self.logger.debug(f"파싱 실패 (예외 메일): {subject}")
+            # 본문 첫 줄에서도 시도
+            body_lines = body.split("\n")
+            for line in body_lines[:5]:  # 처음 5줄만 확인
+                line = line.strip()
+                if line:
+                    parsed_code = self.parse_line(line)
+                    if parsed_code:
+                        result["iacs_code"] = parsed_code
+                        result["extracted_info"] = self._convert_parsed_code_to_dict(
+                            parsed_code
+                        )
+                        self.logger.debug(
+                            f"본문에서 파싱 성공: {parsed_code.full_code}"
+                        )
+                        break
 
         # 2. 회신 체인 분석
         reply_info = self.analyze_reply_chain(subject)
@@ -823,7 +922,7 @@ class IACSCodeParser:
         results = []
         lines = text.strip().split("\n")
 
-        for line in lines:
+        for line in lines[:100]:  # 최대 100줄까지만 파싱
             parsed = self.parse_line(line)
             if parsed:
                 results.append(parsed)
@@ -844,6 +943,7 @@ class IACSCodeParser:
             "special_cases": 0,
             "case_insensitive_parsed": 0,
             "agendas": defaultdict(int),
+            "response_rate": 0.0,
         }
 
         for code in parsed_codes:
@@ -883,4 +983,45 @@ class IACSCodeParser:
                 agenda_key = f"{code.panel}{code.year}{code.number}"
                 stats["agendas"][agenda_key] += 1
 
+        # 응답률 계산
+        total_responses = stats["by_type"].get("RESPONSE", 0)
+        total_agendas = stats["by_type"].get("AGENDA", 0)
+        if total_agendas > 0:
+            stats["response_rate"] = round((total_responses / total_agendas) * 100, 2)
+
+        # defaultdict를 일반 dict로 변환
+        stats["by_type"] = dict(stats["by_type"])
+        stats["by_panel"] = dict(stats["by_panel"])
+        stats["by_year"] = dict(stats["by_year"])
+        stats["by_organization"] = dict(stats["by_organization"])
+        stats["by_parsing_method"] = dict(stats["by_parsing_method"])
+        stats["agendas"] = dict(stats["agendas"])
+
         return stats
+
+    def validate_parsed_code(self, parsed_code: ParsedCode) -> List[str]:
+        """파싱된 코드의 유효성 검증"""
+        warnings = []
+
+        # 년도 검증 (20-29 범위)
+        if parsed_code.year:
+            year_int = int(parsed_code.year)
+            if year_int < 20 or year_int > 29:
+                warnings.append(f"비정상적인 년도: 20{parsed_code.year}")
+
+        # 조직 코드 검증
+        if (
+            parsed_code.organization
+            and parsed_code.organization not in self.ORGANIZATION_CODES
+        ):
+            warnings.append(f"알 수 없는 조직 코드: {parsed_code.organization}")
+
+        # 패널 타입 검증
+        if (
+            parsed_code.panel
+            and parsed_code.panel not in self.PANEL_TYPES
+            and not parsed_code.panel.startswith("JWG")
+        ):
+            warnings.append(f"알 수 없는 패널 타입: {parsed_code.panel}")
+
+        return warnings

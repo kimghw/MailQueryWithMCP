@@ -6,19 +6,42 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-# 데이터 스키마 객체에 대해서 가각 설명해주는 주석을 추가합니다.
-## GrapMailItem 클래스는 Microsoft Graph API를 통해 가져온 메일 아이템을 표현합니다.
-## ProcessingStatus 클래스는 메일 처리 상태를 나타내는 Enum입니다.
-## MailReceivedEvent 클래스는 메일 수신 이벤트를 Kafka로 전송하기 위한 스키마입니다.
-## ProcessedMailData 클래스는 처리된 메일 데이터를 표현합니다.
-## MailProcessingResult 클래스는 메일 처리 결과를 요약합니다.
-## AccountProcessingStatus 클래스는 계정별 메일 처리 상태를 나타냅니다.
-## KeywordExtractionRequest 클래스는 키워드 추출 요청을 표현합니다.
-## KeywordExtractionResponse 클래스는 키워드 추출 응답을 표현합니다.
+
+class ProcessingStatus(str, Enum):
+    """처리 상태"""
+
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+    PARTIAL = "PARTIAL"  # 부분 성공 추가
 
 
-# 스키마와 호출 파이프라인을 주석으로 작성합니다.
-# GraphMailItem: Microsoft Graph API를 통해 가져온 메일 아이템을 표현합니다.
+class SenderType(str, Enum):
+    """발신자 타입"""
+
+    CHAIR = "CHAIR"
+    MEMBER = "MEMBER"
+    UNKNOWN = "UNKNOWN"
+
+
+class MailType(str, Enum):
+    """메일 타입"""
+
+    REQUEST = "REQUEST"
+    RESPONSE = "RESPONSE"
+    NOTIFICATION = "NOTIFICATION"
+    COMPLETED = "COMPLETED"
+    OTHER = "OTHER"
+
+
+class DecisionStatus(str, Enum):
+    """결정 상태"""
+
+    CREATED = "created"
+    COMMENT = "comment"
+    CONSOLIDATED = "consolidated"
+    REVIEW = "review"
+    DECISION = "decision"
 
 
 class GraphMailItem(BaseModel):
@@ -41,16 +64,56 @@ class GraphMailItem(BaseModel):
     importance: str = Field(default="normal", description="중요도")
     web_link: Optional[str] = Field(None, description="웹 링크")
 
-
-class ProcessingStatus(str, Enum):
-    """처리 상태"""
-
-    SUCCESS = "SUCCESS"
-    FAILED = "FAILED"
-    SKIPPED = "SKIPPED"
+    class Config:
+        allow_population_by_field_name = True
 
 
-# 이벤트 발행 스키마
+class ProcessedMailData(BaseModel):
+    """처리된 메일 데이터 (확장됨)"""
+
+    # 기본 정보
+    mail_id: str
+    account_id: str
+    subject: str
+    body_preview: str
+    sent_time: datetime
+    processed_at: datetime = Field(default_factory=datetime.now)
+
+    # 발신자 정보
+    sender_address: str
+    sender_name: str = ""
+    sender_type: Optional[SenderType] = None
+    sender_organization: Optional[str] = None
+
+    # 처리 결과
+    keywords: List[str] = Field(default_factory=list)
+    summary: Optional[str] = None
+    processing_status: ProcessingStatus
+    error_message: Optional[str] = None
+
+    # IACS 관련 정보
+    agenda_no: Optional[str] = None
+    agenda_info: Optional[Dict[str, Any]] = None
+    agenda_response_id: Optional[str] = None  # 응답 ID (조직+버전)
+    additional_agenda_references: List[str] = Field(default_factory=list)
+
+    # 메일 메타정보
+    mail_type: MailType = MailType.OTHER
+    decision_status: DecisionStatus = DecisionStatus.CREATED
+    urgency: str = "NORMAL"
+    is_reply: bool = False
+    reply_depth: Optional[int] = None
+    is_forward: bool = False
+    has_deadline: bool = False
+    deadline: Optional[datetime] = None
+
+    # 정제된 내용
+    clean_content: Optional[str] = None
+
+    # 추출 메타데이터
+    extraction_metadata: Optional[Dict[str, Any]] = None
+
+
 class MailReceivedEvent(BaseModel):
     """Kafka로 전송될 메일 수신 이벤트"""
 
@@ -61,23 +124,9 @@ class MailReceivedEvent(BaseModel):
     api_endpoint: str = "/v1.0/me/messages"
     response_status: int = 200
     request_params: Dict[str, Any]
-    response_data: Dict[str, Any]  # 전체 Graph API 응답
+    response_data: Dict[str, Any]
     response_timestamp: datetime
-
-
-class ProcessedMailData(BaseModel):
-    """처리된 메일 데이터"""
-
-    mail_id: str
-    account_id: str
-    sender_address: str
-    subject: str
-    body_preview: str
-    sent_time: datetime
-    keywords: List[str] = Field(default_factory=list)
-    processing_status: ProcessingStatus
-    error_message: Optional[str] = None
-    processed_at: datetime = Field(default_factory=datetime.now)
+    metadata: Optional[Dict[str, Any]] = None  # 추가 메타데이터
 
 
 class MailProcessingResult(BaseModel):
@@ -85,12 +134,21 @@ class MailProcessingResult(BaseModel):
 
     account_id: str
     total_fetched: int
+    filtered_count: int
+    new_count: int
+    duplicate_count: int
     processed_count: int
-    skipped_count: int
+    saved_count: int
     failed_count: int
+    skipped_count: int
+    events_published: int
     last_sync_time: datetime
     execution_time_ms: int
+    success_rate: float
+    duplication_rate: float
+    processing_efficiency: float
     errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
 
 
 class AccountProcessingStatus(BaseModel):
@@ -100,37 +158,57 @@ class AccountProcessingStatus(BaseModel):
     email: str
     status: str
     last_sync_at: Optional[datetime] = None
+    total_processed: int = 0
+    total_keywords: int = 0
     error_message: Optional[str] = None
+    error_count: int = 0
 
 
 class KeywordExtractionRequest(BaseModel):
     """키워드 추출 요청"""
 
     text: str
+    subject: Optional[str] = None
+    sent_time: Optional[datetime] = None
+    sender_address: Optional[str] = None
+    sender_name: Optional[str] = None
     max_keywords: int = 5
+    use_structured_response: bool = True
 
 
 class KeywordExtractionResponse(BaseModel):
     """키워드 추출 응답"""
 
     keywords: List[str]
-    method: str  # "openrouter", "fallback", "empty_text", "fallback_error"
-    model: str  # 사용된 모델명 (예: "openai/o3-mini", "rule_based")
+    method: str  # "openrouter", "fallback", "empty_text", "cache"
+    model: str  # 사용된 모델명
     execution_time_ms: int
-    token_info: Dict[str, Any] = Field(
-        default_factory=dict, description="토큰 사용량 정보"
-    )
+    cached: bool = False
+    token_info: Dict[str, Any] = Field(default_factory=dict)
+    structured_data: Optional[Dict[str, Any]] = None  # 구조화된 추출 데이터
 
 
-class ProcessedMailEvent(BaseModel):
-    """
-    메일 처리 후 Kafka로 전송될 이벤트 스키마
-    """
+class BatchProcessingEvent(BaseModel):
+    """배치 처리 완료 이벤트"""
 
-    account_id: int
-    message_id: str
-    received_time: datetime
-    subject: str
-    sender: str
-    keywords: List[str]
-    processed_at: datetime = Field(default_factory=datetime.now)
+    event_type: str = "email.batch_processing_complete"
+    event_id: str
+    account_id: str
+    occurred_at: datetime
+    statistics: Dict[str, Any]
+    keywords: List[str] = Field(default_factory=list)
+    processing_metadata: Optional[Dict[str, Any]] = None
+
+
+class MailFilterStatistics(BaseModel):
+    """메일 필터링 통계"""
+
+    total_checked: int = 0
+    filtered_out: int = 0
+    passed: int = 0
+    filtered_by_domain: int = 0
+    filtered_by_pattern: int = 0
+    filtered_by_keyword: int = 0
+    filtered_by_no_sender: int = 0
+    filtering_enabled: bool
+    filter_configurations: Dict[str, Any]

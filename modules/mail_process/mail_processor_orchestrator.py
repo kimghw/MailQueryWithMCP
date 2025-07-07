@@ -3,12 +3,21 @@
 modules/mail_process/mail_processor_orchestrator.py
 """
 
+import os
+import json
 from typing import Any, Dict, List, Optional, Tuple
 from datetime import datetime
 
 from infra.core.logger import get_logger
+from infra.core.config import get_config
 
-from .mail_processor_schema import ProcessingStatus
+from .mail_processor_schema import (
+    ProcessingStatus,
+    MailProcessingResult,
+    SenderType,
+    MailType,
+    DecisionStatus,
+)
 from .services.filtering_service import FilteringService
 from .services.persistence_service import PersistenceService
 from .services.processing_service import ProcessingService
@@ -38,6 +47,10 @@ class MailProcessorOrchestrator:
             statistics_service: 통계 서비스 (테스트 시 모킹 가능)
         """
         self.logger = get_logger(__name__)
+        self.config = get_config()
+
+        # 환경변수 검증
+        self._validate_configuration()
 
         # 서비스 초기화 (의존성 주입 지원)
         self.filtering_service = filtering_service or FilteringService()
@@ -48,7 +61,35 @@ class MailProcessorOrchestrator:
         # 통합 IACS 파서 초기화
         self.iacs_parser = IACSCodeParser()
 
-        self.logger.info("메일 처리 오케스트레이터 초기화 완료 (통합 IACS 파서)")
+        # 설정값 로드
+        self.max_mails_per_account = int(os.getenv("MAX_MAILS_PER_ACCOUNT", "200"))
+        self.enable_dashboard_events = (
+            os.getenv("ENABLE_DASHBOARD_EVENTS", "true").lower() == "true"
+        )
+
+        self.logger.info(
+            f"메일 처리 오케스트레이터 초기화 완료 "
+            f"(통합 IACS 파서, 최대 처리: {self.max_mails_per_account})"
+        )
+
+    def _validate_configuration(self):
+        """환경설정 검증"""
+        required_configs = [
+            ("ENABLE_MAIL_FILTERING", "true"),
+            ("ENABLE_MAIL_DUPLICATE_CHECK", "true"),
+            ("ENABLE_BATCH_KEYWORD_EXTRACTION", "true"),
+            ("ENABLE_MAIL_HISTORY", "true"),
+            ("MAX_KEYWORDS_PER_MAIL", "5"),
+            ("MIN_MAIL_CONTENT_LENGTH", "10"),
+        ]
+
+        for config_name, default_value in required_configs:
+            value = os.getenv(config_name)
+            if value is None:
+                self.logger.warning(
+                    f"환경변수 누락: {config_name}, 기본값 사용: {default_value}"
+                )
+                os.environ[config_name] = default_value
 
     async def __aenter__(self):
         """컨텍스트 매니저 진입"""
@@ -60,7 +101,7 @@ class MailProcessorOrchestrator:
 
     async def process_mails(
         self, account_id: str, mails: List[Dict], publish_batch_event: bool = True
-    ) -> Dict[str, Any]:
+    ) -> MailProcessingResult:
         """
         메일 처리 메인 플로우 (중복 체크 우선 처리)
 
@@ -70,9 +111,17 @@ class MailProcessorOrchestrator:
             publish_batch_event: 배치 이벤트 발행 여부
 
         Returns:
-            처리 통계
+            처리 결과 (MailProcessingResult)
         """
+        start_time = datetime.now()
         self.logger.info(f"메일 처리 시작: account_id={account_id}, count={len(mails)}")
+
+        # 처리 제한
+        if len(mails) > self.max_mails_per_account:
+            self.logger.warning(
+                f"처리 제한 적용: {len(mails)} -> {self.max_mails_per_account}"
+            )
+            mails = mails[: self.max_mails_per_account]
 
         try:
             # Phase 1: 초기화 및 필터링
@@ -92,24 +141,57 @@ class MailProcessorOrchestrator:
             saved_results = await self._phase4_persist(account_id, processed_mails)
 
             # Phase 5: 통계 기록
-            statistics = await self._phase5_statistics(
-                account_id,
-                len(mails),
-                len(filtered_mails),
-                len(new_mails),
-                len(duplicate_mails),
-                saved_results,
-                publish_batch_event,
-                processed_mails,
+            execution_time_ms = int(
+                (datetime.now() - start_time).total_seconds() * 1000
             )
 
-            self.logger.info(f"메일 처리 완료: {statistics}")
-            return statistics
+            result = await self._phase5_create_result(
+                account_id=account_id,
+                total_count=len(mails),
+                filtered_count=len(filtered_mails),
+                new_count=len(new_mails),
+                duplicate_count=len(duplicate_mails),
+                saved_results=saved_results,
+                execution_time_ms=execution_time_ms,
+                publish_batch_event=publish_batch_event,
+                processed_mails=processed_mails,
+            )
+
+            self.logger.info(
+                f"메일 처리 완료: account={account_id}, "
+                f"성공률={result.success_rate}%, "
+                f"중복률={result.duplication_rate}%, "
+                f"실행시간={result.execution_time_ms}ms"
+            )
+
+            return result
 
         except Exception as e:
             self.logger.error(f"메일 처리 중 예외 발생: {str(e)}", exc_info=True)
-            # 부분 실패 허용 - 현재까지 처리된 통계 반환
-            return self.statistics_service.get_current_statistics()
+
+            # 부분 실패 결과 반환
+            execution_time_ms = int(
+                (datetime.now() - start_time).total_seconds() * 1000
+            )
+            return MailProcessingResult(
+                account_id=account_id,
+                total_fetched=len(mails),
+                filtered_count=0,
+                new_count=0,
+                duplicate_count=0,
+                processed_count=0,
+                saved_count=0,
+                failed_count=len(mails),
+                skipped_count=0,
+                events_published=0,
+                last_sync_time=datetime.now(),
+                execution_time_ms=execution_time_ms,
+                success_rate=0.0,
+                duplication_rate=0.0,
+                processing_efficiency=0.0,
+                errors=[str(e)],
+                warnings=[],
+            )
         finally:
             # 리소스 정리는 항상 수행
             await self._cleanup_resources()
@@ -147,7 +229,8 @@ class MailProcessorOrchestrator:
                 new_mails.append(mail)
 
         self.logger.info(
-            f"Phase 2 완료: 전체 {len(mails)}개 중 신규 {len(new_mails)}개, 중복 {len(duplicate_mails)}개"
+            f"Phase 2 완료: 전체 {len(mails)}개 중 "
+            f"신규 {len(new_mails)}개, 중복 {len(duplicate_mails)}개"
         )
         return new_mails, duplicate_mails
 
@@ -167,60 +250,83 @@ class MailProcessorOrchestrator:
         self._extract_iacs_patterns(mails)
 
         # Step 2: OpenRouter 처리 (비동기, 배치)
-        processed_mails = await self.processing_service.process_mails(mails)
+        try:
+            processed_mails = await self.processing_service.process_mails(mails)
+        except Exception as e:
+            self.logger.error(f"OpenRouter 처리 중 오류: {str(e)}", exc_info=True)
+            # OpenRouter 실패 시에도 IACS 파싱 결과는 보존
+            processed_mails = mails
 
         # 처리 통계 로깅
-        total_keywords = 0
-        iacs_parsed_count = 0
-
-        for mail in processed_mails:
-            if "_processed" in mail and "keywords" in mail["_processed"]:
-                keywords = mail["_processed"]["keywords"]
-                total_keywords += len(keywords)
-                if keywords:
-                    self.logger.debug(
-                        f"메일 {mail.get('id', 'unknown')}: 키워드 {len(keywords)}개 - {keywords}"
-                    )
-
-            if "_iacs_parsed" in mail:
-                iacs_parsed_count += 1
-
-        self.logger.info(
-            f"Phase 3 완료: {len(processed_mails)}개 메일 처리, "
-            f"IACS 파싱={iacs_parsed_count}, "
-            f"총 키워드={total_keywords}개"
-        )
+        self._log_processing_statistics(processed_mails)
 
         return processed_mails
 
     def _extract_iacs_patterns(self, mails: List[Dict]):
         """각 메일에서 IACS 코드 및 메타정보 추출 (발신자 정보 포함)"""
         for mail in mails:
-            subject = mail.get("subject", "")
+            try:
+                subject = mail.get("subject", "")
 
-            # 정제된 내용이 있으면 사용, 없으면 원본 사용
-            if "_processed" in mail:
-                body = mail["_processed"].get("clean_content", "")
-            else:
-                body = mail.get("body", {}).get("content", "")
+                # 정제된 내용이 있으면 사용, 없으면 원본 사용
+                if "_processed" in mail:
+                    body = mail["_processed"].get("clean_content", "")
+                else:
+                    body = mail.get("body", {}).get("content", "")
 
-            if not subject:
-                continue
+                if not subject:
+                    continue
 
-            # 통합 IACS 파서로 모든 패턴 추출 (메일 객체 전달)
-            patterns = self.iacs_parser.extract_all_patterns(subject, body, mail)
+                # 통합 IACS 파서로 모든 패턴 추출 (메일 객체 전달)
+                patterns = self.iacs_parser.extract_all_patterns(subject, body, mail)
 
-            if patterns:
-                # 파싱 결과를 메일에 저장
-                mail["_iacs_parsed"] = patterns
+                if patterns:
+                    # 파싱 결과를 메일에 저장
+                    mail["_iacs_parsed"] = patterns
 
-                self.logger.debug(
-                    f"IACS 패턴 추출: {mail.get('id')} - "
-                    f"코드: {patterns.get('extracted_info', {}).get('full_code', 'N/A')}, "
-                    f"긴급도: {patterns.get('urgency', 'NORMAL')}, "
-                    f"회신: {patterns.get('is_reply', False)}, "
-                    f"발신자 타입: {patterns.get('sender_type', 'N/A')}"
+                    self.logger.debug(
+                        f"IACS 패턴 추출: {mail.get('id')} - "
+                        f"코드: {patterns.get('extracted_info', {}).get('full_code', 'N/A')}, "
+                        f"긴급도: {patterns.get('urgency', 'NORMAL')}, "
+                        f"회신: {patterns.get('is_reply', False)}, "
+                        f"발신자 타입: {patterns.get('sender_type', 'N/A')}"
+                    )
+            except Exception as e:
+                self.logger.error(
+                    f"IACS 패턴 추출 중 오류 - 메일 ID: {mail.get('id')}, "
+                    f"오류: {str(e)}"
                 )
+
+    def _log_processing_statistics(self, processed_mails: List[Dict]):
+        """처리 통계 구조화 로깅"""
+        stats = {
+            "total": len(processed_mails),
+            "iacs_parsed": sum(1 for m in processed_mails if "_iacs_parsed" in m),
+            "keywords_extracted": sum(
+                1 for m in processed_mails if m.get("_processed", {}).get("keywords")
+            ),
+            "agenda_identified": sum(
+                1
+                for m in processed_mails
+                if m.get("_iacs_parsed", {})
+                .get("extracted_info", {})
+                .get("base_agenda_no")
+            ),
+            "urgent": sum(
+                1
+                for m in processed_mails
+                if m.get("_iacs_parsed", {}).get("urgency") == "HIGH"
+            ),
+            "responses": sum(
+                1
+                for m in processed_mails
+                if m.get("_iacs_parsed", {})
+                .get("extracted_info", {})
+                .get("is_response")
+            ),
+        }
+
+        self.logger.info(f"Phase 3 처리 통계: {json.dumps(stats, ensure_ascii=False)}")
 
     async def _phase4_persist(self, account_id: str, mails: List[Dict]) -> Dict:
         """
@@ -248,26 +354,7 @@ class MailProcessorOrchestrator:
                 mail["_processed"].update(merged_data)
 
             # 이벤트용 메일 복사본 생성
-            event_mail = mail.copy()
-
-            # _processed 정보는 제거 (이벤트에 불필요)
-            if "_processed" in event_mail:
-                del event_mail["_processed"]
-
-            # 내부 처리 데이터 제거
-            fields_to_remove = [
-                "_iacs_parsed",
-                "keywords",
-                "clean_content",
-                "sent_time",
-                "processing_status",
-                "sender_address",
-                "sender_name",
-            ]
-            for field in fields_to_remove:
-                if field in event_mail:
-                    del event_mail[field]
-
+            event_mail = self._prepare_mail_for_event(mail)
             mails_for_events.append(event_mail)
 
         # 수정된 persist_mails 호출 (이벤트용 데이터 전달)
@@ -280,138 +367,177 @@ class MailProcessorOrchestrator:
         2가지 추출 결과를 지능적으로 병합
         우선순위: IACSCodeParser > OpenRouter
         """
-        merged = {}
+        # 기본값 설정
+        merged = {
+            "mail_type": MailType.OTHER.value,
+            "decision_status": DecisionStatus.CREATED.value,
+            "has_deadline": False,
+            "keywords": [],
+            "summary": "",
+            "processing_status": ProcessingStatus.SUCCESS.value,
+            "urgency": "NORMAL",
+            "is_reply": False,
+            "is_forward": False,
+        }
 
-        # 1. IACS 파서 결과 (최우선)
+        # 1. IACS 파서 결과 병합
         if "_iacs_parsed" in mail:
-            iacs_data = mail["_iacs_parsed"]
+            self._merge_iacs_results(merged, mail["_iacs_parsed"])
 
-            # IACS 코드 정보가 있는 경우
-            if "extracted_info" in iacs_data:
-                iacs_info = iacs_data["extracted_info"]
-
-                # 아젠다 번호
-                if iacs_info.get("base_agenda_no"):
-                    merged["agenda_no"] = iacs_info["base_agenda_no"]
-
-                # 아젠다 상세 정보
-                merged["agenda_info"] = {
-                    "full_pattern": iacs_info.get("full_code"),
-                    "panel_name": iacs_info.get("panel"),
-                    "year": iacs_info.get("year"),
-                    "round_no": iacs_info.get("number"),
-                    "agenda_version": iacs_info.get("agenda_version"),
-                    "document_type": iacs_info.get("document_type"),
-                    "is_response": iacs_info.get("is_response", False),
-                }
-
-                # 응답인 경우 추가 정보
-                if iacs_info.get("is_response") and iacs_info.get("organization"):
-                    merged["sender_organization"] = iacs_info["organization"]
-                    merged["response_version"] = iacs_info.get("response_version")
-                    # agenda_response_id 추가 (대시보드에서 활용)
-                    merged["agenda_response_id"] = (
-                        f"{iacs_info['organization']}{iacs_info.get('response_version', '')}"
-                    )
-
-            # 메타 정보 (IACS 파서에서 추출)
-            if iacs_data.get("urgency"):
-                merged["urgency"] = iacs_data["urgency"]
-            if iacs_data.get("is_reply") is not None:
-                merged["is_reply"] = iacs_data["is_reply"]
-                if iacs_data.get("reply_depth"):
-                    merged["reply_depth"] = iacs_data["reply_depth"]
-            if iacs_data.get("is_forward") is not None:
-                merged["is_forward"] = iacs_data["is_forward"]
-            if iacs_data.get("additional_agenda_references"):
-                merged["additional_agenda_references"] = iacs_data[
-                    "additional_agenda_references"
-                ]
-
-            # 발신자 정보 (IACS 파서 우선)
-            if iacs_data.get("sender_address"):
-                merged["sender_address"] = iacs_data["sender_address"]
-            if iacs_data.get("sender_name"):
-                merged["sender_name"] = iacs_data["sender_name"]
-            if iacs_data.get("sender_type"):
-                merged["sender_type"] = iacs_data["sender_type"]
-
-            # 시간 정보 (IACS 파서 우선)
-            if iacs_data.get("sent_time"):
-                merged["sent_time"] = iacs_data["sent_time"]
-
-            # 정제된 내용 (IACS 파서 우선)
-            if iacs_data.get("clean_content"):
-                merged["clean_content"] = iacs_data["clean_content"]
-
-        # 2. OpenRouter 결과 (의미 분석)
+        # 2. OpenRouter 결과 병합
         if "_processed" in mail:
-            processed_info = mail["_processed"]
+            self._merge_openrouter_results(merged, mail["_processed"])
 
-            # 항상 OpenRouter에서 가져오는 정보
-            merged["keywords"] = processed_info.get("keywords", [])
-            merged["summary"] = processed_info.get("summary", "")
-
-            # IACS 파서에서 못 찾은 정보만 보충
-            if not merged.get("clean_content"):
-                merged["clean_content"] = processed_info.get("clean_content", "")
-            if not merged.get("sent_time"):
-                merged["sent_time"] = processed_info.get("sent_time")
-            if not merged.get("sender_address"):
-                merged["sender_address"] = processed_info.get("sender_address", "")
-            if not merged.get("sender_name"):
-                merged["sender_name"] = processed_info.get("sender_name", "")
-
-            # OpenRouter의 의미 분석 결과
-            for key in [
-                "mail_type",
-                "decision_status",
-                "has_deadline",
-                "deadline",
-            ]:
-                if key in processed_info:
-                    merged[key] = processed_info[key]
-
-            # sender_type은 IACS가 우선, 없으면 OpenRouter
-            if not merged.get("sender_type") and processed_info.get("sender_type"):
-                merged["sender_type"] = processed_info["sender_type"]
-
-            # sender_organization도 IACS가 우선, 없으면 OpenRouter
-            if not merged.get("sender_organization") and processed_info.get(
-                "sender_organization"
-            ):
-                merged["sender_organization"] = processed_info["sender_organization"]
-
-            # 다른 파서에서 못 찾은 정보 보충
-            if not merged.get("agenda_no") and processed_info.get("agenda_no"):
-                merged["agenda_no"] = processed_info["agenda_no"]
-
-        # 3. 기본값 설정
-        merged.setdefault("mail_type", "OTHER")
-        merged.setdefault("decision_status", "created")
-        merged.setdefault("has_deadline", False)
-        merged.setdefault("keywords", [])
-        merged.setdefault("summary", "")
-        merged.setdefault("processing_status", "SUCCESS")
-        merged.setdefault("urgency", "NORMAL")
-
-        # 4. send_time 형식 보정 (대시보드 이벤트용)
-        if merged.get("sent_time"):
-            if hasattr(merged["sent_time"], "isoformat"):
-                merged["send_time"] = merged["sent_time"].isoformat()
-            else:
-                merged["send_time"] = str(merged["sent_time"])
-
-        # 5. 추출 메타데이터
+        # 3. 타임스탬프 및 메타데이터 추가
         merged["extraction_metadata"] = {
             "iacs_parsed": "_iacs_parsed" in mail,
             "openrouter_parsed": "_processed" in mail,
             "extraction_timestamp": datetime.now().isoformat(),
+            "orchestrator_version": "2.0",
         }
+
+        # 4. 대시보드 이벤트용 send_time 형식 보정
+        if merged.get("sent_time"):
+            merged["send_time"] = self._format_datetime(merged["sent_time"])
 
         return merged
 
-    async def _phase5_statistics(
+    def _merge_iacs_results(self, merged: Dict, iacs_data: Dict):
+        """IACS 파서 결과 병합"""
+        # IACS 코드 정보
+        if "extracted_info" in iacs_data:
+            iacs_info = iacs_data["extracted_info"]
+
+            # 아젠다 번호
+            if iacs_info.get("base_agenda_no"):
+                merged["agenda_no"] = iacs_info["base_agenda_no"]
+
+            # 아젠다 상세 정보
+            merged["agenda_info"] = {
+                "full_pattern": iacs_info.get("full_code"),
+                "panel_name": iacs_info.get("panel"),
+                "year": iacs_info.get("year"),
+                "round_no": iacs_info.get("number"),
+                "agenda_version": iacs_info.get("agenda_version"),
+                "document_type": iacs_info.get("document_type"),
+                "is_response": iacs_info.get("is_response", False),
+                "parsing_method": iacs_info.get("parsing_method"),
+            }
+
+            # 응답인 경우 추가 정보
+            if iacs_info.get("is_response") and iacs_info.get("organization"):
+                merged["sender_organization"] = iacs_info["organization"]
+                merged["response_version"] = iacs_info.get("response_version")
+                # agenda_response_id 추가 (대시보드에서 활용)
+                merged["agenda_response_id"] = (
+                    f"{iacs_info['organization']}"
+                    f"{iacs_info.get('response_version', '')}"
+                )
+
+        # 메타 정보
+        if iacs_data.get("urgency"):
+            merged["urgency"] = iacs_data["urgency"]
+        if iacs_data.get("is_reply") is not None:
+            merged["is_reply"] = iacs_data["is_reply"]
+            if iacs_data.get("reply_depth"):
+                merged["reply_depth"] = iacs_data["reply_depth"]
+        if iacs_data.get("is_forward") is not None:
+            merged["is_forward"] = iacs_data["is_forward"]
+        if iacs_data.get("additional_agenda_references"):
+            merged["additional_agenda_references"] = iacs_data[
+                "additional_agenda_references"
+            ]
+
+        # 발신자 정보 (IACS 파서 우선)
+        if iacs_data.get("sender_address"):
+            merged["sender_address"] = iacs_data["sender_address"]
+        if iacs_data.get("sender_name"):
+            merged["sender_name"] = iacs_data["sender_name"]
+        if iacs_data.get("sender_type"):
+            merged["sender_type"] = iacs_data["sender_type"]
+
+        # 시간 정보 (IACS 파서 우선)
+        if iacs_data.get("sent_time"):
+            merged["sent_time"] = iacs_data["sent_time"]
+
+        # 정제된 내용 (IACS 파서 우선)
+        if iacs_data.get("clean_content"):
+            merged["clean_content"] = iacs_data["clean_content"]
+
+    def _merge_openrouter_results(self, merged: Dict, processed_info: Dict):
+        """OpenRouter 결과 병합"""
+        # 항상 OpenRouter에서 가져오는 정보
+        merged["keywords"] = processed_info.get("keywords", [])
+        merged["summary"] = processed_info.get("summary", "")
+
+        # IACS 파서에서 못 찾은 정보만 보충
+        if not merged.get("clean_content"):
+            merged["clean_content"] = processed_info.get("clean_content", "")
+        if not merged.get("sent_time"):
+            merged["sent_time"] = processed_info.get("sent_time")
+        if not merged.get("sender_address"):
+            merged["sender_address"] = processed_info.get("sender_address", "")
+        if not merged.get("sender_name"):
+            merged["sender_name"] = processed_info.get("sender_name", "")
+
+        # OpenRouter의 의미 분석 결과
+        for key in [
+            "mail_type",
+            "decision_status",
+            "has_deadline",
+            "deadline",
+        ]:
+            if key in processed_info:
+                merged[key] = processed_info[key]
+
+        # sender_type은 IACS가 우선, 없으면 OpenRouter
+        if not merged.get("sender_type") and processed_info.get("sender_type"):
+            merged["sender_type"] = processed_info["sender_type"]
+
+        # sender_organization도 IACS가 우선, 없으면 OpenRouter
+        if not merged.get("sender_organization") and processed_info.get(
+            "sender_organization"
+        ):
+            merged["sender_organization"] = processed_info["sender_organization"]
+
+        # 다른 파서에서 못 찾은 정보 보충
+        if not merged.get("agenda_no") and processed_info.get("agenda_no"):
+            merged["agenda_no"] = processed_info["agenda_no"]
+
+    def _format_datetime(self, dt: Any) -> str:
+        """datetime 객체를 문자열로 포맷"""
+        if hasattr(dt, "isoformat"):
+            return dt.isoformat()
+        else:
+            return str(dt)
+
+    def _prepare_mail_for_event(self, mail: Dict) -> Dict:
+        """이벤트 발행용 메일 데이터 준비"""
+        event_mail = mail.copy()
+
+        # _processed 정보는 제거 (이벤트에 불필요)
+        if "_processed" in event_mail:
+            del event_mail["_processed"]
+
+        # 내부 처리 데이터 제거
+        fields_to_remove = [
+            "_iacs_parsed",
+            "keywords",
+            "clean_content",
+            "sent_time",
+            "processing_status",
+            "sender_address",
+            "sender_name",
+            "extraction_metadata",
+        ]
+
+        for field in fields_to_remove:
+            if field in event_mail:
+                del event_mail[field]
+
+        return event_mail
+
+    async def _phase5_create_result(
         self,
         account_id: str,
         total_count: int,
@@ -419,30 +545,72 @@ class MailProcessorOrchestrator:
         new_count: int,
         duplicate_count: int,
         saved_results: Dict,
+        execution_time_ms: int,
         publish_batch_event: bool,
         processed_mails: List[Dict] = None,
-    ) -> Dict:
-        """Phase 5: 통계 기록 (중복 정보 포함)"""
-        self.logger.debug("Phase 5 시작: 통계")
+    ) -> MailProcessingResult:
+        """Phase 5: 결과 생성 및 통계 기록"""
+        self.logger.debug("Phase 5 시작: 결과 생성")
 
-        # 통계 서비스에 전달할 파라미터 구성
-        statistics_params = {
-            "account_id": account_id,
-            "total_count": total_count,
-            "filtered_count": filtered_count,
-            "new_count": new_count,
-            "duplicate_count": duplicate_count,
-            "saved_results": saved_results,
-            "publish_batch_event": publish_batch_event,
-            "processed_mails": processed_mails,
-        }
+        # 성공률 계산
+        success_rate = 0.0
+        if new_count > 0:
+            success_rate = (saved_results.get("saved", 0) / new_count) * 100
 
-        return await self.statistics_service.record_statistics(**statistics_params)
+        # 중복률 계산
+        duplication_rate = 0.0
+        if filtered_count > 0:
+            duplication_rate = (duplicate_count / filtered_count) * 100
+
+        # 처리 효율성 계산
+        processing_efficiency = 0.0
+        if new_count + duplicate_count > 0:
+            saved_processing = duplicate_count
+            total_potential = new_count + duplicate_count
+            processing_efficiency = (saved_processing / total_potential) * 100
+
+        # 결과 객체 생성
+        result = MailProcessingResult(
+            account_id=account_id,
+            total_fetched=total_count,
+            filtered_count=filtered_count,
+            new_count=new_count,
+            duplicate_count=duplicate_count,
+            processed_count=len(processed_mails) if processed_mails else 0,
+            saved_count=saved_results.get("saved", 0),
+            failed_count=saved_results.get("failed", 0),
+            skipped_count=total_count - filtered_count,
+            events_published=saved_results.get("events_published", 0),
+            last_sync_time=datetime.now(),
+            execution_time_ms=execution_time_ms,
+            success_rate=round(success_rate, 2),
+            duplication_rate=round(duplication_rate, 2),
+            processing_efficiency=round(processing_efficiency, 2),
+            errors=[],
+            warnings=[],
+        )
+
+        # 통계 기록
+        if self.statistics_service:
+            await self.statistics_service.record_statistics(
+                account_id=account_id,
+                total_count=total_count,
+                filtered_count=filtered_count,
+                new_count=new_count,
+                duplicate_count=duplicate_count,
+                saved_results=saved_results,
+                publish_batch_event=publish_batch_event,
+                processed_mails=processed_mails,
+                result=result,
+            )
+
+        return result
 
     async def _cleanup_resources(self):
         """리소스 정리"""
         try:
-            await self.processing_service.close()
+            if self.processing_service:
+                await self.processing_service.close()
         except Exception as e:
             self.logger.error(f"리소스 정리 중 오류: {str(e)}")
 
@@ -459,3 +627,12 @@ class MailProcessorOrchestrator:
         """특정 조직의 멤버 이메일 주소 설정"""
         self.iacs_parser.set_member_emails(organization, emails)
         self.logger.info(f"{organization} 멤버 이메일 {len(emails)}개 설정됨")
+
+    def get_processing_statistics(self) -> Dict[str, Any]:
+        """현재 처리 통계 반환"""
+        return {
+            "filtering_stats": self.filtering_service.get_filter_stats(),
+            "duplicate_check_enabled": self.persistence_service.get_duplicate_check_status(),
+            "max_mails_per_account": self.max_mails_per_account,
+            "dashboard_events_enabled": self.enable_dashboard_events,
+        }
