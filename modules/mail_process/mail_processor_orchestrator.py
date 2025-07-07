@@ -194,7 +194,7 @@ class MailProcessorOrchestrator:
         return processed_mails
 
     def _extract_iacs_patterns(self, mails: List[Dict]):
-        """각 메일에서 IACS 코드 및 메타정보 추출"""
+        """각 메일에서 IACS 코드 및 메타정보 추출 (발신자 정보 포함)"""
         for mail in mails:
             subject = mail.get("subject", "")
 
@@ -207,8 +207,8 @@ class MailProcessorOrchestrator:
             if not subject:
                 continue
 
-            # 통합 IACS 파서로 모든 패턴 추출
-            patterns = self.iacs_parser.extract_all_patterns(subject, body)
+            # 통합 IACS 파서로 모든 패턴 추출 (메일 객체 전달)
+            patterns = self.iacs_parser.extract_all_patterns(subject, body, mail)
 
             if patterns:
                 # 파싱 결과를 메일에 저장
@@ -218,7 +218,8 @@ class MailProcessorOrchestrator:
                     f"IACS 패턴 추출: {mail.get('id')} - "
                     f"코드: {patterns.get('extracted_info', {}).get('full_code', 'N/A')}, "
                     f"긴급도: {patterns.get('urgency', 'NORMAL')}, "
-                    f"회신: {patterns.get('is_reply', False)}"
+                    f"회신: {patterns.get('is_reply', False)}, "
+                    f"발신자 타입: {patterns.get('sender_type', 'N/A')}"
                 )
 
     async def _phase4_persist(self, account_id: str, mails: List[Dict]) -> Dict:
@@ -327,6 +328,22 @@ class MailProcessorOrchestrator:
                     "additional_agenda_references"
                 ]
 
+            # 발신자 정보 (IACS 파서 우선)
+            if iacs_data.get("sender_address"):
+                merged["sender_address"] = iacs_data["sender_address"]
+            if iacs_data.get("sender_name"):
+                merged["sender_name"] = iacs_data["sender_name"]
+            if iacs_data.get("sender_type"):
+                merged["sender_type"] = iacs_data["sender_type"]
+
+            # 시간 정보 (IACS 파서 우선)
+            if iacs_data.get("sent_time"):
+                merged["sent_time"] = iacs_data["sent_time"]
+
+            # 정제된 내용 (IACS 파서 우선)
+            if iacs_data.get("clean_content"):
+                merged["clean_content"] = iacs_data["clean_content"]
+
         # 2. OpenRouter 결과 (의미 분석)
         if "_processed" in mail:
             processed_info = mail["_processed"]
@@ -334,10 +351,16 @@ class MailProcessorOrchestrator:
             # 항상 OpenRouter에서 가져오는 정보
             merged["keywords"] = processed_info.get("keywords", [])
             merged["summary"] = processed_info.get("summary", "")
-            merged["clean_content"] = processed_info.get("clean_content", "")
-            merged["sent_time"] = processed_info.get("sent_time")
-            merged["sender_address"] = processed_info.get("sender_address", "")
-            merged["sender_name"] = processed_info.get("sender_name", "")
+
+            # IACS 파서에서 못 찾은 정보만 보충
+            if not merged.get("clean_content"):
+                merged["clean_content"] = processed_info.get("clean_content", "")
+            if not merged.get("sent_time"):
+                merged["sent_time"] = processed_info.get("sent_time")
+            if not merged.get("sender_address"):
+                merged["sender_address"] = processed_info.get("sender_address", "")
+            if not merged.get("sender_name"):
+                merged["sender_name"] = processed_info.get("sender_name", "")
 
             # OpenRouter의 의미 분석 결과
             for key in [
@@ -345,11 +368,19 @@ class MailProcessorOrchestrator:
                 "decision_status",
                 "has_deadline",
                 "deadline",
-                "sender_type",
-                "sender_organization",
             ]:
                 if key in processed_info:
                     merged[key] = processed_info[key]
+
+            # sender_type은 IACS가 우선, 없으면 OpenRouter
+            if not merged.get("sender_type") and processed_info.get("sender_type"):
+                merged["sender_type"] = processed_info["sender_type"]
+
+            # sender_organization도 IACS가 우선, 없으면 OpenRouter
+            if not merged.get("sender_organization") and processed_info.get(
+                "sender_organization"
+            ):
+                merged["sender_organization"] = processed_info["sender_organization"]
 
             # 다른 파서에서 못 찾은 정보 보충
             if not merged.get("agenda_no") and processed_info.get("agenda_no"):
@@ -418,3 +449,13 @@ class MailProcessorOrchestrator:
     async def close(self):
         """명시적 리소스 정리"""
         await self._cleanup_resources()
+
+    def set_chair_emails(self, emails: List[str]):
+        """Chair 이메일 주소 설정"""
+        self.iacs_parser.set_chair_emails(emails)
+        self.logger.info(f"Chair 이메일 {len(emails)}개 설정됨")
+
+    def set_member_emails(self, organization: str, emails: List[str]):
+        """특정 조직의 멤버 이메일 주소 설정"""
+        self.iacs_parser.set_member_emails(organization, emails)
+        self.logger.info(f"{organization} 멤버 이메일 {len(emails)}개 설정됨")

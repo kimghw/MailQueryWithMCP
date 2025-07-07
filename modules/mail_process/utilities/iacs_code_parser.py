@@ -1,7 +1,7 @@
-"""개선된 IACS 코드 파서 - 새로운 파싱 규칙 적용"""
+"""개선된 IACS 코드 파서 - 새로운 파싱 규칙 적용 및 발신자 정보 추출"""
 
 import re
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Tuple
 from dataclasses import dataclass
 from datetime import datetime
 
@@ -92,6 +92,27 @@ class IACSCodeParser:
         # 특수 케이스
         self.special_cases = ["Multilateral", "MULTILATERAL", "multilateral"]
 
+        # Chair와 Member 이메일 주소 리스트
+        self.chair_emails = []  # 초기화 시 설정 가능
+        self.member_emails = {}  # {organization: [email_list]}
+
+        # 텍스트 정제를 위한 패턴들
+        self.email_pattern = re.compile(
+            r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+        )
+        self.url_pattern = re.compile(r"https?://[^\s]+|www\.[^\s]+")
+        self.html_pattern = re.compile(r"<[^>]+>")
+
+    def set_chair_emails(self, emails: List[str]):
+        """Chair 이메일 주소 설정"""
+        self.chair_emails = [email.lower() for email in emails]
+        self.logger.info(f"Chair 이메일 {len(self.chair_emails)}개 설정됨")
+
+    def set_member_emails(self, organization: str, emails: List[str]):
+        """특정 조직의 멤버 이메일 주소 설정"""
+        self.member_emails[organization.upper()] = [email.lower() for email in emails]
+        self.logger.info(f"{organization} 멤버 이메일 {len(emails)}개 설정됨")
+
     def parse_line(self, line: str) -> Optional[ParsedCode]:
         """한 줄을 파싱하여 코드 정보 추출 (새로운 규칙 적용)"""
         line = line.strip()
@@ -137,6 +158,172 @@ class IACSCodeParser:
             self.logger.debug(f"IACS 코드 파싱 실패 (예외 메일): {cleaned_line}")
 
         return None
+
+    def extract_sender_info(self, mail: Dict) -> Tuple[str, str, Optional[str]]:
+        """
+        발신자 정보 추출 및 sender_type 결정
+
+        Returns:
+            (sender_address, sender_name, sender_type)
+        """
+        sender_address = ""
+        sender_name = ""
+        sender_type = None
+
+        # 가능한 모든 발신자 필드 확인
+        sender_fields = [
+            ("from", "발신자(from)"),
+            ("From", "발신자(From)"),
+            ("sender", "발신자(sender)"),
+            ("Sender", "발신자(Sender)"),
+            ("from_address", "발신자(from_address)"),
+            ("fromRecipients", "발신자(fromRecipients)"),
+        ]
+
+        for field_name, field_desc in sender_fields:
+            field_value = mail.get(field_name)
+            if field_value:
+                # 문자열인 경우
+                if isinstance(field_value, str):
+                    if "@" in field_value:
+                        sender_address = field_value
+                        sender_name = field_value.split("@")[0]
+                        break
+
+                # 딕셔너리인 경우
+                elif isinstance(field_value, dict):
+                    # emailAddress 필드 확인
+                    email_addr = field_value.get("emailAddress", {})
+                    if isinstance(email_addr, dict):
+                        addr = email_addr.get("address", "")
+                        name = email_addr.get("name", "")
+                        if addr:
+                            sender_address = addr
+                            sender_name = name or addr.split("@")[0]
+                            break
+
+                    # 직접 address/name 필드 확인
+                    addr = field_value.get("address", "")
+                    name = field_value.get("name", "")
+                    if addr:
+                        sender_address = addr
+                        sender_name = name or addr.split("@")[0]
+                        break
+
+        # sender_type 결정
+        if sender_address:
+            sender_address_lower = sender_address.lower()
+
+            # Chair 확인
+            if sender_address_lower in self.chair_emails:
+                sender_type = "CHAIR"
+                self.logger.debug(f"Chair 이메일 감지: {sender_address}")
+            else:
+                # Member 조직 확인
+                for org, emails in self.member_emails.items():
+                    if sender_address_lower in emails:
+                        sender_type = "MEMBER"
+                        self.logger.debug(f"{org} 멤버 이메일 감지: {sender_address}")
+                        break
+
+                # 도메인 기반 추정 (설정된 이메일이 없는 경우)
+                if not sender_type and "@" in sender_address:
+                    domain = sender_address.split("@")[1].lower()
+                    # IL 도메인은 보통 Chair
+                    if "il." in domain or domain.endswith(".il"):
+                        sender_type = "CHAIR"
+                    # 다른 IACS 멤버 도메인 패턴 확인
+                    elif any(org.lower() in domain for org in self.ORGANIZATION_CODES):
+                        sender_type = "MEMBER"
+
+        return sender_address, sender_name, sender_type
+
+    def extract_sent_time(self, mail: Dict) -> Optional[datetime]:
+        """발송 시간 추출"""
+        # 다양한 시간 필드 확인
+        time_fields = [
+            "received_date_time",
+            "receivedDateTime",
+            "ReceivedDateTime",
+            "sentDateTime",
+            "SentDateTime",
+            "dateTimeReceived",
+            "dateTimeSent",
+        ]
+
+        for field in time_fields:
+            if field in mail:
+                received_time = mail[field]
+                try:
+                    if isinstance(received_time, datetime):
+                        return received_time
+                    elif isinstance(received_time, str) and received_time:
+                        # ISO 형식 파싱
+                        if received_time.endswith("Z"):
+                            received_time = received_time[:-1] + "+00:00"
+                        return datetime.fromisoformat(received_time)
+                except (ValueError, TypeError) as e:
+                    self.logger.warning(
+                        f"시간 파싱 실패: {received_time}, 오류: {str(e)}"
+                    )
+                    continue
+
+        return None
+
+    def clean_content(self, text: str) -> str:
+        """텍스트 정제"""
+        if not text:
+            return ""
+
+        # 1. HTML 태그 제거
+        clean = self.html_pattern.sub("", text)
+
+        # 2. 이메일 주소를 공백으로 변환
+        clean = self.email_pattern.sub(" ", clean)
+
+        # 3. URL 제거
+        clean = self.url_pattern.sub(" ", clean)
+
+        # 4. 줄바꿈 통일
+        clean = clean.replace("\r\n", "\n").replace("\r", "\n")
+
+        # 5. 연속된 줄바꿈을 하나의 공백으로
+        clean = re.sub(r"\n+", " ", clean)
+
+        # 6. 탭을 공백으로
+        clean = clean.replace("\t", " ")
+
+        # 7. 특수문자 정리
+        clean = re.sub(r"[^\w\s가-힣.,!?():;-]", " ", clean)
+
+        # 8. 구분선 제거
+        clean = re.sub(r"[-=]{5,}", " ", clean)
+
+        # 9. 과도한 공백 정리
+        clean = re.sub(r"\s+", " ", clean)
+
+        return clean.strip()
+
+    def extract_clean_content(self, mail: Dict) -> str:
+        """메일에서 정제된 내용 추출"""
+        # 제목 추출
+        subject = mail.get("subject", mail.get("Subject", ""))
+
+        # 본문 추출
+        body_content = ""
+        body = mail.get("body", mail.get("Body", {}))
+        if isinstance(body, dict):
+            body_content = body.get("content", body.get("Content", ""))
+        elif isinstance(body, str):
+            body_content = body
+
+        # 본문이 없으면 미리보기 사용
+        if not body_content:
+            body_content = mail.get("bodyPreview", mail.get("body_preview", ""))
+
+        # 제목과 본문 결합 후 정제
+        full_content = f"{subject} {body_content}"
+        return self.clean_content(full_content)
 
     def _parse_basic_patterns(
         self, line: str, case_sensitive: bool = True
@@ -560,8 +747,10 @@ class IACSCodeParser:
 
         return "NORMAL"
 
-    def extract_all_patterns(self, subject: str, body: str) -> Dict[str, Any]:
-        """제목과 본문에서 모든 패턴 추출"""
+    def extract_all_patterns(
+        self, subject: str, body: str, mail: Dict = None
+    ) -> Dict[str, Any]:
+        """제목과 본문에서 모든 패턴 추출 (메일 정보 포함)"""
         result = {}
 
         # 1. 제목에서 IACS 코드 파싱
@@ -587,6 +776,26 @@ class IACSCodeParser:
         additional_refs = self.extract_agenda_patterns(body)
         if additional_refs:
             result["additional_agenda_references"] = additional_refs
+
+        # 5. 메일 정보가 제공된 경우 추가 정보 추출
+        if mail:
+            # 발신자 정보 추출
+            sender_address, sender_name, sender_type = self.extract_sender_info(mail)
+            if sender_address:
+                result["sender_address"] = sender_address
+                result["sender_name"] = sender_name
+                if sender_type:
+                    result["sender_type"] = sender_type
+
+            # 발송 시간 추출
+            sent_time = self.extract_sent_time(mail)
+            if sent_time:
+                result["sent_time"] = sent_time
+
+            # 정제된 내용 추출
+            clean_content = self.extract_clean_content(mail)
+            if clean_content:
+                result["clean_content"] = clean_content
 
         return result
 
