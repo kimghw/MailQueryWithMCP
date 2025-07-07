@@ -933,6 +933,22 @@ class IACSCodeParser:
         if parsed_code:
             result["iacs_code"] = parsed_code
             result["extracted_info"] = self._convert_parsed_code_to_dict(parsed_code)
+
+            # IACS 코드에서 추출한 조직 정보 분리
+            if parsed_code.organization:
+                result["agenda_organization"] = parsed_code.organization
+                # response_version만 추출하여 agenda_organization_round로 저장
+                if parsed_code.response_version:
+                    result["agenda_organization_round"] = parsed_code.response_version
+                else:
+                    result["agenda_organization_round"] = None
+
+                self.logger.debug(
+                    f"IACS 코드에서 조직 정보 추출: "
+                    f"organization={parsed_code.organization}, "
+                    f"round={parsed_code.response_version}"
+                )
+
             self.logger.debug(
                 f"파싱 성공: {parsed_code.full_code} "
                 f"(방법: {parsed_code.parsing_method})"
@@ -949,6 +965,18 @@ class IACSCodeParser:
                         result["extracted_info"] = self._convert_parsed_code_to_dict(
                             parsed_code
                         )
+
+                        # IACS 코드에서 추출한 조직 정보 분리
+                        if parsed_code.organization:
+                            result["agenda_organization"] = parsed_code.organization
+                            # response_version만 추출하여 agenda_organization_round로 저장
+                            if parsed_code.response_version:
+                                result["agenda_organization_round"] = (
+                                    parsed_code.response_version
+                                )
+                            else:
+                                result["agenda_organization_round"] = None
+
                         self.logger.debug(
                             f"본문에서 파싱 성공: {parsed_code.full_code}"
                         )
@@ -979,15 +1007,11 @@ class IACSCodeParser:
                 if sender_type:
                     result["sender_type"] = sender_type
 
-                # sender_organization 설정 (우선순위 적용)
-                # 1. IACS 코드에서 추출된 organization이 있으면 사용
-                if parsed_code and parsed_code.organization:
-                    result["sender_organization"] = parsed_code.organization
-                # 2. 이메일 도메인에서 추출된 organization 사용
-                elif sender_organization:
+                # 발신자 조직은 항상 이메일에서 추출
+                if sender_organization:
                     result["sender_organization"] = sender_organization
                     self.logger.debug(
-                        f"이메일 도메인에서 sender_organization 추출: {sender_organization} "
+                        f"이메일에서 발신자 조직 추출: {sender_organization} "
                         f"(from: {sender_address})"
                     )
 

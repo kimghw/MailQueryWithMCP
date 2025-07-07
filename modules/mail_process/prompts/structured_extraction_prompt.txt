@@ -22,11 +22,6 @@ Content:
   "decision_status": "created" or "comment" or "consolidated" or "review" or "decision",
   "keywords": ["keyword1", "keyword2", "keyword3", "keyword4", "keyword5"],
   "sender_type": "CHAIR" or "MEMBER",
-  "sender_organization": "ABS" or "BV" or "CCS" or "CRS" or "DNV" or "IRS" or "KR" or "LR" or "NK" or "PRS" or "RINA" or "IL" or "TL" or null,
-  "send_time": "YYYY-MM-DD HH:MM:SS format (when email was sent)",
-  "agenda_Reference": "Complete pattern like PL25003_ILa",
-  "agenda_number": "PL25003_, PL24004a, PL25006a"
-  "agenda_reponseid" : "KRa, KRb, KRc, NKa, NKb"
 }
 
 # Rules
