@@ -8,12 +8,10 @@ from .filtering_service import FilteringService
 from .persistence_service import PersistenceService
 from .processing_service import ProcessingService
 from .statistics_service import StatisticsService
-from .regex_parser_service import RegexParserService
 
 __all__ = [
     "FilteringService",
     "PersistenceService",
     "ProcessingService",
     "StatisticsService",
-    "RegexParserService",
 ]
