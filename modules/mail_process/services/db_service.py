@@ -1,9 +1,4 @@
-"""
-메일 데이터베이스 서비스
-중복 확인 및 메일 히스토리 저장
-modules/mail_process/services/db_service.py
-"""
-
+# modules/mail_process/services/db_service.py
 import json
 from datetime import datetime
 from typing import Dict, List, Optional, Any, Tuple
@@ -144,6 +139,18 @@ class MailDatabaseService:
                 )
             return False
 
+    async def save_processed_mail(self, processed_mail: ProcessedMailData) -> bool:
+        """
+        처리된 메일을 DB에 저장 (비동기 래퍼)
+
+        Args:
+            processed_mail: 처리된 메일 데이터
+
+        Returns:
+            저장 성공 여부
+        """
+        return self.save_mail_history(processed_mail)
+
     def get_active_accounts(self) -> List[dict]:
         """
         활성 계정 목록 조회
@@ -268,6 +275,71 @@ class MailDatabaseService:
             "unique_contents": 0,
             "days_analyzed": days,
         }
+
+    async def get_statistics(self) -> Dict[str, Any]:
+        """
+        데이터베이스 통계 조회
+
+        Returns:
+            통계 정보
+        """
+        try:
+            # 전체 메일 수
+            total_result = self.db_manager.fetch_one(
+                "SELECT COUNT(*) as count FROM mail_history"
+            )
+
+            # 오늘 처리된 메일 수
+            today_result = self.db_manager.fetch_one(
+                """
+                SELECT COUNT(*) as count 
+                FROM mail_history 
+                WHERE processed_at >= date('now', 'start of day')
+                """
+            )
+
+            # 최근 7일간 처리된 메일 수
+            week_result = self.db_manager.fetch_one(
+                """
+                SELECT COUNT(*) as count 
+                FROM mail_history 
+                WHERE processed_at >= datetime('now', '-7 days')
+                """
+            )
+
+            # 계정별 통계
+            account_stats = self.db_manager.fetch_all(
+                """
+                SELECT 
+                    a.user_id,
+                    COUNT(mh.id) as mail_count,
+                    MAX(mh.processed_at) as last_processed
+                FROM accounts a
+                LEFT JOIN mail_history mh ON a.id = mh.account_id
+                WHERE a.is_active = 1
+                GROUP BY a.user_id
+                ORDER BY mail_count DESC
+                LIMIT 10
+                """
+            )
+
+            return {
+                "total_mails": total_result["count"] if total_result else 0,
+                "today_mails": today_result["count"] if today_result else 0,
+                "week_mails": week_result["count"] if week_result else 0,
+                "top_accounts": (
+                    [dict(row) for row in account_stats] if account_stats else []
+                ),
+            }
+
+        except Exception as e:
+            self.logger.error(f"통계 조회 실패: {str(e)}")
+            return {
+                "total_mails": 0,
+                "today_mails": 0,
+                "week_mails": 0,
+                "top_accounts": [],
+            }
 
     def _generate_content_hash(self, content: str) -> str:
         """내용 해시 생성"""

@@ -140,21 +140,33 @@ class MailReceivedEvent(BaseModel):
 class MailProcessingResult(BaseModel):
     """메일 처리 결과"""
 
+    # 필수 필드들
+    success: bool
+    mail_id: str
     account_id: str
-    total_fetched: int
-    filtered_count: int
-    new_count: int
-    duplicate_count: int
-    processed_count: int
-    saved_count: int
-    failed_count: int
-    skipped_count: int
-    events_published: int
-    last_sync_time: datetime
-    execution_time_ms: int
-    success_rate: float
-    duplication_rate: float
-    processing_efficiency: float
+
+    # 선택적 필드들
+    filtered: bool = False
+    filter_reason: Optional[str] = None
+    error: Optional[str] = None
+    processed_data: Optional[ProcessedMailData] = None
+    keywords: List[str] = Field(default_factory=list)
+
+    # 배치 처리 통계 (선택적)
+    total_fetched: Optional[int] = None
+    filtered_count: Optional[int] = None
+    new_count: Optional[int] = None
+    duplicate_count: Optional[int] = None
+    processed_count: Optional[int] = None
+    saved_count: Optional[int] = None
+    failed_count: Optional[int] = None
+    skipped_count: Optional[int] = None
+    events_published: Optional[int] = None
+    last_sync_time: Optional[datetime] = None
+    execution_time_ms: Optional[int] = None
+    success_rate: Optional[float] = None
+    duplication_rate: Optional[float] = None
+    processing_efficiency: Optional[float] = None
     errors: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
 

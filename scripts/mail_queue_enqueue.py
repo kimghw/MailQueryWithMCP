@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 메일 조회 후 큐에 저장하는 테스트 스크립트
-scripts/test_mail_queue_enqueue.py
+scripts/mail_queue_enqueue.py
 """
 
 import asyncio
@@ -15,8 +15,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
-
-# 직접 import 경로 수정
 from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
 from modules.mail_query import (
     MailQueryFilters,
@@ -37,13 +35,14 @@ class MailQueueEnqueueTester:
     async def setup(self):
         """오케스트레이터 초기화"""
         self.orchestrator = MailProcessorOrchestrator()
-        await self.orchestrator.__aenter__()
+        # 백그라운드 프로세서 시작 (필요한 경우)
+        await self.orchestrator.start_background_processor()
         logger.info("오케스트레이터 초기화 완료")
 
     async def cleanup(self):
         """리소스 정리"""
         if self.orchestrator:
-            await self.orchestrator.__aexit__(None, None, None)
+            await self.orchestrator.cleanup()
         logger.info("리소스 정리 완료")
 
     async def get_active_accounts(
@@ -85,14 +84,31 @@ class MailQueueEnqueueTester:
             )
 
             # 페이지네이션 설정
-            pagination = PaginationOptions(top=mails_per_page, max_pages=max_pages)
+            pagination = PaginationOptions(
+                page_size=mails_per_page, max_pages=max_pages
+            )
 
-            # 큐에 메일 저장
-            result = await self.orchestrator.enqueue_user_mails(
+            # save_to_queue 메서드 사용
+            result = await self.orchestrator.save_to_queue(
                 user_id=user_id, filters=filters, pagination=pagination
             )
 
-            return {"success": True, "user_id": user_id, **result}
+            # 실행 시간 계산
+            execution_time_ms = int(
+                (datetime.now() - self.start_time).total_seconds() * 1000
+            )
+
+            return {
+                "success": True,
+                "user_id": user_id,
+                "enqueued": result.get("enqueued", 0),
+                "duplicates": result.get("duplicates", 0),
+                "queue_size": result.get("queue_size", 0),
+                "total_fetched": result.get("enqueued", 0)
+                + result.get("duplicates", 0),
+                "filtered_count": 0,  # save_to_queue에서는 필터링 정보가 없음
+                "execution_time_ms": execution_time_ms,
+            }
 
         except Exception as e:
             logger.error(f"계정 {user_id} 메일 큐 저장 실패: {str(e)}")
@@ -117,7 +133,6 @@ class MailQueueEnqueueTester:
         if result["success"]:
             print(f"✅ 성공!")
             print(f"  - 조회된 메일: {result['total_fetched']}개")
-            print(f"  - 필터링 후: {result['filtered_count']}개")
             print(f"  - 큐에 저장: {result['enqueued']}개")
             print(f"  - 중복 건너뜀: {result['duplicates']}개")
             print(f"  - 큐 크기: {result['queue_size']}개")
@@ -251,33 +266,32 @@ class MailQueueEnqueueTester:
         print("-" * 50)
 
         # 프로세서 상태 확인
-        initial_stats = await self.orchestrator.get_processing_status()
+        initial_stats = await self.orchestrator.get_processing_stats()
         print(f"초기 상태:")
         print(f"  - 큐 크기: {initial_stats['queue']['queue_size']}개")
-        print(f"  - 처리됨: {initial_stats['processor']['stats']['total_processed']}개")
+        print(
+            f"  - 백그라운드 프로세서 실행 중: {initial_stats['background_processor']['running']}"
+        )
 
         # 대기하면서 주기적으로 상태 확인
         for i in range(wait_seconds):
             await asyncio.sleep(1)
 
             if (i + 1) % 5 == 0:  # 5초마다 상태 출력
-                current_stats = await self.orchestrator.get_processing_status()
+                current_stats = await self.orchestrator.get_processing_stats()
                 print(f"\n[{i+1}초] 현재 상태:")
                 print(f"  - 큐 크기: {current_stats['queue']['queue_size']}개")
                 print(
-                    f"  - 처리됨: {current_stats['processor']['stats']['total_processed']}개"
-                )
-                print(
-                    f"  - 저장됨: {current_stats['processor']['stats']['total_saved']}개"
+                    f"  - 백그라운드 프로세서 실행 중: {current_stats['background_processor']['running']}"
                 )
 
         # 최종 상태
-        final_stats = await self.orchestrator.get_processing_status()
+        final_stats = await self.orchestrator.get_processing_stats()
         print(f"\n최종 상태:")
         print(f"  - 큐 크기: {final_stats['queue']['queue_size']}개")
-        print(f"  - 총 처리: {final_stats['processor']['stats']['total_processed']}개")
-        print(f"  - 총 저장: {final_stats['processor']['stats']['total_saved']}개")
-        print(f"  - 총 실패: {final_stats['processor']['stats']['total_failed']}개")
+        print(
+            f"  - 백그라운드 프로세서 실행 중: {final_stats['background_processor']['running']}"
+        )
 
     async def clear_queue(self):
         """큐 초기화 (테스트용)"""
@@ -323,10 +337,12 @@ async def main():
 
         elif choice == "4":
             # 큐 상태 확인 및 모니터링
-            status = await tester.orchestrator.get_processing_status()
+            status = await tester.orchestrator.get_processing_stats()
             print(f"\n📊 현재 큐 상태:")
             print(f"  - 큐 크기: {status['queue']['queue_size']}개")
-            print(f"  - 처리 중: {status['processor']['is_running']}")
+            print(
+                f"  - 백그라운드 프로세서 실행 중: {status['background_processor']['running']}"
+            )
 
             if status["queue"]["queue_size"] > 0:
                 monitor = input("\n처리 과정을 모니터링하시겠습니까? (y/N): ")

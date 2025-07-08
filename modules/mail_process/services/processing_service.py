@@ -15,6 +15,7 @@ from modules.mail_process.mail_processor_schema import (
     SenderType,
     MailType,
     DecisionStatus,
+    MailProcessingResult,
 )
 from ..utilities.mail_parser import MailParser
 from ..utilities.text_cleaner import TextCleaner
@@ -33,10 +34,65 @@ class ProcessingService:
         self.iacs_parser = IACSCodeParser()
 
     async def process_mail(
+        self,
+        account_id: str,
+        mail_data: Dict[str, Any],
+        cleaned_content: Optional[str] = None,
+    ) -> MailProcessingResult:
+        """
+        개별 메일 처리
+
+        Args:
+            account_id: 계정 ID
+            mail_data: 메일 데이터 (딕셔너리)
+            cleaned_content: 정제된 내용 (옵션)
+
+        Returns:
+            MailProcessingResult: 처리 결과
+        """
+        try:
+            # GraphMailItem으로 변환
+            if isinstance(mail_data, dict):
+                mail = GraphMailItem(**mail_data)
+            else:
+                mail = mail_data
+
+            # 처리된 메일 데이터 생성
+            processed_mail = await self._process_mail_internal(account_id, mail)
+
+            # cleaned_content가 제공된 경우 적용
+            if cleaned_content:
+                processed_mail.clean_content = cleaned_content
+
+            # 결과 반환
+            return MailProcessingResult(
+                success=True,
+                mail_id=mail.id,
+                account_id=account_id,
+                processed_data=processed_mail,
+                keywords=processed_mail.keywords,
+            )
+
+        except Exception as e:
+            self.logger.error(
+                f"메일 처리 실패 - account_id: {account_id}, error: {str(e)}"
+            )
+
+            mail_id = (
+                mail_data.get("id", "unknown")
+                if isinstance(mail_data, dict)
+                else getattr(mail_data, "id", "unknown")
+            )
+
+            return MailProcessingResult(
+                success=False, mail_id=mail_id, account_id=account_id, error=str(e)
+            )
+
+    async def _process_mail_internal(
         self, account_id: str, mail: GraphMailItem
     ) -> ProcessedMailData:
         """
-        개별 메일 처리
+        내부 메일 처리 로직
 
         Args:
             account_id: 계정 ID

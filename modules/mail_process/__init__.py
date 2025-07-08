@@ -1,17 +1,33 @@
-from .mail_query_orchestrator import MailQueryOrchestrator
-from .mail_query_schema import (
-    MailQueryRequest,
-    MailQueryResponse,
-    MailQueryFilters,
-    PaginationOptions,
+#  modules/mail_process/services/processing_service.py
+
+from .mail_processor_orchestrator import MailProcessorOrchestrator
+from .mail_processor_schema import (
+    MailProcessingResult,
+    ProcessedMailData,
+    ProcessingStatus,
+    SenderType,
+    MailType,
+    DecisionStatus,
     GraphMailItem,
+    ProcessedMailEvent,
+    KeywordExtractionRequest,
+    KeywordExtractionResponse,
+    BatchExtractionRequest,
+    BatchExtractionResponse,
 )
 
 __all__ = [
-    "MailQueryOrchestrator",
-    "MailQueryRequest",
-    "MailQueryResponse",
-    "MailQueryFilters",
-    "PaginationOptions",
+    "MailProcessorOrchestrator",
+    "MailProcessingResult",
+    "ProcessedMailData",
+    "ProcessingStatus",
+    "SenderType",
+    "MailType",
+    "DecisionStatus",
     "GraphMailItem",
+    "ProcessedMailEvent",
+    "KeywordExtractionRequest",
+    "KeywordExtractionResponse",
+    "BatchExtractionRequest",
+    "BatchExtractionResponse",
 ]

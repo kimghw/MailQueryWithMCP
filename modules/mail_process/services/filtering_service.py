@@ -73,6 +73,23 @@ class FilteringService:
             f"차단 패턴: {len(self.blocked_sender_patterns)}개"
         )
 
+    def is_enabled(self) -> bool:
+        """필터링 활성화 여부 반환"""
+        return self.filtering_enabled
+
+    async def filter_mail(self, mail_data: Dict) -> Dict[str, any]:
+        """
+        단일 메일 필터링
+
+        Args:
+            mail_data: {"mail": 메일 딕셔너리, "cleaned_content": 정제된 내용}
+
+        Returns:
+            {"filtered": bool, "reason": str or None}
+        """
+        if not self.filtering_enabled:
+            return {"filtered": False, "reason": None}
+
     async def filter_mails(self, mails: List[Dict]) -> List[Dict]:
         """
         메일 리스트 필터링
@@ -196,3 +213,24 @@ class FilteringService:
         for key in self._stats:
             self._stats[key] = 0
         self.logger.debug("필터링 통계 초기화됨")
+
+        mail = mail_data.get("mail", {})
+
+        # 발신자 주소 추출
+        sender_address = self.parser.extract_sender_address(mail)
+        subject = self.parser.extract_subject(mail)
+
+        # 필터링 체크
+        should_process, reason = self._should_process_mail(sender_address, subject)
+
+        if not should_process:
+            self._stats["total_checked"] += 1
+            self._stats["filtered_out"] += 1
+            self._update_filter_stats(reason)
+
+            return {"filtered": True, "reason": reason}
+
+        self._stats["total_checked"] += 1
+        self._stats["passed"] += 1
+
+        return {"filtered": False, "reason": None}

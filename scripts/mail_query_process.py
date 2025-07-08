@@ -17,9 +17,7 @@ from typing import Any, Dict, List
 from infra.core.config import get_config
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger, update_all_loggers_level
-from modules.mail_process.mail_processor_orchestrator import MailProcessingOrchestrator
-
-# 직접 import
+from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
 from modules.mail_query.mail_query_orchestrator import MailQueryOrchestrator
 from modules.mail_query.mail_query_schema import (
     MailQueryFilters,
@@ -37,7 +35,7 @@ class AllAccountsFullProcessTester:
 
     def __init__(self):
         self.mail_query = MailQueryOrchestrator()
-        self.mail_processor = MailProcessingOrchestrator()
+        self.mail_processor = MailProcessorOrchestrator()
         self.db = get_database_manager()
         self.config = get_config()
 
@@ -61,9 +59,9 @@ class AllAccountsFullProcessTester:
                 last_sync_time
             FROM accounts 
             WHERE is_active = 1
-            AND user_id NOT IN ('test_user', 'test', 'nonexistent', 'temp_user', 'demo_user', 'kimghw')  -- 테스트 계정 및 kimghw 제외
-            AND user_id NOT LIKE 'test_%'  -- test_로 시작하는 계정 제외
-            AND user_id NOT LIKE 'temp_%'  -- temp_로 시작하는 계정 제외
+            AND user_id NOT IN ('test_user', 'test', 'nonexistent', 'temp_user', 'demo_user', 'kimghw')
+            AND user_id NOT LIKE 'test_%'
+            AND user_id NOT LIKE 'temp_%'
             ORDER BY user_id
         """
 
@@ -190,39 +188,42 @@ class AllAccountsFullProcessTester:
             )
             process_start = datetime.now()
 
-            # 메일 처리
-            process_stats = await self.mail_processor.process_mails(
-                account_id=user_id,
-                mails=[mail.model_dump() for mail in query_response.messages],
-                publish_batch_event=False,  # 테스트에서는 배치 이벤트 발행 안함
+            # 먼저 큐에 저장
+            queue_result = await self.mail_processor.save_to_queue(
+                user_id=user_id,
+                filters=MailQueryFilters(
+                    date_from=datetime.now() - timedelta(days=days_back)
+                ),
+                pagination=PaginationOptions(page_size=max_mails),
             )
 
+            # 배치 처리
+            batch_results = await self.mail_processor.process_batch()
+
             result["process_success"] = True
+            result["mails_processed"] = len(batch_results)
 
             # 통계 매핑
-            result["mails_processed"] = process_stats.total_fetched
             result["processing_stats"] = {
-                "success": process_stats.saved_count,  # 실제 저장된 메일
-                "skipped": process_stats.skipped_count,  # 필터링된 메일
-                "failed": process_stats.failed_count,  # DB 오류
-                "filtered": process_stats.filtered_count,  # 필터링된 메일
-                "duplicate": process_stats.duplicate_count,  # 중복 메일
-                "processed": process_stats.processed_count,  # 처리된 메일
-                "events_published": process_stats.get(
-                    "events_published", 0
-                ),  # 발행된 이벤트
+                "success": sum(
+                    1 for r in batch_results if r.success and not r.filtered
+                ),
+                "duplicate": queue_result.get("duplicates", 0),
+                "filtered": sum(1 for r in batch_results if r.filtered),
+                "failed": sum(1 for r in batch_results if not r.success),
+                "processed": len(batch_results),
+                "skipped": 0,
+                "events_published": sum(1 for r in batch_results if r.success),
             }
 
-            # 필터 이유 상세
-            if "filter_reasons" in process_stats:
-                result["filter_details"] = {
-                    "total": process_stats.skipped_count,
-                    "reasons": process_stats["filter_reasons"],
-                }
-
-            # 키워드 수집
-            if "keywords" in process_stats:
-                result["keywords_extracted"] = process_stats["keywords"]
+            # 키워드 수집 (샘플)
+            keywords = []
+            for batch_result in batch_results[:5]:  # 처음 5개만 샘플로
+                if hasattr(batch_result, "keywords") and batch_result.keywords:
+                    keywords.extend(batch_result.keywords)
+            result["keywords_extracted"] = list(set(keywords))[
+                :10
+            ]  # 중복 제거, 최대 10개
 
             result["execution_time"]["process_ms"] = int(
                 (datetime.now() - process_start).total_seconds() * 1000
@@ -232,16 +233,15 @@ class AllAccountsFullProcessTester:
             if self.duplicate_check_enabled:
                 logger.info(
                     f"✅ [{user_id}] 메일 처리 완료 (중복 체크 ON): "
-                    f"저장={process_stats.get('saved_mails', 0)}, "
-                    f"중복={process_stats.get('duplicate_mails', 0)}, "
-                    f"필터링={process_stats.get('skipped_mails', 0)}, "
-                    f"이벤트={process_stats.get('events_published', 0)}"
+                    f"저장={result['processing_stats']['success']}, "
+                    f"중복={result['processing_stats']['duplicate']}, "
+                    f"필터링={result['processing_stats']['filtered']}, "
+                    f"이벤트={result['processing_stats']['events_published']}"
                 )
             else:
                 logger.info(
                     f"✅ [{user_id}] 메일 처리 완료 (중복 체크 OFF): "
-                    f"이벤트 발행={process_stats.get('events_published', 0)}개 "
-                    f"(DB 저장 없이 모든 메일에 대해 이벤트 발행)"
+                    f"이벤트 발행={result['processing_stats']['events_published']}개"
                 )
 
         except Exception as e:
@@ -328,7 +328,7 @@ class AllAccountsFullProcessTester:
             total_stats["total_mails_processed"] += result["mails_processed"]
             total_stats["total_saved"] += result["processing_stats"]["success"]
             total_stats["total_duplicate"] += result["processing_stats"]["duplicate"]
-            total_stats["total_filtered"] += result["processing_stats"]["skipped"]
+            total_stats["total_filtered"] += result["processing_stats"]["filtered"]
             total_stats["total_events"] += result["processing_stats"][
                 "events_published"
             ]
@@ -346,22 +346,16 @@ class AllAccountsFullProcessTester:
                 print(
                     f"     - 처리 결과: 저장={result['processing_stats']['success']}, "
                     f"중복={result['processing_stats']['duplicate']}, "
-                    f"필터링={result['processing_stats']['skipped']}"
+                    f"필터링={result['processing_stats']['filtered']}"
                 )
             else:
                 print(
-                    f"     - 처리 결과: 필터링={result['processing_stats']['skipped']}"
+                    f"     - 처리 결과: 필터링={result['processing_stats']['filtered']}"
                 )
 
             print(
                 f"     - 이벤트 발행: {result['processing_stats']['events_published']}개"
             )
-
-            # 필터링 상세
-            if result.get("filter_details") and result["filter_details"].get("reasons"):
-                print(f"     - 필터링 상세:")
-                for reason, count in result["filter_details"]["reasons"].items():
-                    print(f"       • {reason}: {count}개")
 
             print(
                 f"     - 실행 시간: 조회={result['execution_time']['query_ms']}ms, "
@@ -438,7 +432,7 @@ class AllAccountsFullProcessTester:
                     f"{result['total_mails_found']:<8} "
                     f"{result['processing_stats']['success']:<8} "
                     f"{result['processing_stats']['duplicate']:<8} "
-                    f"{result['processing_stats']['skipped']:<8} "
+                    f"{result['processing_stats']['filtered']:<8} "
                     f"{result['processing_stats']['events_published']:<8} "
                     f"{result['execution_time']['total_ms']/1000:<10.1f}"
                 )
@@ -452,7 +446,7 @@ class AllAccountsFullProcessTester:
                 print(
                     f"{result['user_id']:<15} "
                     f"{result['total_mails_found']:<8} "
-                    f"{result['processing_stats']['skipped']:<8} "
+                    f"{result['processing_stats']['filtered']:<8} "
                     f"{result['processing_stats']['events_published']:<8} "
                     f"{result['execution_time']['total_ms']/1000:<10.1f}"
                 )
@@ -537,7 +531,7 @@ class AllAccountsFullProcessTester:
                 print("\n❌ 중복 체크 오류: 일부 메일이 중복으로 처리되지 않음")
         else:
             print(
-                f"  - 이벤트: {result2['processing_stats']['events_published']}개 (예상: {result2['total_mails_found'] - result2['processing_stats']['skipped']})"
+                f"  - 이벤트: {result2['processing_stats']['events_published']}개 (예상: {result2['total_mails_found'] - result2['processing_stats']['filtered']})"
             )
             print("\n✅ 중복 체크 OFF: DB 확인 없이 모든 메일에 대해 이벤트 발행")
 
@@ -560,7 +554,7 @@ class AllAccountsFullProcessTester:
             logger.debug(f"mail_query 정리 중 오류 (무시): {e}")
 
         try:
-            await self.mail_processor.close()
+            await self.mail_processor.cleanup()
         except Exception as e:
             logger.debug(f"mail_processor 정리 중 오류 (무시): {e}")
 

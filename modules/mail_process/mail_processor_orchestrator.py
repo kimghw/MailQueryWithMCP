@@ -269,3 +269,11 @@ class MailProcessorOrchestrator:
         """리소스 정리"""
         await self.stop_background_processor()
         self.logger.info("리소스 정리 완료")
+
+    async def __aenter__(self):
+        """컨텍스트 매니저 진입"""
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        """컨텍스트 매니저 종료"""
+        await self.cleanup()
