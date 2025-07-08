@@ -6,7 +6,7 @@ modules/mail_process/mail_processor_orchestrator_v2.py
 
 import time
 from datetime import datetime
-from typing import Dict, Optional, List
+from typing import Dict, Optional, List, Any
 import asyncio
 
 from infra.core.logger import get_logger
@@ -26,7 +26,7 @@ from .services.queue_processor import get_queue_processor
 logger = get_logger(__name__)
 
 
-class MailProcessorOrchestratorV2:
+class MailProcessorOrchestrator:
     """메일 처리 오케스트레이터 V2 - 큐 기반 배치 처리"""
 
     def __init__(self):

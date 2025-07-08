@@ -3,6 +3,7 @@
 modules/mail_process/services/queue_processor.py
 """
 
+import os  # 이 줄이 누락되어 있음
 import asyncio
 from typing import Dict, List, Any, Optional
 from datetime import datetime
