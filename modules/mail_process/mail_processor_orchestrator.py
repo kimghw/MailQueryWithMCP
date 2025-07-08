@@ -9,21 +9,19 @@ from typing import List, Dict, Any, Optional
 
 from infra.core.logger import get_logger
 from infra.core.database import get_database_manager
-from modules.mail_query import (
-    MailQueryOrchestrator,
-    MailQueryRequest,
-    MailQueryFilters,
-    PaginationOptions,
-)
 from .services.filtering_service import FilteringService
 from .services.queue_service import MailQueueService
 from .services.processing_service import ProcessingService
 from .services.db_service import MailDatabaseService
-from .mail_processor_schema import MailProcessingResult, ProcessedMailData
+from .mail_processor_schema import (
+    MailProcessingResult,
+    ProcessedMailData,
+    GraphMailItem,
+)
 
 
 class MailProcessorOrchestrator:
-    """메일 처리 오케스트레이터"""
+    """메일 처리 오케스트레이터 - 순수 비즈니스 로직만 포함"""
 
     def __init__(self):
         self.logger = get_logger(__name__)
@@ -35,67 +33,107 @@ class MailProcessorOrchestrator:
         self.processing_service = ProcessingService()
         self.db_service = MailDatabaseService()
 
-        # 메일 조회 오케스트레이터
-        self.mail_query = MailQueryOrchestrator()
-
         # 백그라운드 태스크
         self._background_task: Optional[asyncio.Task] = None
         self._should_stop = False
 
         self.logger.info("오케스트레이터 초기화 완료")
 
-    async def save_to_queue(
-        self,
-        user_id: str,
-        filters: Optional[MailQueryFilters] = None,
-        pagination: Optional[PaginationOptions] = None,
+    async def enqueue_mail_batch(
+        self, account_id: str, mails: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
         """
-        특정 계정의 메일을 조회하여 큐에 저장
+        외부에서 전달받은 메일 배치를 전처리하고 큐에 저장
 
         Args:
-            user_id: 사용자 ID
-            filters: 메일 필터
-            pagination: 페이지네이션 옵션
+            account_id: 사용자 ID
+            mails: 메일 리스트 (딕셔너리 형태)
 
         Returns:
             큐 저장 결과
         """
         try:
-            self.logger.info(f"메일 조회 시작 - user_id: {user_id}")
-
-            # 1. 메일 조회
-            query_request = MailQueryRequest(
-                user_id=user_id,
-                filters=filters or MailQueryFilters(),
-                pagination=pagination or PaginationOptions(top=50),
+            self.logger.info(
+                f"메일 배치 처리 시작 - account_id: {account_id}, 메일 수: {len(mails)}개"
             )
 
-            # mail_query_user_emails 메서드 사용 (올바른 메서드명)
-            async with self.mail_query as mail_query:
-                query_response = await mail_query.mail_query_user_emails(query_request)
+            enqueued = 0
+            filtered = 0
+            duplicates = 0
+            errors = []
 
-            # MailQueryResponse 객체에서 messages 추출
-            mails = query_response.messages
-            self.logger.info(f"조회된 메일 수: {len(mails)}개")
+            for mail in mails:
+                try:
+                    # GraphMailItem으로 변환 (검증)
+                    mail_item = GraphMailItem(**mail)
 
-            if not mails:
-                return {
-                    "account_id": user_id,
-                    "enqueued": 0,
-                    "duplicates": 0,
-                    "queue_size": 0,
-                }
+                    # 1. 필터링 체크
+                    if self.filtering_service.is_enabled():
+                        filter_result = await self.filtering_service.filter_mail(
+                            {
+                                "mail": mail,
+                                "cleaned_content": "",  # 필터링 시점에는 아직 정제 전
+                            }
+                        )
 
-            # 2. 큐에 저장 - GraphMailItem 객체 리스트를 전달
-            queue_result = await self.queue_service.enqueue_mails(user_id, mails)
+                        if filter_result["filtered"]:
+                            filtered += 1
+                            self.logger.debug(
+                                f"메일 필터링됨 - ID: {mail_item.id}, "
+                                f"이유: {filter_result['reason']}"
+                            )
+                            continue
 
-            return queue_result
+                    # 2. DB 중복 확인
+                    if self.db_service.check_duplicate_by_id(mail_item.id):
+                        duplicates += 1
+                        self.logger.debug(f"중복 메일 발견 - ID: {mail_item.id}")
+                        continue
+
+                    # 3. 텍스트 정제
+                    cleaned_content = self.queue_service._clean_mail_content(mail_item)
+
+                    # 4. 큐에 추가
+                    queue_item = {
+                        "account_id": account_id,
+                        "mail": mail,
+                        "cleaned_content": cleaned_content,
+                        "enqueued_at": datetime.now().isoformat(),
+                    }
+
+                    await self.queue_service.add_to_queue(queue_item)
+                    enqueued += 1
+
+                except Exception as e:
+                    error_msg = f"메일 처리 실패 - ID: {mail.get('id', 'unknown')}, error: {str(e)}"
+                    self.logger.error(error_msg)
+                    errors.append(error_msg)
+
+            # 결과 요약
+            result = {
+                "account_id": account_id,
+                "total": len(mails),
+                "enqueued": enqueued,
+                "filtered": filtered,
+                "duplicates": duplicates,
+                "errors": len(errors),
+                "queue_size": await self.queue_service.get_queue_size(),
+                "success": len(errors) == 0,
+            }
+
+            self.logger.info(
+                f"메일 배치 처리 완료 - "
+                f"총: {result['total']}, "
+                f"큐 저장: {result['enqueued']}, "
+                f"필터링: {result['filtered']}, "
+                f"중복: {result['duplicates']}, "
+                f"오류: {result['errors']}"
+            )
+
+            return result
 
         except Exception as e:
-            self.logger.error(
-                f"메일 큐 저장 중 오류 발생 - user_id: {user_id}, error: {str(e)}"
-            )
+            self.logger.error(f"메일 배치 처리 중 오류 발생: {str(e)}")
             raise
 
     async def process_batch(self) -> List[MailProcessingResult]:
@@ -118,8 +156,31 @@ class MailProcessorOrchestrator:
             # 2. 배치 내 각 메일 처리
             results = []
             for item in batch:
-                result = await self._process_single_mail(item)
-                results.append(result)
+                try:
+                    # 메일 처리 (키워드 추출 등)
+                    result = await self.processing_service.process_mail(
+                        account_id=item["account_id"],
+                        mail_data=item["mail"],
+                        cleaned_content=item["cleaned_content"],
+                    )
+
+                    # DB 저장
+                    if result.success and result.processed_data:
+                        await self.db_service.save_processed_mail(result.processed_data)
+
+                    results.append(result)
+
+                except Exception as e:
+                    self.logger.error(f"메일 처리 실패: {str(e)}")
+                    # 실패한 메일도 결과에 포함
+                    results.append(
+                        MailProcessingResult(
+                            success=False,
+                            mail_id=item["mail"].get("id", "unknown"),
+                            account_id=item["account_id"],
+                            error=str(e),
+                        )
+                    )
 
             # 3. 처리 결과 통계
             success_count = sum(1 for r in results if r.success)
@@ -135,69 +196,6 @@ class MailProcessorOrchestrator:
         except Exception as e:
             self.logger.error(f"배치 처리 중 오류 발생: {str(e)}")
             raise
-
-    async def _process_single_mail(
-        self, queue_item: Dict[str, Any]
-    ) -> MailProcessingResult:
-        """
-        단일 메일 처리
-
-        Args:
-            queue_item: 큐 아이템
-
-        Returns:
-            처리 결과
-        """
-        mail_data = queue_item["mail"]
-        account_id = queue_item["account_id"]
-        cleaned_content = queue_item["cleaned_content"]
-
-        try:
-            # 1. 필터링
-            if self.filtering_service.is_enabled():
-                filter_result = await self.filtering_service.filter_mail(
-                    {"mail": mail_data, "cleaned_content": cleaned_content}
-                )
-
-                if filter_result["filtered"]:
-                    self.logger.info(
-                        f"메일 필터링됨 - ID: {mail_data['id']}, "
-                        f"이유: {filter_result['reason']}"
-                    )
-                    return MailProcessingResult(
-                        success=True,
-                        mail_id=mail_data["id"],
-                        account_id=account_id,
-                        filtered=True,
-                        filter_reason=filter_result["reason"],
-                    )
-
-            # 2. 메일 처리
-            processing_result = await self.processing_service.process_mail(
-                account_id=account_id,
-                mail_data=mail_data,
-                cleaned_content=cleaned_content,
-            )
-
-            # 3. DB 저장
-            if processing_result.success:
-                await self.db_service.save_processed_mail(
-                    processing_result.processed_data
-                )
-
-            return processing_result
-
-        except Exception as e:
-            self.logger.error(
-                f"메일 처리 실패 - ID: {mail_data.get('id', 'unknown')}, "
-                f"error: {str(e)}"
-            )
-            return MailProcessingResult(
-                success=False,
-                mail_id=mail_data.get("id", "unknown"),
-                account_id=account_id,
-                error=str(e),
-            )
 
     async def start_background_processor(self):
         """백그라운드 큐 처리 시작"""
@@ -228,6 +226,8 @@ class MailProcessorOrchestrator:
     async def _background_processor(self):
         """백그라운드 큐 처리 루프"""
         self.logger.info("큐 프로세서 시작")
+        consecutive_empty_count = 0
+        max_empty_count = 3  # 3번 연속으로 큐가 비어있으면 종료
 
         while not self._should_stop:
             try:
@@ -235,9 +235,19 @@ class MailProcessorOrchestrator:
                 status = await self.queue_service.get_queue_status()
 
                 if status["is_empty"]:
+                    consecutive_empty_count += 1
+                    if consecutive_empty_count >= max_empty_count:
+                        self.logger.info(
+                            f"큐가 {max_empty_count}번 연속 비어있음. 프로세서 종료"
+                        )
+                        break
+
                     # 큐가 비어있으면 잠시 대기
                     await asyncio.sleep(5)
                     continue
+
+                # 큐에 데이터가 있으면 카운터 리셋
+                consecutive_empty_count = 0
 
                 # 배치 처리
                 await self.process_batch()
@@ -250,6 +260,7 @@ class MailProcessorOrchestrator:
                 await asyncio.sleep(5)
 
         self.logger.info("큐 프로세서 종료")
+        self._background_task = None  # 자동 종료 시 태스크 정리
 
     async def get_processing_stats(self) -> Dict[str, Any]:
         """처리 통계 조회"""

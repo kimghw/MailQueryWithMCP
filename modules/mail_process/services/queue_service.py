@@ -4,17 +4,14 @@ modules/mail_process/services/queue_service.py
 """
 
 import asyncio
-import json
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 from collections import deque
 import os
 
 from infra.core.logger import get_logger
-from infra.core.database import get_database_manager
 from modules.mail_process.mail_processor_schema import GraphMailItem
 from modules.mail_process.utilities.text_cleaner import TextCleaner
-from .db_service import MailDatabaseService
 
 
 class MailQueueService:
@@ -22,128 +19,35 @@ class MailQueueService:
 
     def __init__(self):
         self.logger = get_logger(__name__)
-        self.db_service = MailDatabaseService()
         self.text_cleaner = TextCleaner()
 
         # 큐 저장소 (실제 운영에서는 Redis 등 사용 권장)
-        self.batch_size = int(os.getenv("MAIL_BATCH_SIZE", "50"))
         self._queue: deque = deque()
         self._lock = asyncio.Lock()
 
         # 배치 크기 설정
         self.batch_size = int(os.getenv("MAIL_BATCH_SIZE", "50"))
 
-        # 중복 허용 설정
-        self.allow_duplicates = (
-            os.getenv("MAIL_ALLOW_DUPLICATES", "false").lower() == "true"
-        )
-
-        self.logger.info(
-            f"메일 큐 서비스 초기화 - 배치 크기: {self.batch_size}, "
-            f"중복 허용: {self.allow_duplicates}"
-        )
+        self.logger.info(f"메일 큐 서비스 초기화 - 배치 크기: {self.batch_size}")
 
         # 통계
         self._stats = {
             "total_enqueued": 0,
             "total_dequeued": 0,
-            "total_duplicates": 0,
-            "total_processed": 0,
             "current_queue_size": 0,
         }
 
-    async def enqueue_mails(self, account_id: str, mails: List[Any]) -> Dict[str, Any]:
+    async def add_to_queue(self, queue_item: Dict[str, Any]) -> None:
         """
-        메일을 큐에 저장
+        큐에 아이템 추가 (이미 전처리된 아이템)
 
         Args:
-            account_id: 계정 ID
-            mails: 메일 리스트 (Dict 또는 GraphMailItem)
-
-        Returns:
-            큐 저장 결과
+            queue_item: 큐에 추가할 아이템
         """
         async with self._lock:
-            enqueued_count = 0
-            duplicate_count = 0
-
-            for mail in mails:
-                try:
-                    # GraphMailItem 객체인 경우 딕셔너리로 변환
-                    if hasattr(mail, "model_dump"):
-                        mail_dict = mail.model_dump()
-                    elif isinstance(mail, dict):
-                        mail_dict = mail
-                    else:
-                        self.logger.error(f"알 수 없는 메일 타입: {type(mail)}")
-                        continue
-
-                    # GraphMailItem으로 변환 (검증용)
-                    mail_item = GraphMailItem(**mail_dict)
-
-                    # 1. 중복 검사 (message_id 기반)
-                    is_duplicate = self.db_service.check_duplicate_by_id(mail_item.id)
-
-                    if is_duplicate:
-                        duplicate_count += 1
-                        self.logger.debug(f"중복 메일 발견 - ID: {mail_item.id}")
-
-                        # 중복 허용 설정 확인
-                        if not self.allow_duplicates:
-                            self.logger.debug(f"중복 메일 스킵 - ID: {mail_item.id}")
-                            continue
-                        else:
-                            self.logger.debug(
-                                f"중복 허용 - 큐에 추가 - ID: {mail_item.id}"
-                            )
-
-                    # 2. body content 정제
-                    cleaned_content = self._clean_mail_content(mail_item)
-
-                    # 3. 큐에 저장할 데이터 준비
-                    queue_item = {
-                        "account_id": account_id,
-                        "mail": mail_dict,  # 딕셔너리 형태로 저장
-                        "cleaned_content": cleaned_content,
-                        "enqueued_at": datetime.now().isoformat(),
-                    }
-
-                    # 4. 큐에 추가
-                    self._queue.append(queue_item)
-                    enqueued_count += 1
-
-                except Exception as e:
-                    # 메일 ID 추출 시도
-                    mail_id = "unknown"
-                    if isinstance(mail, dict):
-                        mail_id = mail.get("id", "unknown")
-                    elif hasattr(mail, "id"):
-                        mail_id = getattr(mail, "id", "unknown")
-
-                    self.logger.error(
-                        f"메일 큐 저장 실패 - ID: {mail_id}, " f"error: {str(e)}"
-                    )
-                    continue
-
-            # 통계 업데이트
-            self._stats["total_enqueued"] += enqueued_count
-            self._stats["total_duplicates"] += duplicate_count
+            self._queue.append(queue_item)
+            self._stats["total_enqueued"] += 1
             self._stats["current_queue_size"] = len(self._queue)
-
-            self.logger.info(
-                f"큐 저장 완료 - "
-                f"계정: {account_id}, "
-                f"저장: {enqueued_count}, "
-                f"중복: {duplicate_count}, "
-                f"현재 큐 크기: {len(self._queue)}"
-            )
-
-            return {
-                "account_id": account_id,
-                "enqueued": enqueued_count,
-                "duplicates": duplicate_count,
-                "queue_size": len(self._queue),
-            }
 
     async def dequeue_batch(self) -> List[Dict[str, Any]]:
         """
@@ -185,6 +89,11 @@ class MailQueueService:
                 "statistics": self._stats.copy(),
                 "is_empty": len(self._queue) == 0,
             }
+
+    async def get_queue_size(self) -> int:
+        """현재 큐 크기 반환"""
+        async with self._lock:
+            return len(self._queue)
 
     async def clear_queue(self) -> int:
         """큐 비우기 (테스트/관리용)"""
@@ -250,45 +159,6 @@ class MailQueueService:
                 items.append(summary)
 
             return items
-
-    async def requeue_failed_items(self, failed_items: List[Dict[str, Any]]) -> int:
-        """
-        실패한 아이템 재큐잉
-
-        Args:
-            failed_items: 실패한 아이템 리스트
-
-        Returns:
-            재큐잉된 아이템 수
-        """
-        async with self._lock:
-            requeued_count = 0
-
-            for item in failed_items:
-                # 재시도 횟수 증가
-                if "retry_count" not in item:
-                    item["retry_count"] = 0
-                item["retry_count"] += 1
-
-                # 최대 재시도 횟수 확인
-                max_retries = int(os.getenv("MAIL_MAX_RETRIES", "3"))
-                if item["retry_count"] <= max_retries:
-                    item["requeued_at"] = datetime.now().isoformat()
-                    self._queue.append(item)
-                    requeued_count += 1
-                else:
-                    self.logger.warning(
-                        f"최대 재시도 횟수 초과 - "
-                        f"mail_id: {item['mail']['id']}, "
-                        f"retries: {item['retry_count']}"
-                    )
-
-            self._stats["current_queue_size"] = len(self._queue)
-
-            if requeued_count > 0:
-                self.logger.info(f"실패 아이템 재큐잉 - {requeued_count}개")
-
-            return requeued_count
 
     def get_batch_size(self) -> int:
         """현재 배치 크기 반환"""
