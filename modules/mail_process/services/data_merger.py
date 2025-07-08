@@ -6,46 +6,66 @@ modules/mail_process/services/data_merger.py
 from datetime import datetime
 from typing import Dict, Any, Optional
 
-from ..mail_processor_schema import MailType, DecisionStatus, ProcessingStatus
+from ..mail_processor_schema import (
+    MailType,
+    DecisionStatus,
+    ProcessingStatus,
+    SenderType,
+)
 
 
 class DataMerger:
-    """메일 변환 규칙"""
+    """IACS와 OpenRouter 결과 병합"""
 
     def to_event_format(
-        self, self, merged_data: MergedMailData, raw_mail: Dict
+        self, merged_data: Dict[str, Any], mail: Dict, raw_mail: Dict
     ) -> Dict[str, Any]:
         """이벤트용 포맷으로 변환"""
+        # sender_type 변환
+        sender_type_value = None
+        if merged_data.get("sender_type"):
+            if isinstance(merged_data["sender_type"], str):
+                sender_type_value = merged_data["sender_type"]
+            else:
+                sender_type_value = merged_data["sender_type"].value
+
+        # mail_type 변환
+        mail_type_value = merged_data.get("mail_type", MailType.OTHER.value)
+        if hasattr(mail_type_value, "value"):
+            mail_type_value = mail_type_value.value
+
+        # decision_status 변환
+        decision_status_value = merged_data.get(
+            "decision_status", DecisionStatus.CREATED.value
+        )
+        if hasattr(decision_status_value, "value"):
+            decision_status_value = decision_status_value.value
+
         return {
             # 기본 필드
-            "id": merged_data.mail_id,
-            "subject": merged_data.subject,
+            "id": mail.get("id", ""),
+            "subject": mail.get("subject", ""),
             "from": raw_mail.get("from"),
-            "receivedDateTime": merged_data.sent_time,
-            "bodyPreview": merged_data.body_preview,
+            "receivedDateTime": mail.get("sent_time"),
+            "bodyPreview": mail.get("body_preview", ""),
             "body": raw_mail.get("body", {}),
             # 병합된 필드들
-            "sender_organization": merged_data.sender_organization,
-            "sender_type": (
-                merged_data.sender_type.value if merged_data.sender_type else None
-            ),
-            "agenda_code": merged_data.agenda_code,
-            "agenda_base": merged_data.agenda_base,
-            "agenda_panel": merged_data.agenda_panel,
-            "agenda_year": merged_data.agenda_year,
-            "agenda_number": merged_data.agenda_number,
-            "agenda_version": merged_data.agenda_version,
-            "response_org": merged_data.response_org,
-            "response_version": merged_data.response_version,
-            "mail_type": merged_data.mail_type.value,
-            "decision_status": merged_data.decision_status.value,
-            "has_deadline": merged_data.has_deadline,
-            "deadline": merged_data.deadline,
-            "extracted_keywords": merged_data.keywords,
-            "urgency": merged_data.urgency,
-            "is_reply": merged_data.is_reply,
-            "is_forward": merged_data.is_forward,
-            "summary": merged_data.summary,
+            "sender_organization": merged_data.get("sender_organization"),
+            "sender_type": sender_type_value,
+            "agenda_code": merged_data.get("agenda_code"),
+            "agenda_base": merged_data.get("agenda_base"),
+            "agenda_panel": merged_data.get("agenda_panel"),
+            "response_org": merged_data.get("response_org"),
+            "response_version": merged_data.get("response_version"),
+            "mail_type": mail_type_value,
+            "decision_status": decision_status_value,
+            "has_deadline": merged_data.get("has_deadline", False),
+            "deadline": merged_data.get("deadline"),
+            "extracted_keywords": merged_data.get("keywords", []),
+            "urgency": merged_data.get("urgency", "NORMAL"),
+            "is_reply": merged_data.get("is_reply", False),
+            "is_forward": merged_data.get("is_forward", False),
+            "summary": merged_data.get("summary"),
         }
 
     def merge_extractions(
@@ -79,8 +99,6 @@ class DataMerger:
                         "agenda_panel": info.get("panel"),  # 패널 정보
                         "response_org": info.get("organization"),  # 응답 조직
                         "response_version": info.get("response_version"),
-                        "agenda_version": merged_data.agenda_version,
-                        "agenda_version": version,
                     }
                 )
 
@@ -116,7 +134,7 @@ class DataMerger:
 
             # 나머지는 IACS에 없는 경우만
             for key in ["decision_status", "has_deadline", "deadline"]:
-                if key in openrouter_result:
+                if key in openrouter_result and not merged.get(key):
                     merged[key] = openrouter_result[key]
 
             # 발신자 정보 보충

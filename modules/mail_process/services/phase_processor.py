@@ -119,7 +119,7 @@ class PhaseProcessor:
 
         for mail in mails:
             # 2가지 추출 결과 병합
-            merged_data = self.transformation_rules.merge_extractions(
+            merged_data = self.data_merger.merge_extractions(
                 mail.get("_iacs_parsed"), mail.get("_processed")
             )
 
@@ -131,8 +131,14 @@ class PhaseProcessor:
             if "_processed" in mail:
                 mail["_processed"].update(merged_data)
 
+            # 원본 메일 정보 가져오기
+            raw_mail = {
+                "from": mail.get("from"),
+                "body": mail.get("body", {}),
+            }
+
             # 이벤트용 메일 생성 (필요한 필드만 선택)
-            event_mail = self.data_merger.to_event_format(merged_data, enriched_mail.raw)
+            event_mail = self.data_merger.to_event_format(merged_data, mail, raw_mail)
             mails_for_events.append(event_mail)
 
         # 저장 및 이벤트 발행
