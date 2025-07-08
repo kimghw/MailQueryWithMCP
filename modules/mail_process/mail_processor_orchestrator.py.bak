@@ -17,7 +17,7 @@ from modules.mail_query import (
 )
 from .services.filtering_service import FilteringService
 from .services.queue_service import MailQueueService
-from .services.processing_service import ProcessingService
+from .services.processing_service import MailProcessingService
 from .services.db_service import MailDatabaseService
 from .mail_processor_schema import MailProcessingResult, ProcessedMailData
 
@@ -32,7 +32,7 @@ class MailProcessorOrchestrator:
         # 서비스 초기화
         self.filtering_service = FilteringService()
         self.queue_service = MailQueueService()
-        self.processing_service = ProcessingService()
+        self.processing_service = MailProcessingService()
         self.db_service = MailDatabaseService()
 
         # 메일 조회 오케스트레이터

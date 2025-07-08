@@ -15,7 +15,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
-from modules.mail_process import MailProcessorOrchestrator
+
+# 직접 import 경로 수정
+from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
 from modules.mail_query import (
     MailQueryFilters,
     PaginationOptions,

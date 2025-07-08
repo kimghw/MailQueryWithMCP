@@ -51,13 +51,13 @@ class MailQueueService:
             "current_queue_size": 0,
         }
 
-    async def enqueue_mails(self, account_id: str, mails: List[Dict]) -> Dict[str, Any]:
+    async def enqueue_mails(self, account_id: str, mails: List[Any]) -> Dict[str, Any]:
         """
         메일을 큐에 저장
 
         Args:
             account_id: 계정 ID
-            mails: 메일 리스트
+            mails: 메일 리스트 (Dict 또는 GraphMailItem)
 
         Returns:
             큐 저장 결과
@@ -68,8 +68,17 @@ class MailQueueService:
 
             for mail in mails:
                 try:
-                    # GraphMailItem으로 변환
-                    mail_item = GraphMailItem(**mail)
+                    # GraphMailItem 객체인 경우 딕셔너리로 변환
+                    if hasattr(mail, "model_dump"):
+                        mail_dict = mail.model_dump()
+                    elif isinstance(mail, dict):
+                        mail_dict = mail
+                    else:
+                        self.logger.error(f"알 수 없는 메일 타입: {type(mail)}")
+                        continue
+
+                    # GraphMailItem으로 변환 (검증용)
+                    mail_item = GraphMailItem(**mail_dict)
 
                     # 1. 중복 검사 (message_id 기반)
                     is_duplicate = self.db_service.check_duplicate_by_id(mail_item.id)
@@ -93,7 +102,7 @@ class MailQueueService:
                     # 3. 큐에 저장할 데이터 준비
                     queue_item = {
                         "account_id": account_id,
-                        "mail": mail_item.model_dump(),
+                        "mail": mail_dict,  # 딕셔너리 형태로 저장
                         "cleaned_content": cleaned_content,
                         "enqueued_at": datetime.now().isoformat(),
                     }
@@ -103,9 +112,15 @@ class MailQueueService:
                     enqueued_count += 1
 
                 except Exception as e:
+                    # 메일 ID 추출 시도
+                    mail_id = "unknown"
+                    if isinstance(mail, dict):
+                        mail_id = mail.get("id", "unknown")
+                    elif hasattr(mail, "id"):
+                        mail_id = getattr(mail, "id", "unknown")
+
                     self.logger.error(
-                        f"메일 큐 저장 실패 - ID: {mail.get('id', 'unknown')}, "
-                        f"error: {str(e)}"
+                        f"메일 큐 저장 실패 - ID: {mail_id}, " f"error: {str(e)}"
                     )
                     continue
 

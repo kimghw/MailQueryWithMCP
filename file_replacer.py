@@ -30,9 +30,10 @@ def extract_multiple_files_from_content(file_path: str) -> List[Tuple[str, str]]
 
         # """ 또는 ''' 로 구분된 섹션 찾기
         pattern = r'"""[\s\S]*?"""'
-        sections = re.findall(pattern, content)
+        sections = list(re.finditer(pattern, content))
 
-        for i, section in enumerate(sections):
+        for i, section_match in enumerate(sections):
+            section = section_match.group(0)
             # 섹션 내에서 경로 추출
             lines = section.split("\n")
             target_path = None
@@ -56,18 +57,16 @@ def extract_multiple_files_from_content(file_path: str) -> List[Tuple[str, str]]
                     break
 
             if target_path:
-                # 섹션 다음부터 다음 섹션 전까지의 내용 추출
-                section_start = content.find(section) + len(section)
+                # 현재 섹션의 끝 위치
+                section_end = section_match.end()
 
-                # 다음 섹션 찾기
-                remaining_content = content[section_start:]
-                next_section_match = re.search(r'"""[\s\S]*?"""', remaining_content)
-
-                if next_section_match:
-                    section_content = remaining_content[: next_section_match.start()]
+                # 다음 섹션의 시작 위치 찾기
+                if i + 1 < len(sections):
+                    next_section_start = sections[i + 1].start()
+                    section_content = content[section_end:next_section_start]
                 else:
-                    # 마지막 섹션인 경우
-                    section_content = remaining_content
+                    # 마지막 섹션인 경우 파일 끝까지
+                    section_content = content[section_end:]
 
                 # 앞뒤 공백 제거
                 section_content = section_content.strip()

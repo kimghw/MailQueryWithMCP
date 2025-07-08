@@ -1,7 +1,5 @@
 """
-Mail Process Services 모듈
-
-modules/mail_process/services/__init__.py
+메일 처리 서비스 모듈
 """
 
 from .filtering_service import FilteringService
