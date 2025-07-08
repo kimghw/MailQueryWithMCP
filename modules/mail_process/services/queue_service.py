@@ -26,6 +26,7 @@ class MailQueueService:
         self.text_cleaner = TextCleaner()
 
         # 큐 저장소 (실제 운영에서는 Redis 등 사용 권장)
+        self.batch_size = int(os.getenv("MAIL_BATCH_SIZE", "50"))
         self._queue: deque = deque()
         self._lock = asyncio.Lock()
 

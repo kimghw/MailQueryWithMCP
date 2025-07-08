@@ -68,15 +68,15 @@ class MailProcessorOrchestrator:
             query_request = MailQueryRequest(
                 user_id=user_id,
                 filters=filters or MailQueryFilters(),
-                pagination=pagination or PaginationOptions(page_size=50),
+                pagination=pagination or PaginationOptions(top=50),
             )
 
-            query_result = await self.mail_query.get_user_mails(query_request)
+            # mail_query_user_emails 메서드 사용 (올바른 메서드명)
+            async with self.mail_query as mail_query:
+                query_response = await mail_query.mail_query_user_emails(query_request)
 
-            if not query_result.success:
-                raise Exception(f"메일 조회 실패: {query_result.error}")
-
-            mails = query_result.data.get("mails", [])
+            # MailQueryResponse 객체에서 messages 추출
+            mails = query_response.messages
             self.logger.info(f"조회된 메일 수: {len(mails)}개")
 
             if not mails:

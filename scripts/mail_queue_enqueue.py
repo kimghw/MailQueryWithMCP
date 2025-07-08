@@ -1,369 +1,330 @@
 #!/usr/bin/env python3
 """
-메일 조회 후 큐에 저장하는 테스트 스크립트
-scripts/mail_queue_enqueue.py
+메일 큐 저장 테스트 - 더 많은 메일 조회
 """
 
 import asyncio
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
 import sys
 import os
 
-# 프로젝트 루트 경로 추가
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from infra.core.database import get_database_manager
-from infra.core.logger import get_logger
 from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
-from modules.mail_query import (
-    MailQueryFilters,
-    PaginationOptions,
-)
+from modules.mail_query import MailQueryFilters, PaginationOptions
+from infra.core.logger import get_logger
+from infra.core.database import get_database_manager
 
 logger = get_logger(__name__)
 
 
-class MailQueueEnqueueTester:
-    """메일 조회 후 큐에 저장하는 테스터"""
+async def test_with_more_mails(user_id: str):
+    """더 많은 메일을 조회하는 테스트"""
 
-    def __init__(self):
-        self.db = get_database_manager()
-        self.orchestrator = None
-        self.start_time = datetime.now()
+    print(f"\n🧪 확장된 메일 큐 저장 테스트: {user_id}")
+    print("=" * 80)
 
-    async def setup(self):
-        """오케스트레이터 초기화"""
-        self.orchestrator = MailProcessorOrchestrator()
-        # 백그라운드 프로세서 시작 (필요한 경우)
-        await self.orchestrator.start_background_processor()
-        logger.info("오케스트레이터 초기화 완료")
+    orchestrator = MailProcessorOrchestrator()
+    db = get_database_manager()
 
-    async def cleanup(self):
-        """리소스 정리"""
-        if self.orchestrator:
-            await self.orchestrator.cleanup()
-        logger.info("리소스 정리 완료")
+    try:
+        # 백그라운드 프로세서 시작
+        await orchestrator.start_background_processor()
 
-    async def get_active_accounts(
-        self, limit: Optional[int] = None
-    ) -> List[Dict[str, Any]]:
-        """활성화된 계정 조회"""
-        query = """
-            SELECT 
-                user_id, 
-                user_name, 
-                email,
-                is_active,
-                status,
-                last_sync_time
-            FROM accounts 
-            WHERE is_active = 1
-            ORDER BY user_id
-        """
-
-        if limit:
-            query += f" LIMIT {limit}"
-
-        accounts = self.db.fetch_all(query)
-        return [dict(account) for account in accounts]
-
-    async def enqueue_account_mails(
-        self,
-        user_id: str,
-        days_back: int = 30,
-        max_pages: int = 5,
-        mails_per_page: int = 50,
-    ) -> Dict[str, Any]:
-        """특정 계정의 메일을 큐에 저장"""
-
-        try:
-            # 필터 설정
-            filters = MailQueryFilters(
-                date_from=datetime.now() - timedelta(days=days_back)
-            )
-
-            # 페이지네이션 설정
-            pagination = PaginationOptions(
-                page_size=mails_per_page, max_pages=max_pages
-            )
-
-            # save_to_queue 메서드 사용
-            result = await self.orchestrator.save_to_queue(
-                user_id=user_id, filters=filters, pagination=pagination
-            )
-
-            # 실행 시간 계산
-            execution_time_ms = int(
-                (datetime.now() - self.start_time).total_seconds() * 1000
-            )
-
-            return {
-                "success": True,
-                "user_id": user_id,
-                "enqueued": result.get("enqueued", 0),
-                "duplicates": result.get("duplicates", 0),
-                "queue_size": result.get("queue_size", 0),
-                "total_fetched": result.get("enqueued", 0)
-                + result.get("duplicates", 0),
-                "filtered_count": 0,  # save_to_queue에서는 필터링 정보가 없음
-                "execution_time_ms": execution_time_ms,
-            }
-
-        except Exception as e:
-            logger.error(f"계정 {user_id} 메일 큐 저장 실패: {str(e)}")
-            return {
-                "success": False,
-                "user_id": user_id,
-                "error": str(e),
-                "total_fetched": 0,
-                "enqueued": 0,
-                "duplicates": 0,
-            }
-
-    async def test_enqueue_single_account(self, user_id: str):
-        """단일 계정 테스트"""
-        print(f"\n🧪 단일 계정 큐 저장 테스트: {user_id}")
-        print("=" * 80)
-
-        result = await self.enqueue_account_mails(
-            user_id=user_id, days_back=30, max_pages=2, mails_per_page=50
+        # 기존 메일 히스토리 확인
+        existing_count = db.fetch_one(
+            """
+            SELECT COUNT(*) as count 
+            FROM mail_history mh
+            JOIN accounts a ON mh.account_id = a.id
+            WHERE a.user_id = ?
+            """,
+            (user_id,),
         )
 
-        if result["success"]:
-            print(f"✅ 성공!")
-            print(f"  - 조회된 메일: {result['total_fetched']}개")
-            print(f"  - 큐에 저장: {result['enqueued']}개")
-            print(f"  - 중복 건너뜀: {result['duplicates']}개")
-            print(f"  - 큐 크기: {result['queue_size']}개")
-            print(f"  - 실행 시간: {result['execution_time_ms']}ms")
-        else:
-            print(f"❌ 실패: {result['error']}")
+        print(
+            f"\n📊 기존 저장된 메일: {existing_count['count'] if existing_count else 0}개"
+        )
 
-    async def test_enqueue_all_accounts(
-        self,
-        max_accounts: Optional[int] = None,
-        days_back: int = 30,
-        max_pages_per_account: int = 5,
-    ):
-        """모든 계정 큐 저장 테스트"""
-        print("\n🚀 모든 계정 메일 큐 저장 테스트")
-        print("=" * 80)
-        print(f"설정:")
-        print(f"  - 최근 {days_back}일 메일")
-        print(f"  - 계정당 최대 {max_pages_per_account} 페이지")
-        print(f"  - 시작 시간: {self.start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print("=" * 80)
+        # 더 긴 기간과 더 많은 페이지로 설정
+        filters = MailQueryFilters(
+            date_from=datetime.now() - timedelta(days=90)  # 90일로 확장
+        )
 
-        # 활성 계정 조회
-        accounts = await self.get_active_accounts(limit=max_accounts)
-        print(f"\n📋 활성 계정 수: {len(accounts)}개")
+        # 페이지네이션 설정 - 더 많은 메일 조회
+        pagination = PaginationOptions(
+            top=100, max_pages=10  # 페이지당 100개로 증가  # 최대 10페이지 (1000개)
+        )
 
-        # 큐 상태 확인
-        initial_queue_status = await self.orchestrator.queue_service.get_queue_status()
-        print(f"\n📊 초기 큐 상태:")
-        print(f"  - 큐 크기: {initial_queue_status['queue_size']}개")
-        print(f"  - 배치 크기: {initial_queue_status['batch_size']}개")
+        print(f"\n📧 메일 조회 설정:")
+        print(f"  - 조회 기간: 최근 90일")
+        print(f"  - 페이지당 메일 수: 100개")
+        print(f"  - 최대 페이지: 10개")
+        print(f"  - 최대 조회 가능: 1000개")
 
-        # 각 계정별 처리
-        print(f"\n📧 계정별 메일 큐 저장 시작...")
-        print("-" * 80)
+        # 메일 조회 및 큐 저장
+        print(f"\n⏳ 메일 조회 중...")
+        start_time = datetime.now()
 
-        results = []
-        total_enqueued = 0
-        total_duplicates = 0
-        success_count = 0
+        result = await orchestrator.save_to_queue(
+            user_id=user_id, filters=filters, pagination=pagination
+        )
 
-        for i, account in enumerate(accounts, 1):
-            user_id = account["user_id"]
+        elapsed_time = (datetime.now() - start_time).total_seconds()
+
+        print(f"\n✅ 큐 저장 완료!")
+        print(f"  - 큐에 저장된 메일: {result.get('enqueued', 0)}개")
+        print(f"  - 중복 메일: {result.get('duplicates', 0)}개")
+        print(f"  - 현재 큐 크기: {result.get('queue_size', 0)}개")
+        print(f"  - 소요 시간: {elapsed_time:.1f}초")
+
+        # 큐 배치 크기 확인
+        queue_status = await orchestrator.queue_service.get_queue_status()
+        print(f"\n📦 큐 설정:")
+        print(f"  - 배치 크기: {queue_status['batch_size']}개")
+        print(f"  - 큐 비어있음: {queue_status['is_empty']}")
+
+        # 큐 처리 진행 모니터링
+        if not queue_status["is_empty"]:
+            print(f"\n⏳ 큐 처리 진행 모니터링 (30초)...")
+
+            for i in range(6):  # 5초마다 6번 = 30초
+                await asyncio.sleep(5)
+
+                current_status = await orchestrator.get_processing_stats()
+                queue_size = current_status["queue"]["queue_size"]
+
+                print(f"  [{(i+1)*5}초] 남은 큐: {queue_size}개")
+
+                if queue_size == 0:
+                    print("  ✅ 큐 처리 완료!")
+                    break
+
+        # 최종 통계
+        final_stats = await orchestrator.get_processing_stats()
+        print(f"\n📊 최종 통계:")
+        print(f"  - DB 저장된 전체 메일: {final_stats['database']['total_mails']}개")
+        print(f"  - 오늘 처리된 메일: {final_stats['database']['today_mails']}개")
+        print(f"  - 이번 주 처리된 메일: {final_stats['database']['week_mails']}개")
+
+    except Exception as e:
+        logger.error(f"테스트 중 오류 발생: {str(e)}", exc_info=True)
+        print(f"❌ 오류 발생: {str(e)}")
+
+    finally:
+        await orchestrator.cleanup()
+        print("\n✅ 리소스 정리 완료")
+
+
+async def check_mail_history_duplicates(user_id: str):
+    """메일 히스토리 중복 체크"""
+
+    print(f"\n🔍 메일 히스토리 중복 분석: {user_id}")
+    print("=" * 80)
+
+    db = get_database_manager()
+
+    # 전체 메일 수
+    total_query = """
+        SELECT COUNT(*) as total_count
+        FROM mail_history mh
+        JOIN accounts a ON mh.account_id = a.id
+        WHERE a.user_id = ?
+    """
+
+    # 고유 메시지 ID 수
+    unique_query = """
+        SELECT COUNT(DISTINCT message_id) as unique_count
+        FROM mail_history mh
+        JOIN accounts a ON mh.account_id = a.id
+        WHERE a.user_id = ?
+    """
+
+    # 최근 메일 정보
+    recent_query = """
+        SELECT 
+            message_id,
+            subject,
+            received_time,
+            processed_at
+        FROM mail_history mh
+        JOIN accounts a ON mh.account_id = a.id
+        WHERE a.user_id = ?
+        ORDER BY processed_at DESC
+        LIMIT 10
+    """
+
+    total_result = db.fetch_one(total_query, (user_id,))
+    unique_result = db.fetch_one(unique_query, (user_id,))
+    recent_mails = db.fetch_all(recent_query, (user_id,))
+
+    total_count = total_result["total_count"] if total_result else 0
+    unique_count = unique_result["unique_count"] if unique_result else 0
+
+    print(f"📊 메일 히스토리 통계:")
+    print(f"  - 전체 레코드: {total_count}개")
+    print(f"  - 고유 메시지: {unique_count}개")
+    print(f"  - 중복 레코드: {total_count - unique_count}개")
+
+    if recent_mails:
+        print(f"\n📧 최근 처리된 메일 (10개):")
+        for mail in recent_mails:
+            print(f"  - {mail['subject'][:50]}...")
+            print(f"    수신: {mail['received_time']}")
+            print(f"    처리: {mail['processed_at']}")
+            print()
+
+
+async def check_queue_status_and_process():
+    """큐 상태 확인 및 처리"""
+
+    print(f"\n📊 큐 상태 확인 및 처리")
+    print("=" * 80)
+
+    orchestrator = MailProcessorOrchestrator()
+
+    try:
+        # 현재 큐 상태 확인
+        initial_status = await orchestrator.get_processing_stats()
+        queue_size = initial_status["queue"]["queue_size"]
+
+        print(f"\n현재 큐 상태:")
+        print(f"  - 큐 크기: {queue_size}개")
+        print(f"  - 배치 크기: {initial_status['queue']['batch_size']}개")
+        print(f"  - 큐 비어있음: {initial_status['queue']['is_empty']}")
+
+        if queue_size == 0:
+            print("\n✅ 큐가 비어있습니다. 처리할 메일이 없습니다.")
+
+            # DB 통계 표시
+            print(f"\n📊 DB 통계:")
             print(
-                f"\n[{i}/{len(accounts)}] {user_id} ({account['user_name']}) 처리 중..."
+                f"  - 전체 저장된 메일: {initial_status['database']['total_mails']}개"
             )
-
-            result = await self.enqueue_account_mails(
-                user_id=user_id, days_back=days_back, max_pages=max_pages_per_account
+            print(
+                f"  - 오늘 처리된 메일: {initial_status['database']['today_mails']}개"
             )
+            return
 
-            results.append(result)
-
-            if result["success"]:
-                success_count += 1
-                total_enqueued += result.get("enqueued", 0)
-                total_duplicates += result.get("duplicates", 0)
-
-                print(
-                    f"  ✅ 성공: 조회 {result['total_fetched']}개 → "
-                    f"큐 저장 {result['enqueued']}개 (중복 {result['duplicates']}개)"
-                )
-            else:
-                print(f"  ❌ 실패: {result.get('error', 'Unknown error')}")
-
-            # 진행 상황 표시
-            if i % 5 == 0:
-                current_queue_status = (
-                    await self.orchestrator.queue_service.get_queue_status()
-                )
-                print(
-                    f"\n  📊 진행 상황: 큐 크기 = {current_queue_status['queue_size']}개"
-                )
-
-        # 최종 큐 상태
-        final_queue_status = await self.orchestrator.queue_service.get_queue_status()
-
-        # 결과 요약
-        print("\n" + "=" * 80)
-        print("📊 전체 결과 요약")
-        print("=" * 80)
-
-        print(f"\n✅ 성공: {success_count}/{len(accounts)} 계정")
-        print(f"📧 큐에 저장된 메일: {total_enqueued}개")
-        print(f"🔄 중복 메일: {total_duplicates}개")
-
-        print(f"\n📈 큐 상태 변화:")
-        print(f"  - 초기: {initial_queue_status['queue_size']}개")
-        print(f"  - 최종: {final_queue_status['queue_size']}개")
-        print(
-            f"  - 증가: {final_queue_status['queue_size'] - initial_queue_status['queue_size']}개"
+        # 큐에 메일이 있으면 처리 시작
+        process_choice = input(
+            f"\n{queue_size}개의 메일이 큐에 있습니다. 처리하시겠습니까? (y/N): "
         )
 
-        # 계정별 상세 통계
-        print(f"\n📊 계정별 상세:")
-        print(
-            f"{'계정 ID':<20} {'조회':<10} {'큐 저장':<10} {'중복':<10} {'실행(ms)':<10}"
-        )
-        print("-" * 70)
+        if process_choice.lower() == "y":
+            # 백그라운드 프로세서 시작
+            await orchestrator.start_background_processor()
+            print("\n⏳ 큐 처리 중...")
 
-        for result in results:
-            if result["success"]:
+            # 처리 진행 모니터링
+            processed_count = 0
+            for i in range(60):  # 최대 5분 (5초 * 60 = 300초)
+                await asyncio.sleep(5)
+
+                current_status = await orchestrator.get_processing_stats()
+                current_queue_size = current_status["queue"]["queue_size"]
+
+                # 처리된 메일 수 계산
+                newly_processed = queue_size - current_queue_size - processed_count
+                processed_count += newly_processed
+
                 print(
-                    f"{result['user_id']:<20} "
-                    f"{result.get('total_fetched', 0):<10} "
-                    f"{result.get('enqueued', 0):<10} "
-                    f"{result.get('duplicates', 0):<10} "
-                    f"{result.get('execution_time_ms', 0):<10}"
+                    f"  [{(i+1)*5}초] 남은 큐: {current_queue_size}개 (처리됨: {processed_count}개)"
                 )
 
-        # 실행 시간 분석
-        total_time = (datetime.now() - self.start_time).total_seconds()
-        print(f"\n⏱️  실행 시간 분석:")
-        print(f"  - 총 실행 시간: {total_time:.2f}초")
-        print(f"  - 평균 시간/계정: {total_time/len(accounts):.2f}초")
+                if current_queue_size == 0:
+                    print(f"\n✅ 큐 처리 완료! 총 {processed_count}개 메일 처리됨")
+                    break
 
-        print(f"\n✅ 테스트 완료!")
-        print(f"종료 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+                # 처리가 멈춘 것 같으면 확인
+                if i > 0 and newly_processed == 0:
+                    if not current_status["background_processor"]["running"]:
+                        print("\n⚠️  백그라운드 프로세서가 중지되었습니다.")
+                        break
 
-        return {
-            "total_accounts": len(accounts),
-            "success_count": success_count,
-            "total_enqueued": total_enqueued,
-            "total_duplicates": total_duplicates,
-            "final_queue_size": final_queue_status["queue_size"],
-        }
+            # 최종 통계
+            final_status = await orchestrator.get_processing_stats()
+            print(f"\n📊 최종 통계:")
+            print(f"  - 남은 큐: {final_status['queue']['queue_size']}개")
+            print(f"  - DB 전체 메일: {final_status['database']['total_mails']}개")
+            print(f"  - 오늘 처리된 메일: {final_status['database']['today_mails']}개")
 
-    async def test_queue_processing(self, wait_seconds: int = 10):
-        """큐 처리 모니터링"""
-        print(f"\n🔄 큐 처리 모니터링 ({wait_seconds}초)...")
-        print("-" * 50)
+        else:
+            print("\n큐 처리를 건너뛰었습니다.")
 
-        # 프로세서 상태 확인
-        initial_stats = await self.orchestrator.get_processing_stats()
-        print(f"초기 상태:")
-        print(f"  - 큐 크기: {initial_stats['queue']['queue_size']}개")
-        print(
-            f"  - 백그라운드 프로세서 실행 중: {initial_stats['background_processor']['running']}"
-        )
+            # 큐 초기화 옵션
+            clear_choice = input("\n큐를 초기화하시겠습니까? (y/N): ")
+            if clear_choice.lower() == "y":
+                cleared = await orchestrator.queue_service.clear_queue()
+                print(f"✅ 큐가 초기화되었습니다. {cleared}개 아이템 제거됨")
 
-        # 대기하면서 주기적으로 상태 확인
-        for i in range(wait_seconds):
-            await asyncio.sleep(1)
+    finally:
+        await orchestrator.cleanup()
+        print("\n✅ 리소스 정리 완료")
 
-            if (i + 1) % 5 == 0:  # 5초마다 상태 출력
-                current_stats = await self.orchestrator.get_processing_stats()
-                print(f"\n[{i+1}초] 현재 상태:")
-                print(f"  - 큐 크기: {current_stats['queue']['queue_size']}개")
-                print(
-                    f"  - 백그라운드 프로세서 실행 중: {current_stats['background_processor']['running']}"
-                )
 
-        # 최종 상태
-        final_stats = await self.orchestrator.get_processing_stats()
-        print(f"\n최종 상태:")
-        print(f"  - 큐 크기: {final_stats['queue']['queue_size']}개")
-        print(
-            f"  - 백그라운드 프로세서 실행 중: {final_stats['background_processor']['running']}"
-        )
+async def clear_mail_history_option():
+    """메일 히스토리 초기화 옵션"""
 
-    async def clear_queue(self):
-        """큐 초기화 (테스트용)"""
-        cleared = await self.orchestrator.queue_service.clear_queue()
-        print(f"\n🗑️  큐 초기화 완료: {cleared}개 아이템 제거됨")
+    confirm = input("\n⚠️  메일 히스토리를 초기화하시겠습니까? (y/N): ")
+    if confirm.lower() == "y":
+        db = get_database_manager()
+        db.execute_query("DELETE FROM mail_history")
+        print("✅ 메일 히스토리가 초기화되었습니다.")
+        return True
+    return False
 
 
 async def main():
-    """메인 실행 함수"""
-    tester = MailQueueEnqueueTester()
+    """메인 함수"""
+    print("\n🚀 확장된 메일 큐 테스트 프로그램")
+    print("=" * 80)
 
-    try:
-        # 초기화
-        await tester.setup()
+    user_id = input("테스트할 계정 ID를 입력하세요 (예: krsdtp): ").strip()
 
-        # 테스트 모드 선택
-        print("\n📋 테스트 모드 선택:")
-        print("1. 단일 계정 테스트")
-        print("2. 모든 계정 테스트 (소규모)")
-        print("3. 모든 계정 테스트 (전체)")
-        print("4. 큐 상태 확인")
-        print("5. 큐 초기화")
+    if not user_id:
+        print("❌ 계정 ID가 입력되지 않았습니다.")
+        return
 
-        choice = input("\n선택 (1-5): ").strip()
+    print("\n테스트 모드를 선택하세요:")
+    print("1. 기본 테스트 (최근 30일, 100개)")
+    print("2. 확장 테스트 (최근 90일, 1000개)")
+    print("3. 메일 히스토리 분석")
+    print("4. 메일 히스토리 초기화 후 테스트")
 
-        if choice == "1":
-            user_id = input("계정 ID 입력: ").strip()
-            await tester.test_enqueue_single_account(user_id)
+    choice = input("\n선택 (1-4): ").strip()
 
-        elif choice == "2":
-            # 소규모 테스트 (최대 5개 계정)
-            await tester.test_enqueue_all_accounts(
-                max_accounts=5, days_back=30, max_pages_per_account=3
+    if choice == "1":
+        # 기본 설정으로 간단히 테스트
+        orchestrator = MailProcessorOrchestrator()
+        try:
+            await orchestrator.start_background_processor()
+
+            result = await orchestrator.save_to_queue(
+                user_id=user_id,
+                filters=MailQueryFilters(date_from=datetime.now() - timedelta(days=30)),
+                pagination=PaginationOptions(top=50, max_pages=2),
             )
 
-        elif choice == "3":
-            # 전체 테스트
-            confirm = input("⚠️  모든 계정을 처리합니다. 계속하시겠습니까? (y/N): ")
-            if confirm.lower() == "y":
-                await tester.test_enqueue_all_accounts(
-                    days_back=60, max_pages_per_account=10
-                )
+            print(f"\n✅ 결과:")
+            print(f"  - 큐에 저장: {result.get('enqueued', 0)}개")
+            print(f"  - 중복: {result.get('duplicates', 0)}개")
 
-        elif choice == "4":
-            # 큐 상태 확인 및 모니터링
-            status = await tester.orchestrator.get_processing_stats()
-            print(f"\n📊 현재 큐 상태:")
-            print(f"  - 큐 크기: {status['queue']['queue_size']}개")
-            print(
-                f"  - 백그라운드 프로세서 실행 중: {status['background_processor']['running']}"
-            )
+        finally:
+            await orchestrator.cleanup()
 
-            if status["queue"]["queue_size"] > 0:
-                monitor = input("\n처리 과정을 모니터링하시겠습니까? (y/N): ")
-                if monitor.lower() == "y":
-                    await tester.test_queue_processing(wait_seconds=30)
+    elif choice == "2":
+        await test_with_more_mails(user_id)
 
-        elif choice == "5":
-            # 큐 초기화
-            confirm = input("⚠️  큐를 초기화하시겠습니까? (y/N): ")
-            if confirm.lower() == "y":
-                await tester.clear_queue()
+    elif choice == "3":
+        await check_mail_history_duplicates(user_id)
 
-        else:
-            print("❌ 잘못된 선택입니다.")
+    elif choice == "4":
+        if await clear_mail_history_option():
+            await test_with_more_mails(user_id)
 
-    except KeyboardInterrupt:
-        print("\n\n⚠️  사용자에 의해 중단됨")
-    except Exception as e:
-        logger.error(f"테스트 실행 중 오류: {str(e)}", exc_info=True)
-    finally:
-        await tester.cleanup()
+    else:
+        print("❌ 잘못된 선택입니다.")
 
 
 if __name__ == "__main__":
