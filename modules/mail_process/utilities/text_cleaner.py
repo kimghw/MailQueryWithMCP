@@ -1,7 +1,7 @@
 """텍스트 정제 유틸리티"""
 
 import re
-from typing import Dict, Optional, Tuple
+from typing import Dict
 
 from infra.core.logger import get_logger
 
@@ -62,15 +62,15 @@ class TextCleaner:
 
         return clean
 
-    def prepare_mail_content(self, mail: Dict) -> Tuple[Dict, str]:
+    def prepare_mail_content(self, mail: Dict) -> Dict:
         """
-        메일 내용 준비 - 원본 메일을 정제하여 새로운 메일 객체와 전체 정제 내용 반환
+        메일 내용 준비 - 원본 메일을 정제하여 새로운 메일 객체 반환
 
         Args:
             mail: 원본 메일 딕셔너리
 
         Returns:
-            (정제된 메일 딕셔너리, 키워드 추출용 전체 정제 내용)
+            정제된 메일 딕셔너리
         """
         # 원본 메일 복사
         refined_mail = mail.copy()
