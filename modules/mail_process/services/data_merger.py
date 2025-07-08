@@ -36,6 +36,7 @@ class MailTransformationRules:
                 "agenda_organization"
             ),  # agenda_organization을 response_org로 매핑
             "response_version": mail.get("response_version"),
+                        "agenda_version": mail.get("agenda_version"),
             # 추가 정보
             "extracted_keywords": mail.get("keywords", []),
             "urgency": mail.get("urgency", "NORMAL"),
@@ -48,9 +49,6 @@ class MailTransformationRules:
             "summary": mail.get("summary"),
         }
 
-        # agenda 상세 정보가 있으면 추가
-        if mail.get("agenda_info"):
-            event_data["agenda"] = mail["agenda_info"]
 
         return event_data
 
@@ -86,16 +84,8 @@ class MailTransformationRules:
                         "agenda_panel": info.get("panel"),  # 패널 정보
                         "response_org": info.get("organization"),  # 응답 조직
                         "response_version": info.get("response_version"),
-                        "agenda_info": {
-                            "fullCode": info.get("full_code"),
-                            "documentType": info.get("document_type"),
-                            "panel": info.get("panel"),
-                            "year": info.get("year"),
-                            "number": info.get("number"),
-                            "version": version,
-                            "organization": info.get("organization"),
-                            "responseVersion": info.get("response_version"),
-                        },
+                        "agenda_version": mail.get("agenda_version"),
+                        "agenda_version": version,
                     }
                 )
 
@@ -125,7 +115,12 @@ class MailTransformationRules:
             merged["summary"] = openrouter_result.get("summary", "")
 
             # IACS에서 못 찾은 정보만 보충
-            for key in ["mail_type", "decision_status", "has_deadline", "deadline"]:
+            # mail_type은 항상 OpenRouter 값 사용
+            if "mail_type" in openrouter_result:
+                merged["mail_type"] = openrouter_result["mail_type"]
+            
+            # 나머지는 IACS에 없는 경우만
+            for key in ["decision_status", "has_deadline", "deadline"]:
                 if key in openrouter_result:
                     merged[key] = openrouter_result[key]
 

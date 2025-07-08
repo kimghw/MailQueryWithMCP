@@ -1,13 +1,14 @@
 """
-Mail Processor 모듈 스키마 정의 - 통일된 네이밍 적용
+Mail Processor 모듈 스키마 정의 - Pydantic v2 호환
 modules/mail_process/mail_processor_schema.py
 """
 
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
+# AgendaInfo 클래스 삭제됨 - 플랫한 구조로 변경
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class ProcessingStatus(str, Enum):
@@ -50,6 +51,8 @@ class DecisionStatus(str, Enum):
 class GraphMailItem(BaseModel):
     """Graph API 메일 아이템"""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str = Field(..., description="메일 ID")
     subject: Optional[str] = Field(None, description="제목")
     sender: Optional[Dict[str, Any]] = Field(None, description="발신자 정보")
@@ -67,25 +70,8 @@ class GraphMailItem(BaseModel):
     importance: str = Field(default="normal", description="중요도")
     web_link: Optional[str] = Field(None, description="웹 링크")
 
-    class Config:
-        allow_population_by_field_name = True
-
 
 class AgendaInfo(BaseModel):
-    """아젠다 상세 정보 - 통일된 네이밍"""
-
-    fullCode: Optional[str] = Field(None, description="전체 IACS 코드")
-    documentType: Optional[str] = Field(
-        None, description="문서 타입 (AGENDA/RESPONSE/SPECIAL)"
-    )
-    panel: Optional[str] = Field(None, description="패널 (PL/PS/JWG-SDT/JWG-CS)")
-    year: Optional[str] = Field(None, description="년도 (2자리)")
-    number: Optional[str] = Field(None, description="번호 (3-4자리)")
-    version: Optional[str] = Field(None, description="아젠다 버전")
-    organization: Optional[str] = Field(None, description="응답 조직 (응답인 경우)")
-    responseVersion: Optional[str] = Field(None, description="응답 버전 (응답인 경우)")
-
-
 class ProcessedMailData(BaseModel):
     """처리된 메일 데이터 - 통일된 네이밍"""
 
@@ -116,6 +102,7 @@ class ProcessedMailData(BaseModel):
     agenda_panel: Optional[str] = None  # 패널 (PL/PS/JWG-SDT 등) - agenda_org에서 변경
     response_org: Optional[str] = None  # 응답 조직 (IR)
     response_version: Optional[str] = None  # 응답 버전 (a)
+    agenda_version: Optional[str] = None  # 아젠다 버전 (a, b, c)
     agenda_info: Optional[Dict[str, Any]] = None
     additional_agenda_references: List[str] = Field(default_factory=list)
 
@@ -176,6 +163,8 @@ class MailProcessingResult(BaseModel):
 class ProcessedMailEvent(BaseModel):
     """처리된 메일 이벤트 - 통일된 네이밍"""
 
+    model_config = ConfigDict(populate_by_name=True)
+
     # Graph API 필드
     id: str
     subject: str
@@ -192,7 +181,7 @@ class ProcessedMailEvent(BaseModel):
     agenda_panel: Optional[str] = None  # 패널 (PL/PS/JWG-SDT 등) - agenda_org에서 변경
     response_org: Optional[str] = None  # 응답 조직
     response_version: Optional[str] = None  # 응답 버전
-    agenda: Optional[AgendaInfo] = None
+    agenda_version: Optional[str] = None  # 아젠다 버전 (a, b, c)
     extracted_keywords: List[str] = Field(default_factory=list)
     urgency: str = "NORMAL"
     is_reply: bool = False
@@ -202,9 +191,6 @@ class ProcessedMailEvent(BaseModel):
     has_deadline: bool = False
     deadline: Optional[datetime] = None
     summary: Optional[str] = None
-
-    class Config:
-        allow_population_by_field_name = True
 
 
 class KeywordExtractionRequest(BaseModel):

@@ -1,9 +1,10 @@
 """
-IACS 코드 파서 - 메인 모듈
+IACS 코드 파서 - 메인 모듈 (import 수정)
 modules/mail_process/utilities/iacs/iacs_code_parser.py
 """
 
 from typing import Dict, List, Optional, Any, Tuple
+from datetime import datetime  # 누락된 import 추가
 
 from infra.core.logger import get_logger
 from .constants import (

@@ -1,0 +1,919 @@
+{
+  "total": 262,
+  "parsed": 259,
+  "failed": 3,
+  "special": 2,
+  "by_type": {
+    "RESPONSE": 249,
+    "SPECIAL": 2,
+    "AGENDA": 8
+  },
+  "by_panel": {
+    "PL": 245,
+    "MULTILATERAL": 2,
+    "JWG-SDT": 4,
+    "PS": 1,
+    "JWG-CS": 7
+  },
+  "by_organization": {
+    "IR": 19,
+    "KR": 8,
+    "TL": 22,
+    "BV": 19,
+    "PR": 20,
+    "IL": 61,
+    "CR": 14,
+    "NV": 23,
+    "RI": 5,
+    "CC": 16,
+    "LR": 5,
+    "NK": 21,
+    "AB": 15,
+    "PL": 1
+  },
+  "by_parsing_method": {
+    "pattern2_underscore_case_sensitive": 128,
+    "pattern1_attached_case_sensitive": 118,
+    "special_case": 2,
+    "jwg_agenda_case_sensitive": 8,
+    "jwg_version_underscore_case_sensitive": 1,
+    "jwg_attached_case_sensitive": 2
+  },
+  "failed_subjects": [
+    "테스트 Graph API 직접 테스트",
+    "2nd IACS Safe Digital Transformation Panel - Day 1",
+    "2nd IACS Safe Digital Transformation Panel Meeting Day - 2."
+  ],
+  "parsed_details": [
+    {
+      "subject": "PL25016_IRa: IMO Expert Group on Data Harmonization (EGDH) 13 Session",
+      "parsed": {
+        "full_code": "PL25016_IRa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "016",
+        "agenda_version": null,
+        "organization": "IR",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25016_IRa",
+        "agenda_base": "PL25016",
+        "agenda_panel": "PL",
+        "response_org": "IR",
+        "response_version": "a",
+        "base_agenda_no": "PL25016",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25015_KRa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6)",
+      "parsed": {
+        "full_code": "PL25015_KRa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "KR",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_KRa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "KR",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25007bTLa IMO FAL Correspondence Group (CG) on IMO Strategy on Maritime Digitalization - Round 2",
+      "parsed": {
+        "full_code": "PL25007bTLa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "007",
+        "agenda_version": "b",
+        "organization": "TL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25007bTLa",
+        "agenda_base": "PL25007",
+        "agenda_panel": "PL",
+        "response_org": "TL",
+        "response_version": "a",
+        "base_agenda_no": "PL25007",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "Multilateral New SDTP Secretary",
+      "parsed": {
+        "full_code": "Multilateral",
+        "document_type": "SPECIAL",
+        "panel": "MULTILATERAL",
+        "year": null,
+        "number": null,
+        "agenda_version": null,
+        "organization": null,
+        "response_version": null,
+        "is_response": false,
+        "parsing_method": "special_case"
+      },
+      "event_format": {
+        "agenda_code": "Multilateral",
+        "agenda_base": null,
+        "agenda_panel": "MULTILATERAL",
+        "response_org": null,
+        "response_version": null,
+        "base_agenda_no": null,
+        "document_type": "SPECIAL",
+        "is_response": false,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25015_BVa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6)",
+      "parsed": {
+        "full_code": "PL25015_BVa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "BV",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_BVa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "BV",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25016_BVa: IMO Expert Group on Data Harmonization (EGDH) 13 Session",
+      "parsed": {
+        "full_code": "PL25016_BVa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "016",
+        "agenda_version": null,
+        "organization": "BV",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25016_BVa",
+        "agenda_base": "PL25016",
+        "agenda_panel": "PL",
+        "response_org": "BV",
+        "response_version": "a",
+        "base_agenda_no": "PL25016",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25007bPRa IMO FAL Correspondence Group (CG) on IMO Strategy on Maritime Digitalization - Round 2",
+      "parsed": {
+        "full_code": "PL25007bPRa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "007",
+        "agenda_version": "b",
+        "organization": "PR",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25007bPRa",
+        "agenda_base": "PL25007",
+        "agenda_panel": "PL",
+        "response_org": "PR",
+        "response_version": "a",
+        "base_agenda_no": "PL25007",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25008cILc: IMO MSC 110 7 - IACS Brief - Cybersecurity - Final",
+      "parsed": {
+        "full_code": "PL25008cILc",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "008",
+        "agenda_version": "c",
+        "organization": "IL",
+        "response_version": "c",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25008cILc",
+        "agenda_base": "PL25008",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "c",
+        "base_agenda_no": "PL25008",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25016_ILa: IMO Expert Group on Data Harmonization (EGDH) 13 Session",
+      "parsed": {
+        "full_code": "PL25016_ILa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "016",
+        "agenda_version": null,
+        "organization": "IL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25016_ILa",
+        "agenda_base": "PL25016",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "a",
+        "base_agenda_no": "PL25016",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25007bBVa IMO FAL Correspondence Group (CG) on IMO Strategy on Maritime Digitalization Round 2",
+      "parsed": {
+        "full_code": "PL25007bBVa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "007",
+        "agenda_version": "b",
+        "organization": "BV",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25007bBVa",
+        "agenda_base": "PL25007",
+        "agenda_panel": "PL",
+        "response_org": "BV",
+        "response_version": "a",
+        "base_agenda_no": "PL25007",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25015_CRa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6)",
+      "parsed": {
+        "full_code": "PL25015_CRa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "CR",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_CRa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "CR",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25016_NVa: IMO Expert Group on Data Harmonization (EGDH) 13 Session",
+      "parsed": {
+        "full_code": "PL25016_NVa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "016",
+        "agenda_version": null,
+        "organization": "NV",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25016_NVa",
+        "agenda_base": "PL25016",
+        "agenda_panel": "PL",
+        "response_org": "NV",
+        "response_version": "a",
+        "base_agenda_no": "PL25016",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25017_ILa - ISO TC8 SC26 1st Plenary Meeting - Observation Report of IACS liaison",
+      "parsed": {
+        "full_code": "PL25017_ILa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "017",
+        "agenda_version": null,
+        "organization": "IL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25017_ILa",
+        "agenda_base": "PL25017",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "a",
+        "base_agenda_no": "PL25017",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25007bRIa IMO FAL Correspondence Group (CG) on IMO Strategy on Maritime Digitalization - Round 2",
+      "parsed": {
+        "full_code": "PL25007bRIa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "007",
+        "agenda_version": "b",
+        "organization": "RI",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25007bRIa",
+        "agenda_base": "PL25007",
+        "agenda_panel": "PL",
+        "response_org": "RI",
+        "response_version": "a",
+        "base_agenda_no": "PL25007",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL24035_ILf: IACS Recommendation on Vessel Asset Inventory - Approved by GPG (25083)",
+      "parsed": {
+        "full_code": "PL24035_ILf",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "24",
+        "number": "035",
+        "agenda_version": null,
+        "organization": "IL",
+        "response_version": "f",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL24035_ILf",
+        "agenda_base": "PL24035",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "f",
+        "base_agenda_no": "PL24035",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25018_ILa: IMO NCSR 12 Guidelines for software maintenance of shipboard computer-based navigation and communication equipment and systems",
+      "parsed": {
+        "full_code": "PL25018_ILa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "018",
+        "agenda_version": null,
+        "organization": "IL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25018_ILa",
+        "agenda_base": "PL25018",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "a",
+        "base_agenda_no": "PL25018",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25015_IRa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6)",
+      "parsed": {
+        "full_code": "PL25015_IRa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "IR",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_IRa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "IR",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25015_NVa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6)",
+      "parsed": {
+        "full_code": "PL25015_NVa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "NV",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_NVa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "NV",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25016_TLa: IMO Expert Group on Data Harmonization (EGDH) 13 Session",
+      "parsed": {
+        "full_code": "PL25016_TLa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "016",
+        "agenda_version": null,
+        "organization": "TL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25016_TLa",
+        "agenda_base": "PL25016",
+        "agenda_panel": "PL",
+        "response_org": "TL",
+        "response_version": "a",
+        "base_agenda_no": "PL25016",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25007bILb IMO FAL Correspondence Group (CG) on IMO Strategy on Maritime Digitalization - Round 2",
+      "parsed": {
+        "full_code": "PL25007bILb",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "007",
+        "agenda_version": "b",
+        "organization": "IL",
+        "response_version": "b",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25007bILb",
+        "agenda_base": "PL25007",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "b",
+        "base_agenda_no": "PL25007",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL24005_TLb: Email thread dedicated to track observations on published URs (2nd SDTP Meeting, Agenda item 19, FUA 13)",
+      "parsed": {
+        "full_code": "PL24005_TLb",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "24",
+        "number": "005",
+        "agenda_version": null,
+        "organization": "TL",
+        "response_version": "b",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL24005_TLb",
+        "agenda_base": "PL24005",
+        "agenda_panel": "PL",
+        "response_org": "TL",
+        "response_version": "b",
+        "base_agenda_no": "PL24005",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25016_CCa: IMO Expert Group on Data Harmonization (EGDH) 13 Session",
+      "parsed": {
+        "full_code": "PL25016_CCa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "016",
+        "agenda_version": null,
+        "organization": "CC",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25016_CCa",
+        "agenda_base": "PL25016",
+        "agenda_panel": "PL",
+        "response_org": "CC",
+        "response_version": "a",
+        "base_agenda_no": "PL25016",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "Re: JWG-SDT25001a: IACS Recommendation on Cybersecurity Controls for existing ships - (PL24016) (23170)",
+      "parsed": {
+        "full_code": "JWG-SDT25001a",
+        "document_type": "AGENDA",
+        "panel": "JWG-SDT",
+        "year": "25",
+        "number": "001",
+        "agenda_version": "a",
+        "organization": null,
+        "response_version": null,
+        "is_response": false,
+        "parsing_method": "jwg_agenda_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "JWG-SDT25001a",
+        "agenda_base": "JWG-SDT25001",
+        "agenda_panel": "JWG-SDT",
+        "response_org": null,
+        "response_version": null,
+        "base_agenda_no": "JWG-SDT25001",
+        "document_type": "AGENDA",
+        "is_response": false,
+        "is_agenda": true,
+        "urgency": "NORMAL",
+        "is_reply": true,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL24005_IRc: Email thread dedicated to track observations on published URs (2nd SDTP Meeting, Agenda item 19, FUA 13)",
+      "parsed": {
+        "full_code": "PL24005_IRc",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "24",
+        "number": "005",
+        "agenda_version": null,
+        "organization": "IR",
+        "response_version": "c",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL24005_IRc",
+        "agenda_base": "PL24005",
+        "agenda_panel": "PL",
+        "response_org": "IR",
+        "response_version": "c",
+        "base_agenda_no": "PL24005",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25007bKRa IMO FAL Correspondence Group (CG) on IMO Strategy on Maritime Digitalization - Round 2",
+      "parsed": {
+        "full_code": "PL25007bKRa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "007",
+        "agenda_version": "b",
+        "organization": "KR",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25007bKRa",
+        "agenda_base": "PL25007",
+        "agenda_panel": "PL",
+        "response_org": "KR",
+        "response_version": "a",
+        "base_agenda_no": "PL25007",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25008dILe: IMO MSC 110 5 - IACS Brief - MASS - Final",
+      "parsed": {
+        "full_code": "PL25008dILe",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "008",
+        "agenda_version": "d",
+        "organization": "IL",
+        "response_version": "e",
+        "is_response": true,
+        "parsing_method": "pattern1_attached_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25008dILe",
+        "agenda_base": "PL25008",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "e",
+        "base_agenda_no": "PL25008",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25015_ILa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6)",
+      "parsed": {
+        "full_code": "PL25015_ILa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "IL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_ILa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "IACS SDTP Fw: PL25015_ILa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6) (안종우)",
+      "parsed": {
+        "full_code": "PL25015_ILa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "IL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_ILa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "PL25015_TLa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6)",
+      "parsed": {
+        "full_code": "PL25015_TLa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "TL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_TLa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "TL",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": false,
+        "is_forward": false
+      }
+    },
+    {
+      "subject": "Re: IACS SDTP Fw: PL25015_ILa: Recommendation on Network Monitoring (2nd SDTP Meeting, Agenda Item 5, FUA 6) (안종우)",
+      "parsed": {
+        "full_code": "PL25015_ILa",
+        "document_type": "RESPONSE",
+        "panel": "PL",
+        "year": "25",
+        "number": "015",
+        "agenda_version": null,
+        "organization": "IL",
+        "response_version": "a",
+        "is_response": true,
+        "parsing_method": "pattern2_underscore_case_sensitive"
+      },
+      "event_format": {
+        "agenda_code": "PL25015_ILa",
+        "agenda_base": "PL25015",
+        "agenda_panel": "PL",
+        "response_org": "IL",
+        "response_version": "a",
+        "base_agenda_no": "PL25015",
+        "document_type": "RESPONSE",
+        "is_response": true,
+        "is_agenda": false,
+        "urgency": "NORMAL",
+        "is_reply": true,
+        "is_forward": false
+      }
+    }
+  ]
+}
