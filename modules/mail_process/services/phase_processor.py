@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple, Optional, Protocol
 
 from infra.core.logger import get_logger
 from ..mail_processor_schema import MailProcessingResult
-from .data_merger import MailTransformationRules
+from .data_merger import DataMerger
 
 
 class OrchestratorInterface(Protocol):
@@ -41,7 +41,7 @@ class PhaseProcessor:
         """
         self.orchestrator = orchestrator
         self.logger = get_logger(__name__)
-        self.transformation_rules = MailTransformationRules()
+        self.data_merger = DataMerger()
 
     async def filter_mails(self, mails: List[Dict]) -> List[Dict]:
         """Phase 1: 필터링"""
@@ -132,7 +132,7 @@ class PhaseProcessor:
                 mail["_processed"].update(merged_data)
 
             # 이벤트용 메일 생성 (필요한 필드만 선택)
-            event_mail = self.transformation_rules.to_event_format(mail)
+            event_mail = self.data_merger.to_event_format(merged_data, enriched_mail.raw)
             mails_for_events.append(event_mail)
 
         # 저장 및 이벤트 발행
