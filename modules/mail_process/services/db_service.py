@@ -1,13 +1,17 @@
-"""데이터베이스 서비스 - 중복 확인 및 저장"""
+"""
+메일 데이터베이스 서비스
+중복 확인 및 메일 히스토리 저장
+modules/mail_process/services/db_service.py
+"""
 
-import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Any, Tuple
+import hashlib
 
-from infra.core.config import get_config
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
+from infra.core.config import get_config
 from modules.mail_process.mail_processor_schema import ProcessedMailData
 
 
@@ -18,6 +22,33 @@ class MailDatabaseService:
         self.logger = get_logger(__name__)
         self.db_manager = get_database_manager()
         self.config = get_config()
+
+    def check_duplicate_by_id(self, message_id: str) -> bool:
+        """
+        메시지 ID로 중복 확인
+
+        Args:
+            message_id: 메일의 고유 ID
+
+        Returns:
+            True if duplicate exists, False otherwise
+        """
+        query = "SELECT id FROM mail_history WHERE message_id = ? LIMIT 1"
+
+        try:
+            result = self.db_manager.fetch_one(query, (message_id,))
+
+            if result:
+                self.logger.debug(f"중복 메일 발견 - message_id: {message_id}")
+                return True
+            return False
+
+        except Exception as e:
+            self.logger.error(
+                f"중복 확인 실패 - message_id: {message_id}, error: {str(e)}"
+            )
+            # 에러 발생 시 안전하게 중복으로 처리
+            return True
 
     def check_duplicate_by_content_hash(
         self, mail_id: str, content: str
@@ -61,128 +92,57 @@ class MailDatabaseService:
 
         return False, []
 
-    def save_mail_with_hash(
-        self, processed_mail: ProcessedMailData, clean_content: str
-    ) -> bool:
+    def save_mail_history(self, processed_mail: ProcessedMailData) -> bool:
         """
-        메일 히스토리 저장 (해시 포함)
+        메일 히스토리 저장 (infra.database 활용)
 
         Args:
             processed_mail: 처리된 메일 데이터
-            clean_content: 정제된 메일 내용
 
         Returns:
             저장 성공 여부
         """
-        # 내용 해시 생성
-        content_hash = self._generate_content_hash(clean_content)
-
         # 실제 account_id 조회
         actual_account_id = self._get_actual_account_id(processed_mail.account_id)
 
         # content_hash 컬럼 확인 및 추가
         self._ensure_content_hash_column()
 
-        # 메일 히스토리 저장
-        query = """
-            INSERT INTO mail_history (
-                account_id, message_id, received_time, subject, 
-                sender, keywords, processed_at, content_hash
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        """
-
-        keywords_json = json.dumps(processed_mail.keywords, ensure_ascii=False)
+        # 메일 히스토리 저장 데이터 준비
+        mail_data = {
+            "account_id": actual_account_id,
+            "message_id": processed_mail.mail_id,
+            "received_time": processed_mail.sent_time,
+            "subject": processed_mail.subject,
+            "sender": processed_mail.sender_address,
+            "keywords": json.dumps(processed_mail.keywords, ensure_ascii=False),
+            "processed_at": processed_mail.processed_at,
+            "content_hash": self._generate_content_hash(
+                processed_mail.clean_content or ""
+            ),
+        }
 
         try:
-            self.db_manager.execute_query(
-                query,
-                (
-                    actual_account_id,
-                    processed_mail.mail_id,
-                    processed_mail.sent_time,
-                    processed_mail.subject,
-                    processed_mail.sender_address,
-                    keywords_json,
-                    processed_mail.processed_at,
-                    content_hash,
-                ),
-            )
+            # infra.database의 insert 메서드 사용
+            inserted_id = self.db_manager.insert("mail_history", mail_data)
 
-            self.logger.info(f"메일 저장 완료 - ACCOUNT_ID: {actual_account_id}")
+            self.logger.info(
+                f"메일 저장 완료 - ID: {inserted_id}, "
+                f"mail_id: {processed_mail.mail_id}, "
+                f"account_id: {actual_account_id}"
+            )
             return True
 
         except Exception as e:
             if "UNIQUE constraint failed" in str(e):
                 self.logger.warning(
-                    f"메일 저장 실패 (중복) - ID: {processed_mail.mail_id}"
+                    f"메일 저장 실패 (중복) - mail_id: {processed_mail.mail_id}"
                 )
-                raise  # 상위에서 처리하도록 예외 재발생
             else:
                 self.logger.error(
-                    f"메일 저장 실패 - ID: {processed_mail.mail_id}, 오류: {str(e)}"
+                    f"메일 저장 실패 - mail_id: {processed_mail.mail_id}, error: {str(e)}"
                 )
-                raise
-
-    def get_mail_by_id(self, mail_id: str) -> Optional[Dict[str, Any]]:
-        """
-        메일 ID로 기존 메일 조회
-
-        Args:
-            mail_id: 메일 ID
-
-        Returns:
-            메일 정보 딕셔너리 또는 None
-        """
-        query = """
-            SELECT mh.*, a.user_id 
-            FROM mail_history mh
-            JOIN accounts a ON mh.account_id = a.id
-            WHERE mh.message_id = ?
-        """
-
-        result = self.db_manager.fetch_one(query, (mail_id,))
-
-        if result:
-            mail_dict = dict(result)
-            # 키워드 파싱
-            try:
-                mail_dict["keywords"] = json.loads(mail_dict.get("keywords", "[]"))
-            except (json.JSONDecodeError, TypeError):
-                mail_dict["keywords"] = []
-            return mail_dict
-
-        return None
-
-    def get_mail_by_hash(self, content_hash: str) -> Optional[Dict[str, Any]]:
-        """
-        컨텐츠 해시로 기존 메일 조회
-
-        Args:
-            content_hash: 컨텐츠 해시
-
-        Returns:
-            메일 정보 딕셔너리 또는 None
-        """
-        query = """
-            SELECT mh.*, a.user_id 
-            FROM mail_history mh
-            JOIN accounts a ON mh.account_id = a.id
-            WHERE mh.content_hash = ?
-            LIMIT 1
-        """
-
-        result = self.db_manager.fetch_one(query, (content_hash,))
-
-        if result:
-            mail_dict = dict(result)
-            # 키워드 파싱
-            try:
-                mail_dict["keywords"] = json.loads(mail_dict.get("keywords", "[]"))
-            except (json.JSONDecodeError, TypeError):
-                mail_dict["keywords"] = []
-            return mail_dict
-
-        return None
+            return False
 
     def get_active_accounts(self) -> List[dict]:
         """
@@ -218,38 +178,58 @@ class MailDatabaseService:
         계정 동기화 시간 업데이트
 
         Args:
-            account_id: 계정 ID
+            account_id: 계정 ID (user_id)
             sync_time: 동기화 시간
         """
-        query = "UPDATE accounts SET last_sync_time = ?, updated_at = CURRENT_TIMESTAMP WHERE user_id = ?"
-        self.db_manager.execute_query(query, (sync_time, account_id))
-        self.logger.debug(f"계정 {account_id} 동기화 시간 업데이트: {sync_time}")
+        update_data = {"last_sync_time": sync_time, "updated_at": datetime.now()}
+
+        rows_affected = self.db_manager.update(
+            table="accounts",
+            data=update_data,
+            where_clause="user_id = ?",
+            where_params=(account_id,),
+        )
+
+        if rows_affected > 0:
+            self.logger.debug(f"계정 {account_id} 동기화 시간 업데이트: {sync_time}")
+        else:
+            self.logger.warning(
+                f"계정 {account_id} 동기화 시간 업데이트 실패 - 계정을 찾을 수 없음"
+            )
 
     def record_account_error(self, account_id: str, error_message: str) -> None:
         """
         계정 에러 기록
 
         Args:
-            account_id: 계정 ID
+            account_id: 계정 ID (user_id)
             error_message: 에러 메시지
         """
         import uuid
 
-        log_query = """
-            INSERT INTO processing_logs (run_id, account_id, log_level, message)
-            VALUES (?, (SELECT id FROM accounts WHERE user_id = ?), 'ERROR', ?)
-        """
+        # 실제 account_id 조회
+        actual_account_id = self._get_actual_account_id(account_id)
 
-        run_id = str(uuid.uuid4())
-        self.db_manager.execute_query(log_query, (run_id, account_id, error_message))
-        self.logger.error(f"계정 {account_id} 에러 기록: {error_message}")
+        log_data = {
+            "run_id": str(uuid.uuid4()),
+            "account_id": actual_account_id,
+            "log_level": "ERROR",
+            "message": error_message,
+            "timestamp": datetime.now(),
+        }
+
+        try:
+            self.db_manager.insert("processing_logs", log_data)
+            self.logger.error(f"계정 {account_id} 에러 기록: {error_message}")
+        except Exception as e:
+            self.logger.error(f"에러 로그 기록 실패: {str(e)}")
 
     def get_mail_statistics(self, account_id: str, days: int = 30) -> Dict[str, Any]:
         """
         계정의 메일 처리 통계 조회
 
         Args:
-            account_id: 계정 ID
+            account_id: 계정 ID (user_id)
             days: 조회할 과거 일수
 
         Returns:
@@ -294,7 +274,7 @@ class MailDatabaseService:
         return hashlib.sha256(content.encode("utf-8")).hexdigest()
 
     def _get_actual_account_id(self, account_id: str) -> int:
-        """문자열 account_id를 실제 DB ID로 변환"""
+        """문자열 account_id(user_id)를 실제 DB ID로 변환"""
         if isinstance(account_id, int):
             return account_id
 
@@ -306,17 +286,15 @@ class MailDatabaseService:
         else:
             # 테스트용 계정이 없는 경우 임시로 생성
             self.logger.warning(f"계정 {account_id}가 존재하지 않음, 임시 계정 생성")
-            insert_account_query = """
-                INSERT INTO accounts (user_id, user_name, is_active) 
-                VALUES (?, ?, 1)
-            """
-            self.db_manager.execute_query(
-                insert_account_query, (account_id, f"Test User ({account_id})")
-            )
 
-            # 생성된 계정 ID 조회
-            account_result = self.db_manager.fetch_one(account_query, (account_id,))
-            return account_result["id"]
+            temp_account_data = {
+                "user_id": account_id,
+                "user_name": f"Test User ({account_id})",
+                "is_active": True,
+            }
+
+            account_id_int = self.db_manager.insert("accounts", temp_account_data)
+            return account_id_int
 
     def _ensure_content_hash_column(self) -> None:
         """content_hash 컬럼 존재 확인 및 추가"""

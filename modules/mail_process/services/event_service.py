@@ -1,4 +1,8 @@
-"""이벤트 발행 서비스"""
+"""
+이벤트 발행 서비스
+메일 처리 이벤트를 Kafka로 발행
+modules/mail_process/services/event_service.py
+"""
 
 import uuid
 from datetime import datetime
@@ -17,7 +21,7 @@ class MailEventService:
         self.kafka_client = get_kafka_client()
         self.config = get_config()
 
-    def publish_mail_event(
+    async def publish_mail_event(
         self, account_id: str, mail: Dict, keywords: List[str], clean_content: str
     ) -> None:
         """
@@ -73,42 +77,18 @@ class MailEventService:
             subject = mail.get("subject", "")
             truncated_subject = subject[:50] + "..." if len(subject) > 50 else subject
 
-            # 필드 매핑이 적용되었는지 확인
-            sender_org = mail_copy.get("sender_organization", "N/A")
-            sender_type = mail_copy.get("sender_type", "N/A")
-            agenda_code = mail_copy.get("agenda_code", "N/A")
-            agenda_info = mail_copy.get("agenda", {})
-
             self.logger.info(
                 f"메일 처리 이벤트 발행 - "
                 f"계정: {account_id}, "
                 f"제목: {truncated_subject}, "
-                f"키워드: {len(keywords)}개, "
-                f"발신자 조직: {sender_org}, "
-                f"발신자 타입: {sender_type}, "
-                f"아젠다 코드: {agenda_code}, "
-                f"아젠다 전체: {agenda_info.get('fullCode', 'N/A')}"
+                f"키워드: {len(keywords)}개"
             )
 
         except Exception as e:
             self.logger.error(f"Kafka 이벤트 발행 실패: {str(e)}")
             # 이벤트 발행 실패는 전체 프로세스를 중단시키지 않음
 
-    def _convert_datetime_to_string(self, data: any) -> any:
-        """재귀적으로 datetime 객체를 문자열로 변환"""
-        if isinstance(data, datetime):
-            return data.isoformat()
-        elif isinstance(data, dict):
-            return {
-                key: self._convert_datetime_to_string(value)
-                for key, value in data.items()
-            }
-        elif isinstance(data, list):
-            return [self._convert_datetime_to_string(item) for item in data]
-        else:
-            return data
-
-    def publish_batch_complete_event(
+    async def publish_batch_complete_event(
         self,
         account_id: str,
         processed_count: int,
@@ -151,3 +131,17 @@ class MailEventService:
 
         except Exception as e:
             self.logger.error(f"배치 완료 이벤트 발행 실패: {str(e)}")
+
+    def _convert_datetime_to_string(self, data: any) -> any:
+        """재귀적으로 datetime 객체를 문자열로 변환"""
+        if isinstance(data, datetime):
+            return data.isoformat()
+        elif isinstance(data, dict):
+            return {
+                key: self._convert_datetime_to_string(value)
+                for key, value in data.items()
+            }
+        elif isinstance(data, list):
+            return [self._convert_datetime_to_string(item) for item in data]
+        else:
+            return data
