@@ -345,12 +345,12 @@ def analyze_parsing_results(
                     "agenda_base": extracted_info.get("agenda_base"),
                     "agenda_panel": extracted_info.get(
                         "agenda_panel"
-                    ),  # panel -> agenda_panel
+                    ),  # agenda_panel로 변경
                     "response_org": extracted_info.get(
                         "organization"
-                    ),  # organization -> response_org
+                    ),  # response_org로 매핑
                     "response_version": extracted_info.get("response_version"),
-                    "base_agenda_no": extracted_info.get("base_agenda_no"),
+                    "agenda_base": extracted_info.get("base_agenda_no"),
                     "document_type": extracted_info.get("document_type"),
                     "is_response": extracted_info.get("is_response", False),
                     "is_agenda": extracted_info.get("is_agenda", False),
@@ -433,7 +433,7 @@ def print_results(results: Dict[str, Any]):
 
 def save_results_to_json(
     results: Dict[str, Any],
-    filename: str = "iacs_parser_test_results_with_event_format.json",
+    filename: str = "/home/kimghw/IACSGRAPH/iacs_parser_test_results_with_event_format.json",
 ):
     """결과를 JSON 파일로 저장"""
     # defaultdict를 일반 dict로 변환
@@ -453,7 +453,7 @@ def save_results_to_json(
     with open(filename, "w", encoding="utf-8") as f:
         json.dump(results_copy, f, ensure_ascii=False, indent=2)
 
-    print(f"\n결과가 {filename} 파일로 저장되었습니다.")
+    print(f"\n결과가 {filename} 파일로 저장되었습니다.\n전체 경로: {filename}")
 
 
 def main():

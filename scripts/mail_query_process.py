@@ -17,7 +17,7 @@ from typing import Any, Dict, List
 from infra.core.config import get_config
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger, update_all_loggers_level
-from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
+from modules.mail_process.mail_processor_orchestrator import MailProcessingOrchestrator
 
 # 직접 import
 from modules.mail_query.mail_query_orchestrator import MailQueryOrchestrator
@@ -37,7 +37,7 @@ class AllAccountsFullProcessTester:
 
     def __init__(self):
         self.mail_query = MailQueryOrchestrator()
-        self.mail_processor = MailProcessorOrchestrator()
+        self.mail_processor = MailProcessingOrchestrator()
         self.db = get_database_manager()
         self.config = get_config()
 
@@ -200,14 +200,14 @@ class AllAccountsFullProcessTester:
             result["process_success"] = True
 
             # 통계 매핑
-            result["mails_processed"] = process_stats.get("total_mails", 0)
+            result["mails_processed"] = process_stats.total_fetched
             result["processing_stats"] = {
-                "success": process_stats.get("saved_mails", 0),  # 실제 저장된 메일
-                "skipped": process_stats.get("skipped_mails", 0),  # 필터링된 메일
-                "failed": process_stats.get("db_errors", 0),  # DB 오류
-                "filtered": process_stats.get("filtered_mails", 0),  # 필터링된 메일
-                "duplicate": process_stats.get("duplicate_mails", 0),  # 중복 메일
-                "processed": process_stats.get("processed_mails", 0),  # 처리된 메일
+                "success": process_stats.saved_count,  # 실제 저장된 메일
+                "skipped": process_stats.skipped_count,  # 필터링된 메일
+                "failed": process_stats.failed_count,  # DB 오류
+                "filtered": process_stats.filtered_count,  # 필터링된 메일
+                "duplicate": process_stats.duplicate_count,  # 중복 메일
+                "processed": process_stats.processed_count,  # 처리된 메일
                 "events_published": process_stats.get(
                     "events_published", 0
                 ),  # 발행된 이벤트
@@ -216,7 +216,7 @@ class AllAccountsFullProcessTester:
             # 필터 이유 상세
             if "filter_reasons" in process_stats:
                 result["filter_details"] = {
-                    "total": process_stats.get("skipped_mails", 0),
+                    "total": process_stats.skipped_count,
                     "reasons": process_stats["filter_reasons"],
                 }
 

@@ -6,6 +6,7 @@ modules/mail_process/mail_processor_schema.py
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
+
 # AgendaInfo 클래스 삭제됨 - 플랫한 구조로 변경
 
 from pydantic import BaseModel, Field, ConfigDict
@@ -71,7 +72,6 @@ class GraphMailItem(BaseModel):
     web_link: Optional[str] = Field(None, description="웹 링크")
 
 
-class AgendaInfo(BaseModel):
 class ProcessedMailData(BaseModel):
     """처리된 메일 데이터 - 통일된 네이밍"""
 
@@ -102,7 +102,6 @@ class ProcessedMailData(BaseModel):
     agenda_panel: Optional[str] = None  # 패널 (PL/PS/JWG-SDT 등) - agenda_org에서 변경
     response_org: Optional[str] = None  # 응답 조직 (IR)
     response_version: Optional[str] = None  # 응답 버전 (a)
-    agenda_version: Optional[str] = None  # 아젠다 버전 (a, b, c)
     agenda_info: Optional[Dict[str, Any]] = None
     additional_agenda_references: List[str] = Field(default_factory=list)
 
@@ -181,7 +180,6 @@ class ProcessedMailEvent(BaseModel):
     agenda_panel: Optional[str] = None  # 패널 (PL/PS/JWG-SDT 등) - agenda_org에서 변경
     response_org: Optional[str] = None  # 응답 조직
     response_version: Optional[str] = None  # 응답 버전
-    agenda_version: Optional[str] = None  # 아젠다 버전 (a, b, c)
     extracted_keywords: List[str] = Field(default_factory=list)
     urgency: str = "NORMAL"
     is_reply: bool = False

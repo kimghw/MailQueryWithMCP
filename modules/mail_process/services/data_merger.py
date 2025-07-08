@@ -36,7 +36,7 @@ class MailTransformationRules:
                 "agenda_organization"
             ),  # agenda_organization을 response_org로 매핑
             "response_version": mail.get("response_version"),
-                        "agenda_version": mail.get("agenda_version"),
+                        "agenda_version": merged.get("agenda_version"),
             # 추가 정보
             "extracted_keywords": mail.get("keywords", []),
             "urgency": mail.get("urgency", "NORMAL"),
@@ -84,7 +84,7 @@ class MailTransformationRules:
                         "agenda_panel": info.get("panel"),  # 패널 정보
                         "response_org": info.get("organization"),  # 응답 조직
                         "response_version": info.get("response_version"),
-                        "agenda_version": mail.get("agenda_version"),
+                        "agenda_version": merged.get("agenda_version"),
                         "agenda_version": version,
                     }
                 )
