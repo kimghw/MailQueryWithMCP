@@ -28,30 +28,47 @@ def extract_multiple_files_from_content(file_path: str) -> List[Tuple[str, str]]
         with open(file_path, "r", encoding="utf-8") as f:
             content = f.read()
 
+        # 파일 구분자 패턴들
+        # 1. """ 패턴
+        # 2. ''' 패턴
+        # 3. # === 패턴
+        # 4. # --- 패턴
+
         # """ 또는 ''' 로 구분된 섹션 찾기
         pattern = r'"""[\s\S]*?"""'
         sections = re.findall(pattern, content)
 
-        for i, section in enumerate(sections):
+        for section in sections:
             # 섹션 내에서 경로 추출
             lines = section.split("\n")
             target_path = None
 
             # 경로 패턴들
             path_patterns = [
-                r"modules/[^\s]+\.py",  # modules/로 시작하는 경로
-                r"scripts/[^\s]+\.py",  # scripts/로 시작하는 경로
-                r"infra/[^\s]+\.py",  # infra/로 시작하는 경로
-                r"[a-zA-Z0-9_/]+\.py",  # 일반적인 .py 경로
+                r"^.*?modules/[^\s]+\.py",  # modules/로 시작하는 경로
+                r"^.*?scripts/[^\s]+\.py",  # scripts/로 시작하는 경로
+                r"^.*?infra/[^\s]+\.py",  # infra/로 시작하는 경로
+                r"^.*?([a-zA-Z0-9_/]+\.py)",  # 일반적인 .py 경로
             ]
 
             # 처음 몇 줄에서 경로 찾기
-            for line in lines[:10]:
+            for i, line in enumerate(lines[:10]):
                 for pattern in path_patterns:
                     match = re.search(pattern, line)
                     if match:
-                        target_path = match.group(0)
-                        break
+                        if "modules/" in line or "scripts/" in line or "infra/" in line:
+                            # 전체 경로 추출
+                            path_match = re.search(
+                                r"((?:modules|scripts|infra)/[^\s]+\.py)", line
+                            )
+                            if path_match:
+                                target_path = path_match.group(1)
+                                break
+                        else:
+                            target_path = (
+                                match.group(1) if match.lastindex else match.group(0)
+                            )
+                            break
                 if target_path:
                     break
 
@@ -66,7 +83,6 @@ def extract_multiple_files_from_content(file_path: str) -> List[Tuple[str, str]]
                 if next_section_match:
                     section_content = remaining_content[: next_section_match.start()]
                 else:
-                    # 마지막 섹션인 경우
                     section_content = remaining_content
 
                 # 앞뒤 공백 제거
@@ -102,29 +118,8 @@ def extract_file_path_from_content(file_path: str) -> Optional[str]:
     """
     try:
         with open(file_path, "r", encoding="utf-8") as f:
-            content = f.read(500)  # 첫 500자만 읽기
-
-        # docstring 내부의 경로 찾기
-        if content.startswith('"""') or content.startswith("'''"):
-            # docstring 내용 추출
-            docstring_pattern = r'^("""|\'\'\')\s*(.*?)\s*\1'
-            match = re.search(docstring_pattern, content, re.DOTALL)
-            if match:
-                docstring_content = match.group(2)
-                # docstring 내에서 경로 찾기
-                path_patterns = [
-                    r"modules/[^\s]+\.py",
-                    r"scripts/[^\s]+\.py",
-                    r"infra/[^\s]+\.py",
-                    r"[a-zA-Z0-9_/]+\.py",
-                ]
-                for pattern in path_patterns:
-                    path_match = re.search(pattern, docstring_content)
-                    if path_match:
-                        return path_match.group(0)
-
-        # 기존 방식으로도 시도
-        lines = content.split("\n")[:10]
+            # 첫 10줄만 읽어서 경로 정보 찾기
+            lines = [f.readline().strip() for _ in range(10)]
 
         # 다양한 패턴으로 경로 찾기
         patterns = [
@@ -137,18 +132,14 @@ def extract_file_path_from_content(file_path: str) -> Optional[str]:
             r"^#\s*(.+\..+)$",  # # some/path/file.ext
             r"^\s*#\s*(.+/[^/]+\.[^/]+)$",  # # path/file.ext
             r"^\s*(.+/[^/]+\.[^/]+)$",  # path/file.ext (주석 없이)
-            r"(modules/[^\s]+\.py)",  # modules/ 경로
-            r"(scripts/[^\s]+\.py)",  # scripts/ 경로
-            r"(infra/[^\s]+\.py)",  # infra/ 경로
         ]
 
         for line in lines:
-            line = line.strip()
             if not line:
                 continue
 
             for pattern in patterns:
-                match = re.search(pattern, line, re.IGNORECASE)
+                match = re.match(pattern, line, re.IGNORECASE)
                 if match:
                     target_path = match.group(1).strip()
                     # 상대 경로를 절대 경로로 변환
@@ -197,57 +188,6 @@ def find_replace_files(directory: str = ".") -> List[str]:
     return replace_files
 
 
-def process_file_replacement(source_file: str, dry_run: bool = False) -> bool:
-    """
-    단일 파일을 처리하여 지정된 경로로 이동/복사합니다.
-
-    Args:
-        source_file: 원본 파일 경로
-        dry_run: True면 실제 작업 없이 시뮬레이션만
-
-    Returns:
-        성공 여부
-    """
-    print(f"\n처리 중: {source_file}")
-
-    # 파일에서 대상 경로 추출
-    target_path = extract_file_path_from_content(source_file)
-
-    if not target_path:
-        print(f"  ❌ 대상 경로를 찾을 수 없습니다.")
-        return False
-
-    print(f"  📍 대상 경로: {target_path}")
-
-    # 대상 디렉토리 생성
-    target_dir = os.path.dirname(target_path)
-
-    if dry_run:
-        print(f"  🔍 [DRY RUN] 디렉토리 생성: {target_dir}")
-        print(f"  🔍 [DRY RUN] 파일 복사: {source_file} -> {target_path}")
-        return True
-
-    try:
-        # 디렉토리가 없으면 생성 (중첩 디렉토리도 모두 생성)
-        if target_dir and not os.path.exists(target_dir):
-            os.makedirs(target_dir, exist_ok=True)
-            print(f"  📁 디렉토리 생성: {target_dir}")
-
-        # 파일 복사
-        shutil.copy2(source_file, target_path)
-        print(f"  ✅ 파일 복사 완료: {target_path}")
-
-        # 원본 파일 삭제
-        os.remove(source_file)
-        print(f"  🗑️ 원본 파일 삭제: {source_file}")
-
-        return True
-
-    except Exception as e:
-        print(f"  ❌ 오류 발생: {e}")
-        return False
-
-
 def process_multi_file_replacement(source_file: str, dry_run: bool = False) -> int:
     """
     다중 파일이 포함된 파일을 처리합니다.
@@ -259,18 +199,14 @@ def process_multi_file_replacement(source_file: str, dry_run: bool = False) -> i
     Returns:
         성공적으로 처리된 파일 수
     """
-    print(f"\n🔍 파일 분석 중: {source_file}")
+    print(f"\n🔍 다중 파일 확인 중: {source_file}")
 
-    # 파일에서 여러 파일 추출 시도
+    # 파일에서 여러 파일 추출
     files = extract_multiple_files_from_content(source_file)
 
-    # 다중 파일이 없으면 단일 파일로 처리
-    if not files or len(files) == 0:
-        # 단일 파일로 처리 시도
-        if process_file_replacement(source_file, dry_run):
-            return 1
-        else:
-            return 0
+    if not files:
+        print(f"  ❌ 처리할 파일을 찾을 수 없습니다.")
+        return 0
 
     if len(files) > 1:
         print(f"  📦 {len(files)}개의 파일이 포함되어 있습니다.")
@@ -306,7 +242,7 @@ def process_multi_file_replacement(source_file: str, dry_run: bool = False) -> i
             print(f"    ❌ 오류 발생: {e}")
 
     # 모든 파일이 성공적으로 처리되면 원본 삭제
-    if not dry_run and success_count == len(files) and len(files) > 0:
+    if not dry_run and success_count == len(files):
         try:
             os.remove(source_file)
             print(f"  🗑️ 원본 파일 삭제: {source_file}")
