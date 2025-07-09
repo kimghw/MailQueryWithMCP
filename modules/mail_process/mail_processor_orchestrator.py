@@ -240,7 +240,7 @@ class MailProcessorOrchestrator:
                 try:
                     # 이벤트 발행 (event_service가 모든 처리를 담당)
                     await event_service.publish_mail_received_event(
-                        mail=mail, iacs_info=iacs_info, keywords=keywords_data
+                        mail=mail, iacs_info=iacs_info, semantic_info=keywords_data
                     )
 
                     # keywords_data에서 keywords 리스트 추출

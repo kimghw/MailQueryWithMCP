@@ -22,7 +22,10 @@ class MailEventService:
         self.config = get_config()
 
     async def publish_mail_received_event(
-        self, mail: Dict[str, Any], iacs_info: Dict[str, Any], keywords: List[str]
+        self,
+        mail: Dict[str, Any],
+        iacs_info: Dict[str, Any],
+        semantic_info: Dict[str, Any],
     ) -> None:
         """
         메일 수신 이벤트 발행 (통합 포맷)
@@ -30,7 +33,7 @@ class MailEventService:
         Args:
             mail: 원본 메일 데이터
             iacs_info: IACS 파싱 결과의 extracted_info
-            keywords: 추출된 키워드 리스트
+            semantic_info: 추출된 semantic 정보 (keywords, deadline 등)
         """
         try:
             # 이벤트 정보 구성
@@ -59,15 +62,11 @@ class MailEventService:
                 "sender_organization": iacs_info.get("sender_organization"),
                 "parsing_method": iacs_info.get("parsing_method"),
                 # semantic_info
-                "keywords": keywords,
-                "deadline": self._extract_deadline(mail),
-                "has_deadline": self._check_deadline(mail),
-                "mail_type": self._determine_mail_type(
-                    mail.get("subject", ""), iacs_info
-                ),
-                "decision_status": self._determine_decision_status(
-                    mail.get("subject", ""), mail.get("body", {}).get("content", "")
-                ),
+                "keywords": semantic_info.get("keywords", []),  # 리스트만 추출
+                "deadline": semantic_info.get("deadline"),  # 이미 추출된 값
+                "has_deadline": semantic_info.get("has_deadline", False),
+                "mail_type": semantic_info.get("mail_type"),
+                "decision_status": semantic_info.get("decision_status"),
             }
 
             # 발신자 정보 추출 및 설정
@@ -91,11 +90,12 @@ class MailEventService:
             # 간단한 로깅
             subject = mail.get("subject", "")
             truncated_subject = subject[:50] + "..." if len(subject) > 50 else subject
+            keywords_count = len(semantic_info.get("keywords", []))
             self.logger.info(
                 f"메일 수신 이벤트 발행 - "
                 f"ID: {mail.get('id', 'unknown')}, "
                 f"제목: {truncated_subject}, "
-                f"키워드: {len(keywords)}개"
+                f"키워드: {keywords_count}개"
             )
 
         except Exception as e:
@@ -114,49 +114,6 @@ class MailEventService:
             from_info = mail["from"].get("emailAddress", {})
             event_info["sender"] = from_info.get("name", "")
             event_info["sender_address"] = from_info.get("address", "")
-
-    def _determine_mail_type(self, subject: str, iacs_info: Dict[str, Any]) -> str:
-        """메일 타입 결정"""
-        subject_lower = subject.lower()
-
-        if iacs_info.get("is_reply"):
-            return "RESPONSE"
-        elif "request" in subject_lower or "req" in subject_lower:
-            return "REQUEST"
-        elif "notification" in subject_lower or "notice" in subject_lower:
-            return "NOTIFICATION"
-        elif "completed" in subject_lower or "done" in subject_lower:
-            return "COMPLETED"
-        else:
-            return "OTHER"
-
-    def _determine_decision_status(self, subject: str, body: str) -> str:
-        """결정 상태 결정"""
-        combined = f"{subject} {body}".lower()
-
-        if "decision" in combined or "decided" in combined:
-            return "decision"
-        elif "review" in combined:
-            return "review"
-        elif "consolidated" in combined:
-            return "consolidated"
-        elif "comment" in combined:
-            return "comment"
-        else:
-            return "created"
-
-    def _check_deadline(self, mail: Dict[str, Any]) -> bool:
-        """마감일 존재 여부 확인"""
-        content = f"{mail.get('subject', '')} {mail.get('body', {}).get('content', '')}".lower()
-        deadline_keywords = ["deadline", "due date", "by", "until", "마감", "기한"]
-
-        return any(keyword in content for keyword in deadline_keywords)
-
-    def _extract_deadline(self, mail: Dict[str, Any]) -> Optional[str]:
-        """마감일 추출 (향후 개선 필요)"""
-        # TODO: 자연어 처리나 정규식을 사용한 날짜 추출 로직 구현
-        # 현재는 None 반환
-        return None
 
     async def publish_batch_complete_event(
         self,
