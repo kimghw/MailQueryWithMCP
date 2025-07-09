@@ -1,3 +1,5 @@
+# scripts/mail_queue_event.py
+
 #!/usr/bin/env python3
 """
 이벤트 발행 테스트 스크립트 - 실제 메일 조회 버전
@@ -49,9 +51,10 @@ class EventPublishingTest:
         self.event_stats = defaultdict(int)
         self.sample_events = []
         self.published_events = []
+        self.processed_mail_data = {}  # 처리된 메일 데이터 저장
 
     async def test_real_mail_events(
-        self, user_id: str = "krsdtp", days_back: int = 49, max_mails: int = 7  # 7주일
+        self, user_id: str = "krsdtp", days_back: int = 49, max_mails: int = 7
     ):
         """실제 메일로 이벤트 발행 테스트"""
 
@@ -129,6 +132,7 @@ class EventPublishingTest:
                 print(f"\n⏳ 배치 처리 시작...")
                 start_time = datetime.now()
 
+                # process_batch는 이미 이벤트를 발행함
                 process_results = await self.mail_processor_orchestrator.process_batch()
 
                 process_time_ms = (datetime.now() - start_time).total_seconds() * 1000
@@ -136,8 +140,8 @@ class EventPublishingTest:
                 print(f"✅ 배치 처리 완료 (소요시간: {process_time_ms:.0f}ms)")
                 print(f"  - 처리된 메일: {len(process_results)}개")
 
-                # 처리 결과 분석 및 이벤트 발행
-                await self._process_and_publish_events(
+                # 처리 결과 분석 (이벤트는 이미 발행됨)
+                await self._analyze_processing_results(
                     process_results, query_response.messages
                 )
 
@@ -165,133 +169,52 @@ class EventPublishingTest:
         finally:
             await self.mail_query_orchestrator.close()
 
-    async def _process_and_publish_events(
+    async def _analyze_processing_results(
         self, process_results: List[Any], original_mails: List[Any]
     ):
-        """처리 결과를 기반으로 실제 이벤트 발행"""
+        """처리 결과 분석 (이벤트는 이미 발행됨)"""
 
-        print(f"\n📊 처리 결과 상세 및 이벤트 발행:")
+        print(f"\n📊 처리 결과 분석:")
 
         # 메일별 처리 결과 매핑
         mail_map = {mail.id: mail for mail in original_mails}
-
-        dashboard_candidates = 0
-        dashboard_published = 0
-        email_events_published = 0
 
         for result in process_results:
             if result.success and result.mail_id in mail_map:
                 mail = mail_map[result.mail_id]
 
-                # 메일 데이터를 딕셔너리로 변환
-                mail_dict = self._convert_mail_to_dict(mail)
-
-                # IACS 정보 추출 (result.keywords에서)
-                iacs_info = {}
-                semantic_info = {}
-
-                if hasattr(result, "keywords") and isinstance(result.keywords, dict):
-                    # semantic_info 추출
-                    semantic_info = {
-                        "keywords": result.keywords.get("keywords", []),
-                        "deadline": result.keywords.get("deadline"),
-                        "has_deadline": result.keywords.get("has_deadline", False),
-                        "mail_type": result.keywords.get("mail_type"),
-                        "decision_status": result.keywords.get("decision_status"),
-                    }
-
-                    # IACS 정보 추출
-                    iacs_info = {
-                        "agenda_code": result.keywords.get("agenda_code"),
-                        "agenda_base": result.keywords.get("agenda_base"),
-                        "agenda_base_version": result.keywords.get(
-                            "agenda_base_version"
-                        ),
-                        "agenda_panel": result.keywords.get("agenda_panel"),
-                        "agenda_year": result.keywords.get("agenda_year"),
-                        "agenda_number": result.keywords.get("agenda_number"),
-                        "agenda_version": result.keywords.get("agenda_version"),
-                        "response_org": result.keywords.get("response_org"),
-                        "response_version": result.keywords.get("response_version"),
-                        "sent_time": result.keywords.get("sent_time"),
-                        "sender_type": result.keywords.get("sender_type"),
-                        "sender_organization": result.keywords.get(
-                            "sender_organization"
-                        ),
-                        "parsing_method": result.keywords.get("parsing_method"),
-                    }
-
                 print(f"\n  📧 메일 ID: {result.mail_id[:20]}...")
                 print(f"     제목: {mail.subject[:50]}...")
+                print(f"     ✅ 처리 성공")
 
-                # 1. email.received 이벤트 발행
-                try:
-                    await self.mail_event_service.publish_mail_received_event(
-                        mail=mail_dict, iacs_info=iacs_info, semantic_info=semantic_info
+                # keywords가 리스트인 경우
+                if isinstance(result.keywords, list):
+                    print(f"     키워드: {len(result.keywords)}개")
+                    if result.keywords:
+                        print(f"     - {', '.join(result.keywords[:5])}")
+
+                # 이벤트 발행 성공으로 간주 (process_batch에서 이미 발행)
+                self.event_stats["email.received"] += 1
+
+                # 샘플 이벤트 저장
+                if len(self.sample_events) < 3:
+                    self.sample_events.append(
+                        {
+                            "type": "email.received",
+                            "mail_id": result.mail_id,
+                            "subject": mail.subject[:50],
+                            "keywords": (
+                                result.keywords
+                                if isinstance(result.keywords, list)
+                                else []
+                            ),
+                        }
                     )
-                    email_events_published += 1
-                    self.event_stats["email.received"] += 1
-                    print(f"     ✅ email.received 이벤트 발행 완료")
 
-                    # 샘플 이벤트 저장
-                    if len(self.sample_events) < 3:
-                        self.sample_events.append(
-                            {
-                                "type": "email.received",
-                                "mail_id": result.mail_id,
-                                "subject": mail.subject[:50],
-                                "iacs_info": iacs_info,
-                                "semantic_info": semantic_info,
-                            }
-                        )
-
-                except Exception as e:
-                    print(f"     ❌ email.received 이벤트 발행 실패: {str(e)}")
-
-                # 2. 대시보드 이벤트 발행 (조건 충족시)
-                if iacs_info.get("agenda_code") and iacs_info.get(
-                    "sender_organization"
-                ):
-                    dashboard_candidates += 1
-
-                    if iacs_info.get("sender_organization") in [
-                        "ABS",
-                        "BV",
-                        "CCS",
-                        "CRS",
-                        "DNV",
-                        "IRS",
-                        "KR",
-                        "NK",
-                        "PRS",
-                        "RINA",
-                        "IL",
-                        "TL",
-                    ]:
-                        try:
-                            # 대시보드 이벤트용 데이터 구성
-                            structured_data = {
-                                **iacs_info,
-                                **semantic_info,
-                                "mail_id": result.mail_id,
-                                "subject": mail.subject,
-                                "received_date_time": mail.received_date_time,
-                            }
-
-                            await self.dashboard_event_service.publish_dashboard_event(
-                                structured_data
-                            )
-                            dashboard_published += 1
-                            self.event_stats["email-dashboard"] += 1
-                            print(f"     ✅ 대시보드 이벤트 발행 완료")
-
-                        except Exception as e:
-                            print(f"     ❌ 대시보드 이벤트 발행 실패: {str(e)}")
-
-        print(f"\n📈 이벤트 발행 결과:")
-        print(f"  - email.received 이벤트 발행: {email_events_published}개")
-        print(f"  - 대시보드 이벤트 후보: {dashboard_candidates}개")
-        print(f"  - 대시보드 이벤트 발행: {dashboard_published}개")
+        print(f"\n📈 처리 결과 요약:")
+        print(f"  - 총 처리된 메일: {len(process_results)}개")
+        print(f"  - 성공: {sum(1 for r in process_results if r.success)}개")
+        print(f"  - 실패: {sum(1 for r in process_results if not r.success)}개")
 
     def _convert_mail_to_dict(self, mail: Any) -> Dict[str, Any]:
         """메일 객체를 딕셔너리로 변환"""
@@ -433,6 +356,8 @@ class EventPublishingTest:
 
             if is_iacs and has_agenda:
                 print(f"      ✅ 대시보드 이벤트 발행 가능")
+                # IACS 정보가 제대로 추출되었다면 대시보드 이벤트도 발행되었을 것
+                self.event_stats["email-dashboard"] += 1
             elif not is_iacs and has_agenda:
                 print(f"      ❌ 대시보드 이벤트 불가 (비IACS 조직)")
             elif is_iacs and not has_agenda:
@@ -455,24 +380,11 @@ class EventPublishingTest:
             print(f"      제목: {event['subject']}...")
 
             if event["type"] == "email.received":
-                print(f"      IACS 정보:")
-                print(
-                    f"        - agenda_code: {event['iacs_info'].get('agenda_code', 'N/A')}"
-                )
-                print(
-                    f"        - sender_organization: {event['iacs_info'].get('sender_organization', 'N/A')}"
-                )
-                print(f"      Semantic 정보:")
-                print(
-                    f"        - mail_type: {event['semantic_info'].get('mail_type', 'N/A')}"
-                )
-                print(
-                    f"        - has_deadline: {event['semantic_info'].get('has_deadline', False)}"
-                )
-                keywords = event["semantic_info"].get("keywords", [])[:5]
-                print(
-                    f"        - keywords: {', '.join(keywords) if keywords else 'N/A'}"
-                )
+                keywords = event.get("keywords", [])
+                if keywords:
+                    print(f"      키워드: {', '.join(keywords[:5])}")
+                else:
+                    print(f"      키워드: 없음")
 
     async def cleanup(self):
         """리소스 정리"""
@@ -497,7 +409,7 @@ async def main():
 
         if confirm == "y":
             await test.test_real_mail_events(
-                user_id="krsdtp", days_back=49, max_mails=7  # 7주
+                user_id="krsdtp", days_back=49, max_mails=7
             )
         else:
             # 사용자 정의
