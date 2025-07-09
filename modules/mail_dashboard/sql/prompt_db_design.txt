@@ -1,45 +1,45 @@
 {
 	"event_type": "email.received",
-	"event_id": "0d6b7467-307b-4643-9ec2-0fa020e6b370",
-	"mail_id": "AAMkADY4YzAyZTE3LWNmYTItNDkxOS04YjgwLTljNzkxNjgxMzUxNwBGAAAAAAAFMZh9CBe1RJUgE-GxZfw9BwDWadiCgUcrQbuYpQ897aeZAADD-UD1AADWadiCgUcrQbuYpQ897aeZAAEuCbrLAAA=",
-	"occurred_at": "2025-07-09T18:21:07.538790",
+	"event_id": "eec1e7dc-ed47-4120-958a-64bea381191f",
+	"mail_id": "AAMkADY4YzAyZTE3LWNmYTItNDkxOS04YjgwLTljNzkxNjgxMzUxNwBGAAAAAAAFMZh9CBe1RJUgE-GxZfw9BwDWadiCgUcrQbuYpQ897aeZAAEuCcp0AADWadiCgUcrQbuYpQ897aeZAAEuCdJkAAA=",
+	"occurred_at": "2025-07-09T21:14:11.378255",
 	"event_info": {
 		"sentDateTime": "",
 		"hasAttachments": false,
-		"subject": "PL24035_ILf: IACS Recommendation on Vessel Asset Inventory - Approved by GPG (25083)",
+		"subject": "PL25016_BVa: IMO Expert Group on Data Harmonization (EGDH) 13 Session",
 		"webLink": "",
-		"body": "PL24035_ILf: IACS Recommendation on Vessel Asset Inventory - Approved by GPG (25083) Date: 30 June 2025 TO: SDT Panel Members Attached Files: 1._draft_Recommendation_Vessel_Asset_Inventory_May_2025_updated_by_GCT_to_reflect_LR_IRS_RINA_comments_agreed_by_SDTP_Chair.docx 2. draft appendix 1 Vessel Asset Inventory template May 2025.xlsx 3. draft appendix 2 sample Vessel Asset Inventory May 2025.xlsx 4. HF TB Recommendation Vessel Asset Inventory May 2025.docx Subject: PL24035_ILf: IACS Recommendation on Vessel Asset Inventory - Approved by GPG (25083) Dear SDT Panel Members, 1. Reference is made to PL24035_ILe, item 5. 1. Further to item 1, after two rounds of review, all GPG Members tacitly agreed to the updated IACS Recommendation on Vessel Asset Inventory (including its appendices 1 and 2), and its associated HF TB. 1. Revised recommendation and attachments are attached herein. The recommendation document includes all comments raised by the GPG members along with responses for your information. 1. would like to extend my appreciation to the panel members and in particular to Mr. Greg Zidiak for developing the subject recommendation. 1. Permanent Secretariat will be finalizing publishing the recommendation and attachments in the IACS website in due course. 1. Members are kindly requested to note as above. With Kind Regards, Angeliki Zisimatou IACS Safe Digital Transformation Panel Chair",
-		"sender": "IACS SDTP Chair",
-		"sender_address": "SDTPChair@eagle.org",
-		"agenda_code": "PL24035_ILf",
-		"agenda_base": "PL24035",
-		"agenda_base_version": null,
+		"body": "PL25016_BVa: IMO Expert Group on Data Harmonization (EGDH) 13 Session Date: 24 Jun. 2025 To: SDTP Chair Cc: SDTP Members Cc: Subject: PL25016_BVa: IMO Expert Group on Data Harmonization (EGDH) 13 Session Dear Chair, 1. Reference is made to PL25016_ILa dated 05 Jun. 2025. 2. Answering item 4., BV does not consider SDTP representation essential in the IMO Expert Group on Data Harmonization (EGDH) 13 Session Best Regards, Jerome FAIVRE BV SDTP Member This message contains confidential information. To know more, please click on the following link:",
+		"sender": "SdtpPanelmail",
+		"sender_address": "sdtp.panel@bureauveritas.com",
+		"agenda_code": "PL25016_BVa",
+		"agenda_base": "PL25016",
+		"agenda_base_version": "PL25016",
 		"agenda_panel": "PL",
-		"agenda_year": "24",
-		"agenda_number": "035",
-		"agenda_version": null,
-		"response_org": "IL",
-		"response_version": "f",
-		"sent_time": "2025-06-30 14:20:32 UTC",
+		"agenda_year": "25",
+		"agenda_number": "016",
+		"agenda_version": "",
+		"response_org": "BV",
+		"response_version": "a",
+		"sent_time": "2025-06-24 15:10:24 UTC",
 		"sender_type": "MEMBER",
-		"sender_organization": "ABS",
+		"sender_organization": "BV",
 		"parsing_method": "pattern2_underscore_case_sensitive",
 		"keywords": [
-			"IACS",
-			"Recommendation",
-			"Vessel",
-			"Asset",
-			"Inventory"
+			"IMO",
+			"EGDH",
+			"representation",
+			"harmonization",
+			"session"
 		],
 		"deadline": null,
 		"has_deadline": false,
-		"mail_type": "NOTIFICATION",
+		"mail_type": "RESPONSE",
 		"decision_status": "decision"
 	}
-}
 
 # table list
-## agenda_chair : agenda_code, (pk)agenda_base, agenda_base_version, agenda_ba
-## agenda_responses_content :(pk)agenda_base
-## agenda_responses_receivedtime : (pk)agenda_base
-## agenda_pending :(pk) increase index
+## agenda_all : agenda_code(PK), sender_type, sender_organization, sent_time, mail_type, decision_status, subject, body, keywords, response_org, response_version, deadline, has_deadline, sender, sender_address, agenda_panel, agenda_year, agenda_number, agenda_base, agenda_version, agenda_base_version, parsing_method, hasAttachments, sentDateTime, webLink
+## agenda_chair : agenda_code, sender_type, sender_organization, sent_time, mail_type, decision_status, subject, body, keywords, response_org, response_version, deadline, has_deadline, sender, sender_address, agenda_panel, agenda_year, agenda_number, agenda_base, agenda_version, agenda_base_version(PK), parsing_method, hasAttachments, sentDateTime, webLink
+## agenda_responses_content : (PK)agenda_base_version , KR, ABS, BV, CCS, CRS, DNV, IRS, KR, NK PRS, RINA, TL and OTHER
+## agenda_responses_receivedtime : (PK)agenda_base_version , KR, ABS, BV, CCS, CRS, DNV, IRS, KR, NK PRS, RINA, TL and OTHER
+## agenda_pending :agenda_code(PK), sender_type, sender_organization, sent_time, mail_type, decision_status, subject, body, keywords, response_org, response_version, deadline, has_deadline, sender, sender_address, agenda_panel, agenda_year, agenda_number, agenda_base, agenda_version, agenda_base_version, parsing_method, hasAttachments, sentDateTime, webLink
