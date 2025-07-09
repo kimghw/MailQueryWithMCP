@@ -21,7 +21,7 @@ class PersistenceService:
 
     def save_processed_mail(self, processed_mail: ProcessedMailData) -> bool:
         """
-        처리된 메일 저장
+        처리된 메일 저장 (레거시 메서드 - 호환성 유지)
 
         Args:
             processed_mail: 처리된 메일 데이터
@@ -30,29 +30,21 @@ class PersistenceService:
             저장 성공 여부
         """
         try:
-            # 중복 확인 (안전장치)
-            if self.db_service.check_duplicate_by_id(processed_mail.mail_id):
-                self.logger.warning(
-                    f"저장 시도 중 중복 발견 - mail_id: {processed_mail.mail_id}"
-                )
-                return False
+            # 새로운 메서드 사용
+            saved, _ = self.db_service.check_and_save_mail(processed_mail)
 
-            # 메일 히스토리 저장
-            success = self.db_service.save_mail_history(processed_mail)
-
-            if success:
+            if saved:
                 self.logger.debug(
                     f"메일 저장 성공 - "
                     f"mail_id: {processed_mail.mail_id}, "
-                    f"subject: {processed_mail.subject[:50]}..., "
-                    f"keywords: {len(processed_mail.keywords)}개"
+                    f"subject: {processed_mail.subject[:50]}..."
                 )
             else:
                 self.logger.warning(
                     f"메일 저장 실패 - mail_id: {processed_mail.mail_id}"
                 )
 
-            return success
+            return saved
 
         except DatabaseError as e:
             self.logger.error(
@@ -68,6 +60,52 @@ class PersistenceService:
                 exc_info=True,
             )
             return False
+
+    def check_and_save_mail(
+        self, processed_mail: ProcessedMailData
+    ) -> tuple[bool, bool]:
+        """
+        중복 확인 후 저장 및 다음 단계 진행 여부 결정
+
+        Args:
+            processed_mail: 처리된 메일 데이터
+
+        Returns:
+            (저장_성공_여부, 다음_단계_진행_여부)
+        """
+        try:
+            saved, should_continue = self.db_service.check_and_save_mail(processed_mail)
+
+            if saved:
+                self.logger.debug(
+                    f"메일 저장 성공 - mail_id: {processed_mail.mail_id}, "
+                    f"subject: {processed_mail.subject[:50]}..."
+                )
+            elif should_continue:
+                self.logger.info(
+                    f"중복 메일이지만 다음 단계 진행 - mail_id: {processed_mail.mail_id}"
+                )
+            else:
+                self.logger.info(
+                    f"중복 메일로 다음 단계 스킵 - mail_id: {processed_mail.mail_id}"
+                )
+
+            return saved, should_continue
+
+        except DatabaseError as e:
+            self.logger.error(
+                f"데이터베이스 오류 - mail_id: {processed_mail.mail_id}, "
+                f"error: {str(e)}"
+            )
+            return False, False
+
+        except Exception as e:
+            self.logger.error(
+                f"예상치 못한 오류 - mail_id: {processed_mail.mail_id}, "
+                f"error: {str(e)}",
+                exc_info=True,
+            )
+            return False, False
 
     def save_batch_result(self, account_id: str, processing_stats: dict) -> bool:
         """

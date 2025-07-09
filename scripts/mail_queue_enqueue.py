@@ -11,7 +11,12 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
-from modules.mail_query import MailQueryFilters, PaginationOptions
+from modules.mail_query.mail_query_orchestrator import MailQueryOrchestrator
+from modules.mail_query.mail_query_schema import (
+    MailQueryFilters,
+    PaginationOptions,
+    MailQueryRequest,
+)
 from infra.core.logger import get_logger
 from infra.core.database import get_database_manager
 
@@ -66,9 +71,47 @@ async def test_with_more_mails(user_id: str):
         print(f"\n⏳ 메일 조회 중...")
         start_time = datetime.now()
 
-        result = await orchestrator.save_to_queue(
-            user_id=user_id, filters=filters, pagination=pagination
-        )
+        # 메일 조회
+        mail_query_orchestrator = MailQueryOrchestrator()
+        try:
+            query_request = MailQueryRequest(
+                user_id=user_id, filters=filters, pagination=pagination
+            )
+
+            query_response = await mail_query_orchestrator.mail_query_user_emails(
+                query_request
+            )
+
+            print(f"📧 메일 조회 완료: {query_response.total_fetched}개")
+
+            # 큐에 저장
+            if query_response.messages:
+                # account_id 조회 (user_id로부터)
+                account_record = db.fetch_one(
+                    "SELECT id FROM accounts WHERE user_id = ?", (user_id,)
+                )
+                if not account_record:
+                    raise ValueError(f"계정을 찾을 수 없습니다: {user_id}")
+
+                account_id = account_record["id"]
+
+                result = await orchestrator.enqueue_mail_batch(
+                    account_id=account_id, mails=query_response.messages
+                )
+            else:
+                result = {
+                    "account_id": user_id,
+                    "total": 0,
+                    "enqueued": 0,
+                    "filtered": 0,
+                    "duplicates": 0,
+                    "errors": 0,
+                    "queue_size": 0,
+                    "success": True,
+                }
+
+        finally:
+            await mail_query_orchestrator.close()
 
         elapsed_time = (datetime.now() - start_time).total_seconds()
 
@@ -297,14 +340,45 @@ async def main():
     if choice == "1":
         # 기본 설정으로 간단히 테스트
         orchestrator = MailProcessorOrchestrator()
+        db = get_database_manager()
+
         try:
             await orchestrator.start_background_processor()
 
-            result = await orchestrator.save_to_queue(
-                user_id=user_id,
-                filters=MailQueryFilters(date_from=datetime.now() - timedelta(days=30)),
-                pagination=PaginationOptions(top=50, max_pages=2),
-            )
+            # 메일 조회
+            mail_query_orchestrator = MailQueryOrchestrator()
+            try:
+                query_request = MailQueryRequest(
+                    user_id=user_id,
+                    filters=MailQueryFilters(
+                        date_from=datetime.now() - timedelta(days=30)
+                    ),
+                    pagination=PaginationOptions(top=50, max_pages=2),
+                )
+
+                query_response = await mail_query_orchestrator.mail_query_user_emails(
+                    query_request
+                )
+
+                # 큐에 저장
+                if query_response.messages:
+                    # account_id 조회
+                    account_record = db.fetch_one(
+                        "SELECT id FROM accounts WHERE user_id = ?", (user_id,)
+                    )
+                    if not account_record:
+                        raise ValueError(f"계정을 찾을 수 없습니다: {user_id}")
+
+                    account_id = account_record["id"]
+
+                    result = await orchestrator.enqueue_mail_batch(
+                        account_id=account_id, mails=query_response.messages
+                    )
+                else:
+                    result = {"enqueued": 0, "duplicates": 0}
+
+            finally:
+                await mail_query_orchestrator.close()
 
             print(f"\n✅ 결과:")
             print(f"  - 큐에 저장: {result.get('enqueued', 0)}개")

@@ -1,18 +1,18 @@
-"""IACS 코드 파서 테스트 - 이벤트 포맷 필드 포함"""
+"""
+/home/kimghw/IACSGRAPH/test2.py
+"""
 
 import sys
 import json
 from typing import Dict, List, Any
 from collections import defaultdict
+from datetime import datetime
 
 # 프로젝트 루트 경로 추가
 sys.path.append("/home/kimghw/IACSGRAPH")
 
 # 실제 모듈 import
-from modules.mail_process.utilities.iacs.iacs_code_parser import (
-    IACSCodeParser,
-    ParsedCode,
-)
+from modules.mail_process.utilities.iacs.iacs_code_parser import IACSCodeParser
 
 
 def load_test_data() -> List[str]:
@@ -283,10 +283,61 @@ def load_test_data() -> List[str]:
     ]
 
 
+def create_mock_mail(subject: str) -> Dict[str, Any]:
+    """테스트용 가짜 메일 데이터 생성"""
+    # 현재 시간
+    current_time = datetime.now()
+
+    # 발신자 이메일 예시 (도메인 기반으로 조직 추출)
+    sender_emails = {
+        "IL": "chair@iacs.org.uk",
+        "KR": "member@krs.co.kr",
+        "BV": "contact@bureauveritas.com",
+        "NK": "info@classnk.or.jp",
+        "LR": "admin@lr.org",
+        "DNV": "support@dnv.com",
+        "ABS": "service@eagle.org",
+        "CCS": "mail@ccs.org.cn",
+        "RINA": "contact@rina.org",
+        "PR": "info@prs.pl",
+        "TL": "admin@turkloydu.org",
+        "CR": "service@crs.hr",
+        "IR": "contact@irclass.org",
+        "CC": "info@chinaccs.com",
+        "AB": "abs@abs-group.com",
+        "NV": "nv@dnv.com",
+        "RI": "ri@rina.it",
+        "PL": "pl@prs.pl",
+    }
+
+    # 제목에서 조직 코드 추출 시도
+    org_code = None
+    for code in sender_emails.keys():
+        if f"_{code}" in subject or f"{code}a" in subject or f"{code}b" in subject:
+            org_code = code
+            break
+
+    # 기본값: IL (Chair)
+    if not org_code:
+        org_code = "IL"
+
+    sender_email = sender_emails.get(org_code, "unknown@example.com")
+
+    return {
+        "id": f"test-{hash(subject)}",
+        "subject": subject,
+        "from": {
+            "emailAddress": {"address": sender_email, "name": f"Test User ({org_code})"}
+        },
+        "receivedDateTime": current_time,
+        "body": {"content": f"This is a test email for: {subject}"},
+    }
+
+
 def analyze_parsing_results(
     parser: IACSCodeParser, test_subjects: List[str]
 ) -> Dict[str, Any]:
-    """파싱 결과 분석 - 이벤트 포맷 포함"""
+    """파싱 결과 분석 - extracted_info 형식"""
     results = {
         "total": len(test_subjects),
         "parsed": 0,
@@ -297,73 +348,60 @@ def analyze_parsing_results(
         "by_organization": defaultdict(int),
         "by_parsing_method": defaultdict(int),
         "failed_subjects": [],
-        "parsed_details": [],
+        "extracted_info_list": [],  # extracted_info 형식으로 저장
     }
 
+    # Chair 이메일 설정 (IL은 보통 Chair)
+    parser.set_chair_emails(["chair@iacs.org.uk", "chair@iscsmaritime.com"])
+
+    # 멤버 이메일 설정 예시
+    parser.set_member_emails("KR", ["member@krs.co.kr", "admin@krs.co.kr"])
+    parser.set_member_emails("BV", ["contact@bureauveritas.com"])
+
     for subject in test_subjects:
-        # parse_line과 extract_all_patterns 모두 테스트
-        parsed = parser.parse_line(subject)
+        # 가짜 메일 생성
+        mail = create_mock_mail(subject)
 
-        if parsed:
+        # extract_all_patterns 호출
+        patterns = parser.extract_all_patterns(subject, "", mail)
+
+        if "extracted_info" in patterns:
             results["parsed"] += 1
-            results["by_type"][parsed.document_type] += 1
-            results["by_panel"][parsed.panel] += 1
+            extracted_info = patterns["extracted_info"]
 
-            if parsed.organization:
-                results["by_organization"][parsed.organization] += 1
+            # 파싱 성공/실패 체크
+            if extracted_info.get("parsing_method") != "failed":
+                # 타입별 집계
+                if "iacs_code" in patterns:
+                    parsed = patterns["iacs_code"]
+                    results["by_type"][parsed.document_type] += 1
+                    results["by_panel"][parsed.panel] += 1
+                    if parsed.organization:
+                        results["by_organization"][parsed.organization] += 1
+                    if parsed.is_special:
+                        results["special"] += 1
 
-            # parsing_method가 있는 경우에만 집계
-            if hasattr(parsed, "parsing_method") and parsed.parsing_method:
-                results["by_parsing_method"][parsed.parsing_method] += 1
+                # parsing_method 집계
+                if extracted_info.get("parsing_method"):
+                    results["by_parsing_method"][extracted_info["parsing_method"]] += 1
 
-            if hasattr(parsed, "is_special") and parsed.is_special:
-                results["special"] += 1
-
-            # extract_all_patterns로 통일된 네이밍 추출
-            all_patterns = parser.extract_all_patterns(subject, "")
-            extracted_info = all_patterns.get("extracted_info", {})
-
-            # 이벤트 포맷으로 변환된 필드들을 저장
-            detail = {
-                "subject": subject,
-                # 원본 파싱 결과
-                "parsed": {
-                    "full_code": parsed.full_code,
-                    "document_type": parsed.document_type,
-                    "panel": parsed.panel,
-                    "year": parsed.year,
-                    "number": parsed.number,
-                    "agenda_version": parsed.agenda_version,
-                    "organization": parsed.organization,
-                    "response_version": parsed.response_version,
-                    "is_response": parsed.is_response,
-                    "parsing_method": getattr(parsed, "parsing_method", ""),
-                },
-                # 이벤트 출력용 통일된 네이밍
-                "event_format": {
-                    "agenda_code": extracted_info.get("agenda_code"),
-                    "agenda_base": extracted_info.get("agenda_base"),
-                    "agenda_panel": extracted_info.get(
-                        "agenda_panel"
-                    ),  # agenda_panel로 변경
-                    "response_org": extracted_info.get(
-                        "organization"
-                    ),  # response_org로 매핑
-                    "response_version": extracted_info.get("response_version"),
-                    "agenda_base": extracted_info.get("base_agenda_no"),
-                    "document_type": extracted_info.get("document_type"),
-                    "is_response": extracted_info.get("is_response", False),
-                    "is_agenda": extracted_info.get("is_agenda", False),
-                    "urgency": all_patterns.get("urgency", "NORMAL"),
-                    "is_reply": all_patterns.get("is_reply", False),
-                    "is_forward": all_patterns.get("is_forward", False),
-                },
-            }
-
-            results["parsed_details"].append(detail)
+            # extracted_info 리스트에 추가
+            results["extracted_info_list"].append(extracted_info)
         else:
             results["failed"] += 1
             results["failed_subjects"].append(subject)
+
+            # 파싱 실패한 경우도 기본 정보 포함
+            failed_info = {
+                "parsing_method": "failed",
+                "agenda_code": None,
+                "agenda_base": None,
+                "agenda_panel": None,
+                "sent_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S UTC"),
+                "sender_type": "OTHER",
+                "sender_organization": None,
+            }
+            results["extracted_info_list"].append(failed_info)
 
     return results
 
@@ -371,7 +409,7 @@ def analyze_parsing_results(
 def print_results(results: Dict[str, Any]):
     """결과 출력"""
     print("=" * 80)
-    print("IACS 코드 파서 테스트 결과 (이벤트 포맷 포함)")
+    print("IACS 코드 파서 테스트 결과 (extracted_info 형식)")
     print("=" * 80)
 
     # 전체 통계
@@ -402,66 +440,37 @@ def print_results(results: Dict[str, Any]):
         for org, count in sorted(results["by_organization"].items()):
             print(f"  {org}: {count}개")
 
-    # 파싱 실패 목록
-    if results["failed_subjects"]:
-        print(f"\n[파싱 실패 목록] ({len(results['failed_subjects'])}개)")
-        for subject in results["failed_subjects"]:
-            print(f"  - {subject}")
-
-    # 파싱 성공 예시 (이벤트 포맷 포함)
-    print(f"\n[파싱 성공 예시 - 이벤트 포맷] (처음 5개)")
-    for i, detail in enumerate(results["parsed_details"][:5]):
-        print(f"\n{i+1}. 제목: {detail['subject']}")
-        print(f"   원본 파싱:")
-        print(f"     - 코드: {detail['parsed']['full_code']}")
-        print(f"     - 타입: {detail['parsed']['document_type']}")
-        print(f"     - 패널: {detail['parsed']['panel']}")
-        if detail["parsed"]["organization"]:
-            print(f"     - 조직: {detail['parsed']['organization']}")
-
-        print(f"   이벤트 포맷:")
-        event = detail["event_format"]
-        print(f"     - agenda_code: {event['agenda_code']}")
-        print(f"     - agenda_base: {event['agenda_base']}")
-        print(f"     - agenda_panel: {event['agenda_panel']}")
-        if event["response_org"]:
-            print(f"     - response_org: {event['response_org']}")
-            print(f"     - response_version: {event['response_version']}")
-        print(f"     - urgency: {event['urgency']}")
-        print(f"     - is_reply: {event['is_reply']}")
+    # extracted_info 예시 (처음 10개)
+    print(f"\n[extracted_info 예시] (처음 10개)")
+    for i, info in enumerate(results["extracted_info_list"][:10]):
+        print(f"\n{i+1}. extracted_info:")
+        print(json.dumps(info, indent=4, ensure_ascii=False))
 
 
 def save_results_to_json(
     results: Dict[str, Any],
-    filename: str = "/home/kimghw/IACSGRAPH/iacs_parser_test_results_with_event_format.json",
+    filename: str = "/home/kimghw/IACSGRAPH/data/result/iacs_parser_extracted_info_results.json",
 ):
-    """결과를 JSON 파일로 저장"""
-    # defaultdict를 일반 dict로 변환
-    results_copy = {
+    """결과를 JSON 파일로 저장 - extracted_info 형식만"""
+    # extracted_info 리스트만 저장
+    output_data = {
         "total": results["total"],
         "parsed": results["parsed"],
         "failed": results["failed"],
-        "special": results["special"],
-        "by_type": dict(results["by_type"]),
-        "by_panel": dict(results["by_panel"]),
-        "by_organization": dict(results["by_organization"]),
-        "by_parsing_method": dict(results["by_parsing_method"]),
-        "failed_subjects": results["failed_subjects"],
-        "parsed_details": results["parsed_details"][:30],  # 처음 30개만 저장
+        "extracted_info_list": results["extracted_info_list"],
     }
 
     with open(filename, "w", encoding="utf-8") as f:
-        json.dump(results_copy, f, ensure_ascii=False, indent=2)
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
 
-    print(f"\n결과가 {filename} 파일로 저장되었습니다.\n전체 경로: {filename}")
+    print(f"\n결과가 {filename} 파일로 저장되었습니다.")
+    print(f"저장된 extracted_info 개수: {len(results['extracted_info_list'])}개")
 
 
 def main():
     """메인 함수"""
-    print("IACS 코드 파서 모듈 테스트 시작 (이벤트 포맷 포함)")
-    print(
-        f"모듈 경로: /home/kimghw/IACSGRAPH/modules/mail_process/utilities/iacs/iacs_code_parser.py"
-    )
+    print("IACS 코드 파서 테스트 시작 (extracted_info 형식)")
+    print(f"모듈 경로: /home/kimghw/IACSGRAPH/modules/mail_process/utilities/iacs/")
 
     try:
         # 파서 초기화
@@ -481,35 +490,10 @@ def main():
         # 결과 저장
         save_results_to_json(results)
 
-        # 추가 통계
-        print("\n" + "=" * 80)
-        print("추가 분석")
-        print("=" * 80)
-
-        # 가장 많이 사용된 기관
-        if results["by_organization"]:
-            top_org = max(results["by_organization"].items(), key=lambda x: x[1])
-            print(f"가장 많이 응답한 기관: {top_org[0]} ({top_org[1]}개)")
-
-        # 통일된 네이밍 검증
-        print("\n[통일된 네이밍 검증]")
-        correct_naming = 0
-        for detail in results["parsed_details"][:10]:
-            parsed = detail["parsed"]
-            event = detail["event_format"]
-
-            # 패널 변환 확인
-            if parsed["panel"] == event["agenda_panel"]:
-                correct_naming += 1
-
-            # response 조직 변환 확인
-            if (
-                parsed["organization"]
-                and parsed["organization"] == event["response_org"]
-            ):
-                correct_naming += 1
-
-        print(f"통일된 네이밍 정확도: {correct_naming} 검증 통과")
+        # 파싱 방법별 통계
+        print("\n[파싱 방법별 통계]")
+        for method, count in sorted(results["by_parsing_method"].items()):
+            print(f"  {method}: {count}개")
 
     except Exception as e:
         print(f"\n❌ 오류 발생: {str(e)}")

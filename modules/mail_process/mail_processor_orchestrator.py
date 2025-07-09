@@ -4,6 +4,7 @@ modules/mail_process/mail_processor_orchestrator.py
 """
 
 import asyncio
+import uuid
 from datetime import datetime
 from typing import List, Dict, Any, Optional
 
@@ -13,10 +14,16 @@ from .services.filtering_service import FilteringService
 from .services.queue_service import MailQueueService
 from .services.processing_service import ProcessingService
 from .services.db_service import MailDatabaseService
+from .services.persistence_service import PersistenceService
 from .mail_processor_schema import (
     MailProcessingResult,
     ProcessedMailData,
     GraphMailItem,
+    ProcessingStatus,
+    SenderType,
+    MailType,
+    DecisionStatus,
+    MailHistoryData,
 )
 
 
@@ -32,6 +39,7 @@ class MailProcessorOrchestrator:
         self.queue_service = MailQueueService()
         self.processing_service = ProcessingService()
         self.db_service = MailDatabaseService()
+        self.persistence_service = PersistenceService()
 
         # 백그라운드 태스크
         self._background_task: Optional[asyncio.Task] = None
@@ -40,14 +48,14 @@ class MailProcessorOrchestrator:
         self.logger.info("오케스트레이터 초기화 완료")
 
     async def enqueue_mail_batch(
-        self, account_id: str, mails: List[Dict[str, Any]]
+        self, account_id: str, mails: List[GraphMailItem]
     ) -> Dict[str, Any]:
         """
         외부에서 전달받은 메일 배치를 전처리하고 큐에 저장
 
         Args:
             account_id: 사용자 ID
-            mails: 메일 리스트 (딕셔너리 형태)
+            mails: 메일 리스트 (GraphMailItem Pydantic 객체)
 
         Returns:
             큐 저장 결과
@@ -62,41 +70,43 @@ class MailProcessorOrchestrator:
             duplicates = 0
             errors = []
 
-            for mail in mails:
+            for mail_item in mails:
                 try:
-                    # GraphMailItem으로 변환 (검증)
-                    mail_item = GraphMailItem(**mail)
+                    # 외부에서 이미 GraphMailItem으로 변환된 상태로 전달받음
+                    # mail_item은 GraphMailItem Pydantic 객체
 
                     # 1. 필터링 체크
-                    if self.filtering_service.is_enabled():
-                        filter_result = await self.filtering_service.filter_mail(
-                            {
-                                "mail": mail,
-                                "cleaned_content": "",  # 필터링 시점에는 아직 정제 전
-                            }
+                    filter_result = await self.filtering_service.filter_mail_single(
+                        mail_item
+                    )
+                    if filter_result["filtered"]:
+                        filtered += 1
+                        self.logger.debug(
+                            f"메일 필터링됨 - ID: {mail_item.id}, "
+                            f"이유: {filter_result['reason']}"
                         )
+                        continue
 
-                        if filter_result["filtered"]:
-                            filtered += 1
-                            self.logger.debug(
-                                f"메일 필터링됨 - ID: {mail_item.id}, "
-                                f"이유: {filter_result['reason']}"
-                            )
-                            continue
+                    # 2. 중복 확인 후 DB 저장
+                    saved, should_continue = self.db_service.check_and_save_graph_mail(
+                        account_id, mail_item
+                    )
 
-                    # 2. DB 중복 확인
-                    if self.db_service.check_duplicate_by_id(mail_item.id):
+                    if not should_continue:
+                        # 중복이고 환경설정이 false인 경우만 스킵
                         duplicates += 1
-                        self.logger.debug(f"중복 메일 발견 - ID: {mail_item.id}")
+                        self.logger.debug(
+                            f"중복 메일로 큐 저장 스킵 - ID: {mail_item.id}"
+                        )
                         continue
 
                     # 3. 텍스트 정제
                     cleaned_content = self.queue_service._clean_mail_content(mail_item)
 
-                    # 4. 큐에 추가
+                    # 4. 큐에 추가 (딕셔너리 형태로 변환하여 저장)
                     queue_item = {
                         "account_id": account_id,
-                        "mail": mail,
+                        "mail": mail_item.model_dump(),  # Pydantic → 딕셔너리 변환
                         "cleaned_content": cleaned_content,
                         "enqueued_at": datetime.now().isoformat(),
                     }
@@ -105,7 +115,9 @@ class MailProcessorOrchestrator:
                     enqueued += 1
 
                 except Exception as e:
-                    error_msg = f"메일 처리 실패 - ID: {mail.get('id', 'unknown')}, error: {str(e)}"
+                    # Pydantic 모델에서 ID 추출
+                    mail_id = getattr(mail_item, "id", "unknown")
+                    error_msg = f"메일 처리 실패 - ID: {mail_id}, error: {str(e)}"
                     self.logger.error(error_msg)
                     errors.append(error_msg)
 
@@ -139,6 +151,11 @@ class MailProcessorOrchestrator:
     async def process_batch(self) -> List[MailProcessingResult]:
         """
         큐에서 배치를 가져와 처리
+        1. 큐에서 배치 가져오기 (기본 50개)
+        2. IACS 파싱 수행
+        3. OpenRouter로 배치 키워드 추출
+        4. 이벤트 발행
+        5. 재귀적으로 다음 배치 처리
 
         Returns:
             처리 결과 리스트
@@ -153,36 +170,175 @@ class MailProcessorOrchestrator:
 
             self.logger.info(f"배치 처리 시작 - 크기: {len(batch)}")
 
-            # 2. 배치 내 각 메일 처리
-            results = []
+            # 2. IACS 파싱 및 데이터 준비
+            from modules.mail_process.utilities.iacs import IACSCodeParser
+
+            iacs_parser = IACSCodeParser()
+
+            enriched_items = []
             for item in batch:
+                mail = item["mail"]
+
+                # IACS 파싱
+                subject = mail.get("subject", "")
+                body = (
+                    mail.get("body", {}).get("content", "")
+                    if isinstance(mail.get("body"), dict)
+                    else ""
+                )
+                iacs_info = iacs_parser.extract_all_patterns(
+                    subject=subject, body=body, mail=mail
+                )
+
+                # OpenRouter 배치 처리를 위한 아이템 준비
+                enriched_item = {
+                    "mail_id": mail.get("id"),
+                    "content": item["cleaned_content"],
+                    "subject": subject,
+                    "sent_time": mail.get("receivedDateTime"),
+                    "sender_address": iacs_info.get("sender_address", ""),
+                    "sender_name": iacs_info.get("sender_name", ""),
+                    "account_id": item["account_id"],
+                    "mail": mail,
+                    "iacs_info": iacs_info,
+                    "enqueued_at": item.get("enqueued_at"),
+                }
+                enriched_items.append(enriched_item)
+
+            # 3. OpenRouter 배치 키워드 추출
+            from modules.keyword_extractor import KeywordExtractorOrchestrator
+            from modules.keyword_extractor.keyword_extractor_schema import (
+                BatchExtractionRequest,
+            )
+
+            keyword_orchestrator = KeywordExtractorOrchestrator()
+
+            batch_request = BatchExtractionRequest(
+                items=enriched_items, batch_size=50, concurrent_requests=5
+            )
+
+            async with keyword_orchestrator:
+                batch_response = await keyword_orchestrator.extract_keywords_batch(
+                    batch_request
+                )
+
+            # 4. 결과 처리 및 이벤트 발행
+            results = []
+            from infra.core.kafka_client import get_kafka_client
+
+            kafka_client = get_kafka_client()
+
+            for idx, (item, keywords) in enumerate(
+                zip(enriched_items, batch_response.results)
+            ):
                 try:
-                    # 메일 처리 (키워드 추출 등)
-                    result = await self.processing_service.process_mail(
+                    # ProcessedMailData 생성
+                    processed_data = ProcessedMailData(
+                        mail_id=item["mail_id"],
                         account_id=item["account_id"],
-                        mail_data=item["mail"],
-                        cleaned_content=item["cleaned_content"],
+                        subject=item["subject"],
+                        body_preview=item["mail"].get("bodyPreview", ""),
+                        sent_time=(
+                            datetime.fromisoformat(
+                                item["sent_time"].replace("Z", "+00:00")
+                            )
+                            if item.get("sent_time")
+                            else datetime.now()
+                        ),
+                        sender_address=item["sender_address"],
+                        sender_name=item["sender_name"],
+                        sender_type=(
+                            SenderType(item["iacs_info"].get("sender_type"))
+                            if item["iacs_info"].get("sender_type")
+                            else None
+                        ),
+                        sender_organization=item["iacs_info"].get(
+                            "sender_organization"
+                        ),
+                        keywords=keywords,
+                        processing_status=(
+                            ProcessingStatus.SUCCESS
+                            if keywords
+                            else ProcessingStatus.FAILED
+                        ),
+                        # IACS 정보
+                        agenda_code=item["iacs_info"]
+                        .get("extracted_info", {})
+                        .get("agenda_code"),
+                        agenda_base=item["iacs_info"]
+                        .get("extracted_info", {})
+                        .get("agenda_base"),
+                        agenda_version=item["iacs_info"]
+                        .get("extracted_info", {})
+                        .get("agenda_version"),
+                        agenda_panel=item["iacs_info"]
+                        .get("extracted_info", {})
+                        .get("agenda_panel"),
+                        response_org=item["iacs_info"].get("response_org"),
+                        response_version=item["iacs_info"].get("response_version"),
+                        clean_content=item["content"],
+                        mail_type=MailType.OTHER,
+                        decision_status=DecisionStatus.CREATED,
+                        urgency=item["iacs_info"].get("urgency", "NORMAL"),
+                        is_reply=item["iacs_info"].get("is_reply", False),
+                        is_forward=item["iacs_info"].get("is_forward", False),
                     )
 
-                    # DB 저장
-                    if result.success and result.processed_data:
-                        await self.db_service.save_processed_mail(result.processed_data)
+                    # DB 저장 및 다음 단계 진행 여부 결정
+                    saved, should_continue = (
+                        self.persistence_service.check_and_save_mail(processed_data)
+                    )
 
-                    results.append(result)
+                    if not should_continue:
+                        # 중복이고 환경설정이 false인 경우 - 이벤트 발행 스킵
+                        self.logger.debug(
+                            f"중복 메일로 이벤트 발행 스킵 - ID: {item['mail_id']}"
+                        )
+                        continue
+
+                    # 이벤트 발행
+                    event_data = {
+                        "event_type": "email_type",
+                        "event_id": str(uuid.uuid4()),
+                        "account_id": item["account_id"],
+                        "occurred_at": datetime.now().isoformat(),
+                        "mail_id": item["mail_id"],
+                        "original_mail": item["mail"],
+                        "iacs_info": item["iacs_info"],
+                        "keywords": keywords,
+                        "processed_at": datetime.now().isoformat(),
+                    }
+
+                    kafka_client.produce_event(
+                        topic="email.processed",
+                        event_data=event_data,
+                        key=item["account_id"],
+                    )
+
+                    results.append(
+                        MailProcessingResult(
+                            success=True,
+                            mail_id=item["mail_id"],
+                            account_id=item["account_id"],
+                            processed_data=processed_data,
+                            keywords=keywords,
+                        )
+                    )
 
                 except Exception as e:
-                    self.logger.error(f"메일 처리 실패: {str(e)}")
-                    # 실패한 메일도 결과에 포함
+                    self.logger.error(
+                        f"메일 처리 실패 - ID: {item.get('mail_id')}: {str(e)}"
+                    )
                     results.append(
                         MailProcessingResult(
                             success=False,
-                            mail_id=item["mail"].get("id", "unknown"),
+                            mail_id=item.get("mail_id", "unknown"),
                             account_id=item["account_id"],
                             error=str(e),
                         )
                     )
 
-            # 3. 처리 결과 통계
+            # 5. 처리 결과 통계
             success_count = sum(1 for r in results if r.success)
             self.logger.info(
                 f"배치 처리 완료 - "
@@ -190,6 +346,15 @@ class MailProcessorOrchestrator:
                 f"성공: {success_count}, "
                 f"실패: {len(results) - success_count}"
             )
+
+            # 6. 큐에 데이터가 남아있는지 확인하고 재귀 처리
+            queue_status = await self.queue_service.get_queue_status()
+            if not queue_status["is_empty"]:
+                self.logger.info(
+                    f"큐에 {queue_status['queue_size']}개 아이템 남음. 다음 배치 처리 시작"
+                )
+                # 비동기 태스크로 다음 배치 처리 (블로킹 방지)
+                asyncio.create_task(self.process_batch())
 
             return results
 

@@ -12,12 +12,12 @@ class MailParser:
     def __init__(self):
         self.logger = get_logger(__name__)
 
-    def extract_sender_info(self, mail: Dict) -> Tuple[str, str]:
+    def extract_sender_info(self, mail) -> Tuple[str, str]:
         """
         발신자 주소와 이름을 함께 추출 (개선된 버전)
 
         Args:
-            mail: 메일 딕셔너리
+            mail: 메일 딕셔너리 또는 Pydantic 모델
 
         Returns:
             (발신자 이메일 주소, 발신자 이름)
@@ -25,8 +25,15 @@ class MailParser:
         sender_address = ""
         sender_name = ""
 
+        # Pydantic 모델인지 딕셔너리인지 확인
+        if hasattr(mail, "model_dump"):
+            # Pydantic 모델인 경우 딕셔너리로 변환
+            mail_dict = mail.model_dump()
+        else:
+            mail_dict = mail
+
         # 디버깅: 메일 구조 확인
-        self.logger.debug(f"메일 구조 키: {list(mail.keys())}")
+        self.logger.debug(f"메일 구조 키: {list(mail_dict.keys())}")
 
         # 가능한 모든 발신자 필드 확인
         sender_fields = [
@@ -39,7 +46,7 @@ class MailParser:
         ]
 
         for field_name, field_desc in sender_fields:
-            field_value = mail.get(field_name)
+            field_value = mail_dict.get(field_name)
             if field_value:
                 self.logger.debug(f"{field_desc} 필드 발견: {field_value}")
 
@@ -74,10 +81,10 @@ class MailParser:
         # 발신자 정보를 찾지 못한 경우 전체 메일 구조 로깅
         if not sender_address:
             self.logger.warning(
-                f"발신자 정보를 찾을 수 없음 - 메일 ID: {mail.get('id', 'unknown')}"
+                f"발신자 정보를 찾을 수 없음 - 메일 ID: {mail_dict.get('id', 'unknown')}"
             )
             # 상세 디버깅 정보
-            for key, value in mail.items():
+            for key, value in mail_dict.items():
                 if key.lower() in ["from", "sender", "from_address"]:
                     self.logger.debug(f"  {key}: {type(value)} = {str(value)[:100]}")
 

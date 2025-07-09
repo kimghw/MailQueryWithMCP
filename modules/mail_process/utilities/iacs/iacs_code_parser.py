@@ -93,18 +93,41 @@ class IACSCodeParser:
     ) -> Dict[str, Any]:
         """제목과 본문에서 모든 패턴 추출 - 통일된 네이밍 적용"""
         result = {}
+        mail_info = {}
 
-        # 1. 제목에서 IACS 코드 파싱
+        # 1. 메일 정보가 제공된 경우 먼저 추출
+        if mail:
+            # 발신자 정보 추출
+            sender_address, sender_name, sender_type, sender_organization = (
+                self.data_extractor.extract_sender_info(mail)
+            )
+
+            if sender_type:
+                mail_info["sender_type"] = sender_type
+            if sender_organization:
+                mail_info["sender_organization"] = sender_organization
+
+            # 발송 시간 추출
+            sent_time = self.data_extractor.extract_sent_time(mail)
+            if sent_time:
+                mail_info["sent_time"] = sent_time
+
+            # 기타 정보는 result에 직접 저장 (extracted_info에는 포함하지 않음)
+            if sender_address:
+                result["sender_address"] = sender_address
+                result["sender_name"] = sender_name
+
+            # 정제된 내용 추출
+            clean_content = self.data_extractor.extract_clean_content(mail)
+            if clean_content:
+                result["clean_content"] = clean_content
+
+        # 2. 제목에서 IACS 코드 파싱
         parsed_code = self.parse_line(subject)
         if parsed_code:
             result["iacs_code"] = parsed_code
-            result["extracted_info"] = convert_to_unified_naming(parsed_code)
-
-            # 조직 정보 추출
-            if parsed_code.organization:
-                result["response_org"] = parsed_code.organization
-                if parsed_code.response_version:
-                    result["response_version"] = parsed_code.response_version
+            # mail_info를 함께 전달하여 sent_time, sender_type, sender_organization 포함
+            result["extracted_info"] = convert_to_unified_naming(parsed_code, mail_info)
 
             self.logger.debug(
                 f"파싱 성공: {parsed_code.full_code} "
@@ -112,28 +135,50 @@ class IACSCodeParser:
             )
         else:
             # 본문 첫 줄에서도 시도
-            self._try_parse_from_body(body, result)
+            self._try_parse_from_body(body, result, mail_info)
+            
+            # 여전히 파싱 실패한 경우
+            if "iacs_code" not in result:
+                # 파싱 실패 정보를 extracted_info에 포함
+                failed_info = {
+                    "parsing_method": "failed",
+                    "agenda_code": None,
+                    "agenda_base": None,
+                    "agenda_panel": None
+                }
+                # mail_info 정보 추가
+                if mail_info:
+                    if "sent_time" in mail_info:
+                        sent_time = mail_info["sent_time"]
+                        if hasattr(sent_time, 'strftime'):
+                            failed_info["sent_time"] = sent_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+                        else:
+                            failed_info["sent_time"] = str(sent_time)
+                    if "sender_type" in mail_info:
+                        failed_info["sender_type"] = mail_info["sender_type"]
+                    if "sender_organization" in mail_info:
+                        failed_info["sender_organization"] = mail_info["sender_organization"]
+                
+                result["extracted_info"] = failed_info
+                result["parsing_failed"] = True
+                self.logger.debug(f"파싱 실패 - 제목: {subject[:50]}...")
 
-        # 2. 회신 체인 분석
+        # 3. 회신 체인 분석
         reply_info = self.data_extractor.analyze_reply_chain(subject)
         if reply_info:
             result.update(reply_info)
 
-        # 3. 긴급도 추출
+        # 4. 긴급도 추출
         result["urgency"] = self.data_extractor.extract_urgency(subject, body)
 
-        # 4. 본문에서 추가 아젠다 참조 추출
+        # 5. 본문에서 추가 아젠다 참조 추출
         additional_refs = self.data_extractor.extract_agenda_patterns(body)
         if additional_refs:
             result["additional_agenda_references"] = additional_refs
 
-        # 5. 메일 정보가 제공된 경우 추가 정보 추출
-        if mail:
-            self._extract_mail_info(mail, result)
-
         return result
 
-    def _try_parse_from_body(self, body: str, result: Dict):
+    def _try_parse_from_body(self, body: str, result: Dict, mail_info: Dict):
         """본문에서 IACS 코드 파싱 시도"""
         body_lines = body.split("\n")
         for line in body_lines[:5]:  # 처음 5줄만 확인
@@ -142,44 +187,11 @@ class IACSCodeParser:
                 parsed_code = self.parse_line(line)
                 if parsed_code:
                     result["iacs_code"] = parsed_code
-                    result["extracted_info"] = convert_to_unified_naming(parsed_code)
-
-                    if parsed_code.organization:
-                        result["response_org"] = parsed_code.organization
-                        if parsed_code.response_version:
-                            result["response_version"] = parsed_code.response_version
+                    # mail_info를 함께 전달
+                    result["extracted_info"] = convert_to_unified_naming(parsed_code, mail_info)
 
                     self.logger.debug(f"본문에서 파싱 성공: {parsed_code.full_code}")
                     break
-
-    def _extract_mail_info(self, mail: Dict, result: Dict):
-        """메일 정보 추출"""
-        # 발신자 정보 추출
-        sender_address, sender_name, sender_type, sender_organization = (
-            self.data_extractor.extract_sender_info(mail)
-        )
-
-        if sender_address:
-            result["sender_address"] = sender_address
-            result["sender_name"] = sender_name
-            if sender_type:
-                result["sender_type"] = sender_type
-            if sender_organization:
-                result["sender_organization"] = sender_organization
-                self.logger.debug(
-                    f"이메일에서 발신자 조직 추출: {sender_organization} "
-                    f"(from: {sender_address})"
-                )
-
-        # 발송 시간 추출
-        sent_time = self.data_extractor.extract_sent_time(mail)
-        if sent_time:
-            result["sent_time"] = sent_time
-
-        # 정제된 내용 추출
-        clean_content = self.data_extractor.extract_clean_content(mail)
-        if clean_content:
-            result["clean_content"] = clean_content
 
     def _remove_prefixes(self, line: str) -> str:
         """특수 접두사 제거"""

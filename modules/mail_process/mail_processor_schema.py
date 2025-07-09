@@ -72,6 +72,17 @@ class GraphMailItem(BaseModel):
     web_link: Optional[str] = Field(None, description="웹 링크")
 
 
+class MailHistoryData(BaseModel):
+    """mail_history 테이블 저장용 데이터"""
+
+    account_id: str
+    message_id: str
+    received_time: datetime
+    subject: str
+    sender: str
+    processed_at: datetime = Field(default_factory=datetime.now)
+
+
 class ProcessedMailData(BaseModel):
     """처리된 메일 데이터 - 통일된 네이밍"""
 

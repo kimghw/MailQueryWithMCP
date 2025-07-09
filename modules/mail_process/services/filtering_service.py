@@ -1,19 +1,17 @@
-"""필터링 서비스 - 메일 필터링 로직 통합"""
+"""필터링 서비스 - Pydantic 모델 배치 처리"""
 
 import os
 from typing import Dict, List, Set, Tuple
 
 from infra.core.logger import get_logger
-
-from ..utilities.mail_parser import MailParser
+from ..mail_processor_schema import GraphMailItem
 
 
 class FilteringService:
-    """메일 필터링 서비스 - 필터링 로직과 오케스트레이션 통합"""
+    """메일 필터링 서비스 - Pydantic 모델 배치 처리"""
 
     def __init__(self):
         self.logger = get_logger(__name__)
-        self.parser = MailParser()
 
         # 환경변수에서 필터링 설정 로드
         self.filtering_enabled = (
@@ -77,12 +75,12 @@ class FilteringService:
         """필터링 활성화 여부 반환"""
         return self.filtering_enabled
 
-    async def filter_mail(self, mail_data: Dict) -> Dict[str, any]:
+    async def filter_mail_single(self, mail_item: GraphMailItem) -> Dict[str, any]:
         """
-        단일 메일 필터링
+        단일 Pydantic 모델 필터링 (기존 호환성 유지)
 
         Args:
-            mail_data: {"mail": 메일 딕셔너리, "cleaned_content": 정제된 내용}
+            mail_item: GraphMailItem
 
         Returns:
             {"filtered": bool, "reason": str or None}
@@ -90,55 +88,67 @@ class FilteringService:
         if not self.filtering_enabled:
             return {"filtered": False, "reason": None}
 
-    async def filter_mails(self, mails: List[Dict]) -> List[Dict]:
+        # 발신자 주소 추출
+        sender_address = self._extract_sender_address(mail_item)
+        subject = mail_item.subject or ""
+
+        # 필터링 체크
+        should_process, reason = self._should_process_mail(sender_address, subject)
+
+        if not should_process:
+            self._stats["total_checked"] += 1
+            self._stats["filtered_out"] += 1
+            self._update_filter_stats(reason)
+
+            return {"filtered": True, "reason": reason}
+
+        self._stats["total_checked"] += 1
+        self._stats["passed"] += 1
+
+        return {"filtered": False, "reason": None}
+
+    # 기존 호환성을 위한 메서드 (deprecated)
+    async def filter_mail(self, mail_data: Dict) -> Dict[str, any]:
         """
-        메일 리스트 필터링
+        기존 딕셔너리 방식 필터링 (호환성 유지용)
 
         Args:
-            mails: 원본 메일 리스트
+            mail_data: {"mail": 메일 딕셔너리, "cleaned_content": 정제된 내용}
 
         Returns:
-            필터링된 메일 리스트
+            {"filtered": bool, "reason": str or None}
         """
-        if not self.filtering_enabled:
-            self.logger.info(f"필터링 비활성화 상태 - 모든 메일 통과 ({len(mails)}개)")
-            self._stats["total_checked"] += len(mails)
-            self._stats["passed"] += len(mails)
-            return mails
-
-        filtered_mails = []
-
-        for mail in mails:
-            self._stats["total_checked"] += 1
-
-            # 발신자 주소 추출
-            sender_address = self.parser.extract_sender_address(mail)
-            subject = self.parser.extract_subject(mail)
-
-            # 필터링 체크
-            should_process, reason = self._should_process_mail(sender_address, subject)
-
-            if should_process:
-                filtered_mails.append(mail)
-                self._stats["passed"] += 1
-            else:
-                self._stats["filtered_out"] += 1
-                self._update_filter_stats(reason)
-
-                mail_id = self.parser.extract_mail_id(mail)
-                self.logger.debug(
-                    f"메일 필터링됨 - ID: {mail_id}, "
-                    f"발신자: {sender_address}, "
-                    f"이유: {reason}"
-                )
-
-        self.logger.info(
-            f"필터링 완료 - 입력: {len(mails)}개, "
-            f"통과: {len(filtered_mails)}개, "
-            f"필터링: {len(mails) - len(filtered_mails)}개"
+        self.logger.warning(
+            "filter_mail 메서드는 deprecated입니다. filter_mail_single 또는 filter_mail_batch를 사용하세요."
         )
 
-        return filtered_mails
+        if not self.filtering_enabled:
+            return {"filtered": False, "reason": None}
+
+        mail = mail_data.get("mail", {})
+
+        try:
+            # 딕셔너리를 GraphMailItem으로 변환
+            mail_item = GraphMailItem(**mail)
+            return await self.filter_mail_single(mail_item)
+        except Exception as e:
+            self.logger.error(f"메일 데이터 변환 실패: {str(e)}")
+            return {"filtered": True, "reason": "invalid_data"}
+
+    def _extract_sender_address(self, mail_item: GraphMailItem) -> str:
+        """Pydantic 모델에서 발신자 주소 추출"""
+        if mail_item.from_address and isinstance(mail_item.from_address, dict):
+            email_address = mail_item.from_address.get("emailAddress", {})
+            if isinstance(email_address, dict):
+                return email_address.get("address", "")
+
+        # sender 필드도 확인
+        if mail_item.sender and isinstance(mail_item.sender, dict):
+            email_address = mail_item.sender.get("emailAddress", {})
+            if isinstance(email_address, dict):
+                return email_address.get("address", "")
+
+        return ""
 
     def _should_process_mail(
         self, sender_address: str, subject: str = ""
@@ -213,24 +223,3 @@ class FilteringService:
         for key in self._stats:
             self._stats[key] = 0
         self.logger.debug("필터링 통계 초기화됨")
-
-        mail = mail_data.get("mail", {})
-
-        # 발신자 주소 추출
-        sender_address = self.parser.extract_sender_address(mail)
-        subject = self.parser.extract_subject(mail)
-
-        # 필터링 체크
-        should_process, reason = self._should_process_mail(sender_address, subject)
-
-        if not should_process:
-            self._stats["total_checked"] += 1
-            self._stats["filtered_out"] += 1
-            self._update_filter_stats(reason)
-
-            return {"filtered": True, "reason": reason}
-
-        self._stats["total_checked"] += 1
-        self._stats["passed"] += 1
-
-        return {"filtered": False, "reason": None}

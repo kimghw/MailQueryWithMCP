@@ -254,6 +254,16 @@ class Config:
         """OpenRouter 모델"""
         return os.getenv("OPENROUTER_MODEL", "openai/gpt-3.5-turbo")
 
+    @property
+    def process_duplicate_mails(self) -> bool:
+        """중복 메일도 다음 단계로 처리할지 여부"""
+        return os.getenv("PROCESS_DUPLICATE_MAILS", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+            "on",
+        )
+
     def to_dict(self) -> dict:
         """설정을 딕셔너리로 반환 (민감한 정보 제외)"""
         return {

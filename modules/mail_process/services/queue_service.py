@@ -105,27 +105,34 @@ class MailQueueService:
             self.logger.warning(f"큐 초기화됨 - 제거된 아이템: {cleared_count}개")
             return cleared_count
 
-    def _clean_mail_content(self, mail: GraphMailItem) -> str:
+    def _clean_mail_content(self, mail) -> str:
         """
         메일 내용 정제
 
         Args:
-            mail: GraphMailItem 객체
+            mail: GraphMailItem 객체 또는 딕셔너리
 
         Returns:
             정제된 내용
         """
-        # 제목 추출
-        subject = mail.subject or ""
-
-        # 본문 추출
-        body_content = ""
-        if mail.body and isinstance(mail.body, dict):
-            body_content = mail.body.get("content", "")
-
-        # 본문이 없으면 미리보기 사용
-        if not body_content:
-            body_content = mail.body_preview or ""
+        # Pydantic 모델인지 딕셔너리인지 확인하고 처리
+        if hasattr(mail, "subject"):
+            # Pydantic 모델인 경우
+            subject = mail.subject or ""
+            body_content = ""
+            if mail.body and isinstance(mail.body, dict):
+                body_content = mail.body.get("content", "")
+            if not body_content:
+                body_content = mail.body_preview or ""
+        else:
+            # 딕셔너리인 경우
+            subject = mail.get("subject", "")
+            body_content = ""
+            body = mail.get("body")
+            if body and isinstance(body, dict):
+                body_content = body.get("content", "")
+            if not body_content:
+                body_content = mail.get("bodyPreview", "")
 
         # 제목과 본문 결합 후 정제
         full_content = f"{subject}\n\n{body_content}"

@@ -7,7 +7,10 @@ import hashlib
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from infra.core.config import get_config
-from modules.mail_process.mail_processor_schema import ProcessedMailData
+from modules.mail_process.mail_processor_schema import (
+    ProcessedMailData,
+    MailHistoryData,
+)
 
 
 class MailDatabaseService:
@@ -368,8 +371,175 @@ class MailDatabaseService:
             account_id_int = self.db_manager.insert("accounts", temp_account_data)
             return account_id_int
 
+    def check_and_save_mail(
+        self, processed_mail: ProcessedMailData
+    ) -> Tuple[bool, bool]:
+        """
+        중복 확인 후 저장 및 다음 단계 진행 여부 결정
+
+        Args:
+            processed_mail: 처리된 메일 데이터
+
+        Returns:
+            (저장_성공_여부, 다음_단계_진행_여부)
+        """
+        # 1. 중복 확인
+        is_duplicate = self.check_duplicate_by_id(processed_mail.mail_id)
+
+        if is_duplicate:
+            self.logger.info(f"중복 메일 발견: {processed_mail.mail_id}")
+            # 환경설정에 따라 다음 단계 진행 여부 결정
+            should_continue = self.config.process_duplicate_mails
+            self.logger.debug(f"중복 메일 처리 설정: {should_continue}")
+            return False, should_continue
+
+        # 2. 중복이 아닌 경우 - MailHistoryData로 변환 후 저장
+        mail_history_data = self._convert_to_mail_history(processed_mail)
+        save_success = self._save_mail_history_simple(mail_history_data)
+
+        # 3. 저장 성공 시 다음 단계로 진행
+        return save_success, save_success
+
+    def _convert_to_mail_history(
+        self, processed_mail: ProcessedMailData
+    ) -> MailHistoryData:
+        """ProcessedMailData를 MailHistoryData로 변환"""
+        return MailHistoryData(
+            account_id=processed_mail.account_id,
+            message_id=processed_mail.mail_id,
+            received_time=processed_mail.sent_time,
+            subject=processed_mail.subject,
+            sender=processed_mail.sender_address,
+            processed_at=processed_mail.processed_at,
+        )
+
+    def _save_mail_history_simple(self, mail_history_data: MailHistoryData) -> bool:
+        """
+        단순화된 메일 히스토리 저장 (keywords, content_hash 제외)
+
+        Args:
+            mail_history_data: 메일 히스토리 데이터
+
+        Returns:
+            저장 성공 여부
+        """
+        # 실제 account_id 조회
+        actual_account_id = self._get_actual_account_id(mail_history_data.account_id)
+
+        # 메일 히스토리 저장 데이터 준비
+        mail_data = {
+            "account_id": actual_account_id,
+            "message_id": mail_history_data.message_id,
+            "received_time": mail_history_data.received_time,
+            "subject": mail_history_data.subject,
+            "sender": mail_history_data.sender,
+            "processed_at": mail_history_data.processed_at,
+        }
+
+        try:
+            # infra.database의 insert 메서드 사용
+            inserted_id = self.db_manager.insert("mail_history", mail_data)
+
+            self.logger.info(
+                f"메일 저장 완료 - ID: {inserted_id}, "
+                f"message_id: {mail_history_data.message_id}, "
+                f"account_id: {actual_account_id}"
+            )
+            return True
+
+        except Exception as e:
+            if "UNIQUE constraint failed" in str(e):
+                self.logger.warning(
+                    f"메일 저장 실패 (중복) - message_id: {mail_history_data.message_id}"
+                )
+            else:
+                self.logger.error(
+                    f"메일 저장 실패 - message_id: {mail_history_data.message_id}, error: {str(e)}"
+                )
+            return False
+
+    def check_and_save_mail_history(
+        self, mail_history_data: MailHistoryData
+    ) -> Tuple[bool, bool]:
+        """
+        MailHistoryData 중복 확인 후 저장 및 다음 단계 진행 여부 결정
+
+        Args:
+            mail_history_data: 메일 히스토리 데이터
+
+        Returns:
+            (저장_성공_여부, 다음_단계_진행_여부)
+        """
+        # 1. 중복 확인
+        is_duplicate = self.check_duplicate_by_id(mail_history_data.message_id)
+
+        if is_duplicate:
+            self.logger.info(f"중복 메일 발견: {mail_history_data.message_id}")
+            # 환경설정에 따라 다음 단계 진행 여부 결정
+            should_continue = self.config.process_duplicate_mails
+            self.logger.debug(f"중복 메일 처리 설정: {should_continue}")
+            return False, should_continue
+
+        # 2. 중복이 아닌 경우 저장
+        save_success = self._save_mail_history_simple(mail_history_data)
+
+        # 3. 저장 성공 시 다음 단계로 진행
+        return save_success, save_success
+
+    def check_and_save_graph_mail(
+        self, account_id: str, mail_item
+    ) -> Tuple[bool, bool]:
+        """
+        GraphMailItem 중복 확인 후 MailHistoryData로 변환하여 저장
+
+        Args:
+            account_id: 계정 ID
+            mail_item: GraphMailItem 객체
+
+        Returns:
+            (저장_성공_여부, 다음_단계_진행_여부)
+        """
+        # 1. 중복 확인
+        is_duplicate = self.check_duplicate_by_id(mail_item.id)
+
+        if is_duplicate:
+            self.logger.info(f"중복 메일 발견: {mail_item.id}")
+            # 환경설정에 따라 다음 단계 진행 여부 결정
+            should_continue = self.config.process_duplicate_mails
+            self.logger.debug(f"중복 메일 처리 설정: {should_continue}")
+            return False, should_continue
+
+        # 2. GraphMailItem을 MailHistoryData로 변환
+        mail_history_data = self._convert_graph_mail_to_history(account_id, mail_item)
+
+        # 3. 저장
+        save_success = self._save_mail_history_simple(mail_history_data)
+
+        # 4. 저장 성공 시 다음 단계로 진행
+        return save_success, save_success
+
+    def _convert_graph_mail_to_history(
+        self, account_id: str, mail_item
+    ) -> MailHistoryData:
+        """GraphMailItem을 MailHistoryData로 변환"""
+        # 발신자 정보 추출
+        sender_info = mail_item.sender or mail_item.from_address or {}
+        sender_name = sender_info.get("emailAddress", {}).get("name", "")
+        sender_address = sender_info.get("emailAddress", {}).get("address", "")
+        sender_display = (
+            f"{sender_name} <{sender_address}>" if sender_name else sender_address
+        )
+
+        return MailHistoryData(
+            account_id=account_id,
+            message_id=mail_item.id,
+            received_time=mail_item.received_date_time,
+            subject=mail_item.subject or "",
+            sender=sender_display,
+        )
+
     def _ensure_content_hash_column(self) -> None:
-        """content_hash 컬럼 존재 확인 및 추가"""
+        """content_hash 컬럼 존재 확인 및 추가 (레거시 지원용)"""
         try:
             # 컬럼 존재 여부 확인
             table_info = self.db_manager.get_table_info("mail_history")
