@@ -91,47 +91,34 @@ class EmailDashboardService:
         try:
             self.logger.info("새 테이블 생성 시작")
 
-            # create_table.sql 파일 읽기
-            from pathlib import Path
+            # 직접 생성 방법 사용
+            from .sql.create_tables_direct import create_tables_directly
 
-            sql_file = Path(__file__).parent / "sql" / "migrations" / "create_table.sql"
+            success = create_tables_directly(self.db)
 
-            if not sql_file.exists():
-                self.logger.error(f"SQL 파일을 찾을 수 없음: {sql_file}")
+            if success:
+                self.logger.info("새 테이블 생성 완료")
+
+                # 생성 확인
+                required_tables = [
+                    "agenda_all",
+                    "agenda_chair",
+                    "agenda_responses_content",
+                    "agenda_responses_receivedtime",
+                    "agenda_pending",
+                ]
+
+                for table in required_tables:
+                    if not self.db.table_exists(table):
+                        self.logger.error(f"테이블 생성 실패: {table}")
+                        return False
+                    else:
+                        self.logger.info(f"테이블 생성 확인: {table}")
+
+                return True
+            else:
+                self.logger.error("테이블 생성 실패")
                 return False
-
-            with open(sql_file, "r", encoding="utf-8") as f:
-                schema_sql = f.read()
-
-            # SQL 문장별로 실행
-            statements = [
-                stmt.strip() for stmt in schema_sql.split(";") if stmt.strip()
-            ]
-
-            with self.db.transaction():
-                for statement in statements:
-                    if statement:
-                        self.db.execute_query(statement)
-
-            self.logger.info(f"새 테이블 생성 완료: {len(statements)}개 구문 실행")
-
-            # 생성 확인
-            required_tables = [
-                "agenda_all",
-                "agenda_chair",
-                "agenda_responses_content",
-                "agenda_responses_receivedtime",
-                "agenda_pending",
-            ]
-
-            for table in required_tables:
-                if not self.db.table_exists(table):
-                    self.logger.error(f"테이블 생성 실패: {table}")
-                    return False
-                else:
-                    self.logger.info(f"테이블 생성 확인: {table}")
-
-            return True
 
         except Exception as e:
             self.logger.error(f"테이블 생성 실패: {str(e)}")

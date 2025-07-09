@@ -29,13 +29,11 @@ CREATE TABLE agenda_all (
     hasAttachments BOOLEAN DEFAULT FALSE,
     sentDateTime TEXT,
     webLink TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_agenda_all_code (agenda_code),
+    INDEX idx_agenda_all_time (sent_time),
+    INDEX idx_agenda_all_org (sender_organization)
 );
-
--- agenda_all 인덱스
-CREATE INDEX idx_agenda_all_code ON agenda_all(agenda_code);
-CREATE INDEX idx_agenda_all_time ON agenda_all(sent_time);
-CREATE INDEX idx_agenda_all_org ON agenda_all(sender_organization);
 
 -- =====================================================
 -- 2. 의장 발송 의제 (1개 메일 = 1개 행)
@@ -136,7 +134,10 @@ CREATE TABLE agenda_pending (
     received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     processed BOOLEAN DEFAULT FALSE,
     processed_at TIMESTAMP,
-    retry_count INTEGER DEFAULT 0
+    retry_count INTEGER DEFAULT 0,
+    
+    INDEX idx_pending_processed (processed),
+    INDEX idx_pending_received (received_at)
 );
 
 -- =====================================================
@@ -152,10 +153,6 @@ CREATE INDEX idx_chair_deadline_status ON agenda_chair(deadline, decision_status
 -- agenda_responses 인덱스
 CREATE INDEX idx_responses_updated ON agenda_responses_content(updated_at);
 CREATE INDEX idx_responses_time_updated ON agenda_responses_receivedtime(updated_at);
-
--- agenda_pending 인덱스
-CREATE INDEX idx_pending_processed ON agenda_pending(processed);
-CREATE INDEX idx_pending_received ON agenda_pending(received_at);
 
 -- =====================================================
 -- 트리거: 응답 테이블 자동 초기화
