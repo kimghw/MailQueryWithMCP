@@ -531,7 +531,7 @@ class MailDatabaseService:
         )
 
         return MailHistoryData(
-            account_id=account_id,
+            account_id=str(account_id),  # 문자열로 변환
             message_id=mail_item.id,
             received_time=mail_item.received_date_time,
             subject=mail_item.subject or "",

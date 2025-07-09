@@ -48,19 +48,22 @@ class MailProcessorOrchestrator:
         self.logger.info("오케스트레이터 초기화 완료")
 
     async def enqueue_mail_batch(
-        self, account_id: str, mails: List[GraphMailItem]
+        self, account_id, mails: List[GraphMailItem]
     ) -> Dict[str, Any]:
         """
         외부에서 전달받은 메일 배치를 전처리하고 큐에 저장
 
         Args:
-            account_id: 사용자 ID
+            account_id: 사용자 ID (문자열 또는 정수)
             mails: 메일 리스트 (GraphMailItem Pydantic 객체)
 
         Returns:
             큐 저장 결과
         """
         try:
+            # account_id를 문자열로 변환
+            account_id = str(account_id)
+
             self.logger.info(
                 f"메일 배치 처리 시작 - account_id: {account_id}, 메일 수: {len(mails)}개"
             )
@@ -104,14 +107,16 @@ class MailProcessorOrchestrator:
                     cleaned_content = self.queue_service._clean_mail_content(mail_item)
 
                     # 4. 큐에 추가 (딕셔너리 형태로 변환하여 저장)
-                    queue_item = {
-                        "account_id": account_id,
-                        "mail": mail_item.model_dump(),  # Pydantic → 딕셔너리 변환
-                        "cleaned_content": cleaned_content,
-                        "enqueued_at": datetime.now().isoformat(),
-                    }
+                    mail_dict = mail_item.model_dump()  # Pydantic → 딕셔너리 변환
 
-                    await self.queue_service.add_to_queue(queue_item)
+                    # body content를 cleaned_content로 대체
+                    if "body" in mail_dict and isinstance(mail_dict["body"], dict):
+                        mail_dict["body"]["content"] = cleaned_content
+
+                    # account_id는 Graph API 데이터에 없으므로 추가 (process_batch에서 필요)
+                    mail_dict["_account_id"] = account_id  # _prefix로 구분
+
+                    await self.queue_service.add_to_queue(mail_dict)
                     enqueued += 1
 
                 except Exception as e:
@@ -176,8 +181,8 @@ class MailProcessorOrchestrator:
             iacs_parser = IACSCodeParser()
 
             enriched_items = []
-            for item in batch:
-                mail = item["mail"]
+            for mail in batch:
+                # 이제 batch의 각 item은 mail_dict 자체임
 
                 # IACS 파싱
                 subject = mail.get("subject", "")
@@ -193,15 +198,14 @@ class MailProcessorOrchestrator:
                 # OpenRouter 배치 처리를 위한 아이템 준비
                 enriched_item = {
                     "mail_id": mail.get("id"),
-                    "content": item["cleaned_content"],
+                    "content": body,  # cleaned_content는 이미 body.content에 포함됨
                     "subject": subject,
                     "sent_time": mail.get("receivedDateTime"),
                     "sender_address": iacs_info.get("sender_address", ""),
                     "sender_name": iacs_info.get("sender_name", ""),
-                    "account_id": item["account_id"],
+                    "account_id": mail.get("_account_id"),  # _account_id 사용
                     "mail": mail,
                     "iacs_info": iacs_info,
-                    "enqueued_at": item.get("enqueued_at"),
                 }
                 enriched_items.append(enriched_item)
 
