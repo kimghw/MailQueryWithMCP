@@ -224,16 +224,6 @@ class Config:
 
     # Mail Processor 설정
     @property
-    def enable_mail_history(self) -> bool:
-        """메일 히스토리 저장 기능 활성화 여부"""
-        return os.getenv("ENABLE_MAIL_HISTORY", "true").lower() in (
-            "true",
-            "1",
-            "yes",
-            "on",
-        )
-
-    @property
     def max_keywords_per_mail(self) -> int:
         """메일당 최대 키워드 수"""
         return int(os.getenv("MAX_KEYWORDS_PER_MAIL", "5"))
@@ -286,7 +276,6 @@ class Config:
             "http_timeout": self.http_timeout,
             "kafka_timeout": self.kafka_timeout,
             "enrollment_directory": self.enrollment_directory,
-            "enable_mail_history": self.enable_mail_history,
             "max_keywords_per_mail": self.max_keywords_per_mail,
             "max_mails_per_account": self.max_mails_per_account,
             "openai_configured": self.is_openai_configured(),
