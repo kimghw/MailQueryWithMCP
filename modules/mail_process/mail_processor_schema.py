@@ -254,3 +254,36 @@ class BatchExtractionResponse(BaseModel):
     successful_items: int
     failed_items: int
     execution_time_ms: int
+
+
+# modules/mail_process/mail_processor_schema.py에 추가
+class MailEventSchema(BaseModel):
+    """메일 이벤트 표준 스키마"""
+
+    event_type: str = Field(..., description="이벤트 타입")
+    event_id: str = Field(..., description="고유 이벤트 ID")
+    account_id: str = Field(..., description="계정 ID")
+    mail_id: str = Field(..., description="메일 ID")
+    occurred_at: str = Field(..., description="이벤트 발생 시간")
+    source: str = Field(default="mail_process", description="이벤트 출처")
+    version: str = Field(default="1.0", description="이벤트 버전")
+    data: Dict[str, Any] = Field(..., description="이벤트 데이터")
+
+    class Config:
+        schema_extra = {
+            "example": {
+                "event_type": "email.received",
+                "event_id": "550e8400-e29b-41d4-a716-446655440000",
+                "account_id": "user@company.com",
+                "mail_id": "AAMkAGI2TG93AAA=",
+                "occurred_at": "2024-01-01T12:00:00Z",
+                "source": "mail_process",
+                "version": "1.0",
+                "data": {
+                    "mail": {...},
+                    "iacs_info": {...},
+                    "keywords": ["PL25016", "urgent"],
+                    "metadata": {...},
+                },
+            }
+        }

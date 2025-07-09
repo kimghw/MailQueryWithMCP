@@ -1,5 +1,5 @@
 """
-메일 처리 오케스트레이터 - 메일 처리 워크플로우 총괄
+메일 처리 오케스트레이터 - 메일 처리 워크플로우 총괄 (수정 버전)
 modules/mail_process/mail_processor_orchestrator.py
 """
 
@@ -234,26 +234,55 @@ class MailProcessorOrchestrator:
             event_service = MailEventService()
 
             # 각 메일에 대해 데이터 결합 후 이벤트 발행
-            for mail, iacs_info, keywords in zip(
+            for mail, iacs_info, keywords_data in zip(
                 original_mails, iacs_infos, batch_response.results
             ):
-                # 이벤트 발행 (event_service가 모든 처리를 담당)
-                await event_service.publish_mail_received_event(
-                    mail=mail, iacs_info=iacs_info, keywords=keywords
-                )
-
-                results.append(
-                    MailProcessingResult(
-                        success=True,
-                        mail_id=mail.get("id", ""),
-                        account_id="",  # 이제 사용하지 않음
-                        keywords=keywords,
+                try:
+                    # 이벤트 발행 (event_service가 모든 처리를 담당)
+                    await event_service.publish_mail_received_event(
+                        mail=mail, iacs_info=iacs_info, keywords=keywords_data
                     )
-                )
+
+                    # keywords_data에서 keywords 리스트 추출
+                    keywords_list = []
+                    if isinstance(keywords_data, dict):
+                        # 구조화된 응답인 경우
+                        keywords_list = keywords_data.get("keywords", [])
+                    elif isinstance(keywords_data, list):
+                        # 이미 리스트인 경우
+                        keywords_list = keywords_data
+
+                    results.append(
+                        MailProcessingResult(
+                            success=True,
+                            mail_id=mail.get("id", ""),
+                            account_id="",  # 이제 사용하지 않음
+                            keywords=keywords_list,  # 리스트로 전달
+                        )
+                    )
+                except Exception as e:
+                    self.logger.error(f"이벤트 발행 중 오류: {str(e)}")
+                    # 이벤트 발행 실패해도 처리는 계속
+
+                    # keywords 리스트 추출 (에러 시에도)
+                    keywords_list = []
+                    if isinstance(keywords_data, dict):
+                        keywords_list = keywords_data.get("keywords", [])
+                    elif isinstance(keywords_data, list):
+                        keywords_list = keywords_data
+
+                    results.append(
+                        MailProcessingResult(
+                            success=True,  # 처리는 성공
+                            mail_id=mail.get("id", ""),
+                            account_id="",
+                            keywords=keywords_list,
+                        )
+                    )
 
             # 5. 처리 결과 통계
             self.logger.info(
-                f"배치 처리 완료 - 전체: {len(batch)}, 이벤트 발행: {len(results)}"
+                f"배치 처리 완료 - 전체: {len(batch)}, 이벤트 발행 시도: {len(results)}"
             )
 
             # 6. 큐에 데이터가 남아있는지 확인하고 재귀 처리
