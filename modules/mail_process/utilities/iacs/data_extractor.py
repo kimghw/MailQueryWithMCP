@@ -14,6 +14,14 @@ from .constants import DOMAIN_ORG_MAP, URGENCY_KEYWORDS, ORGANIZATION_CODES
 class DataExtractor:
     """메일에서 데이터 추출"""
 
+    # 하드코딩된 Chair 이메일 목록
+    DEFAULT_CHAIR_EMAILS = [
+        "sdtpchair@eagle.org",  # SDTP Chair (ABS 도메인이지만 Chair)
+    ]
+
+    # 하드코딩된 Member 이메일 목록 (조직별)
+    DEFAULT_MEMBER_EMAILS = {}
+
     def __init__(self):
         self.logger = get_logger(__name__)
 
@@ -25,19 +33,50 @@ class DataExtractor:
         self.html_pattern = re.compile(r"<[^>]+>")
         self.separator_pattern = re.compile(r"[-=_*]{5,}")
 
-        # Chair와 Member 이메일 주소 리스트
-        self.chair_emails: List[str] = []
-        self.member_emails: Dict[str, List[str]] = {}  # {organization: [email_list]}
+        # Chair와 Member 이메일 주소 리스트 (기본값으로 초기화)
+        self.chair_emails: List[str] = [
+            email.lower() for email in self.DEFAULT_CHAIR_EMAILS
+        ]
+        self.member_emails: Dict[str, List[str]] = {
+            org: [email.lower() for email in emails]
+            for org, emails in self.DEFAULT_MEMBER_EMAILS.items()
+        }
+
+        self.logger.info(f"기본 Chair 이메일 {len(self.chair_emails)}개 로드됨")
+        self.logger.info(f"기본 Member 조직 {len(self.member_emails)}개 로드됨")
 
     def set_chair_emails(self, emails: List[str]):
-        """Chair 이메일 주소 설정"""
+        """Chair 이메일 주소 설정 (기본값을 덮어씀)"""
         self.chair_emails = [email.lower() for email in emails]
         self.logger.info(f"Chair 이메일 {len(self.chair_emails)}개 설정됨")
 
+    def add_chair_emails(self, emails: List[str]):
+        """Chair 이메일 주소 추가 (기본값에 추가)"""
+        new_emails = [
+            email.lower() for email in emails if email.lower() not in self.chair_emails
+        ]
+        self.chair_emails.extend(new_emails)
+        self.logger.info(
+            f"Chair 이메일 {len(new_emails)}개 추가됨 (총 {len(self.chair_emails)}개)"
+        )
+
     def set_member_emails(self, organization: str, emails: List[str]):
-        """특정 조직의 멤버 이메일 주소 설정"""
+        """특정 조직의 멤버 이메일 주소 설정 (기본값을 덮어씀)"""
         self.member_emails[organization.upper()] = [email.lower() for email in emails]
         self.logger.info(f"{organization} 멤버 이메일 {len(emails)}개 설정됨")
+
+    def add_member_emails(self, organization: str, emails: List[str]):
+        """특정 조직의 멤버 이메일 주소 추가 (기본값에 추가)"""
+        org = organization.upper()
+        if org not in self.member_emails:
+            self.member_emails[org] = []
+
+        existing = self.member_emails[org]
+        new_emails = [
+            email.lower() for email in emails if email.lower() not in existing
+        ]
+        self.member_emails[org].extend(new_emails)
+        self.logger.info(f"{org} 멤버 이메일 {len(new_emails)}개 추가됨")
 
     def extract_sender_info(
         self, mail: Dict
