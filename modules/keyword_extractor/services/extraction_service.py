@@ -7,6 +7,8 @@ import time
 from collections import Counter
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
+from datetime import datetime
+
 
 import aiohttp
 
@@ -213,7 +215,22 @@ class ExtractionService:
 
             content = item.get("content", "")
             subject = item.get("subject", "")
-            sent_time = item.get("sent_time")
+            sent_time_raw = item.get("sent_time")
+
+            if sent_time_raw:
+                if isinstance(sent_time_raw, str):
+                    try:
+                        # ISO 형식 문자열을 datetime 객체로 변환
+                        if sent_time_raw.endswith("Z"):
+                            sent_time_raw = sent_time_raw[:-1] + "+00:00"
+                        sent_time = datetime.fromisoformat(sent_time_raw)
+                    except:
+                        sent_time = None
+                else:
+                    sent_time = sent_time_raw
+            else:
+                sent_time = None
+
             sender_address = item.get("sender_address", "")
             sender_name = item.get("sender_name", "")
 
@@ -269,7 +286,13 @@ class ExtractionService:
         )
 
         # 발송 시간 포맷팅
-        sent_time_str = sent_time.isoformat() if sent_time else "Unknown"
+        if sent_time:
+            if hasattr(sent_time, "isoformat"):
+                sent_time_str = sent_time.isoformat()
+            else:
+                sent_time_str = str(sent_time)
+        else:
+            sent_time_str = "Unknown"
 
         # 디버깅: API 호출 전 정보 확인
         self.logger.debug(
@@ -290,11 +313,6 @@ class ExtractionService:
                 "{subject}", subject or "No subject"
             )
             user_prompt = user_prompt.replace("{content}", limited_content)
-            user_prompt = user_prompt.replace("{sent_time}", sent_time_str)
-            user_prompt = user_prompt.replace(
-                "{sender_address}", sender_address or "Unknown"
-            )
-            user_prompt = user_prompt.replace("{sender_name}", sender_name or "Unknown")
 
             # 디버깅: 최종 프롬프트 확인 (처음 500자만)
             self.logger.debug(f"최종 user_prompt (일부): {user_prompt[:500]}...")

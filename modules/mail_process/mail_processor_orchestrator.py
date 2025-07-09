@@ -181,9 +181,11 @@ class MailProcessorOrchestrator:
             iacs_parser = IACSCodeParser()
 
             enriched_items = []
+            mail_info_list = []
+
             for mail in batch:
                 iacs_info = iacs_parser.extract_all_patterns_from_mail(mail)
-                extracted_info = iacs_info.get("extracted_info", {})
+                mail_info = iacs_info.get("extracted_info", {})
 
                 # OpenRouter 배치 처리를 위한 아이템 준비
                 enriched_item = {
