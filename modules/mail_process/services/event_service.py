@@ -6,7 +6,7 @@ modules/mail_process/services/event_service.py
 
 import uuid
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 from infra.core.config import get_config
 from infra.core.kafka_client import get_kafka_client
@@ -21,72 +21,142 @@ class MailEventService:
         self.kafka_client = get_kafka_client()
         self.config = get_config()
 
-    async def publish_mail_event(
-        self, account_id: str, mail: Dict, keywords: List[str], clean_content: str
+    async def publish_mail_received_event(
+        self, mail: Dict[str, Any], iacs_info: Dict[str, Any], keywords: List[str]
     ) -> None:
         """
-        메일 처리 이벤트 발행
+        메일 수신 이벤트 발행 (통합 포맷)
 
         Args:
-            account_id: 계정 ID
-            mail: 원본 메일 데이터 (이미 필드 매핑이 적용된 상태)
-            keywords: 추출된 키워드
-            clean_content: 정제된 내용
+            mail: 원본 메일 데이터
+            iacs_info: IACS 파싱 결과의 extracted_info
+            keywords: 추출된 키워드 리스트
         """
         try:
-            # datetime 객체들을 문자열로 변환
-            mail_copy = self._convert_datetime_to_string(mail.copy())
+            # 이벤트 정보 구성
+            event_info = {
+                # 원본 메일 정보
+                "sentDateTime": mail.get("receivedDateTime", ""),
+                "hasAttachments": mail.get("hasAttachments", False),
+                "subject": mail.get("subject", ""),
+                "webLink": mail.get("webLink", ""),
+                "body": mail.get("body", {}).get("content", ""),
+                # 발신자 정보
+                "sender": "",
+                "sender_address": "",
+                # IACS extracted_info 병합
+                "agenda_code": iacs_info.get("agenda_code"),
+                "agenda_base": iacs_info.get("agenda_base"),
+                "agenda_base_version": iacs_info.get("agenda_base_version"),
+                "agenda_panel": iacs_info.get("agenda_panel"),
+                "agenda_year": iacs_info.get("agenda_year"),
+                "agenda_number": iacs_info.get("agenda_number"),
+                "agenda_version": iacs_info.get("agenda_version"),
+                "response_org": iacs_info.get("response_org"),
+                "response_version": iacs_info.get("response_version"),
+                "sent_time": iacs_info.get("sent_time"),
+                "sender_type": iacs_info.get("sender_type"),
+                "sender_organization": iacs_info.get("sender_organization"),
+                "parsing_method": iacs_info.get("parsing_method"),
+                # semantic_info
+                "keywords": keywords,
+                "deadline": self._extract_deadline(mail),
+                "has_deadline": self._check_deadline(mail),
+                "mail_type": self._determine_mail_type(
+                    mail.get("subject", ""), iacs_info
+                ),
+                "decision_status": self._determine_decision_status(
+                    mail.get("subject", ""), mail.get("body", {}).get("content", "")
+                ),
+            }
 
-            # 키워드 추가 (extracted_keywords로 매핑)
-            mail_copy["extracted_keywords"] = keywords
+            # 발신자 정보 추출 및 설정
+            self._extract_sender_info(mail, event_info)
 
-            # body.content를 clean_content로 교체
-            if "body" in mail_copy and isinstance(mail_copy["body"], dict):
-                mail_copy["body"]["content"] = clean_content
-                # contentType이 HTML인 경우 text로 변경 (정제된 내용이므로)
-                if mail_copy["body"].get("contentType") == "html":
-                    mail_copy["body"]["contentType"] = "text"
-
-            # 이벤트 구조 생성
+            # 이벤트 발행
             event_data = {
-                "event_type": "email_type",
+                "event_type": "email.received",
                 "event_id": str(uuid.uuid4()),
-                "account_id": account_id,
+                "mail_id": mail.get("id", ""),
                 "occurred_at": datetime.now().isoformat(),
-                "api_endpoint": "/v1.0/me/messages",
-                "response_status": 200,
-                "request_params": {
-                    "$select": "id,subject,from,body,bodyPreview,receivedDateTime",
-                    "$top": 50,
-                },
-                "response_data": {
-                    "value": [mail_copy],
-                    "@odata.context": f"https://graph.microsoft.com/v1.0/$metadata#users('{account_id}')/messages",
-                    "@odata.nextLink": "https://graph.microsoft.com/v1.0/me/messages?$skip=50",
-                },
-                "response_timestamp": datetime.now().isoformat(),
+                "event_info": event_info,
             }
 
             self.kafka_client.produce_event(
                 topic=self.config.kafka_topic_email_events,
                 event_data=event_data,
-                key=account_id,
+                key=mail.get("id", ""),  # mail_id를 key로 사용
             )
 
-            # 이벤트 데이터의 일부를 로그로 남겨 확인이 용이하도록 함
+            # 간단한 로깅
             subject = mail.get("subject", "")
             truncated_subject = subject[:50] + "..." if len(subject) > 50 else subject
-
             self.logger.info(
-                f"메일 처리 이벤트 발행 - "
-                f"계정: {account_id}, "
+                f"메일 수신 이벤트 발행 - "
+                f"ID: {mail.get('id', 'unknown')}, "
                 f"제목: {truncated_subject}, "
                 f"키워드: {len(keywords)}개"
             )
 
         except Exception as e:
-            self.logger.error(f"Kafka 이벤트 발행 실패: {str(e)}")
+            self.logger.error(f"메일 이벤트 발행 실패: {str(e)}")
             # 이벤트 발행 실패는 전체 프로세스를 중단시키지 않음
+
+    def _extract_sender_info(
+        self, mail: Dict[str, Any], event_info: Dict[str, Any]
+    ) -> None:
+        """발신자 정보 추출하여 event_info에 설정"""
+        if mail.get("sender"):
+            sender_info = mail["sender"].get("emailAddress", {})
+            event_info["sender"] = sender_info.get("name", "")
+            event_info["sender_address"] = sender_info.get("address", "")
+        elif mail.get("from"):
+            from_info = mail["from"].get("emailAddress", {})
+            event_info["sender"] = from_info.get("name", "")
+            event_info["sender_address"] = from_info.get("address", "")
+
+    def _determine_mail_type(self, subject: str, iacs_info: Dict[str, Any]) -> str:
+        """메일 타입 결정"""
+        subject_lower = subject.lower()
+
+        if iacs_info.get("is_reply"):
+            return "RESPONSE"
+        elif "request" in subject_lower or "req" in subject_lower:
+            return "REQUEST"
+        elif "notification" in subject_lower or "notice" in subject_lower:
+            return "NOTIFICATION"
+        elif "completed" in subject_lower or "done" in subject_lower:
+            return "COMPLETED"
+        else:
+            return "OTHER"
+
+    def _determine_decision_status(self, subject: str, body: str) -> str:
+        """결정 상태 결정"""
+        combined = f"{subject} {body}".lower()
+
+        if "decision" in combined or "decided" in combined:
+            return "decision"
+        elif "review" in combined:
+            return "review"
+        elif "consolidated" in combined:
+            return "consolidated"
+        elif "comment" in combined:
+            return "comment"
+        else:
+            return "created"
+
+    def _check_deadline(self, mail: Dict[str, Any]) -> bool:
+        """마감일 존재 여부 확인"""
+        content = f"{mail.get('subject', '')} {mail.get('body', {}).get('content', '')}".lower()
+        deadline_keywords = ["deadline", "due date", "by", "until", "마감", "기한"]
+
+        return any(keyword in content for keyword in deadline_keywords)
+
+    def _extract_deadline(self, mail: Dict[str, Any]) -> Optional[str]:
+        """마감일 추출 (향후 개선 필요)"""
+        # TODO: 자연어 처리나 정규식을 사용한 날짜 추출 로직 구현
+        # 현재는 None 반환
+        return None
 
     async def publish_batch_complete_event(
         self,

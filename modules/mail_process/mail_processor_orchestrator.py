@@ -159,7 +159,7 @@ class MailProcessorOrchestrator:
         1. 큐에서 배치 가져오기 (기본 50개)
         2. IACS 파싱 수행
         3. OpenRouter로 배치 키워드 추출
-        4. 이벤트 발행
+        4. 데이터 결합 후 이벤트 발행
         5. 재귀적으로 다음 배치 처리
 
         Returns:
@@ -180,14 +180,21 @@ class MailProcessorOrchestrator:
 
             iacs_parser = IACSCodeParser()
 
+            # 배치 처리를 위한 데이터 준비
             enriched_items = []
-            mail_info_list = []
+            iacs_infos = []
+            original_mails = []
 
             for mail in batch:
-                iacs_info = iacs_parser.extract_all_patterns_from_mail(mail)
-                mail_info = iacs_info.get("extracted_info", {})
+                # account_id 추출 후 제거 (이벤트에는 불필요)
+                account_id = mail.pop("_account_id", "")
 
-                # OpenRouter 배치 처리를 위한 아이템 준비
+                # IACS 정보 추출
+                iacs_result = iacs_parser.extract_all_patterns_from_mail(mail)
+                iacs_info = iacs_result.get("extracted_info", {})
+                iacs_infos.append(iacs_info)
+
+                # OpenRouter용 아이템 준비
                 enriched_item = {
                     "subject": mail.get("subject", ""),
                     "content": (
@@ -198,7 +205,10 @@ class MailProcessorOrchestrator:
                 }
                 enriched_items.append(enriched_item)
 
-            # 3. OpenRouter 배치 키워드 추출
+                # 원본 메일 보관
+                original_mails.append(mail)
+
+            # 3. OpenRouter 배치 키워드 추출 (semantic 정보 포함)
             from modules.keyword_extractor import KeywordExtractorOrchestrator
             from modules.keyword_extractor.keyword_extractor_schema import (
                 BatchExtractionRequest,
@@ -217,127 +227,33 @@ class MailProcessorOrchestrator:
 
             # 4. 결과 처리 및 이벤트 발행
             results = []
-            from infra.core.kafka_client import get_kafka_client
 
-            kafka_client = get_kafka_client()
+            # EventService 사용
+            from modules.mail_process.services.event_service import MailEventService
 
-            for idx, (item, keywords) in enumerate(
-                zip(enriched_items, batch_response.results)
+            event_service = MailEventService()
+
+            # 각 메일에 대해 데이터 결합 후 이벤트 발행
+            for mail, iacs_info, keywords in zip(
+                original_mails, iacs_infos, batch_response.results
             ):
-                try:
-                    # ProcessedMailData 생성
-                    processed_data = ProcessedMailData(
-                        mail_id=item["mail_id"],
-                        account_id=item["account_id"],
-                        subject=item["subject"],
-                        body_preview=item["mail"].get("bodyPreview", ""),
-                        sent_time=(
-                            datetime.fromisoformat(
-                                item["sent_time"].replace("Z", "+00:00")
-                            )
-                            if item.get("sent_time")
-                            else datetime.now()
-                        ),
-                        sender_address=item["sender_address"],
-                        sender_name=item["sender_name"],
-                        sender_type=(
-                            SenderType(item["iacs_info"].get("sender_type"))
-                            if item["iacs_info"].get("sender_type")
-                            else None
-                        ),
-                        sender_organization=item["iacs_info"].get(
-                            "sender_organization"
-                        ),
+                # 이벤트 발행 (event_service가 모든 처리를 담당)
+                await event_service.publish_mail_received_event(
+                    mail=mail, iacs_info=iacs_info, keywords=keywords
+                )
+
+                results.append(
+                    MailProcessingResult(
+                        success=True,
+                        mail_id=mail.get("id", ""),
+                        account_id="",  # 이제 사용하지 않음
                         keywords=keywords,
-                        processing_status=(
-                            ProcessingStatus.SUCCESS
-                            if keywords
-                            else ProcessingStatus.FAILED
-                        ),
-                        # IACS 정보
-                        agenda_code=item["iacs_info"]
-                        .get("extracted_info", {})
-                        .get("agenda_code"),
-                        agenda_base=item["iacs_info"]
-                        .get("extracted_info", {})
-                        .get("agenda_base"),
-                        agenda_version=item["iacs_info"]
-                        .get("extracted_info", {})
-                        .get("agenda_version"),
-                        agenda_panel=item["iacs_info"]
-                        .get("extracted_info", {})
-                        .get("agenda_panel"),
-                        response_org=item["iacs_info"].get("response_org"),
-                        response_version=item["iacs_info"].get("response_version"),
-                        clean_content=item["content"],
-                        mail_type=MailType.OTHER,
-                        decision_status=DecisionStatus.CREATED,
-                        urgency=item["iacs_info"].get("urgency", "NORMAL"),
-                        is_reply=item["iacs_info"].get("is_reply", False),
-                        is_forward=item["iacs_info"].get("is_forward", False),
                     )
-
-                    # DB 저장 및 다음 단계 진행 여부 결정
-                    saved, should_continue = (
-                        self.persistence_service.check_and_save_mail(processed_data)
-                    )
-
-                    if not should_continue:
-                        # 중복이고 환경설정이 false인 경우 - 이벤트 발행 스킵
-                        self.logger.debug(
-                            f"중복 메일로 이벤트 발행 스킵 - ID: {item['mail_id']}"
-                        )
-                        continue
-
-                    # 이벤트 발행
-                    event_data = {
-                        "event_type": "email_type",
-                        "event_id": str(uuid.uuid4()),
-                        "account_id": item["account_id"],
-                        "occurred_at": datetime.now().isoformat(),
-                        "mail_id": item["mail_id"],
-                        "original_mail": item["mail"],
-                        "iacs_info": item["iacs_info"],
-                        "keywords": keywords,
-                        "processed_at": datetime.now().isoformat(),
-                    }
-
-                    kafka_client.produce_event(
-                        topic="email.processed",
-                        event_data=event_data,
-                        key=item["account_id"],
-                    )
-
-                    results.append(
-                        MailProcessingResult(
-                            success=True,
-                            mail_id=item["mail_id"],
-                            account_id=item["account_id"],
-                            processed_data=processed_data,
-                            keywords=keywords,
-                        )
-                    )
-
-                except Exception as e:
-                    self.logger.error(
-                        f"메일 처리 실패 - ID: {item.get('mail_id')}: {str(e)}"
-                    )
-                    results.append(
-                        MailProcessingResult(
-                            success=False,
-                            mail_id=item.get("mail_id", "unknown"),
-                            account_id=item["account_id"],
-                            error=str(e),
-                        )
-                    )
+                )
 
             # 5. 처리 결과 통계
-            success_count = sum(1 for r in results if r.success)
             self.logger.info(
-                f"배치 처리 완료 - "
-                f"전체: {len(results)}, "
-                f"성공: {success_count}, "
-                f"실패: {len(results) - success_count}"
+                f"배치 처리 완료 - 전체: {len(batch)}, 이벤트 발행: {len(results)}"
             )
 
             # 6. 큐에 데이터가 남아있는지 확인하고 재귀 처리
