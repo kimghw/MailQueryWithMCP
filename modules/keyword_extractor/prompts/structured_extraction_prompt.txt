@@ -9,9 +9,6 @@ Your response must be ONLY valid JSON with no additional text, explanations, or 
 Extract information from this email and return ONLY valid JSON:
 
 Subject: {subject}
-Sender Email: {sender_address}
-Sender Name: {sender_name}
-Sent Time: {sent_time}
 Content: {content}
 
 ## OUTPUT_FORMAT

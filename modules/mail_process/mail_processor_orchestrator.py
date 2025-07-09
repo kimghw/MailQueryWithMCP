@@ -182,30 +182,17 @@ class MailProcessorOrchestrator:
 
             enriched_items = []
             for mail in batch:
-                # 이제 batch의 각 item은 mail_dict 자체임
-
-                # IACS 파싱
-                subject = mail.get("subject", "")
-                body = (
-                    mail.get("body", {}).get("content", "")
-                    if isinstance(mail.get("body"), dict)
-                    else ""
-                )
-                iacs_info = iacs_parser.extract_all_patterns(
-                    subject=subject, body=body, mail=mail
-                )
+                iacs_info = iacs_parser.extract_all_patterns_from_mail(mail)
+                extracted_info = iacs_info.get("extracted_info", {})
 
                 # OpenRouter 배치 처리를 위한 아이템 준비
                 enriched_item = {
-                    "mail_id": mail.get("id"),
-                    "content": body,  # cleaned_content는 이미 body.content에 포함됨
-                    "subject": subject,
-                    "sent_time": mail.get("receivedDateTime"),
-                    "sender_address": iacs_info.get("sender_address", ""),
-                    "sender_name": iacs_info.get("sender_name", ""),
-                    "account_id": mail.get("_account_id"),  # _account_id 사용
-                    "mail": mail,
-                    "iacs_info": iacs_info,
+                    "subject": mail.get("subject", ""),
+                    "content": (
+                        mail.get("body", {}).get("content", "")
+                        if isinstance(mail.get("body"), dict)
+                        else ""
+                    ),
                 }
                 enriched_items.append(enriched_item)
 
@@ -218,7 +205,7 @@ class MailProcessorOrchestrator:
             keyword_orchestrator = KeywordExtractorOrchestrator()
 
             batch_request = BatchExtractionRequest(
-                items=enriched_items, batch_size=50, concurrent_requests=5
+                items=enriched_items, batch_size=50, concurrent_requests=1
             )
 
             async with keyword_orchestrator:

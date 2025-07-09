@@ -28,6 +28,20 @@ class IACSCodeParser:
         self.pattern_matcher = PatternMatcher()
         self.data_extractor = DataExtractor()
 
+    def extract_all_patterns_from_mail(self, mail: Dict) -> Dict[str, Any]:
+        """메일 딕셔너리에서 직접 모든 패턴 추출"""
+        # mail에서 subject와 body 추출
+        subject = mail.get("subject", "")
+
+        body = ""
+        if isinstance(mail.get("body"), dict):
+            body = mail.get("body", {}).get("content", "")
+        else:
+            body = mail.get("body", "")
+
+        # 기존 메서드 호출
+        return self.extract_all_patterns(subject, body, mail)
+
     def parse_line(self, line: str) -> Optional[ParsedCode]:
         """한 줄을 파싱하여 코드 정보 추출"""
         try:
@@ -136,7 +150,7 @@ class IACSCodeParser:
         else:
             # 본문 첫 줄에서도 시도
             self._try_parse_from_body(body, result, mail_info)
-            
+
             # 여전히 파싱 실패한 경우
             if "iacs_code" not in result:
                 # 파싱 실패 정보를 extracted_info에 포함
@@ -144,21 +158,25 @@ class IACSCodeParser:
                     "parsing_method": "failed",
                     "agenda_code": None,
                     "agenda_base": None,
-                    "agenda_panel": None
+                    "agenda_panel": None,
                 }
                 # mail_info 정보 추가
                 if mail_info:
                     if "sent_time" in mail_info:
                         sent_time = mail_info["sent_time"]
-                        if hasattr(sent_time, 'strftime'):
-                            failed_info["sent_time"] = sent_time.strftime("%Y-%m-%d %H:%M:%S UTC")
+                        if hasattr(sent_time, "strftime"):
+                            failed_info["sent_time"] = sent_time.strftime(
+                                "%Y-%m-%d %H:%M:%S UTC"
+                            )
                         else:
                             failed_info["sent_time"] = str(sent_time)
                     if "sender_type" in mail_info:
                         failed_info["sender_type"] = mail_info["sender_type"]
                     if "sender_organization" in mail_info:
-                        failed_info["sender_organization"] = mail_info["sender_organization"]
-                
+                        failed_info["sender_organization"] = mail_info[
+                            "sender_organization"
+                        ]
+
                 result["extracted_info"] = failed_info
                 result["parsing_failed"] = True
                 self.logger.debug(f"파싱 실패 - 제목: {subject[:50]}...")
@@ -188,7 +206,9 @@ class IACSCodeParser:
                 if parsed_code:
                     result["iacs_code"] = parsed_code
                     # mail_info를 함께 전달
-                    result["extracted_info"] = convert_to_unified_naming(parsed_code, mail_info)
+                    result["extracted_info"] = convert_to_unified_naming(
+                        parsed_code, mail_info
+                    )
 
                     self.logger.debug(f"본문에서 파싱 성공: {parsed_code.full_code}")
                     break
