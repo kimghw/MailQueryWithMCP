@@ -1,4 +1,5 @@
-"""키워드 추출 오케스트레이터 - 완전한 파일 (대시보드 이벤트 포함)"""
+# modules/keyword_extractor/keyword_extractor_orchestrator.py
+"""키워드 추출 오케스트레이터 - 간소화 버전"""
 
 from typing import Any, Dict, List, Optional
 
@@ -16,7 +17,7 @@ logger = get_logger(__name__)
 
 
 class KeywordExtractorOrchestrator:
-    """키워드 추출 흐름만 관리하는 오케스트레이터"""
+    """키워드 추출 흐름 관리 오케스트레이터 - 간소화 버전"""
 
     def __init__(
         self,
@@ -42,14 +43,14 @@ class KeywordExtractorOrchestrator:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        """컨텍스트 매니저 종료 - 자동 리소스 정리"""
+        """컨텍스트 매니저 종료"""
         await self.close()
 
     async def extract_keywords(
         self, request: KeywordExtractionRequest
     ) -> KeywordExtractionResponse:
         """
-        단일 텍스트 키워드 추출 메인 플로우
+        단일 텍스트 키워드 추출
 
         Args:
             request: 키워드 추출 요청
@@ -67,7 +68,7 @@ class KeywordExtractorOrchestrator:
             # Phase 2: 프롬프트 준비
             prompt_data = await self._prepare_prompt(request)
 
-            # Phase 3: 키워드 추출 (저장은 ExtractionService에서 처리)
+            # Phase 3: 키워드 추출
             response = await self._extract_keywords(request, prompt_data)
 
             self.logger.debug(f"키워드 추출 완료: {len(response.keywords)}개")
@@ -81,7 +82,7 @@ class KeywordExtractorOrchestrator:
         self, request: BatchExtractionRequest
     ) -> BatchExtractionResponse:
         """
-        배치 키워드 추출 메인 플로우 (대시보드 이벤트 포함)
+        배치 키워드 추출
 
         Args:
             request: 배치 추출 요청
@@ -92,14 +93,13 @@ class KeywordExtractorOrchestrator:
         self.logger.info(f"배치 키워드 추출 시작: {len(request.items)}개 아이템")
 
         import time
-
         start_time = time.time()
 
         try:
             # Phase 1: 배치 준비 및 검증
             valid_items = self._prepare_batch_items(request.items)
 
-            # Phase 2: 배치 추출 실행 (대시보드 이벤트 자동 발행)
+            # Phase 2: 배치 추출 실행
             results = await self._execute_batch_extraction(
                 valid_items, request.batch_size, request.concurrent_requests
             )
@@ -117,9 +117,8 @@ class KeywordExtractorOrchestrator:
 
         except Exception as e:
             self.logger.error(f"배치 키워드 추출 중 예외 발생: {str(e)}", exc_info=True)
-            # 실패 응답 생성
             return BatchExtractionResponse(
-                results=[[] for _ in request.items],
+                results=[{} for _ in request.items],
                 total_items=len(request.items),
                 successful_items=0,
                 failed_items=len(request.items),
@@ -140,19 +139,14 @@ class KeywordExtractorOrchestrator:
     async def _extract_keywords(
         self, request: KeywordExtractionRequest, prompt_data: Dict[str, Any]
     ) -> KeywordExtractionResponse:
-        """실제 키워드 추출 - 저장 로직 제거"""
+        """실제 키워드 추출"""
         response = await self.extraction_service.extract(
             text=request.text,
             subject=request.subject,
-            sent_time=request.sent_time,
-            sender_address=request.sender_address,
-            sender_name=request.sender_name,
             max_keywords=request.max_keywords,
             prompt_data=prompt_data,
             use_structured_response=request.use_structured_response,
         )
-
-        # 저장은 ExtractionService에서 자동으로 처리됨
         return response
 
     def _prepare_batch_items(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -160,34 +154,29 @@ class KeywordExtractorOrchestrator:
         valid_items = []
 
         for item in items:
+            # subject와 content 필드 확인
+            subject = item.get("subject", "")
             content = item.get("content", "") if isinstance(item, dict) else str(item)
+            
             if content and len(content.strip()) >= 10:
-                valid_items.append(item)
+                valid_items.append({
+                    "subject": subject,
+                    "content": content,
+                    "mail_id": item.get("mail_id", item.get("id", f"item_{id(item)}"))
+                })
 
         return valid_items
 
     async def _execute_batch_extraction(
         self, items: List[Dict[str, Any]], batch_size: int, concurrent_requests: int
-    ) -> List[List[str]]:
-        """배치 추출 실행 (대시보드 이벤트 자동 발행)"""
-
+    ) -> List[Dict[str, Any]]:
+        """배치 추출 실행"""
         # 구조화된 응답을 위한 프롬프트 데이터 준비
         prompt_data = await self.prompt_service.get_prompt_data("structured")
 
-        # 메일 ID 정보 추가 (대시보드 이벤트용)
-        enriched_items = []
-        for i, item in enumerate(items):
-            enriched_item = item.copy()
-
-            # 메일 ID가 없으면 생성
-            if "mail_id" not in enriched_item:
-                enriched_item["mail_id"] = item.get("id", f"batch_item_{i}_{id(item)}")
-
-            enriched_items.append(enriched_item)
-
-        # 배치 추출 실행 (대시보드 이벤트 자동 수집됨)
+        # 배치 추출 실행
         results = await self.extraction_service.extract_batch(
-            enriched_items, batch_size, concurrent_requests, prompt_data
+            items, batch_size, concurrent_requests, prompt_data
         )
 
         self.logger.info(f"배치 추출 완료: {len(results)}개 결과")
@@ -196,7 +185,7 @@ class KeywordExtractorOrchestrator:
     def _compile_batch_results(
         self,
         original_items: List[Dict[str, Any]],
-        results: List[List[str]],
+        results: List[Dict[str, Any]],
         start_time: float,
     ) -> BatchExtractionResponse:
         """배치 결과 컴파일"""
@@ -211,15 +200,15 @@ class KeywordExtractorOrchestrator:
             content = item.get("content", "") if isinstance(item, dict) else str(item)
             if content and len(content.strip()) >= 10:
                 if result_idx < len(results):
-                    keywords = results[result_idx]
-                    final_results.append(keywords)
-                    if keywords:
+                    result = results[result_idx]
+                    final_results.append(result)
+                    if result.get("keywords"):
                         successful += 1
                     result_idx += 1
                 else:
-                    final_results.append([])
+                    final_results.append({})
             else:
-                final_results.append([])
+                final_results.append({})
 
         return BatchExtractionResponse(
             results=final_results,
@@ -232,7 +221,10 @@ class KeywordExtractorOrchestrator:
     def _create_empty_response(self) -> KeywordExtractionResponse:
         """빈 텍스트용 응답 생성"""
         return KeywordExtractionResponse(
-            keywords=[], method="empty_text", model="none", execution_time_ms=0
+            keywords=[], 
+            method="empty_text", 
+            model="none", 
+            execution_time_ms=0
         )
 
     def _create_error_response(self, error: str) -> KeywordExtractionResponse:
