@@ -1,12 +1,13 @@
+# modules/mail_dashboard/__init__.py
 """
-Email Dashboard 모듈
+Email Dashboard 모듈 - email.received 이벤트 처리
 
 이메일 아젠다 및 응답 관리를 위한 대시보드 기능을 제공합니다.
 - 의장 발송 아젠다 관리
-- 멤버 기관 응답 관리
+- 멤버 기관 응답 관리  
 - 대시보드 통계 및 현황 조회
-- 자동 테이블 초기화
-- 이벤트 구독 및 처리
+- 미처리 이벤트 관리
+- email.received 이벤트 구독 및 처리
 
 주요 컴포넌트:
 - EmailDashboardOrchestrator: 메인 오케스트레이터
@@ -24,12 +25,13 @@ try:
     from .repository import EmailDashboardRepository
     from .schema import (
         ORGANIZATIONS,
-        AgendaStatusSummary,
-        DashboardStats,
-        EmailAgendaChair,
-        EmailAgendaMemberResponse,
-        EmailAgendaMemberResponseTime,
-        EmailDashboardEvent,
+        EmailReceivedEvent,
+        EventInfo,
+        AgendaAll,
+        AgendaChair,
+        AgendaResponsesContent,
+        AgendaResponsesReceivedTime,
+        AgendaPending,
     )
     from .service import EmailDashboardService
 
@@ -47,12 +49,13 @@ __all__ = [
     "EmailDashboardRepository",
     "EmailDashboardQuery",
     "EmailDashboardService",
-    "EmailDashboardEvent",
-    "EmailAgendaChair",
-    "EmailAgendaMemberResponse",
-    "EmailAgendaMemberResponseTime",
-    "DashboardStats",
-    "AgendaStatusSummary",
+    "EmailReceivedEvent",
+    "EventInfo",
+    "AgendaAll",
+    "AgendaChair",
+    "AgendaResponsesContent",
+    "AgendaResponsesReceivedTime",
+    "AgendaPending",
     "ORGANIZATIONS",
 ]
 
@@ -71,7 +74,7 @@ def get_dashboard_service() -> EmailDashboardService:
 def initialize_dashboard_module() -> bool:
     """
     Email Dashboard 모듈을 초기화합니다.
-
+    
     Returns:
         초기화 성공 여부
     """
@@ -86,7 +89,7 @@ def initialize_dashboard_module() -> bool:
 def start_dashboard_event_subscription() -> bool:
     """
     Email Dashboard 이벤트 구독을 시작합니다.
-
+    
     Returns:
         구독 시작 성공 여부
     """
@@ -101,7 +104,7 @@ def start_dashboard_event_subscription() -> bool:
 def stop_dashboard_event_subscription() -> bool:
     """
     Email Dashboard 이벤트 구독을 중지합니다.
-
+    
     Returns:
         구독 중지 성공 여부
     """
@@ -111,3 +114,37 @@ def stop_dashboard_event_subscription() -> bool:
     except Exception as e:
         print(f"Email Dashboard 이벤트 구독 중지 실패: {str(e)}")
         return False
+
+
+def get_dashboard_stats(days: int = 30) -> dict:
+    """
+    대시보드 통계를 조회합니다.
+    
+    Args:
+        days: 조회 기간 (일)
+        
+    Returns:
+        통계 정보
+    """
+    try:
+        service = get_dashboard_service()
+        orchestrator = service.orchestrator
+        return orchestrator.get_dashboard_stats(days)
+    except Exception as e:
+        print(f"대시보드 통계 조회 실패: {str(e)}")
+        return {"success": False, "error": str(e)}
+
+
+def process_pending_events() -> dict:
+    """
+    미처리 이벤트를 재처리합니다.
+    
+    Returns:
+        처리 결과
+    """
+    try:
+        service = get_dashboard_service()
+        return service.process_pending_events()
+    except Exception as e:
+        print(f"미처리 이벤트 재처리 실패: {str(e)}")
+        return {"success": False, "error": str(e)}
