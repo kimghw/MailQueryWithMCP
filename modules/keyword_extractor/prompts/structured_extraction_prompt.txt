@@ -23,10 +23,21 @@ Content: {content}
 ## RULES
 
 ### Deadline Extraction
-- Look for keywords: "by", "until", "deadline", "due date", "까지", "마감", "기한"
+- **IMPORTANT: Only extract deadlines for email replies/responses, NOT for meetings, events, or other activities**
+- **CRITICAL: Only extract deadlines from the CURRENT email content, NOT from forwarded/replied original emails**
+- Ignore any content after markers like:
+  - "-----Original Message-----"
+  - "From:", "Sent:", "To:" headers indicating forwarded content
+  - "> " (quoted text indicators)
+  - "On [date] wrote:" patterns
+  - "--- Forwarded message ---"
+  - Email thread separators
+- Look for keywords that indicate reply deadline in the NEW content only: "reply by", "respond by", "response required by", "feedback by", "comments by", "회신 기한", "답변 요청", "의견 제출"
+- Ignore deadlines for: meetings, conferences, submissions (unless it's email response), events, registrations
 - Convert all dates to YYYY-MM-DD HH:MM:SS format
 - If only date is given without time, assume 23:59:59
-- If deadline is mentioned but unclear, set has_deadline=true but deadline=null
+- If reply deadline is mentioned but unclear, set has_deadline=true but deadline=null
+- If email mentions meeting dates or event dates but no reply deadline, set has_deadline=false
 
 ### Mail Type Classification
 - "REQUEST": Asking for input, review, or action with deadline

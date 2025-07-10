@@ -1,7 +1,7 @@
 """
-Email Dashboard 테이블 재생성 스크립트
+Email Dashboard 테이블 내용 삭제 스크립트
 
-기존 테이블을 삭제하고 새로운 스키마로 재생성합니다.
+모든 테이블의 데이터를 삭제합니다. (테이블 구조는 유지)
 주의: 모든 데이터가 삭제됩니다!
 """
 
@@ -17,137 +17,231 @@ from infra.core import get_database_manager, get_logger
 logger = get_logger(__name__)
 
 
-def reset_email_dashboard_tables():
-    """Email Dashboard 테이블 재생성"""
+def clear_email_dashboard_tables():
+    """Email Dashboard 테이블 내용 삭제"""
     db = get_database_manager()
 
     try:
-        logger.info("Email Dashboard 테이블 재생성 시작")
+        logger.info("Email Dashboard 테이블 데이터 삭제 시작")
 
-        # 1. 기존 테이블 삭제 (역순으로)
-        tables_to_drop = [
-            "email_events_unprocessed",  # 신규 테이블
-            "email_agenda_member_response_times",
-            "email_agenda_member_responses",
-            "email_agendas_chair",
+        # 삭제할 테이블 목록 (의존성 순서 고려)
+        tables_to_clear = [
+            "agenda_pending",
+            "agenda_responses_receivedtime",
+            "agenda_responses_content",
+            "agenda_chair",
+            "agenda_all",
         ]
 
-        for table in tables_to_drop:
+        total_deleted = 0
+        table_results = []
+
+        with db.transaction():
+            for table in tables_to_clear:
+                try:
+                    if db.table_exists(table):
+                        # 테이블 레코드 수 확인
+                        count_result = db.fetch_one(
+                            f"SELECT COUNT(*) as count FROM {table}"
+                        )
+                        before_count = count_result["count"] if count_result else 0
+
+                        # 데이터 삭제
+                        db.execute_query(f"DELETE FROM {table}")
+
+                        # 삭제 후 확인
+                        count_result = db.fetch_one(
+                            f"SELECT COUNT(*) as count FROM {table}"
+                        )
+                        after_count = count_result["count"] if count_result else 0
+
+                        deleted_count = before_count - after_count
+                        total_deleted += deleted_count
+
+                        table_results.append(
+                            {
+                                "table": table,
+                                "before": before_count,
+                                "after": after_count,
+                                "deleted": deleted_count,
+                                "status": "✓" if after_count == 0 else "✗",
+                            }
+                        )
+
+                        logger.info(
+                            f"테이블 데이터 삭제 완료: {table} ({deleted_count}개 레코드)"
+                        )
+                    else:
+                        logger.warning(f"테이블이 존재하지 않음: {table}")
+                        table_results.append(
+                            {
+                                "table": table,
+                                "before": 0,
+                                "after": 0,
+                                "deleted": 0,
+                                "status": "⚠",
+                            }
+                        )
+
+                except Exception as e:
+                    logger.error(f"테이블 데이터 삭제 실패 {table}: {str(e)}")
+                    table_results.append(
+                        {
+                            "table": table,
+                            "before": "?",
+                            "after": "?",
+                            "deleted": 0,
+                            "status": "✗",
+                        }
+                    )
+
+            # SQLite의 경우 VACUUM으로 공간 정리
             try:
-                db.execute_query(f"DROP TABLE IF EXISTS {table}")
-                logger.info(f"테이블 삭제 완료: {table}")
+                db.execute_query("VACUUM")
+                logger.info("데이터베이스 공간 정리 완료 (VACUUM)")
             except Exception as e:
-                logger.error(f"테이블 삭제 실패 {table}: {str(e)}")
+                logger.warning(f"VACUUM 실행 실패: {str(e)}")
 
-        # 2. 새 스키마로 테이블 생성
-        # SQL 파일 직접 실행 방식으로 변경
-        try:
-            from modules.mail_dashboard.sql import get_create_tables_sql
-
-            # SQL 스크립트 가져오기
-            schema_sql = get_create_tables_sql()
-
-            # SQL 문장별로 분리하여 실행
-            statements = [
-                stmt.strip() for stmt in schema_sql.split(";") if stmt.strip()
-            ]
-
-            success_count = 0
-            with db.transaction():
-                for i, statement in enumerate(statements):
-                    if statement:
-                        try:
-                            db.execute_query(statement)
-                            success_count += 1
-                            logger.debug(f"SQL 문장 {i+1} 실행 완료")
-                        except Exception as e:
-                            logger.error(f"SQL 문장 {i+1} 실행 실패: {str(e)}")
-                            logger.error(f"실패한 SQL: {statement[:100]}...")
-                            raise
-
-            logger.info(f"새 스키마로 테이블 생성 완료: {success_count}개 구문 실행")
-
-            # 3. 생성된 테이블 확인
-            expected_tables = [
-                "email_agendas_chair",
-                "email_agenda_member_responses",
-                "email_agenda_member_response_times",
-                "email_events_unprocessed",
-            ]
-
-            all_created = True
-            for table in expected_tables:
-                if db.table_exists(table):
-                    logger.info(f"✓ 테이블 생성 확인: {table}")
-                else:
-                    logger.error(f"✗ 테이블 생성 실패: {table}")
-                    all_created = False
-
-            return all_created
-
-        except Exception as e:
-            logger.error(f"테이블 생성 중 오류: {str(e)}")
-            return False
+        return {
+            "success": True,
+            "total_deleted": total_deleted,
+            "table_results": table_results,
+        }
 
     except Exception as e:
-        logger.error(f"테이블 재생성 중 오류: {str(e)}")
-        return False
+        logger.error(f"테이블 데이터 삭제 중 오류: {str(e)}")
+        return {
+            "success": False,
+            "error": str(e),
+            "total_deleted": 0,
+            "table_results": [],
+        }
 
 
-def verify_table_structure():
-    """생성된 테이블 구조 확인"""
+def verify_table_status():
+    """테이블 상태 확인"""
     db = get_database_manager()
 
     try:
-        logger.info("\n테이블 구조 확인:")
+        logger.info("\n테이블 상태 확인:")
 
-        # email_events_unprocessed 테이블 구조 확인
-        result = db.fetch_all("PRAGMA table_info(email_events_unprocessed)")
+        tables = [
+            ("agenda_all", "모든 이벤트 로그"),
+            ("agenda_chair", "의장 발송 의제"),
+            ("agenda_responses_content", "기관별 응답 내용"),
+            ("agenda_responses_receivedtime", "기관별 응답 시간"),
+            ("agenda_pending", "미처리 이벤트"),
+        ]
 
-        if result:
-            logger.info("\nemail_events_unprocessed 테이블 컬럼:")
-            for row in result:
-                logger.info(f"  - {row['name']} ({row['type']})")
+        status_results = []
 
-        # 인덱스 확인
-        indices = db.fetch_all(
-            "SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='email_events_unprocessed'"
-        )
+        for table_name, description in tables:
+            if db.table_exists(table_name):
+                # 레코드 수 확인
+                count_result = db.fetch_one(
+                    f"SELECT COUNT(*) as count FROM {table_name}"
+                )
+                record_count = count_result["count"] if count_result else 0
 
-        if indices:
-            logger.info("\nemail_events_unprocessed 테이블 인덱스:")
-            for idx in indices:
-                logger.info(f"  - {idx['name']}")
+                # 테이블 정보 조회
+                table_info = db.fetch_all(f"PRAGMA table_info({table_name})")
+                column_count = len(table_info) if table_info else 0
+
+                status_results.append(
+                    {
+                        "table": table_name,
+                        "description": description,
+                        "exists": True,
+                        "records": record_count,
+                        "columns": column_count,
+                        "status": (
+                            "✓" if record_count == 0 else f"⚠ ({record_count}개 레코드)"
+                        ),
+                    }
+                )
+
+                logger.info(f"{table_name} - {description}")
+                logger.info(
+                    f"  상태: {'비어있음' if record_count == 0 else f'{record_count}개 레코드 존재'}"
+                )
+                logger.info(f"  컬럼: {column_count}개")
+            else:
+                status_results.append(
+                    {
+                        "table": table_name,
+                        "description": description,
+                        "exists": False,
+                        "records": 0,
+                        "columns": 0,
+                        "status": "✗",
+                    }
+                )
+                logger.error(f"{table_name} - 테이블이 존재하지 않음")
+
+        return status_results
 
     except Exception as e:
-        logger.error(f"테이블 구조 확인 중 오류: {str(e)}")
+        logger.error(f"테이블 상태 확인 중 오류: {str(e)}")
+        return []
+
+
+def print_results(result):
+    """실행 결과 출력"""
+    print("\n" + "=" * 60)
+    print("실행 결과")
+    print("=" * 60)
+
+    if result["success"]:
+        print(f"\n✅ 성공적으로 완료")
+        print(f"총 삭제된 레코드: {result['total_deleted']}개")
+
+        if result["table_results"]:
+            print("\n테이블별 결과:")
+            print("-" * 60)
+            print(f"{'테이블':30} {'삭제전':>10} {'삭제후':>10} {'삭제수':>10}")
+            print("-" * 60)
+
+            for tr in result["table_results"]:
+                print(
+                    f"{tr['status']} {tr['table']:28} {str(tr['before']):>10} "
+                    f"{str(tr['after']):>10} {str(tr['deleted']):>10}"
+                )
+    else:
+        print(f"\n❌ 실행 실패")
+        print(f"오류: {result.get('error', '알 수 없는 오류')}")
 
 
 if __name__ == "__main__":
     print("=" * 60)
-    print("Email Dashboard 테이블 재생성")
-    print("주의: 모든 데이터가 삭제됩니다!")
+    print("Email Dashboard 테이블 데이터 삭제")
+    print("주의: 모든 데이터가 삭제됩니다! (테이블 구조는 유지)")
     print("=" * 60)
 
+    # 현재 상태 확인
+    print("\n현재 테이블 상태:")
+    verify_table_status()
+
     # 확인 프롬프트
-    response = input("\n계속하시겠습니까? (yes/no): ")
+    response = input("\n모든 데이터를 삭제하시겠습니까? (yes/no): ")
     if response.lower() != "yes":
         print("취소되었습니다.")
         sys.exit(0)
 
     print()
 
-    if reset_email_dashboard_tables():
-        print("\n✅ Email Dashboard 테이블 재생성 완료")
+    # 데이터 삭제 실행
+    result = clear_email_dashboard_tables()
 
-        # 테이블 구조 확인
-        verify_table_structure()
+    # 결과 출력
+    print_results(result)
 
-        print("\n생성된 테이블:")
-        print("  1. email_agendas_chair - 의장 발송 아젠다")
-        print("  2. email_agenda_member_responses - 멤버 기관 응답 내용")
-        print("  3. email_agenda_member_response_times - 멤버 기관 응답 시간")
-        print("  4. email_events_unprocessed - 미처리 이벤트 (신규)")
+    if result["success"]:
+        # 삭제 후 상태 확인
+        print("\n삭제 후 테이블 상태:")
+        verify_table_status()
+
+        print("\n✅ Email Dashboard 테이블 데이터 삭제 완료")
+        print("테이블 구조는 그대로 유지되었습니다.")
     else:
-        print("\n❌ Email Dashboard 테이블 재생성 실패")
+        print("\n❌ Email Dashboard 테이블 데이터 삭제 실패")
         print("로그를 확인하세요.")
