@@ -11,12 +11,12 @@ from infra.core import get_database_manager, get_logger
 from infra.core.exceptions import DatabaseError
 
 from .schema import (
-    ORGANIZATIONS,
     AgendaAll,
     AgendaChair,
-    AgendaPending,
     AgendaResponsesContent,
     AgendaResponsesReceivedTime,
+    AgendaPending,
+    ORGANIZATIONS,
 )
 
 
@@ -34,15 +34,6 @@ class EmailDashboardRepository:
     def save_agenda_all(self, agenda: AgendaAll) -> bool:
         """agenda_all 테이블에 저장"""
         try:
-            # 기존 데이터 확인
-            existing = self.db.fetch_one(
-                "SELECT event_id FROM agenda_all WHERE event_id = ?", (agenda.event_id,)
-            )
-
-            if existing:
-                self.logger.debug(f"agenda_all 이미 존재: event_id={agenda.event_id}")
-                return True  # 이미 존재하면 성공으로 처리
-
             data = {
                 "event_id": agenda.event_id,
                 "agenda_code": agenda.agenda_code,
@@ -203,14 +194,6 @@ class EmailDashboardRepository:
                 self.logger.error(f"유효하지 않은 조직 코드: {organization}")
                 return False
 
-            # agenda_base_version이 없으면 agenda_code로 찾기
-            if not agenda_base_version:
-                # event에서 agenda_code 추출 (response_content에서 파싱 필요)
-                self.logger.warning(
-                    "agenda_base_version이 없음, agenda_code로 매칭 시도"
-                )
-                return False
-
             # agenda_chair 존재 확인
             chair = self.db.fetch_one(
                 "SELECT agenda_base_version FROM agenda_chair WHERE agenda_base_version = ?",
@@ -296,8 +279,7 @@ class EmailDashboardRepository:
 
             count = 0
             for org in ORGANIZATIONS:
-                value = row[org] if org in row else None
-                if value is not None and str(value).strip():
+                if row.get(org) is not None and row[org].strip():
                     count += 1
 
             return count
@@ -313,26 +295,6 @@ class EmailDashboardRepository:
     def save_agenda_pending(self, pending: AgendaPending) -> bool:
         """agenda_pending 저장"""
         try:
-            # 기존 데이터 확인
-            if pending.event_id:
-                existing = self.db.fetch_one(
-                    "SELECT event_id FROM agenda_pending WHERE event_id = ?",
-                    (pending.event_id,),
-                )
-
-                if existing:
-                    self.logger.debug(
-                        f"agenda_pending 이미 존재: event_id={pending.event_id}"
-                    )
-                    # 재시도 카운트 증가
-                    self.db.update(
-                        table="agenda_pending",
-                        data={"retry_count": pending.retry_count + 1},
-                        where_clause="event_id = ?",
-                        where_params=(pending.event_id,),
-                    )
-                    return True
-
             data = {
                 "event_id": pending.event_id,
                 "raw_event_data": pending.raw_event_data,

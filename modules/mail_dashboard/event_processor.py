@@ -12,11 +12,11 @@ from infra.core.exceptions import BusinessLogicError, ValidationError
 
 from .repository import EmailDashboardRepository
 from .schema import (
-    EmailReceivedEvent,
     ORGANIZATIONS,
     AgendaAll,
     AgendaChair,
     AgendaPending,
+    EmailReceivedEvent,
 )
 
 
@@ -84,6 +84,37 @@ class EmailDashboardEventProcessor:
     ) -> EmailReceivedEvent:
         """이벤트 데이터 검증 및 파싱"""
         try:
+            # 기본값 설정으로 None 값 문제 해결
+            event_info = event_data.get("event_info", {})
+
+            # 필수 필드에 기본값 설정
+            if not event_info.get("sent_time"):
+                event_info["sent_time"] = datetime.now(timezone.utc).isoformat()
+
+            if not event_info.get("decision_status"):
+                event_info["decision_status"] = "created"
+
+            if not event_info.get("sender_type"):
+                event_info["sender_type"] = "UNKNOWN"
+
+            if not event_info.get("body"):
+                event_info["body"] = ""
+
+            if not event_info.get("sender"):
+                event_info["sender"] = "unknown@unknown.com"
+
+            if not event_info.get("mail_type"):
+                event_info["mail_type"] = "OTHER"
+
+            if not event_info.get("parsing_method"):
+                event_info["parsing_method"] = "unknown"
+
+            if not event_info.get("keywords"):
+                event_info["keywords"] = []
+
+            # 수정된 데이터로 이벤트 생성
+            event_data["event_info"] = event_info
+
             return EmailReceivedEvent(**event_data)
         except Exception as e:
             raise ValidationError(f"이벤트 데이터 형식 오류: {str(e)}")
@@ -184,8 +215,14 @@ class EmailDashboardEventProcessor:
         try:
             info = event.event_info
 
-            # 응답 조직 확인
-            response_org = info.response_org or info.sender_organization
+            # 응답 조직 확인 - sender_organization을 우선 사용
+            # response_org는 종종 "PL" 같은 패널 정보를 포함하므로 sender_organization을 우선 사용
+            response_org = info.sender_organization
+            
+            # sender_organization이 없는 경우에만 response_org 사용
+            if not response_org and info.response_org and info.response_org in ORGANIZATIONS:
+                response_org = info.response_org
+                
             if not response_org or response_org not in ORGANIZATIONS:
                 self.logger.warning(f"유효하지 않은 응답 조직: {response_org}")
                 self._save_to_pending(

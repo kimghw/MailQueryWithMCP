@@ -13,7 +13,7 @@ Content: {content}
 
 ## OUTPUT_FORMAT
 {
-  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline",
+  "deadline": "YYYY-MM-DD HH:MM:SS format or null if no deadline", # Considering Not attached content but only reponsed content
   "has_deadline": true or false,
   "mail_type": "REQUEST" or "RESPONSE" or "NOTIFICATION" or "COMPLETED" or "OTHER",
   "decision_status": "created" or "comment" or "consolidated" or "review" or "decision" or null,
@@ -23,8 +23,16 @@ Content: {content}
 ## RULES
 
 ### Deadline Extraction
+- **IMPORTANT: Begin by separating the response portion from the original request portion in the email, and disregard the request content when calculating deadline estimates.
 - **IMPORTANT: Only extract deadlines for email replies/responses, NOT for meetings, events, or other activities**
 - **CRITICAL: Only extract deadlines from the CURRENT email content, NOT from forwarded/replied original emails**
+- **CRITICAL: Any content after author signatures (e.g., "Best Regards", "Sincerely", "Kind Regards", "Thanks", "Regards", "BR", "감사합니다", "안녕히 계세요") must be completely ignored**
+- **CRITICAL: Even if not explicitly marked, content that appears to be forwarded or from previous emails should be ignored. Signs include:**
+  - Different writing style or context
+  - References to different senders/recipients
+  - Content that seems disconnected from the main message
+  - Multiple date/time references in different contexts
+  - "From:", "Sent:", "To:", "Subject:" headers appearing in the middle of content
 - Ignore any content after markers like:
   - "-----Original Message-----"
   - "From:", "Sent:", "To:" headers indicating forwarded content
@@ -32,6 +40,8 @@ Content: {content}
   - "On [date] wrote:" patterns
   - "--- Forwarded message ---"
   - Email thread separators
+  - _____ Od:
+  - Author signatures followed by additional content
 - Look for keywords that indicate reply deadline in the NEW content only: "reply by", "respond by", "response required by", "feedback by", "comments by", "회신 기한", "답변 요청", "의견 제출"
 - Ignore deadlines for: meetings, conferences, submissions (unless it's email response), events, registrations
 - Convert all dates to YYYY-MM-DD HH:MM:SS format

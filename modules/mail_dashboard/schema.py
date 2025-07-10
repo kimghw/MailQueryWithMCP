@@ -5,6 +5,7 @@ Email Dashboard 스키마 정의 - 새로운 이벤트 구조 대응
 
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+
 from pydantic import BaseModel, Field
 
 # =============================================================================
@@ -108,8 +109,8 @@ class AgendaChair(BaseModel):
     sender: Optional[str] = None
     sender_address: Optional[str] = None
     agenda_panel: str
-    agenda_year: str
-    agenda_number: str
+    agenda_year: Optional[str] = None
+    agenda_number: Optional[str] = None
     agenda_version: Optional[str] = None
     parsing_method: Optional[str] = None
     hasAttachments: bool = False
@@ -187,6 +188,7 @@ ORGANIZATIONS = [
     "DNV",
     "IRS",
     "KR",
+    "LR",  # Lloyd's Register
     "NK",
     "PRS",
     "RINA",
