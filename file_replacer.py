@@ -4,11 +4,11 @@ replace 폴더의 파일들을 첫 부분의 경로 정보를 읽어서 해당 �
 """
 
 import os
-import shutil
 import re
+import shutil
 import time
 from pathlib import Path
-from typing import List, Tuple, Optional
+from typing import List, Optional, Tuple
 
 
 def extract_file_path_from_content(file_path: str) -> Optional[str]:
@@ -204,13 +204,7 @@ def process_file_replacement(source_file: str, dry_run: bool = False) -> bool:
             os.makedirs(target_dir, exist_ok=True)
             print(f"  📁 디렉토리 생성: {target_dir}")
 
-        # 대상 파일이 이미 존재하는 경우 백업
-        if os.path.exists(target_path):
-            backup_path = f"{target_path}.backup_{int(time.time())}"
-            shutil.copy2(target_path, backup_path)
-            print(f"  💾 기존 파일 백업: {os.path.basename(backup_path)}")
-
-        # 파일 복사
+        # 파일 복사 (백업 없이 바로 덮어쓰기)
         shutil.copy2(source_file, target_path)
         print(f"  ✅ 파일 복사 완료: {target_path}")
 

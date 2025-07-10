@@ -1,10 +1,10 @@
 """
-IACS 코드 파서 - 메인 모듈 (import 수정)
+IACS 코드 파서 - 메인 모듈
 modules/mail_process/utilities/iacs/iacs_code_parser.py
 """
 
 from typing import Dict, List, Optional, Any, Tuple
-from datetime import datetime  # 누락된 import 추가
+from datetime import datetime
 
 from infra.core.logger import get_logger
 from .constants import (
@@ -95,6 +95,20 @@ class IACSCodeParser:
             )
             if result:
                 return result
+
+            # 5단계: 모든 기존 방법이 실패하면 유연한 패턴으로 IACS 코드 추출
+            # 원본 텍스트에서 IACS 패턴 찾기
+            found_patterns = self.pattern_matcher.find_iacs_patterns(line)
+            if found_patterns:
+                # 찾은 패턴을 재귀적으로 파싱
+                for pattern in found_patterns:
+                    # 찾은 패턴만 다시 파싱 (재귀 호출)
+                    result = self.parse_line(pattern)
+                    if result:
+                        # 유연한 패턴으로 찾았다는 표시 추가
+                        result.parsing_method = f"flexible_extraction_{result.parsing_method}"
+                        self.logger.debug(f"유연한 패턴으로 추출 후 파싱 성공: {pattern} -> {result.full_code}")
+                        return result
 
             return None
 

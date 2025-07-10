@@ -4,11 +4,10 @@ modules/mail_process/utilities/iacs/pattern_matcher.py
 """
 
 import re
-from typing import List, Optional
+from typing import Optional, List
 
 from infra.core.logger import get_logger
-
-from .constants import ORGANIZATION_CODES, ParsedCode
+from .constants import ParsedCode, ORGANIZATION_CODES
 
 
 class PatternMatcher:
@@ -24,32 +23,34 @@ class PatternMatcher:
         flags = 0 if case_sensitive else re.IGNORECASE
 
         patterns = [
-            # 패턴1: PL25016aIRa (붙어있는 형식)
+            # 패턴1: PL25016aIRa (붙어있는 형식) - 조직은 정확히 2글자
             (
-                r"^([A-Z]{2})(\d{2})(\d{3,4})([a-z*]?)([A-Z]{2,4})([a-z*]?)(?:\s|:|$)",
+                r"^(PL|PS)(\d{2})(\d{3,4})([a-z*]?)([A-Z]{2})([a-z*]?)(?:\s|:|$)",
                 "pattern1_attached",
             ),
-            # 패턴2: PL25015_KRa (언더스코어 형식)
+            # 패턴2: PL25015_KRa (언더스코어 형식) - 조직은 정확히 2글자
             (
-                r"^([A-Z]{2})(\d{2})(\d{3,4})_([A-Z]{2,4})([a-z*]?)(?:\s|:|$)",
+                r"^(PL|PS)(\d{2})(\d{3,4})_([A-Z]{2})([a-z]?)(?:\s|:|$)",
                 "pattern2_underscore",
             ),
-            # 패턴3: PL25016a_IRa (소문자+언더스코어)
+            # 패턴3: PL25016a_IRa (소문자+언더스코어) - 조직은 정확히 2글자
             (
-                r"^([A-Z]{2})(\d{2})(\d{3,4})([a-z*])_([A-Z]{2,4})([a-z*]?)(?:\s|:|$)",
+                r"^(PL|PS)(\d{2})(\d{3,4})([a-z*])_([A-Z]{2})([a-z*]?)(?:\s|:|$)",
                 "pattern3_version_underscore",
             ),
-            # 패턴4: PL25016_aIRa (언더스코어+소문자)
+            # 패턴4: PL25016_aIRa (언더스코어+소문자) - 조직은 정확히 2글자
             (
-                r"^([A-Z]{2})(\d{2})(\d{3,4})_([a-z*])([A-Z]{2,4})([a-z*]?)(?:\s|:|$)",
+                r"^(PL|PS)(\d{2})(\d{3,4})_([a-z*])([A-Z]{2})([a-z*]?)(?:\s|:|$)",
                 "pattern4_underscore_version",
             ),
             # 기본 의제 패턴: PL25016a
-            (r"^([A-Z]{2})(\d{2})(\d{3,4})([a-z*]?)(?:\s|:|$)", "basic_agenda"),
+            (r"^(PL|PS)(\d{2})(\d{3,4})([a-z*]?)(?:\s|:|$)", "basic_agenda"),
         ]
 
         for pattern, pattern_name in patterns:
             if not case_sensitive:
+                # 대소문자 구분 없이 패턴 수정
+                pattern = pattern.replace("PL|PS", "[Pp][Ll]|[Pp][Ss]")
                 pattern = pattern.replace("[A-Z]", "[A-Za-z]").replace(
                     "[a-z*]", "[A-Za-z*]"
                 )
@@ -69,19 +70,19 @@ class PatternMatcher:
         flags = 0 if case_sensitive else re.IGNORECASE
 
         patterns = [
-            # JWG-CS25001b_PRa (agenda_version + underscore + response)
+            # JWG-CS25001b_PRa (agenda_version + underscore + response) - 조직은 정확히 2글자
             (
-                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})([a-z*])_([A-Z]{2,4})([a-z*]?)(?:\s|:|$)",
+                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})([a-z*])_([A-Z]{2})([a-z*]?)(?:\s|:|$)",
                 "jwg_version_underscore",
             ),
-            # JWG-SDT25001_BVa
+            # JWG-SDT25001_BVa - 조직은 정확히 2글자
             (
-                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})_([A-Z]{2,4})([a-z*]?)(?:\s|:|$)",
+                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})_([A-Z]{2})([a-z*]?)(?:\s|:|$)",
                 "jwg_underscore",
             ),
-            # JWG-SDT25001BVa (붙어있는 형식)
+            # JWG-SDT25001BVa (붙어있는 형식) - 조직은 정확히 2글자
             (
-                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})([a-z*]?)([A-Z]{2,4})([a-z*]?)(?:\s|:|$)",
+                r"^(JWG)-(SDT|CS)(\d{2})(\d{3})([a-z*]?)([A-Z]{2})([a-z*]?)(?:\s|:|$)",
                 "jwg_attached",
             ),
             # JWG-SDT25001a (기본 의제)
@@ -102,77 +103,21 @@ class PatternMatcher:
 
         return None
 
-    def parse_flexible_patterns(self, line: str) -> Optional[ParsedCode]:
+    def find_iacs_patterns(self, text: str) -> List[str]:
         """
-        유연한 패턴 파싱 - 텍스트 어디에서든 IACS 코드 찾기
-        패턴:
-        1. 문자2숫자5특수문자_문자2-4 (예: PL25015_ILa)
-        2. 문자2숫자5문자2-4 (예: PL25015IRa)
+        텍스트에서 IACS 패턴 찾기 (추출만)
+        패턴: 문자2 + 숫자5 + (문자1-4 또는 _문자2-3)
+        예: PL25015_ILa, PL25023aKRa
         """
-        # PL/PS 패턴 - 대소문자 구분 없이
+        # 간단한 패턴 - 문자2 + 숫자5 + 나머지
         pattern = re.compile(
-            r"\b(PL|PS)(\d{2})(\d{3,4})([a-z*]?)(?:_([A-Z]{2,4})([a-z*]?)|([A-Z]{2,4})([a-z*]?))?(?:[^A-Za-z0-9]|$)",
-            re.IGNORECASE,
+            r'\b([A-Z]{2}\d{2}\d{3,4}[a-zA-Z_]{0,5})\b',
+            re.IGNORECASE
         )
-
-        # 텍스트에서 첫 번째 매칭 찾기
-        match = pattern.search(line)
-        if not match:
-            return None
-
-        groups = match.groups()
-        panel = groups[0].upper()
-        year = groups[1]
-        number = groups[2]
-        agenda_ver = groups[3] if groups[3] else None
-
-        # 언더스코어가 있는 경우
-        if groups[4]:  # _로 구분된 조직 코드
-            org = groups[4].upper()
-            response_ver = groups[5] if groups[5] else None
-            underscore = True
-        # 붙어있는 경우
-        elif groups[6]:  # 붙어있는 조직 코드
-            org = groups[6].upper()
-            response_ver = groups[7] if groups[7] else None
-            underscore = False
-        else:
-            org = None
-            response_ver = None
-            underscore = False
-
-        # 조직 코드가 있고 유효한 경우 RESPONSE
-        if org and org in ORGANIZATION_CODES:
-            return self._create_response_code(
-                panel=panel,
-                year=year,
-                number=number,
-                agenda_ver=agenda_ver,
-                org=org,
-                response_ver=response_ver,
-                description=None,
-                parsing_method="flexible_pattern",
-                attached=not underscore,
-                underscore=underscore,
-            )
-        # 조직 코드가 없으면 AGENDA
-        else:
-            # org가 실제로는 agenda_ver의 연장일 수 있음
-            if org and len(org) <= 2 and not response_ver:
-                # 예: PL25015ab -> agenda_ver = 'ab'
-                if agenda_ver:
-                    agenda_ver = agenda_ver + org.lower()
-                else:
-                    agenda_ver = org.lower()
-
-            return self._create_agenda_code(
-                panel=panel,
-                year=year,
-                number=number,
-                version=agenda_ver,
-                description=None,
-                parsing_method="flexible_pattern",
-            )
+        
+        matches = pattern.findall(text)
+        # 중복 제거하고 반환
+        return list(set(matches))
 
     def _process_basic_match(
         self, match, pattern_name: str, full_line: str, case_sensitive: bool
