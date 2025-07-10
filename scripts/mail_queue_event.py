@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# scripts/mail_queue_event.py
 """
 이벤트 발행 테스트 스크립트 - 실제 메일 조회 버전
 메일 처리 → 이벤트 발행 → Kafka 이벤트 확인
@@ -6,31 +7,31 @@
 
 import asyncio
 import json
-import sys
 import os
-import uuid
-from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
-from collections import defaultdict
 import re
+import sys
+import uuid
+from collections import defaultdict
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from modules.mail_query.mail_query_orchestrator import MailQueryOrchestrator
-from modules.mail_query.mail_query_schema import (
-    MailQueryFilters,
-    PaginationOptions,
-    MailQueryRequest,
-)
-from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
-from modules.mail_process.services.event_service import MailEventService
+from infra.core.config import get_config
+from infra.core.kafka_client import get_kafka_client
+from infra.core.logger import get_logger
 from modules.keyword_extractor.services.dashboard_event_service import (
     DashboardEventService,
 )
-from infra.core.logger import get_logger
-from infra.core.kafka_client import get_kafka_client
-from infra.core.config import get_config
+from modules.mail_process.mail_processor_orchestrator import MailProcessorOrchestrator
+from modules.mail_process.services.event_service import MailEventService
+from modules.mail_query.mail_query_orchestrator import MailQueryOrchestrator
+from modules.mail_query.mail_query_schema import (
+    MailQueryFilters,
+    MailQueryRequest,
+    PaginationOptions,
+)
 
 logger = get_logger(__name__)
 
@@ -210,13 +211,50 @@ class EventPublishingTest:
                 print(f"\n⏳ 배치 처리 시작...")
                 start_time = datetime.now()
 
-                # process_batch는 이미 이벤트를 발행함
-                process_results = await self.mail_processor_orchestrator.process_batch()
+                # 모든 배치가 처리될 때까지 반복
+                all_process_results = []
+                batch_count = 0
+
+                while True:
+                    # 큐 상태 확인
+                    queue_status = (
+                        await self.mail_processor_orchestrator.queue_service.get_queue_status()
+                    )
+                    if queue_status["is_empty"]:
+                        print(f"\n✅ 모든 배치 처리 완료")
+                        break
+
+                    batch_count += 1
+                    print(
+                        f"\n📦 배치 #{batch_count} 처리 중 (남은 큐: {queue_status['queue_size']}개)..."
+                    )
+
+                    # process_batch는 이미 이벤트를 발행함
+                    process_results = (
+                        await self.mail_processor_orchestrator.process_batch()
+                    )
+                    all_process_results.extend(process_results)
+
+                    print(
+                        f"  - 배치 #{batch_count} 완료: {len(process_results)}개 처리"
+                    )
+
+                # 추가로 생성된 비동기 태스크들이 있다면 대기
+                if hasattr(self.mail_processor_orchestrator, "_batch_tasks"):
+                    if self.mail_processor_orchestrator._batch_tasks:
+                        print(f"\n⏳ 남은 비동기 태스크 대기 중...")
+                        await asyncio.gather(
+                            *self.mail_processor_orchestrator._batch_tasks,
+                            return_exceptions=True,
+                        )
+                        print(f"✅ 모든 비동기 태스크 완료")
 
                 process_time_ms = (datetime.now() - start_time).total_seconds() * 1000
+                process_results = all_process_results  # 전체 결과 사용
 
-                print(f"✅ 배치 처리 완료 (소요시간: {process_time_ms:.0f}ms)")
-                print(f"  - 처리된 메일: {len(process_results)}개")
+                print(f"\n✅ 전체 배치 처리 완료 (소요시간: {process_time_ms:.0f}ms)")
+                print(f"  - 총 배치 수: {batch_count}")
+                print(f"  - 총 처리된 메일: {len(process_results)}개")
 
                 # 처리 결과 분석 (이벤트는 이미 발행됨)
                 await self._analyze_processing_results(
@@ -542,8 +580,21 @@ class EventPublishingTest:
 
     async def cleanup(self):
         """리소스 정리"""
-        await self.mail_query_orchestrator.close()
-        await self.mail_processor_orchestrator.cleanup()
+        try:
+            # 메일 처리 오케스트레이터 정리
+            if hasattr(self, "mail_processor_orchestrator"):
+                await self.mail_processor_orchestrator.cleanup()
+
+            # 메일 쿼리 오케스트레이터 정리
+            if hasattr(self, "mail_query_orchestrator"):
+                await self.mail_query_orchestrator.close()
+
+            # 약간의 대기 시간을 주어 모든 비동기 작업이 완료되도록 함
+            await asyncio.sleep(0.1)
+
+            self.logger.info("모든 리소스 정리 완료")
+        except Exception as e:
+            self.logger.error(f"리소스 정리 중 오류: {str(e)}")
 
     async def _save_test_results(self):
         """테스트 결과를 파일로 저장"""

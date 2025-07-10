@@ -1,4 +1,3 @@
-# modules/mail_process/mail_processor_orchestrator.py
 """
 메일 처리 오케스트레이터 - 메일 처리 워크플로우 총괄 (수정 버전)
 modules/mail_process/mail_processor_orchestrator.py
@@ -45,9 +44,6 @@ class MailProcessorOrchestrator:
         # 백그라운드 태스크
         self._background_task: Optional[asyncio.Task] = None
         self._should_stop = False
-        
-        # 배치 처리 태스크 추적
-        self._batch_tasks: List[asyncio.Task] = []
 
         self.logger.info("오케스트레이터 초기화 완료")
 
@@ -296,12 +292,7 @@ class MailProcessorOrchestrator:
                     f"큐에 {queue_status['queue_size']}개 아이템 남음. 다음 배치 처리 시작"
                 )
                 # 비동기 태스크로 다음 배치 처리 (블로킹 방지)
-                # 태스크를 저장하여 나중에 대기할 수 있도록 함
-                task = asyncio.create_task(self.process_batch())
-                # 백그라운드 태스크 리스트에 추가 (없으면 생성)
-                if not hasattr(self, '_batch_tasks'):
-                    self._batch_tasks = []
-                self._batch_tasks.append(task)
+                asyncio.create_task(self.process_batch())
 
             return results
 
@@ -391,13 +382,6 @@ class MailProcessorOrchestrator:
     async def cleanup(self):
         """리소스 정리"""
         await self.stop_background_processor()
-        
-        # 남은 배치 처리 태스크 대기
-        if hasattr(self, '_batch_tasks') and self._batch_tasks:
-            self.logger.info(f"남은 배치 태스크 {len(self._batch_tasks)}개 대기 중...")
-            await asyncio.gather(*self._batch_tasks, return_exceptions=True)
-            self._batch_tasks.clear()
-            
         self.logger.info("리소스 정리 완료")
 
     async def __aenter__(self):
