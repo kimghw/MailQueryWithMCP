@@ -4,10 +4,11 @@ modules/mail_process/utilities/iacs/pattern_matcher.py
 """
 
 import re
-from typing import Optional
+from typing import List, Optional
 
 from infra.core.logger import get_logger
-from .constants import ParsedCode, ORGANIZATION_CODES
+
+from .constants import ORGANIZATION_CODES, ParsedCode
 
 
 class PatternMatcher:
@@ -100,6 +101,78 @@ class PatternMatcher:
                 )
 
         return None
+
+    def parse_flexible_patterns(self, line: str) -> Optional[ParsedCode]:
+        """
+        유연한 패턴 파싱 - 텍스트 어디에서든 IACS 코드 찾기
+        패턴:
+        1. 문자2숫자5특수문자_문자2-4 (예: PL25015_ILa)
+        2. 문자2숫자5문자2-4 (예: PL25015IRa)
+        """
+        # PL/PS 패턴 - 대소문자 구분 없이
+        pattern = re.compile(
+            r"\b(PL|PS)(\d{2})(\d{3,4})([a-z*]?)(?:_([A-Z]{2,4})([a-z*]?)|([A-Z]{2,4})([a-z*]?))?(?:[^A-Za-z0-9]|$)",
+            re.IGNORECASE,
+        )
+
+        # 텍스트에서 첫 번째 매칭 찾기
+        match = pattern.search(line)
+        if not match:
+            return None
+
+        groups = match.groups()
+        panel = groups[0].upper()
+        year = groups[1]
+        number = groups[2]
+        agenda_ver = groups[3] if groups[3] else None
+
+        # 언더스코어가 있는 경우
+        if groups[4]:  # _로 구분된 조직 코드
+            org = groups[4].upper()
+            response_ver = groups[5] if groups[5] else None
+            underscore = True
+        # 붙어있는 경우
+        elif groups[6]:  # 붙어있는 조직 코드
+            org = groups[6].upper()
+            response_ver = groups[7] if groups[7] else None
+            underscore = False
+        else:
+            org = None
+            response_ver = None
+            underscore = False
+
+        # 조직 코드가 있고 유효한 경우 RESPONSE
+        if org and org in ORGANIZATION_CODES:
+            return self._create_response_code(
+                panel=panel,
+                year=year,
+                number=number,
+                agenda_ver=agenda_ver,
+                org=org,
+                response_ver=response_ver,
+                description=None,
+                parsing_method="flexible_pattern",
+                attached=not underscore,
+                underscore=underscore,
+            )
+        # 조직 코드가 없으면 AGENDA
+        else:
+            # org가 실제로는 agenda_ver의 연장일 수 있음
+            if org and len(org) <= 2 and not response_ver:
+                # 예: PL25015ab -> agenda_ver = 'ab'
+                if agenda_ver:
+                    agenda_ver = agenda_ver + org.lower()
+                else:
+                    agenda_ver = org.lower()
+
+            return self._create_agenda_code(
+                panel=panel,
+                year=year,
+                number=number,
+                version=agenda_ver,
+                description=None,
+                parsing_method="flexible_pattern",
+            )
 
     def _process_basic_match(
         self, match, pattern_name: str, full_line: str, case_sensitive: bool
