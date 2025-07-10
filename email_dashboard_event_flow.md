@@ -37,13 +37,20 @@ else:
 ### 3. 의장 발송 메일 처리 (CHAIR)
 
 ```
-CHAIR 타입 이벤트
+CHAIR 타입 이벤트 (예: PL25016_ILa)
     ↓
-agenda_chair 테이블에 저장/업데이트
+1. agenda_chair 테이블에 저장/업데이트
+   - agenda_base_version: "PL25016"
+   - agenda_code: "PL25016_ILa"
+   - 기타 메일 정보들...
     ↓
-agenda_responses_content 테이블 초기화 (모든 조직 NULL)
+2. agenda_responses_content 테이블 초기화
+   - agenda_base_version: "PL25016" (행 추가)
+   - ABS: NULL, BV: NULL, CCS: NULL, ... (모든 조직 컬럼 NULL)
     ↓
-agenda_responses_receivedtime 테이블 초기화 (모든 조직 NULL)
+3. agenda_responses_receivedtime 테이블 초기화
+   - agenda_base_version: "PL25016" (행 추가)
+   - ABS: NULL, BV: NULL, CCS: NULL, ... (모든 조직 시간 컬럼 NULL)
 ```
 
 **저장되는 정보:**

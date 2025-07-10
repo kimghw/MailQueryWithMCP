@@ -211,28 +211,22 @@ class EmailDashboardEventProcessor:
             }
 
     def _process_member_response(self, event: EmailReceivedEvent) -> Dict[str, Any]:
-        """멤버 응답 처리 (수정됨: response_org 우선 사용)"""
+        """멤버 응답 처리"""
         try:
             info = event.event_info
 
-            # 응답 조직 확인 - response_org를 우선 사용 (수정됨)
-            response_org = None
+            # 응답 조직 확인 - sender_organization을 우선 사용
+            # response_org는 종종 "PL" 같은 패널 정보를 포함하므로 sender_organization을 우선 사용
+            response_org = info.sender_organization
             
-            # 1순위: response_org 사용 (더 정확한 조직 코드)
-            if info.response_org and info.response_org in ORGANIZATIONS:
+            # sender_organization이 없는 경우에만 response_org 사용
+            if not response_org and info.response_org and info.response_org in ORGANIZATIONS:
                 response_org = info.response_org
-            # 2순위: response_org가 없거나 유효하지 않은 경우 sender_organization 사용
-            elif info.sender_organization and info.sender_organization in ORGANIZATIONS:
-                response_org = info.sender_organization
                 
-            if not response_org:
-                self.logger.warning(
-                    f"유효하지 않은 응답 조직: response_org={info.response_org}, "
-                    f"sender_organization={info.sender_organization}"
-                )
+            if not response_org or response_org not in ORGANIZATIONS:
+                self.logger.warning(f"유효하지 않은 응답 조직: {response_org}")
                 self._save_to_pending(
-                    event, "invalid_organization", 
-                    f"유효하지 않은 조직: response_org={info.response_org}, sender_organization={info.sender_organization}"
+                    event, "invalid_organization", f"유효하지 않은 조직: {response_org}"
                 )
                 return {
                     "success": True,
@@ -251,8 +245,7 @@ class EmailDashboardEventProcessor:
 
             if success:
                 self.logger.info(
-                    f"멤버 응답 처리 완료: {info.agenda_base_version} - {response_org} "
-                    f"(response_org: {info.response_org}, sender_organization: {info.sender_organization})"
+                    f"멤버 응답 처리 완료: {info.agenda_base_version} - {response_org}"
                 )
                 return {
                     "success": True,
