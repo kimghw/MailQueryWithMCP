@@ -80,7 +80,7 @@ class DataExtractor:
 
     def extract_sender_info(
         self, mail: Dict
-    ) -> Tuple[str, str, Optional[str], Optional[str]]:
+    ) -> Tuple[str, str, str, Optional[str]]:
         """
         발신자 정보 추출 및 sender_type, sender_organization 결정
 
@@ -88,7 +88,7 @@ class DataExtractor:
             (sender_address, sender_name, sender_type, sender_organization)
         """
         sender_address, sender_name = self._extract_basic_sender_info(mail)
-        sender_type = None
+        sender_type = "OTHER"  # 기본값 설정
         sender_organization = None
 
         if sender_address:
@@ -145,8 +145,8 @@ class DataExtractor:
 
         return sender_address, sender_name
 
-    def _determine_sender_type(self, sender_address: str, mail: Dict) -> Optional[str]:
-        """발신자 타입 결정 (CHAIR/MEMBER)"""
+    def _determine_sender_type(self, sender_address: str, mail: Dict) -> str:
+        """발신자 타입 결정 (CHAIR/MEMBER/OTHER) - 항상 문자열 반환"""
         sender_address_lower = sender_address.lower()
 
         # Chair 확인
@@ -170,7 +170,9 @@ class DataExtractor:
             else:
                 return "MEMBER"
 
-        return None
+        # 위 모든 조건에 해당하지 않으면 OTHER 반환
+        self.logger.debug(f"알 수 없는 발신자 타입 - OTHER로 분류: {sender_address}")
+        return "OTHER"
 
     def extract_organization_from_email(self, email_address: str) -> Optional[str]:
         """이메일 도메인에서 조직 코드 추출"""

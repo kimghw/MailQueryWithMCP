@@ -5,8 +5,8 @@ Email Dashboard 테이블 내용 삭제 스크립트
 주의: 모든 데이터가 삭제됩니다!
 """
 
-import sys
 import os
+import sys
 
 # 프로젝트 루트 경로 추가
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
     # 확인 프롬프트
     response = input("\n모든 데이터를 삭제하시겠습니까? (yes/no): ")
-    if response.lower() != "yes":
+    if response.lower() not in ["yes", "y"]:
         print("취소되었습니다.")
         sys.exit(0)
 

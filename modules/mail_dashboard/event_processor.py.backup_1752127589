@@ -44,50 +44,23 @@ class EmailDashboardEventProcessor:
             # 2. agenda_all 테이블에 모든 이벤트 저장
             self._save_to_agenda_all(event)
 
-            # 3. agenda_base_version 체크 (디버그 로그 추가)
-            self.logger.info(
-                f"[DEBUG] agenda_base_version 체크: "
-                f"value='{event.event_info.agenda_base_version}', "
-                f"type={type(event.event_info.agenda_base_version)}, "
-                f"bool={bool(event.event_info.agenda_base_version)}"
-            )
-            
+            # 3. agenda_base_version이 없으면 pending 처리
             if not event.event_info.agenda_base_version:
-                self.logger.warning(
-                    f"[DEBUG] agenda_base_version 없음 - pending 처리: "
-                    f"event_id={event.event_id}, "
-                    f"agenda_code={event.event_info.agenda_code}, "
-                    f"subject={event.event_info.subject[:50]}..."
+                self._save_to_pending(
+                    event, "no_agenda_base_version", "아젠다 기본 버전 없음"
                 )
-                self._save_to_pending(event, "no_agenda_base_version", "아젠다 기본 버전 없음")
                 return {
                     "success": True,
                     "action": "saved_to_pending",
                     "reason": "no_agenda_base_version",
                 }
 
-            # 4. 발신자 타입에 따른 처리 (디버그 로그 추가)
-            self.logger.info(
-                f"[DEBUG] sender_type 체크: "
-                f"value='{event.event_info.sender_type}', "
-                f"agenda_base_version='{event.event_info.agenda_base_version}'"
-            )
-            
+            # 4. 발신자 타입에 따른 처리
             if event.event_info.sender_type == "CHAIR":
-                self.logger.info(f"[DEBUG] CHAIR 메일 처리 시작: {event.event_info.agenda_base_version}")
                 return self._process_chair_mail(event)
             elif event.event_info.sender_type == "MEMBER":
-                self.logger.info(
-                    f"[DEBUG] MEMBER 응답 처리 시작: "
-                    f"agenda_base_version={event.event_info.agenda_base_version}, "
-                    f"org={event.event_info.response_org or event.event_info.sender_organization}"
-                )
                 return self._process_member_response(event)
             else:
-                self.logger.warning(
-                    f"[DEBUG] 알 수 없는 sender_type - pending 처리: "
-                    f"sender_type='{event.event_info.sender_type}'"
-                )
                 self._save_to_pending(
                     event,
                     "unknown_sender_type",
@@ -240,47 +213,34 @@ class EmailDashboardEventProcessor:
             }
 
     def _process_member_response(self, event: EmailReceivedEvent) -> Dict[str, Any]:
-        """멤버 응답 처리 (수정됨: agenda_chair 없으면 자동 생성)"""
+        """멤버 응답 처리 (수정됨: response_org 우선 사용)"""
         try:
             info = event.event_info
 
-            # 응답 조직 확인 - response_org를 우선 사용
+            # 응답 조직 확인 - response_org를 우선 사용 (수정됨)
             response_org = None
-            
+
             # 1순위: response_org 사용 (더 정확한 조직 코드)
             if info.response_org and info.response_org in ORGANIZATIONS:
                 response_org = info.response_org
             # 2순위: response_org가 없거나 유효하지 않은 경우 sender_organization 사용
             elif info.sender_organization and info.sender_organization in ORGANIZATIONS:
                 response_org = info.sender_organization
-                
+
             if not response_org:
                 self.logger.warning(
                     f"유효하지 않은 응답 조직: response_org={info.response_org}, "
                     f"sender_organization={info.sender_organization}"
                 )
                 self._save_to_pending(
-                    event, "invalid_organization", 
-                    f"유효하지 않은 조직: response_org={info.response_org}, sender_organization={info.sender_organization}"
+                    event,
+                    "invalid_organization",
+                    f"유효하지 않은 조직: response_org={info.response_org}, sender_organization={info.sender_organization}",
                 )
                 return {
                     "success": True,
                     "action": "saved_to_pending",
                     "reason": "invalid_organization",
-                }
-
-            # agenda_chair 존재 확인 및 자동 생성
-            if not self._ensure_agenda_chair_exists(info):
-                self.logger.error(f"agenda_chair 자동 생성 실패: {info.agenda_base_version}")
-                self._save_to_pending(
-                    event,
-                    "chair_creation_failed",
-                    f"agenda_chair 자동 생성 실패: {info.agenda_base_version}",
-                )
-                return {
-                    "success": True,
-                    "action": "saved_to_pending",
-                    "reason": "chair_creation_failed",
                 }
 
             # 응답 내용과 시간 업데이트
@@ -304,17 +264,17 @@ class EmailDashboardEventProcessor:
                     "organization": response_org,
                 }
             else:
-                # 응답 업데이트 실패
-                self.logger.error(f"멤버 응답 업데이트 실패: {info.agenda_base_version}")
+                # 아젠다가 없는 경우 pending 처리
+                self.logger.warning(f"해당 아젠다 없음: {info.agenda_base_version}")
                 self._save_to_pending(
                     event,
-                    "response_update_failed",
-                    f"응답 업데이트 실패: {info.agenda_base_version}",
+                    "agenda_not_found",
+                    f"아젠다를 찾을 수 없음: {info.agenda_base_version}",
                 )
                 return {
                     "success": True,
                     "action": "saved_to_pending",
-                    "reason": "response_update_failed",
+                    "reason": "agenda_not_found",
                 }
 
         except Exception as e:
@@ -324,65 +284,6 @@ class EmailDashboardEventProcessor:
                 "error": "member_response_processing_error",
                 "message": str(e),
             }
-
-    def _ensure_agenda_chair_exists(self, info: Any) -> bool:
-        """agenda_chair가 없으면 자동 생성"""
-        try:
-            # 이미 존재하는지 확인
-            from infra.core import get_database_manager
-            db = get_database_manager()
-            
-            existing = db.fetch_one(
-                "SELECT agenda_base_version FROM agenda_chair WHERE agenda_base_version = ?",
-                (info.agenda_base_version,)
-            )
-            
-            if existing:
-                return True
-            
-            # 없으면 기본 정보로 생성
-            self.logger.info(f"agenda_chair 자동 생성: {info.agenda_base_version}")
-            
-            # 필수 정보 추출
-            agenda_chair = AgendaChair(
-                agenda_base_version=info.agenda_base_version,
-                agenda_code=info.agenda_code or info.agenda_base_version,
-                sender_type="CHAIR",
-                sender_organization="UNKNOWN",  # 나중에 CHAIR 메일이 오면 업데이트됨
-                sent_time=self._parse_datetime(info.sent_time) or datetime.now(timezone.utc),
-                mail_type="REQUEST",
-                decision_status="created",
-                subject=f"[자동생성] {info.agenda_base_version}",
-                body="",
-                keywords=info.keywords or [],
-                deadline=self._parse_datetime(info.deadline) if info.deadline else None,
-                has_deadline=info.has_deadline,
-                sender="auto-generated",
-                sender_address="auto-generated@system",
-                agenda_panel=info.agenda_panel or "UNKNOWN",
-                agenda_year=info.agenda_year or "",
-                agenda_number=info.agenda_number or "",
-                agenda_version=info.agenda_version or "",
-                parsing_method="auto_created_for_member_response",
-                hasAttachments=False,
-            )
-            
-            # 저장
-            success = self.repository.save_or_update_agenda_chair(agenda_chair)
-            
-            if success:
-                self.logger.info(
-                    f"agenda_chair 자동 생성 완료: {info.agenda_base_version} "
-                    f"(MEMBER 응답이 먼저 도착함)"
-                )
-                return True
-            else:
-                self.logger.error(f"agenda_chair 자동 생성 실패: {info.agenda_base_version}")
-                return False
-                
-        except Exception as e:
-            self.logger.error(f"agenda_chair 존재 확인/생성 중 오류: {str(e)}")
-            return False
 
     def _save_to_pending(
         self, event: EmailReceivedEvent, reason: str, description: str
