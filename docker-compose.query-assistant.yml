@@ -1,0 +1,46 @@
+version: '3.8'
+
+services:
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: iacsgraph-qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__LOG_LEVEL=INFO
+    restart: unless-stopped
+
+  # Query Assistant Web API
+  query-assistant:
+    build:
+      context: .
+      dockerfile: Dockerfile.query-assistant
+    container_name: iacsgraph-query-assistant
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_PATH=/app/data/iacsgraph.db
+      - QDRANT_URL=qdrant
+      - QDRANT_PORT=6333
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./data:/app/data:ro
+      - ./logs:/app/logs
+    depends_on:
+      - qdrant
+    restart: unless-stopped
+
+  # Nginx Reverse Proxy (Optional)
+  nginx:
+    image: nginx:alpine
+    container_name: iacsgraph-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - query-assistant
+    restart: unless-stopped

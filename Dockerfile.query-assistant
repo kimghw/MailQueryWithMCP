@@ -1,0 +1,28 @@
+# Query Assistant Dockerfile
+FROM python:3.10-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set working directory
+WORKDIR /app
+
+# Copy project files
+COPY pyproject.toml .
+COPY modules/ ./modules/
+COPY infra/ ./infra/
+COPY data/iacsgraph.db ./data/
+
+# Install Python dependencies
+RUN pip install --no-cache-dir uv && \
+    uv pip install --system -e .
+
+# Expose port
+EXPOSE 8000
+
+# Run web server
+CMD ["python", "-m", "modules.query_assistant.web_api"]
