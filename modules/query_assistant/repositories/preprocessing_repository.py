@@ -6,10 +6,9 @@ Preprocessing Dataset Repository
 import sqlite3
 from typing import List, Optional, Dict, Any
 from datetime import datetime
-import json
 
 from ..models.preprocessing_dataset import PreprocessingTerm, PreprocessingDataset
-from ...infra.core.config import get_config
+from infra.core.config import get_config
 
 
 class PreprocessingRepository:
@@ -233,7 +232,14 @@ class PreprocessingRepository:
                 FROM preprocessing_dataset
             """)
             
-            stats = dict(cursor.fetchone())
+            row = cursor.fetchone()
+            stats = {
+                'total_terms': row[0],
+                'active_terms': row[1],
+                'pattern_terms': row[2],
+                'total_usage_count': row[3],
+                'avg_match_accuracy': row[4]
+            }
             
             # 타입별 통계
             cursor.execute("""

@@ -9,7 +9,7 @@ from datetime import datetime
 import json
 
 from ..models.fallback_queries import FallbackQuery
-from ...infra.core.config import get_config
+from infra.core.config import get_config
 
 
 class FallbackRepository:
@@ -197,7 +197,15 @@ class FallbackRepository:
                 FROM fallback_queries
             """)
             
-            stats = dict(cursor.fetchone())
+            row = cursor.fetchone()
+            stats = {
+                'total_queries': row[0],
+                'unique_sessions': row[1],
+                'avg_match_score': row[2],
+                'avg_execution_time': row[3],
+                'satisfied_count': row[4],
+                'unsatisfied_count': row[5]
+            }
             
             # 폴백 타입별 통계
             cursor.execute("""
