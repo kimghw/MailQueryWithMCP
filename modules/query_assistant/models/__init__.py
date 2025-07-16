@@ -1,0 +1,1 @@
+"""Query Assistant Models Package"""
