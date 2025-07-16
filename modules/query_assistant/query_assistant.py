@@ -15,6 +15,8 @@ from .services.vector_store_http import VectorStoreHTTP
 from .services.keyword_expander import KeywordExpander
 from .services.db_connector import create_db_connector, DBConnector
 from .services.parameter_validator import ParameterValidator
+from .services.domain_ner import DomainNER, EntityType
+from .repositories.preprocessing_repository import PreprocessingRepository
 from .templates import get_templates
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,15 @@ class QueryAssistant:
         # Initialize parameter validator
         self.parameter_validator = ParameterValidator(self.db_connector)
         
+        # Initialize NER with preprocessing repository
+        try:
+            preprocessing_repo = PreprocessingRepository()
+            self.ner = DomainNER(preprocessing_repo)
+            logger.info("Initialized NER with preprocessing dataset")
+        except Exception as e:
+            logger.warning(f"Failed to initialize NER with preprocessing: {e}")
+            self.ner = DomainNER()
+        
         # Index templates on initialization
         self._index_templates()
         
@@ -91,6 +102,10 @@ class QueryAssistant:
     ) -> QueryResult:
         """Process natural language query and optionally execute SQL"""
         try:
+            # Extract named entities
+            entities = self.ner.extract_entities(user_query)
+            entity_summary = self.ner.get_entity_summary(entities)
+            
             # Extract and expand keywords
             expansion = self.keyword_expander.expand_query(user_query)
             
@@ -117,11 +132,12 @@ class QueryAssistant:
             best_match = search_results[0]
             template = best_match.template
             
-            # Extract parameters from user query
+            # Extract parameters from user query with NER results
             parameters = self._extract_parameters(
                 user_query, 
                 template,
-                expansion
+                expansion,
+                entities
             )
             
             # Validate parameters and get suggestions
@@ -218,10 +234,56 @@ class QueryAssistant:
         self, 
         query: str, 
         template: QueryTemplate,
-        expansion: QueryExpansion
+        expansion: QueryExpansion,
+        entities: List = None
     ) -> Dict[str, Any]:
-        """Extract parameters from user query"""
+        """Extract parameters from user query using NER results"""
         parameters = {}
+        
+        # NER 기반 파라미터 추출 (우선순위 높음)
+        if entities:
+            for entity in entities:
+                # Organization 파라미터
+                if (entity.entity_type == EntityType.ORGANIZATION and 
+                    "organization" in template.required_params + template.optional_params):
+                    parameters["organization"] = entity.normalized_value
+                    logger.info(f"NER extracted organization: {entity.normalized_value}")
+                
+                # Time period 파라미터
+                elif (entity.entity_type == EntityType.TIME_PERIOD and 
+                      any(p in ["period", "days", "weeks", "months", "years"] 
+                          for p in template.required_params + template.optional_params)):
+                    if isinstance(entity.normalized_value, dict):
+                        if "days" in entity.normalized_value:
+                            parameters["days"] = entity.normalized_value["days"]
+                            parameters["period"] = entity.text
+                            logger.info(f"NER extracted time period: {entity.normalized_value['days']} days")
+                
+                # Status 파라미터
+                elif (entity.entity_type == EntityType.STATUS and 
+                      "status" in template.required_params + template.optional_params):
+                    parameters["status"] = entity.normalized_value
+                    logger.info(f"NER extracted status: {entity.normalized_value}")
+                
+                # Quantity 파라미터
+                elif (entity.entity_type == EntityType.QUANTITY and 
+                      "limit" in template.optional_params):
+                    if isinstance(entity.normalized_value, dict) and "value" in entity.normalized_value:
+                        if isinstance(entity.normalized_value["value"], int):
+                            parameters["limit"] = entity.normalized_value["value"]
+                            logger.info(f"NER extracted limit: {entity.normalized_value['value']}")
+                
+                # Agenda ID 파라미터
+                elif (entity.entity_type == EntityType.AGENDA_ID and 
+                      "agenda_id" in template.required_params + template.optional_params):
+                    parameters["agenda_id"] = entity.normalized_value
+                    logger.info(f"NER extracted agenda_id: {entity.normalized_value}")
+                
+                # Keyword 파라미터
+                elif (entity.entity_type == EntityType.KEYWORD and 
+                      "keyword" in template.required_params + template.optional_params):
+                    parameters["keyword"] = entity.normalized_value
+                    logger.info(f"NER extracted keyword: {entity.normalized_value}")
         
         # Extract period parameter
         if "period" in template.required_params or "period" in template.optional_params:
@@ -376,6 +438,10 @@ class QueryAssistant:
     
     def analyze_query(self, user_query: str) -> Dict[str, Any]:
         """Analyze user query without executing"""
+        # Extract named entities
+        entities = self.ner.extract_entities(user_query)
+        entity_summary = self.ner.get_entity_summary(entities)
+        
         # Get query expansion
         expansion = self.keyword_expander.expand_query(user_query)
         
@@ -389,6 +455,17 @@ class QueryAssistant:
         # Prepare analysis
         analysis = {
             "original_query": user_query,
+            "named_entities": [
+                {
+                    "text": e.text,
+                    "type": e.entity_type.value,
+                    "normalized": e.normalized_value,
+                    "confidence": e.confidence,
+                    "position": [e.start_pos, e.end_pos]
+                }
+                for e in entities
+            ],
+            "entity_summary": entity_summary,
             "extracted_keywords": expansion.original_keywords,
             "expanded_keywords": expansion.expanded_keywords,
             "missing_info": expansion.missing_params,
