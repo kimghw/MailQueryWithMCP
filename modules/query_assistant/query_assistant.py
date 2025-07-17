@@ -175,7 +175,7 @@ class QueryAssistant:
                 else:
                     # Return validation result with suggestions
                     return QueryResult(
-                        query_id=template.id,
+                        query_id=template.template_id,
                         executed_sql="",
                         parameters=parameters,
                         results=[],
@@ -185,12 +185,15 @@ class QueryAssistant:
                     )
             
             # Apply default values for optional parameters
-            for param in template.optional_params:
+            for param in template.query_filter:
                 if param not in parameters:
                     parameters[param] = DEFAULT_PARAMS.get(param, "")
             
-            # Generate SQL
-            sql = self._generate_sql(template.sql_template, parameters)
+            # Generate SQL - use parameterized version if parameters exist
+            if parameters and any(parameters.values()):
+                sql = self._generate_sql(template.sql_query_with_parameters, parameters)
+            else:
+                sql = template.sql_query
             
             # Execute if requested
             if execute:
@@ -199,10 +202,10 @@ class QueryAssistant:
                 execution_time = (datetime.now() - start_time).total_seconds()
                 
                 # Update usage statistics
-                self.vector_store.update_usage_stats(template.id)
+                self.vector_store.update_usage_stats(template.template_id)
                 
                 return QueryResult(
-                    query_id=template.id,
+                    query_id=template.template_id,
                     executed_sql=sql,
                     parameters=parameters,
                     results=results,
@@ -211,7 +214,7 @@ class QueryAssistant:
                 )
             else:
                 return QueryResult(
-                    query_id=template.id,
+                    query_id=template.template_id,
                     executed_sql=sql,
                     parameters=parameters,
                     results=[],
@@ -245,14 +248,14 @@ class QueryAssistant:
             for entity in entities:
                 # Organization 파라미터
                 if (entity.entity_type == EntityType.ORGANIZATION and 
-                    "organization" in template.required_params + template.optional_params):
+                    "organization" in template.required_params + template.query_filter):
                     parameters["organization"] = entity.normalized_value
                     logger.info(f"NER extracted organization: {entity.normalized_value}")
                 
                 # Time period 파라미터
                 elif (entity.entity_type == EntityType.TIME_PERIOD and 
                       any(p in ["period", "days", "weeks", "months", "years"] 
-                          for p in template.required_params + template.optional_params)):
+                          for p in template.required_params + template.query_filter)):
                     if isinstance(entity.normalized_value, dict):
                         if "days" in entity.normalized_value:
                             parameters["days"] = entity.normalized_value["days"]
@@ -261,13 +264,13 @@ class QueryAssistant:
                 
                 # Status 파라미터
                 elif (entity.entity_type == EntityType.STATUS and 
-                      "status" in template.required_params + template.optional_params):
+                      "status" in template.required_params + template.query_filter):
                     parameters["status"] = entity.normalized_value
                     logger.info(f"NER extracted status: {entity.normalized_value}")
                 
                 # Quantity 파라미터
                 elif (entity.entity_type == EntityType.QUANTITY and 
-                      "limit" in template.optional_params):
+                      "limit" in template.query_filter):
                     if isinstance(entity.normalized_value, dict) and "value" in entity.normalized_value:
                         if isinstance(entity.normalized_value["value"], int):
                             parameters["limit"] = entity.normalized_value["value"]
@@ -275,18 +278,18 @@ class QueryAssistant:
                 
                 # Agenda ID 파라미터
                 elif (entity.entity_type == EntityType.AGENDA_ID and 
-                      "agenda_id" in template.required_params + template.optional_params):
+                      "agenda_id" in template.required_params + template.query_filter):
                     parameters["agenda_id"] = entity.normalized_value
                     logger.info(f"NER extracted agenda_id: {entity.normalized_value}")
                 
                 # Keyword 파라미터
                 elif (entity.entity_type == EntityType.KEYWORD and 
-                      "keyword" in template.required_params + template.optional_params):
+                      "keyword" in template.required_params + template.query_filter):
                     parameters["keyword"] = entity.normalized_value
                     logger.info(f"NER extracted keyword: {entity.normalized_value}")
         
         # Extract period parameter
-        if "period" in template.required_params or "period" in template.optional_params:
+        if "period" in template.required_params or "period" in template.query_filter:
             period_match = re.search(r'(\d+)\s*(일|주|개월|년|days?|weeks?|months?|years?)', query)
             if period_match:
                 value = int(period_match.group(1))

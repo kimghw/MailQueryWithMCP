@@ -176,7 +176,7 @@ class VectorStoreHTTP:
             
             # Prepare texts for batch embedding
             for template in templates:
-                text_to_embed = f"{template.natural_query} {' '.join(template.keywords)}"
+                text_to_embed = f"{template.natural_questions} {' '.join(template.keywords)}"
                 texts_to_embed.append(text_to_embed)
             
             # Get embeddings in batch (more efficient)
@@ -188,15 +188,18 @@ class VectorStoreHTTP:
                     id=i,
                     vector=embedding,
                     payload={
-                        "template_id": template.id,
-                        "natural_query": template.natural_query,
-                        "sql_template": template.sql_template,
+                        "template_id": template.template_id,
+                        "natural_questions": template.natural_questions,
+                        "sql_query": template.sql_query,
+                        "sql_query_with_parameters": template.sql_query_with_parameters,
                         "keywords": template.keywords,
                         "category": template.category,
                         "required_params": template.required_params,
-                        "optional_params": template.optional_params,
+                        "query_filter": template.query_filter,
                         "default_params": template.default_params,
                         "usage_count": template.usage_count,
+                        "related_tables": template.related_tables,
+                        "to_agent_prompt": template.to_agent_prompt,
                         "created_at": template.created_at.isoformat(),
                         "last_used": template.last_used.isoformat() if template.last_used else None
                     }
@@ -264,15 +267,18 @@ class VectorStoreHTTP:
                 if combined_score >= score_threshold:
                     # Reconstruct QueryTemplate
                     template = QueryTemplate(
-                        id=result.payload["template_id"],
-                        natural_query=result.payload["natural_query"],
-                        sql_template=result.payload["sql_template"],
+                        template_id=result.payload["template_id"],
+                        natural_questions=result.payload["natural_questions"],
+                        sql_query=result.payload["sql_query"],
+                        sql_query_with_parameters=result.payload["sql_query_with_parameters"],
                         keywords=result.payload["keywords"],
                         category=result.payload["category"],
                         required_params=result.payload["required_params"],
-                        optional_params=result.payload["optional_params"],
+                        query_filter=result.payload["query_filter"],
                         default_params=result.payload.get("default_params", {}),
                         usage_count=result.payload["usage_count"],
+                        related_tables=result.payload.get("related_tables", []),
+                        to_agent_prompt=result.payload.get("to_agent_prompt"),
                         created_at=datetime.fromisoformat(result.payload["created_at"]),
                         last_used=datetime.fromisoformat(result.payload["last_used"]) 
                                   if result.payload.get("last_used") else None

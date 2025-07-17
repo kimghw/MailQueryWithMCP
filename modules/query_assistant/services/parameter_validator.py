@@ -155,7 +155,7 @@ class ParameterValidator:
         messages.append("")
         
         # Show the template pattern
-        messages.append(f"선택된 쿼리 패턴: '{template.natural_query}'")
+        messages.append(f"선택된 쿼리 패턴: '{template.natural_questions}'")
         messages.append("")
         
         # Explain each missing parameter
@@ -184,19 +184,19 @@ class ParameterValidator:
         if "organization" in missing_params:
             orgs = suggestions.get("organization", ["KR"])[:3]
             for org in orgs:
-                example = template.natural_query.replace("{organization}", org)
+                example = template.natural_questions.replace("{organization}", org)
                 messages.append(f"   - {example}")
                 
         elif "period" in missing_params:
             periods = suggestions.get("period", ["30일"])[:2]
             for period in periods:
-                example = template.natural_query.replace("{period}", period)
+                example = template.natural_questions.replace("{period}", period)
                 messages.append(f"   - {example}")
                 
         elif "status" in missing_params:
             statuses = suggestions.get("status", ["created"])[:2]
             for status in statuses:
-                example = template.natural_query.replace("{status}", status)
+                example = template.natural_questions.replace("{status}", status)
                 messages.append(f"   - {example}")
         
         return "\n".join(messages)

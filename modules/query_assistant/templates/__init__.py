@@ -3,9 +3,13 @@
 from typing import List, Dict, Any, Optional
 from ..schema import QueryTemplate
 from datetime import datetime
+from .new_templates import TEMPLATES
 
-# Query templates organized by category
-QUERY_TEMPLATES: List[Dict[str, Any]] = [
+# Import templates from new_templates.py
+QUERY_TEMPLATES: List[Dict[str, Any]] = TEMPLATES
+
+# Legacy templates (kept for reference)
+LEGACY_TEMPLATES: List[Dict[str, Any]] = [
     # Agenda Summary Templates
     {
         "id": "recent_agendas_by_period",
@@ -541,68 +545,6 @@ def get_templates() -> List[QueryTemplate]:
     """Get all query templates as QueryTemplate objects"""
     templates = []
     for template_dict in QUERY_TEMPLATES:
-        # Ensure default_params exists
-        if "default_params" not in template_dict:
-            template_dict["default_params"] = {}
-        
-        # Auto-populate common defaults if not specified
-        defaults = template_dict["default_params"]
-        
-        # Add common defaults for all templates
-        if "limit" in template_dict.get("optional_params", []) and "limit" not in defaults:
-            defaults["limit"] = 20
-        
-        if "days" in template_dict.get("optional_params", []) and "days" not in defaults:
-            defaults["days"] = 30
-            
-        # Template-specific defaults
-        if template_dict["id"] == "org_response_rate" and "organization" not in defaults:
-            defaults["organization"] = "KR"
-            defaults["days"] = 30
-            
-        if template_dict["id"] == "agenda_decision_status" and "status" not in defaults:
-            defaults["status"] = "created"
-            defaults["days"] = 30
-            
-        if template_dict["id"] == "pending_agendas" and "limit" not in defaults:
-            defaults["limit"] = 10
-            
-        if template_dict["id"] == "high_priority_agendas":
-            defaults["days"] = 30
-            defaults["limit"] = 20
-            
-        if template_dict["id"] == "response_content_search" and "keyword" not in defaults:
-            defaults["keyword"] = ""
-            defaults["days"] = 30
-            
-        if template_dict["id"] == "org_comparison" and "days" not in defaults:
-            defaults["days"] = 30
-            
-        if template_dict["id"] == "periodic_summary":
-            defaults["period"] = "월간"
-            defaults["period_format"] = "%Y-%m"
-            defaults["days"] = 90
-            
-        if template_dict["id"] == "daily_summary":
-            defaults["days"] = 7
-            defaults["limit"] = 7
-            
-        if template_dict["id"] == "weekly_summary":
-            defaults["weeks"] = 4
-            defaults["limit"] = 4
-            
-        if template_dict["id"] == "monthly_summary":
-            defaults["months"] = 6
-            defaults["limit"] = 6
-            
-        if template_dict["id"] == "quarterly_summary":
-            defaults["quarters"] = 12
-            defaults["limit"] = 4
-            
-        if template_dict["id"] == "yearly_summary":
-            defaults["years"] = 3
-            defaults["limit"] = 3
-        
         template = QueryTemplate(
             **template_dict,
             created_at=datetime.now()
@@ -614,7 +556,7 @@ def get_templates() -> List[QueryTemplate]:
 def get_template_by_id(template_id: str) -> Optional[QueryTemplate]:
     """Get a specific template by ID"""
     for template_dict in QUERY_TEMPLATES:
-        if template_dict["id"] == template_id:
+        if template_dict["template_id"] == template_id:
             return QueryTemplate(
                 **template_dict,
                 created_at=datetime.now()

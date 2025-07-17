@@ -7,17 +7,20 @@ from datetime import datetime
 
 class QueryTemplate(BaseModel):
     """SQL query template with metadata"""
-    id: str = Field(..., description="Unique identifier for the template")
-    natural_query: str = Field(..., description="Natural language query pattern")
-    sql_template: str = Field(..., description="SQL template with placeholders")
-    keywords: List[str] = Field(default_factory=list, description="Keywords for matching")
-    required_params: List[str] = Field(default_factory=list, description="Required parameters")
-    optional_params: List[str] = Field(default_factory=list, description="Optional parameters with defaults")
-    default_params: Dict[str, Any] = Field(default_factory=dict, description="Default values for parameters")
-    category: str = Field(..., description="Query category (agenda, response, statistics, etc.)")
-    usage_count: int = Field(default=0, description="Number of times this template has been used")
-    created_at: datetime = Field(default_factory=datetime.now)
-    last_used: Optional[datetime] = Field(default=None)
+    template_id: str = Field(..., description="템플릿 고유 식별자")
+    natural_questions: str = Field(..., description="자연어 질의 패턴")
+    sql_query: str = Field(..., description="SQL 쿼리")
+    sql_query_with_parameters: str = Field(..., description="파라미터화된 SQL 쿼리")
+    keywords: List[str] = Field(default_factory=list, description="매칭용 키워드 목록")
+    category: str = Field(..., description="템플릿 분류")
+    required_params: List[str] = Field(default_factory=list, description="필수 파라미터 목록")
+    default_params: Dict[str, Any] = Field(default_factory=dict, description="필수 파라미터의 초기 값")
+    query_filter: List[str] = Field(default_factory=list, description="선택적 파라미터 목록")
+    usage_count: int = Field(default=0, description="파라미터 기본값 매핑")
+    created_at: datetime = Field(default_factory=datetime.now, description="템플릿 생성 시각")
+    related_tables: List[str] = Field(default_factory=list, description="관련 테이블 목록")
+    last_used: Optional[datetime] = Field(default=None, description="최종 사용 시각")
+    to_agent_prompt: Optional[str] = Field(default=None, description="예외 처리 시 LLM에 전달할 프롬프트")
     
     class Config:
         json_encoders = {
