@@ -21,6 +21,9 @@ class QueryTemplate(BaseModel):
     related_tables: List[str] = Field(default_factory=list, description="관련 테이블 목록")
     last_used: Optional[datetime] = Field(default=None, description="최종 사용 시각")
     to_agent_prompt: Optional[str] = Field(default=None, description="예외 처리 시 LLM에 전달할 프롬프트")
+    template_version: str = Field(default="1.0.0", description="템플릿 버전")
+    embedding_model: str = Field(default="text-embedding-3-large", description="임베딩 모델명")
+    embedding_dimension: int = Field(default=1536, description="임베딩 벡터 차원")
     
     class Config:
         json_encoders = {

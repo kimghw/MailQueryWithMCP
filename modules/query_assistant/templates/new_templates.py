@@ -56,7 +56,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["limit", "status"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Organization Response Statistics
@@ -104,7 +107,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["days"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Agenda Decision Status
@@ -153,7 +159,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["days", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Organization-specific Agendas
@@ -198,7 +207,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["days", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Response Time Analysis
@@ -253,7 +265,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["days"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Pending Agendas
@@ -320,7 +335,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # High Priority Agendas
@@ -368,7 +386,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["days", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Response Content Search
@@ -413,7 +434,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["days", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Organization Comparison
@@ -558,7 +582,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["days", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Weekly Summary
@@ -638,7 +665,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["weeks", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Monthly Summary
@@ -720,7 +750,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["months", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Quarterly Summary
@@ -800,7 +833,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["quarters", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Yearly Summary
@@ -884,7 +920,10 @@ TEMPLATES: List[Dict[str, Any]] = [
         },
         "query_filter": ["years", "limit"],
         "related_tables": ["agenda_chair", "agenda_responses_content"],
-        "to_agent_prompt": None
+        "to_agent_prompt": None,
+        "template_version": "1.0.0",
+        "embedding_model": "text-embedding-3-large",
+        "embedding_dimension": 3072
     },
     
     # Custom Period Summary
@@ -952,3 +991,12 @@ TEMPLATES: List[Dict[str, Any]] = [
         "to_agent_prompt": None
     }
 ]
+
+# Add version, embedding model, and dimension to all templates
+for template in TEMPLATES:
+    if "template_version" not in template:
+        template["template_version"] = "1.0.0"
+    if "embedding_model" not in template:
+        template["embedding_model"] = "text-embedding-3-large"
+    if "embedding_dimension" not in template:
+        template["embedding_dimension"] = 1536

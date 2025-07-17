@@ -64,7 +64,7 @@ class VectorStoreHTTP:
             self.vector_size = vector_size
         else:
             if "text-embedding-3-large" in self.model_name:
-                self.vector_size = 3072
+                self.vector_size = 3072  # Keep original for text-embedding-3-large
             elif "text-embedding-3-small" in self.model_name:
                 self.vector_size = 1536
             else:
@@ -200,6 +200,9 @@ class VectorStoreHTTP:
                         "usage_count": template.usage_count,
                         "related_tables": template.related_tables,
                         "to_agent_prompt": template.to_agent_prompt,
+                        "template_version": template.template_version,
+                        "embedding_model": template.embedding_model,
+                        "embedding_dimension": template.embedding_dimension,
                         "created_at": template.created_at.isoformat(),
                         "last_used": template.last_used.isoformat() if template.last_used else None
                     }
@@ -279,6 +282,9 @@ class VectorStoreHTTP:
                         usage_count=result.payload["usage_count"],
                         related_tables=result.payload.get("related_tables", []),
                         to_agent_prompt=result.payload.get("to_agent_prompt"),
+                        template_version=result.payload.get("template_version", "1.0.0"),
+                        embedding_model=result.payload.get("embedding_model", "text-embedding-3-large"),
+                        embedding_dimension=result.payload.get("embedding_dimension", 1536),
                         created_at=datetime.fromisoformat(result.payload["created_at"]),
                         last_used=datetime.fromisoformat(result.payload["last_used"]) 
                                   if result.payload.get("last_used") else None
