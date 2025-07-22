@@ -42,7 +42,7 @@ class MailEventService:
                 "sentDateTime": mail.get("receivedDateTime", ""),
                 "hasAttachments": mail.get("hasAttachments", False),
                 "subject": mail.get("subject", ""),
-                "webLink": mail.get("webLink", ""),
+                "webLink": mail.get("web_link", ""),
                 "body": mail.get("body", {}).get("content", ""),
                 # 발신자 정보 - 기본값 설정
                 "sender": "",
