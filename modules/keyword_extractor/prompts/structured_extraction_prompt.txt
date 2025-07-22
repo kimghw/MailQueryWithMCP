@@ -65,8 +65,37 @@ Content: {content}
 - null: When status is unclear or not applicable
 
 ### Keyword Extraction
-- Extract 5 most important keywords from the email
-- Include technical terms, project names, action items
-- Prioritize words that describe the main topic or required actions
-- Keywords should be single words or short phrases
-- Avoid common words like "email", "please", "thank you"
+
+Extract 5-8 most important keywords from the document following these specific criteria:
+
+1. **Document Type Keywords** (mandatory if present)
+   - PT, UR, PR, IMO, GPG, EG related keywords must be extracted
+   - For UR: Include the full document name or meeting name as keyword
+   
+2. **Request/Clarification Keywords**
+   - Requests for clarification from other organizations (e.g., "clarification requested from [organization]")
+   - Requests for additional explanations or information
+   - Keywords indicating information requests to specific parties
+
+3. **Chairman/Chair Requirements**
+   - Special requirements or instructions from the Chairman/Chair
+   - Specific action items requested by the Chair
+   - Chair's directives or mandates
+
+4. **Technical/Guideline Keywords**
+   - Technical standards, specifications, or requirements
+   - Guideline names or amendments
+   - New technologies or methodologies
+   - Technical procedures or protocols
+
+5. **Future Planning Keywords**
+   - Future plans or strategies
+   - Upcoming meeting dates or names
+   - Roadmaps, timelines, deadlines
+   - Implementation schedules
+
+**Extraction Rules:**
+- Sort by importance/relevance
+- Single words or short phrases (maximum 4-5 words)
+- Exclude common words
+- Prioritize keywords that clearly indicate the document's core topic and required actions

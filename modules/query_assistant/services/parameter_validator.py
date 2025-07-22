@@ -57,8 +57,8 @@ class ParameterValidator:
             "suggestions": suggestions,
             "clarification_message": clarification_message,
             "template_info": {
-                "id": template.id,
-                "natural_query": template.natural_query,
+                "id": template.template_id,
+                "natural_query": template.natural_questions,
                 "category": template.category
             }
         }

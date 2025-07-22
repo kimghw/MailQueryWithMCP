@@ -308,22 +308,22 @@ class QueryAssistant:
                 parameters["period"] = period_match.group(0)
         
         # Extract time period for specific summary templates
-        if "weeks" in template.optional_params:
+        if "weeks" in template.query_filter:
             weeks_match = re.search(r'(\d+)\s*(주|weeks?)', query)
             if weeks_match:
                 parameters["weeks"] = int(weeks_match.group(1))
                 
-        if "months" in template.optional_params:
+        if "months" in template.query_filter:
             months_match = re.search(r'(\d+)\s*(개월|달|months?)', query)
             if months_match:
                 parameters["months"] = int(months_match.group(1))
                 
-        if "quarters" in template.optional_params:
+        if "quarters" in template.query_filter:
             quarters_match = re.search(r'(\d+)\s*(분기|quarters?)', query)
             if quarters_match:
                 parameters["quarters"] = int(quarters_match.group(1)) * 3  # Convert quarters to months
                 
-        if "years" in template.optional_params:
+        if "years" in template.query_filter:
             years_match = re.search(r'(\d+)\s*(년|년간|years?)', query)
             if years_match:
                 parameters["years"] = int(years_match.group(1))
@@ -370,7 +370,7 @@ class QueryAssistant:
             parameters["limit"] = int(limit_match.group(1))
         
         # Period format for summary reports
-        if "period_format" in template.optional_params:
+        if "period_format" in template.query_filter:
             if "주간" in query or "weekly" in query.lower():
                 parameters["period_format"] = "%Y-%W"
                 parameters["days"] = parameters.get("days", 30)
@@ -479,7 +479,7 @@ class QueryAssistant:
         
         for result in search_results:
             template_info = {
-                "id": result.template.id,
+                "id": result.template.template_id,
                 "natural_query": result.template.natural_query,
                 "category": result.template.category,
                 "match_score": result.score,

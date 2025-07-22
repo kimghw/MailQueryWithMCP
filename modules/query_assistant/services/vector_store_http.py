@@ -284,14 +284,14 @@ class VectorStoreHTTP:
                         to_agent_prompt=result.payload.get("to_agent_prompt"),
                         template_version=result.payload.get("template_version", "1.0.0"),
                         embedding_model=result.payload.get("embedding_model", "text-embedding-3-large"),
-                        embedding_dimension=result.payload.get("embedding_dimension", 1536),
+                        embedding_dimension=result.payload.get("embedding_dimension", 3072),
                         created_at=datetime.fromisoformat(result.payload["created_at"]),
                         last_used=datetime.fromisoformat(result.payload["last_used"]) 
                                   if result.payload.get("last_used") else None
                     )
                     
                     results.append(VectorSearchResult(
-                        template_id=template.id,
+                        template_id=template.template_id,
                         score=combined_score,
                         template=template,
                         keyword_matches=keyword_matches

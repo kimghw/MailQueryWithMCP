@@ -23,7 +23,7 @@ class QueryTemplate(BaseModel):
     to_agent_prompt: Optional[str] = Field(default=None, description="예외 처리 시 LLM에 전달할 프롬프트")
     template_version: str = Field(default="1.0.0", description="템플릿 버전")
     embedding_model: str = Field(default="text-embedding-3-large", description="임베딩 모델명")
-    embedding_dimension: int = Field(default=1536, description="임베딩 벡터 차원")
+    embedding_dimension: int = Field(default=3072, description="임베딩 벡터 차원")
     
     class Config:
         json_encoders = {

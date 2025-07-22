@@ -161,6 +161,7 @@ class AllAccountsFullProcessTester:
                     "hasAttachments",
                     "importance",
                     "isRead",
+                    "webLink",
                 ],
             )
 

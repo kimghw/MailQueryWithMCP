@@ -999,4 +999,4 @@ for template in TEMPLATES:
     if "embedding_model" not in template:
         template["embedding_model"] = "text-embedding-3-large"
     if "embedding_dimension" not in template:
-        template["embedding_dimension"] = 1536
+        template["embedding_dimension"] = 3072  # Match actual text-embedding-3-large dimension

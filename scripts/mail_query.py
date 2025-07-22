@@ -65,6 +65,7 @@ class AllAccountsMailQueryTester:
                     "hasAttachments",
                     "importance",
                     "isRead",
+                    "webLink",
                 ],
             )
 
