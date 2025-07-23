@@ -1,143 +1,96 @@
-"""Template loader service for VectorDB"""
+"""Template loader service using database and VectorDB"""
 
 from typing import List, Dict, Any, Optional
-import asyncio
+import logging
 from datetime import datetime
 
-from modules.query_assistant.services.vector_store_http import VectorStoreService
-from modules.core.utils.embeddings import EmbeddingsManager
-from modules.query_assistant.template_vectordb_schema import QueryTemplate
+from ..database.template_manager import TemplateManager
+from ..services.vector_store_http import VectorStoreHTTP
+from ..schema import VectorSearchResult
+
+logger = logging.getLogger(__name__)
 
 
 class TemplateLoader:
-    """Load and search templates from VectorDB"""
+    """Load and search templates from Database and VectorDB"""
     
-    def __init__(self):
-        self.vector_store = VectorStoreService()
-        self.embeddings_manager = EmbeddingsManager()
-        self.collection_name = "query_templates"
+    def __init__(self, db_url: str = "sqlite:///templates.db", vector_store: Optional[VectorStoreHTTP] = None):
+        self.template_manager = TemplateManager(db_url=db_url, vector_store=vector_store)
+        self.vector_store = vector_store or VectorStoreHTTP()
         self._cache = {}  # Simple in-memory cache
         
-    async def search_templates(
+    def search_templates(
         self, 
         query: str, 
+        keywords: List[str],
         limit: int = 5,
         category: Optional[str] = None,
-        active_only: bool = True
-    ) -> List[Dict[str, Any]]:
-        """Search templates by natural language query"""
+        score_threshold: float = 0.5
+    ) -> List[VectorSearchResult]:
+        """Search templates using vector similarity"""
         try:
-            # Generate embedding for query
-            query_embedding = await self.embeddings_manager.get_embedding(query)
-            
-            # Build filter
-            filter_conditions = []
-            if active_only:
-                filter_conditions.append({
-                    "key": "active",
-                    "match": {"value": True}
-                })
-            if category:
-                filter_conditions.append({
-                    "key": "category", 
-                    "match": {"value": category}
-                })
-            
-            # Search in VectorDB
-            results = await self.vector_store.search(
-                collection_name=self.collection_name,
-                query_vector=query_embedding,
+            # Use VectorStore's search method
+            results = self.vector_store.search(
+                query=query,
+                keywords=keywords,
                 limit=limit,
-                filter={"must": filter_conditions} if filter_conditions else None
+                category=category,
+                score_threshold=score_threshold
             )
             
-            # Format results
-            templates = []
-            for result in results:
-                template_data = result['payload']
-                template_data['score'] = result['score']
-                templates.append(template_data)
-            
-            return templates
+            return results
             
         except Exception as e:
-            print(f"Error searching templates: {e}")
+            logger.error(f"Error searching templates: {e}")
             return []
     
-    async def get_template_by_id(self, template_id: str) -> Optional[Dict[str, Any]]:
-        """Get specific template by ID"""
+    def get_template_by_id(self, template_id: str) -> Optional[Dict[str, Any]]:
+        """Get specific template by ID from database"""
         # Check cache first
         if template_id in self._cache:
             return self._cache[template_id]
         
         try:
-            # Search by template_id
-            filter_condition = {
-                "must": [{
-                    "key": "template_id",
-                    "match": {"value": template_id}
-                }]
-            }
+            # Get from database
+            db_template = self.template_manager.get_template(template_id)
             
-            results = await self.vector_store.search(
-                collection_name=self.collection_name,
-                query_vector=[0] * 768,  # Dummy vector for filter-only search
-                limit=1,
-                filter=filter_condition
-            )
-            
-            if results:
-                template = results[0]['payload']
-                self._cache[template_id] = template
-                return template
+            if db_template:
+                template_dict = db_template.to_dict()
+                self._cache[template_id] = template_dict
+                return template_dict
                 
             return None
             
         except Exception as e:
-            print(f"Error getting template by ID: {e}")
+            logger.error(f"Error getting template by ID: {e}")
             return None
     
-    async def get_templates_by_category(self, category: str) -> List[Dict[str, Any]]:
-        """Get all templates in a category"""
+    def get_templates_by_category(self, category: str) -> List[Dict[str, Any]]:
+        """Get all active templates in a category from database"""
         try:
-            filter_condition = {
-                "must": [
-                    {
-                        "key": "category",
-                        "match": {"value": category}
-                    },
-                    {
-                        "key": "active",
-                        "match": {"value": True}
-                    }
-                ]
-            }
-            
-            # Get all templates in category (up to 100)
-            results = await self.vector_store.search(
-                collection_name=self.collection_name,
-                query_vector=[0] * 768,  # Dummy vector
-                limit=100,
-                filter=filter_condition
+            db_templates = self.template_manager.list_templates(
+                category=category,
+                active_only=True
             )
             
-            templates = [result['payload'] for result in results]
+            templates = [template.to_dict() for template in db_templates]
             return templates
             
         except Exception as e:
-            print(f"Error getting templates by category: {e}")
+            logger.error(f"Error getting templates by category: {e}")
             return []
     
-    async def find_best_template(
+    def find_best_template(
         self, 
         query: str,
+        keywords: List[str],
         extracted_params: Dict[str, Any] = None
     ) -> Optional[Dict[str, Any]]:
         """Find the best matching template for a query"""
         # Search for templates
-        templates = await self.search_templates(query, limit=10)
+        search_results = self.search_templates(query, keywords, limit=10)
         
-        if not templates:
+        if not search_results:
             return None
         
         # If we have extracted parameters, filter by required params
@@ -145,66 +98,75 @@ class TemplateLoader:
             param_keys = set(extracted_params.keys())
             
             # Find templates where all required params are satisfied
-            valid_templates = []
-            for template in templates:
-                required_params = set(template.get('required_params', []))
+            valid_results = []
+            for result in search_results:
+                template = result.template
+                required_params = set(template.required_params)
                 if required_params.issubset(param_keys):
-                    valid_templates.append(template)
+                    valid_results.append(result)
             
-            if valid_templates:
+            if valid_results:
                 # Return the highest scoring valid template
-                return valid_templates[0]
+                return valid_results[0].template.dict()
         
         # Return highest scoring template
-        return templates[0]
+        return search_results[0].template.dict()
     
-    async def refresh_cache(self):
+    def update_usage_stats(self, template_id: str) -> bool:
+        """Update usage statistics for a template"""
+        try:
+            # Update in VectorDB
+            success = self.vector_store.update_usage_stats(template_id)
+            
+            if success:
+                # Update in database
+                db_template = self.template_manager.get_template(template_id)
+                if db_template:
+                    self.template_manager.update_template(
+                        template_id,
+                        {
+                            'usage_count': db_template.usage_count + 1,
+                            'last_used_at': datetime.utcnow()
+                        }
+                    )
+                    
+                # Clear cache entry
+                if template_id in self._cache:
+                    del self._cache[template_id]
+                    
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error updating usage stats: {e}")
+            return False
+    
+    def refresh_cache(self):
         """Clear the template cache"""
         self._cache.clear()
-        print("Template cache cleared")
+        logger.info("Template cache cleared")
+    
+    async def ensure_templates_synced(self):
+        """Ensure templates are synced between DB and VectorDB"""
+        try:
+            stats = self.template_manager.get_statistics()
+            if stats['active_templates'] > stats['indexed_templates']:
+                logger.info("Syncing templates to VectorDB...")
+                result = await self.template_manager.full_sync()
+                logger.info(f"Sync complete: {result['newly_indexed']} templates indexed")
+                return result
+            return {'sync_complete': True, 'newly_indexed': 0}
+        except Exception as e:
+            logger.error(f"Error syncing templates: {e}")
+            return {'sync_complete': False, 'error': str(e)}
 
 
 # Singleton instance
 _template_loader_instance = None
 
 
-def get_template_loader() -> TemplateLoader:
+def get_template_loader(db_url: str = "sqlite:///templates.db", vector_store: Optional[VectorStoreHTTP] = None) -> TemplateLoader:
     """Get singleton instance of TemplateLoader"""
     global _template_loader_instance
     if _template_loader_instance is None:
-        _template_loader_instance = TemplateLoader()
+        _template_loader_instance = TemplateLoader(db_url=db_url, vector_store=vector_store)
     return _template_loader_instance
-
-
-# Example usage
-async def example_usage():
-    """Example of how to use the template loader"""
-    loader = get_template_loader()
-    
-    # Search templates
-    query = "최근 30일 아젠다 보여줘"
-    templates = await loader.search_templates(query)
-    
-    print(f"Found {len(templates)} templates for query: {query}")
-    for template in templates:
-        print(f"  - {template['template_id']}: {template['natural_questions']} (score: {template['score']:.3f})")
-    
-    # Get specific template
-    template = await loader.get_template_by_id("recent_agendas_by_period")
-    if template:
-        print(f"\nTemplate details:")
-        print(f"  - ID: {template['template_id']}")
-        print(f"  - Question: {template['natural_questions']}")
-        print(f"  - Required params: {template['required_params']}")
-    
-    # Find best template with parameters
-    best_template = await loader.find_best_template(
-        query="최근 30일 아젠다", 
-        extracted_params={"period": "30일", "days": 30}
-    )
-    if best_template:
-        print(f"\nBest matching template: {best_template['template_id']}")
-
-
-if __name__ == "__main__":
-    asyncio.run(example_usage())
