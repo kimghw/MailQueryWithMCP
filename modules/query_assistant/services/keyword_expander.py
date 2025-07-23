@@ -4,6 +4,7 @@ import re
 import logging
 from typing import List, Set, Dict, Any
 from ..schema import QueryExpansion
+from ...common.services import SynonymService
 
 logger = logging.getLogger(__name__)
 
@@ -11,10 +12,13 @@ logger = logging.getLogger(__name__)
 class KeywordExpander:
     """Expand user queries with domain-specific keywords and synonyms"""
     
-    def __init__(self):
+    def __init__(self, preprocessing_repo=None):
         """Initialize keyword expander with domain knowledge"""
         
-        # Korean-English mappings
+        # Initialize synonym service
+        self.synonym_service = SynonymService(preprocessing_repo)
+        
+        # Korean-English mappings (keep for backward compatibility)
         self.kr_en_map = {
             "아젠다": ["agenda", "안건"],
             "응답": ["response", "답변", "회신"],
@@ -39,15 +43,8 @@ class KeywordExpander:
             "긴급": ["urgent", "emergency", "급한"]
         }
         
-        # Organization names
-        self.organizations = {
-            "KRSDTP": ["한국연구재단", "연구재단", "NRF"],
-            "KOMDTP": ["해양수산부", "해수부"],
-            "KMDTP": ["기상청"],
-            "GMDTP": ["지질자원연구원", "지자연"],
-            "BMDTP": ["생명공학연구원", "생명연"],
-            "PLDTP": ["극지연구소", "극지연"]
-        }
+        # Organization names - SynonymService로 이관됨
+        # 조직명 확장은 이제 synonym service를 통해 처리
         
         # Time-related keywords
         self.time_keywords = {
@@ -72,8 +69,9 @@ class KeywordExpander:
         
     def expand_query(self, user_query: str) -> QueryExpansion:
         """Expand user query with related keywords and analyze intent"""
-        # Normalize query
-        normalized_query = user_query.lower().strip()
+        # Normalize query using synonym service
+        normalized_query = self.synonym_service.normalize_text(user_query)
+        normalized_query = normalized_query.lower().strip()
         
         # Extract original keywords
         original_keywords = self._extract_keywords(normalized_query)
@@ -127,7 +125,11 @@ class KeywordExpander:
         """Expand keywords with synonyms and related terms"""
         expanded = set(keywords)
         
-        # Check Korean-English mappings
+        # Use synonym service for expansion
+        expanded_list = self.synonym_service.expand_keywords(list(keywords))
+        expanded.update(expanded_list)
+        
+        # Check Korean-English mappings (keep for backward compatibility)
         for keyword in keywords:
             # Direct mapping
             if keyword in self.kr_en_map:
@@ -139,13 +141,15 @@ class KeywordExpander:
                     expanded.add(kr)
                     expanded.update(en_list)
         
-        # Check organization names
-        for org_code, org_names in self.organizations.items():
-            for org_name in org_names:
-                if org_name in full_query:
-                    expanded.add(org_code)
-                    expanded.add("organization")
-                    expanded.add("기관")
+        # Check organization names using synonym service
+        org_code = self.synonym_service.get_organization_code(full_query)
+        if org_code:
+            expanded.add(org_code)
+            expanded.add("organization")
+            expanded.add("기관")
+            # 해당 조직의 동의어도 추가
+            org_synonyms = self.synonym_service.get_synonyms_for_term(org_code)
+            expanded.update(org_synonyms)
         
         # Check time keywords
         for time_kr, time_en_list in self.time_keywords.items():
@@ -181,10 +185,7 @@ class KeywordExpander:
             kw in keywords 
             for kw in ["organization", "기관", "부서"]
         )
-        org_specified = any(
-            org in query 
-            for org in self.organizations.keys()
-        )
+        org_specified = self.synonym_service.get_organization_code(query) is not None
         
         if org_mentioned and not org_specified:
             missing.append("organization")

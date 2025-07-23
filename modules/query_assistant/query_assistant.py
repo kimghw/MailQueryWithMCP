@@ -19,6 +19,9 @@ from .services.domain_ner import DomainNER, EntityType
 from .repositories.preprocessing_repository import PreprocessingRepository
 from .templates import get_templates
 
+# Common parsers import
+from ..common.parsers import QueryParameterExtractor
+
 logger = logging.getLogger(__name__)
 
 
@@ -66,20 +69,31 @@ class QueryAssistant:
             api_key=openai_api_key
         )
         
-        # Initialize keyword expander
-        self.keyword_expander = KeywordExpander()
+        # Initialize preprocessing repository
+        try:
+            preprocessing_repo = PreprocessingRepository()
+            logger.info("Initialized preprocessing repository")
+        except Exception as e:
+            logger.warning(f"Failed to initialize preprocessing repository: {e}")
+            preprocessing_repo = None
+        
+        # Initialize keyword expander with preprocessing repo
+        self.keyword_expander = KeywordExpander(preprocessing_repo)
         
         # Initialize parameter validator
         self.parameter_validator = ParameterValidator(self.db_connector)
         
         # Initialize NER with preprocessing repository
-        try:
-            preprocessing_repo = PreprocessingRepository()
+        if preprocessing_repo:
             self.ner = DomainNER(preprocessing_repo)
             logger.info("Initialized NER with preprocessing dataset")
-        except Exception as e:
-            logger.warning(f"Failed to initialize NER with preprocessing: {e}")
+        else:
             self.ner = DomainNER()
+            logger.info("Initialized NER without preprocessing dataset")
+        
+        # Initialize query parameter extractor
+        self.param_extractor = QueryParameterExtractor(preprocessing_repo)
+        logger.info("Initialized query parameter extractor")
         
         # Index templates on initialization
         self._index_templates()
@@ -102,12 +116,18 @@ class QueryAssistant:
     ) -> QueryResult:
         """Process natural language query and optionally execute SQL"""
         try:
+            # Extract parameters using common parser
+            extracted_params = self.param_extractor.extract_parameters(user_query)
+            normalized_query = extracted_params.get('normalized_query', user_query)
+            
+            logger.info(f"Extracted parameters: {extracted_params}")
+            
             # Extract named entities
-            entities = self.ner.extract_entities(user_query)
+            entities = self.ner.extract_entities(normalized_query)
             entity_summary = self.ner.get_entity_summary(entities)
             
             # Extract and expand keywords
-            expansion = self.keyword_expander.expand_query(user_query)
+            expansion = self.keyword_expander.expand_query(normalized_query)
             
             # Search for matching templates with lower threshold
             search_results = self.vector_store.search(
@@ -139,6 +159,11 @@ class QueryAssistant:
                 expansion,
                 entities
             )
+            
+            # Merge with parameters from common parser
+            for key, value in extracted_params.items():
+                if key not in ['original_query', 'normalized_query'] and value is not None:
+                    parameters[key] = value
             
             # Validate parameters and get suggestions
             validation_result = self.parameter_validator.validate_and_suggest(
@@ -330,13 +355,12 @@ class QueryAssistant:
         
         # Extract organization parameter
         if "organization" in template.required_params:
-            # Look for known organization names (including short codes)
-            orgs = ["KRSDTP", "KOMDTP", "KMDTP", "GMDTP", "BMDTP", "PLDTP", 
-                    "KR", "BV", "CCS", "CRS", "DNV", "IRS", "NK", "PRS", "RINA", "LR", "ABS"]
-            for org in orgs:
-                if org.lower() in query.lower():
-                    parameters["organization"] = org
-                    break
+            # Use synonym service to extract organization
+            from ..common.services.synonym_service import SynonymService
+            syn_service = SynonymService()
+            org_code = syn_service.get_organization_code(query)
+            if org_code:
+                parameters["organization"] = org_code
         
         # Extract status parameter
         if "status" in template.required_params:
@@ -382,7 +406,8 @@ class QueryAssistant:
     
     def _generate_sql(self, template: str, parameters: Dict[str, Any]) -> str:
         """Generate SQL from template and parameters"""
-        sql = template
+        # Use common parser to fill placeholders
+        sql = self.param_extractor.fill_template_placeholders(template, parameters)
         
         # Replace placeholders
         for param, value in parameters.items():
