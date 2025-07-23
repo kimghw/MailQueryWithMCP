@@ -1,0 +1,90 @@
+[
+  {
+    "template_id": "agenda_response_statistics",
+    "natural_questions": "아젠다 응답률 통계|응답률 분석|전체 아젠다 대비 응답률|응답 통계 보여줘",
+    "sql_query": "WITH response_stats AS (SELECT COUNT(DISTINCT a.agenda_id) as total_agendas, COUNT(DISTINCT CASE WHEN ar.response_status = 'received' THEN a.agenda_id END) as responded_agendas, COUNT(DISTINCT CASE WHEN ar.response_status = 'pending' THEN a.agenda_id END) as pending_agendas FROM agenda_all a LEFT JOIN agenda_responses ar ON a.agenda_id = ar.agenda_id WHERE a.created_at >= datetime('now', '-30 days')) SELECT total_agendas, responded_agendas, pending_agendas, ROUND(CAST(responded_agendas AS FLOAT) / total_agendas * 100, 2) as response_rate_percent FROM response_stats",
+    "keywords": ["아젠다", "응답률", "통계", "response", "rate", "분석"],
+    "category": "statistics",
+    "required_params": [],
+    "optional_params": ["days"],
+    "default_params": {"days": 30},
+    "description": "최근 아젠다의 응답률 통계를 계산합니다."
+  },
+  {
+    "template_id": "organization_pending_agendas",
+    "natural_questions": "특정 기관의 대기중인 아젠다|{organization} 미결정 아젠다|기관별 보류 아젠다",
+    "sql_query_with_parameters": "SELECT a.agenda_id, a.title, a.organization, a.chair_name, a.created_at, JULIANDAY('now') - JULIANDAY(a.created_at) as days_pending, ar.response_status FROM agenda_all a LEFT JOIN agenda_responses ar ON a.agenda_id = ar.agenda_id WHERE a.organization = :organization AND (ar.response_status = 'pending' OR ar.response_status IS NULL) ORDER BY a.created_at DESC LIMIT :limit",
+    "keywords": ["기관", "대기", "미결정", "보류", "pending", "organization"],
+    "category": "agenda",
+    "required_params": ["organization"],
+    "optional_params": ["limit"],
+    "default_params": {"limit": 20},
+    "description": "특정 기관의 응답 대기중인 아젠다 목록을 조회합니다."
+  },
+  {
+    "template_id": "recent_approved_decisions",
+    "natural_questions": "최근 승인된 결정사항|승인된 아젠다 목록|최근 허가된 안건|approved 아젠다",
+    "sql_query": "SELECT a.agenda_id, a.title, a.organization, a.chair_name, ar.decision_status, ar.decision_date, ar.decision_comment FROM agenda_all a INNER JOIN agenda_responses ar ON a.agenda_id = ar.agenda_id WHERE ar.decision_status = 'approved' AND ar.decision_date >= datetime('now', '-7 days') ORDER BY ar.decision_date DESC",
+    "keywords": ["승인", "허가", "결정", "approved", "최근", "decision"],
+    "category": "decision",
+    "required_params": [],
+    "optional_params": ["days"],
+    "default_params": {"days": 7},
+    "description": "최근 승인된 아젠다 결정사항을 조회합니다."
+  },
+  {
+    "template_id": "keyword_search_agendas",
+    "natural_questions": "특정 키워드로 아젠다 검색|{keyword} 관련 아젠다|키워드 검색",
+    "sql_query_with_parameters": "SELECT a.agenda_id, a.title, a.organization, a.created_at, a.keywords FROM agenda_all a WHERE a.title LIKE '%' || :keyword || '%' OR a.content LIKE '%' || :keyword || '%' OR a.keywords LIKE '%' || :keyword || '%' ORDER BY a.created_at DESC LIMIT :limit",
+    "keywords": ["키워드", "검색", "search", "keyword", "찾기"],
+    "category": "search",
+    "required_params": ["keyword"],
+    "optional_params": ["limit"],
+    "default_params": {"limit": 50},
+    "description": "키워드로 아젠다를 검색합니다."
+  },
+  {
+    "template_id": "monthly_agenda_summary",
+    "natural_questions": "월별 아젠다 요약|이번달 아젠다 현황|월간 통계",
+    "sql_query": "SELECT strftime('%Y-%m', created_at) as month, COUNT(*) as total_agendas, COUNT(DISTINCT organization) as unique_organizations, SUM(CASE WHEN decision_status = 'approved' THEN 1 ELSE 0 END) as approved_count, SUM(CASE WHEN decision_status = 'rejected' THEN 1 ELSE 0 END) as rejected_count, SUM(CASE WHEN decision_status = 'pending' THEN 1 ELSE 0 END) as pending_count FROM agenda_all a LEFT JOIN agenda_responses ar ON a.agenda_id = ar.agenda_id WHERE created_at >= datetime('now', '-3 months') GROUP BY strftime('%Y-%m', created_at) ORDER BY month DESC",
+    "keywords": ["월별", "월간", "요약", "통계", "summary", "monthly"],
+    "category": "statistics",
+    "required_params": [],
+    "optional_params": ["months"],
+    "default_params": {"months": 3},
+    "description": "월별 아젠다 현황을 요약합니다."
+  },
+  {
+    "template_id": "chair_workload_analysis",
+    "natural_questions": "의장별 업무량|chair 담당 아젠다 수|의장 워크로드 분석",
+    "sql_query": "SELECT chair_name, COUNT(*) as total_agendas, COUNT(DISTINCT organization) as organizations, SUM(CASE WHEN ar.response_status = 'received' THEN 1 ELSE 0 END) as responded, SUM(CASE WHEN ar.response_status = 'pending' THEN 1 ELSE 0 END) as pending FROM agenda_all a LEFT JOIN agenda_responses ar ON a.agenda_id = ar.agenda_id WHERE a.created_at >= datetime('now', '-30 days') GROUP BY chair_name ORDER BY total_agendas DESC",
+    "keywords": ["의장", "chair", "업무량", "워크로드", "담당"],
+    "category": "analysis",
+    "required_params": [],
+    "optional_params": ["days"],
+    "default_params": {"days": 30},
+    "description": "의장별 아젠다 담당 현황을 분석합니다."
+  },
+  {
+    "template_id": "overdue_responses",
+    "natural_questions": "응답 지연 아젠다|오래된 미응답 안건|overdue 목록",
+    "sql_query": "SELECT a.agenda_id, a.title, a.organization, a.chair_name, a.created_at, JULIANDAY('now') - JULIANDAY(a.created_at) as days_overdue FROM agenda_all a LEFT JOIN agenda_responses ar ON a.agenda_id = ar.agenda_id WHERE ar.response_status IS NULL OR ar.response_status = 'pending' AND JULIANDAY('now') - JULIANDAY(a.created_at) > 14 ORDER BY days_overdue DESC",
+    "keywords": ["지연", "오래된", "미응답", "overdue", "delay"],
+    "category": "alert",
+    "required_params": [],
+    "optional_params": ["overdue_days"],
+    "default_params": {"overdue_days": 14},
+    "description": "응답이 지연된 아젠다 목록을 조회합니다."
+  },
+  {
+    "template_id": "today_agenda_activities",
+    "natural_questions": "오늘 아젠다 활동|today's agenda|오늘 처리된 안건",
+    "sql_query": "SELECT 'created' as activity_type, COUNT(*) as count FROM agenda_all WHERE DATE(created_at) = DATE('now') UNION ALL SELECT 'responded' as activity_type, COUNT(*) as count FROM agenda_responses WHERE DATE(response_date) = DATE('now') UNION ALL SELECT 'decided' as activity_type, COUNT(*) as count FROM agenda_responses WHERE DATE(decision_date) = DATE('now')",
+    "keywords": ["오늘", "today", "활동", "activity", "처리"],
+    "category": "daily",
+    "required_params": [],
+    "optional_params": [],
+    "default_params": {},
+    "description": "오늘의 아젠다 활동 현황을 조회합니다."
+  }
+]
