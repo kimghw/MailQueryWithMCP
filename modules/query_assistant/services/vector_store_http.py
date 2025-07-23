@@ -22,13 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 class VectorStoreHTTP:
-    """Qdrant-based vector store using HTTP API for embeddings
-    
-    Supports multiple embedding providers through HTTP API:
-    - OpenAI API
-    - Azure OpenAI
-    - Custom embedding servers
-    """
+    """Qdrant-based vector store using HTTP API for embeddings"""
     
     def __init__(
         self, 
@@ -38,7 +32,8 @@ class VectorStoreHTTP:
         api_base_url: Optional[str] = None,
         model_name: Optional[str] = None,
         collection_name: Optional[str] = None,
-        vector_size: Optional[int] = None
+        vector_size: Optional[int] = None,
+        use_dimension_reduction: bool = False  # 새로운 파라미터
     ):
         """Initialize vector store with HTTP embedding API
         
@@ -49,9 +44,10 @@ class VectorStoreHTTP:
             api_base_url: Base URL for embedding API
             model_name: Model name for embeddings
             collection_name: Custom collection name
-            vector_size: Vector dimension size
+            vector_size: Vector dimension size (None for default, or specific size for reduction)
+            use_dimension_reduction: Whether to use dimension reduction for cost savings
         """
-        # Get configuration from environment or parameters
+        # 기존 설정
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("API key not provided and OPENAI_API_KEY not found in environment")
@@ -59,19 +55,51 @@ class VectorStoreHTTP:
         self.api_base_url = api_base_url or os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")
         self.model_name = model_name or os.environ.get("OPENAI_EMBEDDING_MODEL", "text-embedding-3-large")
         
-        # Determine vector size based on model
-        if vector_size:
-            self.vector_size = vector_size
-        else:
-            if "text-embedding-3-large" in self.model_name:
-                self.vector_size = 3072  # Keep original for text-embedding-3-large
-            elif "text-embedding-3-small" in self.model_name:
-                self.vector_size = 1536
-            else:
-                self.vector_size = 1536  # Default
+        # 모델별 기본 차원 및 축소 가능 차원 정의
+        self.model_configs = {
+            "text-embedding-3-large": {
+                "default_dim": 3072,
+                "allowed_dims": [256, 512, 1024, 1536, 3072]
+            },
+            "text-embedding-3-small": {
+                "default_dim": 1536,
+                "allowed_dims": [512, 1024, 1536]
+            },
+            "text-embedding-ada-002": {
+                "default_dim": 1536,
+                "allowed_dims": [1536]  # 축소 불가
+            }
+        }
         
-        # Set collection name
-        self.collection_name = collection_name or f"iacsgraph_queries_{self.model_name.replace('-', '_')}"
+        # 차원 설정 로직 개선
+        if self.model_name in self.model_configs:
+            config = self.model_configs[self.model_name]
+            default_dim = config["default_dim"]
+            
+            if vector_size and use_dimension_reduction:
+                # 차원 축소 요청시 유효성 검사
+                if vector_size in config["allowed_dims"] and vector_size < default_dim:
+                    self.vector_size = vector_size
+                    self.use_dimension_reduction = True
+                    logger.info(f"Dimension reduction enabled: {default_dim} → {vector_size}")
+                else:
+                    logger.warning(f"Invalid dimension {vector_size} for {self.model_name}. Using default.")
+                    self.vector_size = default_dim
+                    self.use_dimension_reduction = False
+            else:
+                self.vector_size = vector_size or default_dim
+                self.use_dimension_reduction = False
+        else:
+            # 알 수 없는 모델
+            self.vector_size = vector_size or 1536
+            self.use_dimension_reduction = False
+        
+        # 컬렉션 이름에 차원 정보 포함
+        if collection_name:
+            self.collection_name = collection_name
+        else:
+            model_suffix = self.model_name.replace("text-embedding-", "").replace("-", "_")
+            self.collection_name = f"iacsgraph_queries_{model_suffix}_{self.vector_size}d"
         
         # Initialize Qdrant client
         self.client = QdrantClient(host=qdrant_url, port=qdrant_port, check_compatibility=False)
@@ -85,11 +113,25 @@ class VectorStoreHTTP:
         
         logger.info(f"Using embedding API: {self.api_base_url}")
         logger.info(f"Model: {self.model_name} ({self.vector_size} dimensions)")
+        if self.use_dimension_reduction:
+            logger.info(f"Cost reduction: ~{self._calculate_cost_reduction()}% savings")
         logger.info(f"Collection: {self.collection_name}")
         
         # Ensure collection exists
         self._ensure_collection()
+    
+    def _calculate_cost_reduction(self) -> int:
+        """차원 축소로 인한 비용 절감률 계산"""
+        if not self.use_dimension_reduction:
+            return 0
         
+        config = self.model_configs.get(self.model_name, {})
+        default_dim = config.get("default_dim", self.vector_size)
+        
+        # OpenAI는 차원에 비례해서 과금
+        reduction = (1 - self.vector_size / default_dim) * 100
+        return int(reduction)
+    
     def _ensure_collection(self):
         """Create collection if it doesn't exist"""
         try:
@@ -110,7 +152,7 @@ class VectorStoreHTTP:
             raise
     
     def _get_embedding(self, text: str) -> List[float]:
-        """Get embedding from API"""
+        """Get embedding from API with dimension reduction support"""
         try:
             url = f"{self.api_base_url}/embeddings"
             
@@ -119,11 +161,20 @@ class VectorStoreHTTP:
                 "model": self.model_name
             }
             
+            # 차원 축소 파라미터 추가
+            if self.use_dimension_reduction and "text-embedding-3" in self.model_name:
+                payload["dimensions"] = self.vector_size
+                logger.debug(f"Requesting {self.vector_size}D embedding (reduced from default)")
+            
             response = self.session.post(url, json=payload)
             response.raise_for_status()
             
             data = response.json()
             embedding = data['data'][0]['embedding']
+            
+            # 차원 검증
+            if len(embedding) != self.vector_size:
+                logger.warning(f"Expected {self.vector_size}D, got {len(embedding)}D")
             
             return embedding
             
@@ -137,7 +188,7 @@ class VectorStoreHTTP:
             raise
     
     def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
-        """Get embeddings for multiple texts"""
+        """Get embeddings for multiple texts with dimension reduction"""
         try:
             url = f"{self.api_base_url}/embeddings"
             
@@ -146,16 +197,25 @@ class VectorStoreHTTP:
                 "model": self.model_name
             }
             
+            # 차원 축소 파라미터 추가
+            if self.use_dimension_reduction and "text-embedding-3" in self.model_name:
+                payload["dimensions"] = self.vector_size
+            
             response = self.session.post(url, json=payload)
             response.raise_for_status()
             
             data = response.json()
             embeddings = [item['embedding'] for item in data['data']]
             
-            # Log usage if available
+            # 사용량 및 비용 로깅
             usage = data.get('usage', {})
             if usage:
-                logger.info(f"Batch embedding: {len(texts)} texts, {usage.get('total_tokens', 0)} tokens")
+                tokens = usage.get('total_tokens', 0)
+                estimated_cost = self._estimate_cost(tokens)
+                logger.info(
+                    f"Batch embedding: {len(texts)} texts, {tokens} tokens, "
+                    f"~${estimated_cost:.4f} (saved {self._calculate_cost_reduction()}%)"
+                )
             
             return embeddings
             
@@ -167,6 +227,25 @@ class VectorStoreHTTP:
         except Exception as e:
             logger.error(f"Error getting batch embeddings: {e}")
             raise
+    
+    def _estimate_cost(self, tokens: int) -> float:
+        """토큰 수를 기반으로 비용 추정"""
+        # 모델별 가격 (1M 토큰당)
+        prices = {
+            "text-embedding-3-small": 0.02,
+            "text-embedding-3-large": 0.13,
+            "text-embedding-ada-002": 0.10
+        }
+        
+        base_price = prices.get(self.model_name, 0.10)
+        
+        # 차원 축소시 비용도 비례해서 감소
+        if self.use_dimension_reduction and self.model_name in self.model_configs:
+            config = self.model_configs[self.model_name]
+            reduction_factor = self.vector_size / config["default_dim"]
+            base_price *= reduction_factor
+        
+        return (tokens / 1_000_000) * base_price
             
     def index_templates(self, templates: List[QueryTemplate]) -> bool:
         """Index query templates into vector store"""
