@@ -54,7 +54,7 @@ class QueryParameterExtractor:
             # agenda_base: 패널+년도+번호 (예: PL25016)
             result['agenda_base'] = f"{agenda_info['panel']}{agenda_info['year']}{agenda_info['number']}"
             # agenda_base_version: 버전 (예: a, b, c)
-            result['agenda_base_version'] = agenda_info['agenda_version']
+            result['agenda_base_version'] = agenda_info['agenda_base_version']
             # 전체 코드도 저장
             result['agenda_code'] = agenda_info['agenda_code']
             result['agenda_panel'] = agenda_info['panel']
@@ -67,12 +67,8 @@ class QueryParameterExtractor:
         if organizations:
             # organization_code: 조직 코드 (예: KR, ABS, LR)
             result['organization_code'] = organizations[0]
-            # organization: 조직명 전체 (동의어 사전에서 원본 텍스트 찾기)
-            org_text = self._extract_organization_text(query, organizations[0])
-            if org_text:
-                result['organization'] = org_text
-            else:
-                result['organization'] = organizations[0]
+            # organization: 동의어 처리된 조직명 (정규화된 코드)
+            result['organization'] = organizations[0]  # 이미 정규화된 코드 (KR, ABS 등)
             
             # 이전 호환성 유지
             result['sender_organization'] = organizations[0]

@@ -39,7 +39,7 @@ class AgendaParser:
                 'panel': 'PL',
                 'year': '25',
                 'number': '016',
-                'agenda_version': 'a',
+                'agenda_base_version': 'a',
                 'response_org': 'IR',
                 'response_version': 'a'
             }
@@ -61,7 +61,7 @@ class AgendaParser:
                     'panel': groups[0].upper(),
                     'year': groups[1],
                     'number': groups[2],
-                    'agenda_version': groups[3].lower(),
+                    'agenda_base_version': groups[3].lower(),
                     'response_org': groups[4].upper(),
                     'response_version': groups[5].lower()
                 }
@@ -86,7 +86,7 @@ class AgendaParser:
                     'panel': groups[0].upper(),
                     'year': groups[1],
                     'number': groups[2],
-                    'agenda_version': groups[3].lower() if groups[3] else None,
+                    'agenda_base_version': groups[3].lower() if groups[3] else None,
                     'response_org': None,
                     'response_version': None
                 }
