@@ -17,7 +17,7 @@ from .services.db_connector import create_db_connector, DBConnector
 from .services.parameter_validator import ParameterValidator
 from .services.domain_ner import DomainNER, EntityType
 from .repositories.preprocessing_repository import PreprocessingRepository
-from .templates import get_templates
+from .services.template_loader import TemplateLoader
 
 # Common parsers import
 from ..common.parsers import QueryParameterExtractor
@@ -95,24 +95,17 @@ class QueryAssistant:
         self.param_extractor = QueryParameterExtractor(preprocessing_repo)
         logger.info("Initialized query parameter extractor")
         
-        # Index templates on initialization
-        self._index_templates()
+        # Initialize template loader
+        self.template_loader = TemplateLoader(vector_store=self.vector_store)
         
-    def _index_templates(self):
-        """Index all templates into vector store"""
-        templates = get_templates()
-        success = self.vector_store.index_templates(templates)
-        if success:
-            logger.info(f"Successfully indexed {len(templates)} templates")
-        else:
-            logger.error("Failed to index templates")
     
     def process_query(
         self, 
         user_query: str,
         category: Optional[str] = None,
         execute: bool = True,
-        use_defaults: bool = False
+        use_defaults: bool = False,
+        additional_params: Optional[Dict[str, Any]] = None
     ) -> QueryResult:
         """Process natural language query and optionally execute SQL"""
         try:
@@ -164,6 +157,10 @@ class QueryAssistant:
             for key, value in extracted_params.items():
                 if key not in ['original_query', 'normalized_query'] and value is not None:
                     parameters[key] = value
+            
+            # Merge with additional parameters if provided
+            if additional_params:
+                parameters.update(additional_params)
             
             # Validate parameters and get suggestions
             validation_result = self.parameter_validator.validate_and_suggest(

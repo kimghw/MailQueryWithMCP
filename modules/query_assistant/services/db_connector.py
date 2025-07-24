@@ -13,7 +13,7 @@ class DBConnector(ABC):
     """Abstract base class for database connectors"""
     
     @abstractmethod
-    def execute_query(self, sql: str) -> List[Dict[str, Any]]:
+    def execute_query(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute SQL query and return results"""
         pass
     
@@ -29,14 +29,17 @@ class SQLiteConnector(DBConnector):
     def __init__(self, db_path: str):
         self.db_path = db_path
         
-    def execute_query(self, sql: str) -> List[Dict[str, Any]]:
+    def execute_query(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute SQL query on SQLite database"""
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
-            cursor.execute(sql)
+            if params:
+                cursor.execute(sql, params)
+            else:
+                cursor.execute(sql)
             rows = cursor.fetchall()
             
             # Convert to list of dicts
@@ -110,13 +113,16 @@ class SQLServerConnector(DBConnector):
                 f"PWD={self.password};"
             )
     
-    def execute_query(self, sql: str) -> List[Dict[str, Any]]:
+    def execute_query(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute SQL query on SQL Server"""
         try:
             conn = self.pyodbc.connect(self._get_connection_string())
             cursor = conn.cursor()
             
-            cursor.execute(sql)
+            if params:
+                cursor.execute(sql, params)
+            else:
+                cursor.execute(sql)
             
             # Get column names
             columns = [column[0] for column in cursor.description]
@@ -178,7 +184,7 @@ class PostgreSQLConnector(DBConnector):
                 "Install with: pip install psycopg2-binary"
             )
     
-    def execute_query(self, sql: str) -> List[Dict[str, Any]]:
+    def execute_query(self, sql: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute SQL query on PostgreSQL"""
         try:
             conn = self.psycopg2.connect(
@@ -192,7 +198,10 @@ class PostgreSQLConnector(DBConnector):
             # Use RealDictCursor to get results as dictionaries
             cursor = conn.cursor(cursor_factory=self.extras.RealDictCursor)
             
-            cursor.execute(sql)
+            if params:
+                cursor.execute(sql, params)
+            else:
+                cursor.execute(sql)
             rows = cursor.fetchall()
             
             # Convert to list of dicts

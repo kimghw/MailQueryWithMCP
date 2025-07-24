@@ -9,7 +9,7 @@
       "env": {
         "PYTHONPATH": "/home/kimghw/IACSGRAPH",
         "DB_TYPE": "sqlite",
-        "DB_PATH": "data/email_dashboard.db",
+        "DB_PATH": "data/iacsgraph.db",
         "QDRANT_URL": "localhost",
         "QDRANT_PORT": "6333"
       }
