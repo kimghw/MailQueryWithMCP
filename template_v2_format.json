@@ -1,0 +1,87 @@
+{
+  "template_id": "kr_agenda_keywords_v2",
+  "template_version": "2.0",
+  "template_category": "keyword_analysis",
+  "query_info": {
+    "natural_questions": [
+      "KR이 응답해야하는 의제들의 주요 키워드",
+      "KR이 답변해야 할 의제의 핵심 키워드는?",
+      "한국이 응답 필요한 의제들의 중요 키워드"
+    ],
+    "keywords": ["KR", "키워드", "주요", "핵심어", "한국", "응답필요"]
+  },
+  "target_scope": {
+    "scope_type": "specific_organization",
+    "target_organizations": ["KR"],
+    "target_panels": "all"
+  },
+  "sql_template": {
+    "query": "SELECT DISTINCT keywords FROM agendas WHERE organization_code = '{organization_code}' AND response_required = {response_required} AND response_status = '{response_status}' AND created_at >= DATE('now', '-{dates} days')"
+  },
+  "parameters": {
+    "required_params": [
+      {
+        "name": "organization_code",
+        "type": "string",
+        "description": "조직 코드 (예: KR, US, JP)"
+      }
+    ],
+    "optional_params": [
+      {
+        "name": "dates",
+        "type": "integer",
+        "description": "최근 N일 이내 데이터"
+      },
+      {
+        "name": "organization",
+        "type": "string",
+        "description": "조직명 (조직 코드의 별칭)"
+      },
+      {
+        "name": "agenda_base_version",
+        "type": "string",
+        "description": "의제 기본 버전"
+      },
+      {
+        "name": "agenda_base",
+        "type": "string",
+        "description": "의제 기본 정보"
+      },
+      {
+        "name": "keywords",
+        "type": "string",
+        "description": "검색할 키워드"
+      },
+      {
+        "name": "status",
+        "type": "string",
+        "description": "의제 상태 (ongoing, completed, pending)"
+      },
+      {
+        "name": "response_required",
+        "type": "boolean",
+        "description": "응답 필요 여부"
+      },
+      {
+        "name": "response_status",
+        "type": "string",
+        "description": "응답 상태 (pending, responded, not_required)"
+      }
+    ],
+    "default_params": {
+      "dates": 30,
+      "organization_code": "KR",
+      "organization": "KR",
+      "agenda_base_version": null,
+      "agenda_base": null,
+      "keywords": null,
+      "status": "all",
+      "response_required": true,
+      "response_status": "pending"
+    }
+  },
+  "embedding_config": {
+    "model": "text-embedding-3-large",
+    "dimension": 1536
+  }
+}

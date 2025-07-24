@@ -1,0 +1,346 @@
+[
+  {
+    "template_id": "all_panels_ongoing_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_status",
+    "template_metadata": {
+      "created_date": "2024-01-24",
+      "last_modified": "2024-01-24",
+      "author": "system",
+      "description": "모든 패널에서 현재 진행 중인 의제들을 조회하는 템플릿"
+    },
+    "query_info": {
+      "natural_questions": [
+        "최근 모든 패널에서 진행되고 있는 의제 목록",
+        "현재 진행중인 모든 의제를 보여줘",
+        "모든 패널의 ongoing 상태 의제 리스트"
+      ],
+      "keywords": ["진행중", "의제", "패널", "ongoing", "모든", "전체"],
+      "intent": "filter",
+      "expected_output": "record_list"
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all",
+      "time_range": "recent",
+      "data_source": "agendas"
+    },
+    "sql_template": {
+      "base_query": "SELECT * FROM agendas WHERE status = 'ongoing' AND last_updated >= DATE('now', '-30 days')",
+      "parameterized_query": "SELECT * FROM agendas WHERE status = :status AND last_updated >= DATE('now', '-' || :days || ' days')",
+      "joins": [],
+      "aggregations": [],
+      "ordering": "ORDER BY last_updated DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {
+          "name": "days",
+          "type": "integer",
+          "description": "최근 N일 이내의 데이터 조회",
+          "validation": "^[1-9][0-9]{0,2}$"
+        },
+        {
+          "name": "status",
+          "type": "string",
+          "description": "의제 상태",
+          "validation": "^(ongoing|completed|pending|in_review)$"
+        }
+      ],
+      "default_params": {
+        "days": 30,
+        "status": "ongoing"
+      }
+    },
+    "processing_hints": {
+      "requires_llm": false,
+      "requires_vector_search": true,
+      "post_processing": null,
+      "cache_ttl": 1800
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536,
+      "include_fields": ["natural_questions", "keywords"]
+    }
+  },
+  {
+    "template_id": "kr_response_required_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "organization_response",
+    "template_metadata": {
+      "created_date": "2024-01-24",
+      "last_modified": "2024-01-24",
+      "author": "system",
+      "description": "특정 조직(기본값 KR)이 응답해야 하는 의제들을 조회하는 템플릿"
+    },
+    "query_info": {
+      "natural_questions": [
+        "KR이 응답을 해야 하는 의제",
+        "한국이 답변해야 할 의제 목록은?",
+        "KR 응답 필요한 안건들 보여줘",
+        "우리나라가 회신해야 하는 의제들"
+      ],
+      "keywords": ["KR", "응답필요", "회신", "답변", "한국"],
+      "intent": "filter",
+      "expected_output": "record_list"
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all",
+      "time_range": "current",
+      "data_source": "agendas"
+    },
+    "sql_template": {
+      "base_query": "SELECT * FROM agendas WHERE organization_code = 'KR' AND response_required = true AND response_status = 'pending'",
+      "parameterized_query": "SELECT * FROM agendas WHERE organization_code = :organization_code AND response_required = :response_required AND response_status = :response_status",
+      "joins": [],
+      "aggregations": [],
+      "ordering": "ORDER BY priority DESC, deadline ASC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {
+          "name": "organization_code",
+          "type": "string",
+          "description": "조직 코드 (예: KR, US, JP)",
+          "validation": "^[A-Z]{2,3}$"
+        },
+        {
+          "name": "response_required",
+          "type": "boolean",
+          "description": "응답 필요 여부",
+          "validation": null
+        },
+        {
+          "name": "response_status",
+          "type": "string",
+          "description": "응답 상태",
+          "validation": "^(pending|responded|not_required)$"
+        }
+      ],
+      "default_params": {
+        "organization_code": "KR",
+        "response_required": true,
+        "response_status": "pending"
+      }
+    },
+    "processing_hints": {
+      "requires_llm": false,
+      "requires_vector_search": true,
+      "post_processing": null,
+      "cache_ttl": 600
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536,
+      "include_fields": ["natural_questions", "keywords"]
+    }
+  },
+  {
+    "template_id": "agenda_count_by_status_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "template_metadata": {
+      "created_date": "2024-01-24",
+      "last_modified": "2024-01-24",
+      "author": "system",
+      "description": "상태별 의제 수를 집계하는 템플릿"
+    },
+    "query_info": {
+      "natural_questions": [
+        "처리 대기 중인 agenda의 수는?",
+        "pending 상태인 의제가 몇 개야?",
+        "대기중인 안건 개수 알려줘"
+      ],
+      "keywords": ["대기", "수량", "개수", "카운트", "pending", "몇개"],
+      "intent": "count",
+      "expected_output": "single_value"
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all",
+      "time_range": "all",
+      "data_source": "agendas"
+    },
+    "sql_template": {
+      "base_query": "SELECT COUNT(*) as count FROM agendas WHERE status = 'pending'",
+      "parameterized_query": "SELECT COUNT(*) as count FROM agendas WHERE status = :status",
+      "joins": [],
+      "aggregations": ["COUNT"],
+      "ordering": null
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {
+          "name": "status",
+          "type": "string",
+          "description": "의제 상태",
+          "validation": "^(ongoing|completed|pending|in_review)$"
+        }
+      ],
+      "default_params": {
+        "status": "pending"
+      }
+    },
+    "processing_hints": {
+      "requires_llm": false,
+      "requires_vector_search": true,
+      "post_processing": "extract_count",
+      "cache_ttl": 300
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536,
+      "include_fields": ["natural_questions", "keywords"]
+    }
+  },
+  {
+    "template_id": "keyword_based_agenda_search_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "template_metadata": {
+      "created_date": "2024-01-24",
+      "last_modified": "2024-01-24",
+      "author": "system",
+      "description": "키워드 기반으로 의제를 검색하는 템플릿"
+    },
+    "query_info": {
+      "natural_questions": [
+        "최근 논의된 의제들 중에 {keywords}에 대해서 논의되고 있는 의제",
+        "{keywords} 관련 의제들을 찾아줘",
+        "{keywords}에 대한 최근 논의 사항은?"
+      ],
+      "keywords": ["검색", "키워드", "논의", "관련", "찾기"],
+      "intent": "search",
+      "expected_output": "record_list"
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all",
+      "time_range": "recent",
+      "data_source": "agendas"
+    },
+    "sql_template": {
+      "base_query": "SELECT * FROM agendas WHERE (keywords LIKE '%' || :keywords || '%' OR title LIKE '%' || :keywords || '%' OR description LIKE '%' || :keywords || '%')",
+      "parameterized_query": "SELECT * FROM agendas WHERE (keywords LIKE '%' || :keywords || '%' OR title LIKE '%' || :keywords || '%' OR description LIKE '%' || :keywords || '%') AND last_discussed >= DATE('now', '-' || :days || ' days')",
+      "joins": [],
+      "aggregations": [],
+      "ordering": "ORDER BY last_discussed DESC"
+    },
+    "parameters": {
+      "required_params": [
+        {
+          "name": "keywords",
+          "type": "string",
+          "description": "검색할 키워드",
+          "validation": ".+"
+        }
+      ],
+      "optional_params": [
+        {
+          "name": "days",
+          "type": "integer",
+          "description": "최근 N일 이내의 데이터 조회",
+          "validation": "^[1-9][0-9]{0,3}$"
+        }
+      ],
+      "default_params": {
+        "keywords": "",
+        "days": 90
+      }
+    },
+    "processing_hints": {
+      "requires_llm": true,
+      "requires_vector_search": true,
+      "post_processing": null,
+      "cache_ttl": 0
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536,
+      "include_fields": ["natural_questions", "keywords"]
+    }
+  },
+  {
+    "template_id": "multi_org_response_summary_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_analysis",
+    "template_metadata": {
+      "created_date": "2024-01-24",
+      "last_modified": "2024-01-24",
+      "author": "system",
+      "description": "여러 조직의 의견을 포함한 의제 요약 템플릿"
+    },
+    "query_info": {
+      "natural_questions": [
+        "{organization_code}이 응답해야하는 의제에서 의제들의 주요 이슈 및 다른 기관의 의견 정리",
+        "{organization_code} 관련 의제의 타 기관 의견 요약해줘",
+        "{organization_code}가 답변해야 할 안건들의 쟁점과 각국 입장은?"
+      ],
+      "keywords": ["이슈", "의견", "정리", "요약", "쟁점", "입장"],
+      "intent": "summarize",
+      "expected_output": "aggregated_data"
+    },
+    "target_scope": {
+      "scope_type": "custom",
+      "target_organizations": [],
+      "target_panels": "all",
+      "time_range": "current",
+      "data_source": "agendas"
+    },
+    "sql_template": {
+      "base_query": "SELECT a.*, c.comment_text, c.organization FROM agendas a LEFT JOIN comments c ON a.agenda_id = c.agenda_id WHERE a.organization_code = :organization_code AND a.response_required = true AND a.response_status = 'pending'",
+      "parameterized_query": "SELECT a.*, c.comment_text, c.organization FROM agendas a LEFT JOIN comments c ON a.agenda_id = c.agenda_id WHERE a.organization_code = :organization_code AND a.response_required = :response_required AND a.response_status = :response_status",
+      "joins": ["LEFT JOIN comments c ON a.agenda_id = c.agenda_id"],
+      "aggregations": [],
+      "ordering": "ORDER BY a.priority DESC, a.created_at DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {
+          "name": "organization_code",
+          "type": "string",
+          "description": "조직 코드",
+          "validation": "^[A-Z]{2,3}$"
+        },
+        {
+          "name": "response_required",
+          "type": "boolean",
+          "description": "응답 필요 여부",
+          "validation": null
+        },
+        {
+          "name": "response_status",
+          "type": "string",
+          "description": "응답 상태",
+          "validation": "^(pending|responded|not_required)$"
+        }
+      ],
+      "default_params": {
+        "organization_code": "KR",
+        "response_required": true,
+        "response_status": "pending"
+      }
+    },
+    "processing_hints": {
+      "requires_llm": true,
+      "requires_vector_search": true,
+      "post_processing": "summarize_with_comments",
+      "cache_ttl": 3600
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536,
+      "include_fields": ["natural_questions", "keywords"]
+    }
+  }
+]

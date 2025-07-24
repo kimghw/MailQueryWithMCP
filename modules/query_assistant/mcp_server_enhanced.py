@@ -9,6 +9,7 @@ from typing import Any, Dict, List, Optional
 from datetime import datetime, date
 from mcp.server import Server, NotificationOptions
 from mcp.server.models import InitializationOptions
+from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 import mcp.types as types
 from pydantic import BaseModel, Field
@@ -383,7 +384,7 @@ MCP server will extract:
     
     async def run(self):
         """Run the MCP server"""
-        async with mcp.server.stdio.stdio_server() as (read_stream, write_stream):
+        async with stdio_server() as (read_stream, write_stream):
             await self.server.run(
                 read_stream,
                 write_stream,

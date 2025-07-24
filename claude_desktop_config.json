@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "iacsgraph-enhanced": {
+      "command": "python",
+      "args": [
+        "-m",
+        "modules.query_assistant.mcp_server_enhanced"
+      ],
+      "env": {
+        "PYTHONPATH": "/home/kimghw/IACSGRAPH",
+        "DB_TYPE": "sqlite",
+        "DB_PATH": "data/email_dashboard.db",
+        "QDRANT_URL": "localhost",
+        "QDRANT_PORT": "6333"
+      }
+    }
+  }
+}
