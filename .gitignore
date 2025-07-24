@@ -191,3 +191,6 @@ enrollment/
 
 # Test result files
 *_test_result_*.json
+
+# Embedding cache
+.embedding_cache/
