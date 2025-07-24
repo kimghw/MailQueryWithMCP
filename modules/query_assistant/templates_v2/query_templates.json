@@ -1,0 +1,1576 @@
+[
+  {
+    "template_id": "all_panels_ongoing_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_status",
+    "query_info": {
+      "natural_questions": [
+        "최근 모든 패널에서 진행되고 있는 의제 목록",
+        "현재 진행중인 모든 패널의 의제들",
+        "모든 패널의 ongoing 의제 리스트"
+      ],
+      "keywords": ["진행중", "의제", "모든패널", "ongoing"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE decision_status = 'ongoing' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "all_panels_incomplete_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_status",
+    "query_info": {
+      "natural_questions": [
+        "최근 모든 패널에서 완료되지 않은 의제 리스트",
+        "미완료 상태의 모든 패널 의제들",
+        "아직 완료되지 않은 전체 의제 목록"
+      ],
+      "keywords": ["미완료", "완료되지않은", "의제", "모든패널"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE decision_status != 'completed' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "all_panels_recent_3months_v2",
+    "template_version": "2.0",
+    "template_category": "time_based_query",
+    "query_info": {
+      "natural_questions": [
+        "최근 3개월 동안 논의 되었던 의제 목록",
+        "지난 3개월간 논의된 의제들",
+        "3개월 이내 논의 의제 리스트"
+      ],
+      "keywords": ["3개월", "최근", "논의", "의제"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE sent_time >= DATE('now', '-90 days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "kr_no_response_ongoing_v2",
+    "template_version": "2.0",
+    "template_category": "organization_response",
+    "query_info": {
+      "natural_questions": [
+        "진행되고 있는 의제들 중에서 KR이 아직 응답하지 않는 의제",
+        "KR 미응답 진행중 의제",
+        "한국이 아직 답변하지 않은 ongoing 의제들"
+      ],
+      "keywords": ["KR", "미응답", "진행중", "한국"]
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT a.* FROM agenda_all a LEFT JOIN agenda_responses_content r ON a.agenda_code = r.agenda_code AND r.sender_organization = 'KR' WHERE a.decision_status = 'ongoing' AND r.id IS NULL AND a.sent_time >= DATE('now', '-{days} days')"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "kr_response_required_v2",
+    "template_version": "2.0",
+    "template_category": "organization_response",
+    "query_info": {
+      "natural_questions": [
+        "KR이 응답을 해야 하는 의제",
+        "한국이 답변해야 할 의제 목록",
+        "KR 응답 필요 의제들"
+      ],
+      "keywords": ["KR", "응답필요", "답변", "한국"]
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (response_org LIKE '%KR%' OR response_org = 'ALL') AND decision_status != 'completed' AND sent_time >= DATE('now', '-{days} days') ORDER BY deadline ASC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "pending_agenda_count_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "처리 대기 중인 agenda의 수는?",
+        "pending 상태 의제 개수",
+        "대기중인 안건 수량"
+      ],
+      "keywords": ["대기", "pending", "수", "개수"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT COUNT(*) as count FROM agenda_pending"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "kr_agenda_issues_summary_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_analysis",
+    "query_info": {
+      "natural_questions": [
+        "KR이 응답해야하는 의제에서 의제들의 주요 이슈 및 다른 기관의 의견 정리",
+        "한국 응답 필요 의제의 이슈와 타기관 의견",
+        "KR 대응 의제의 쟁점 및 각국 입장"
+      ],
+      "keywords": ["KR", "이슈", "의견", "정리", "타기관"]
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT a.agenda_code, a.subject, a.keywords, r.sender_organization, r.body FROM agenda_all a LEFT JOIN agenda_responses_content r ON a.agenda_code = r.agenda_code WHERE (a.response_org LIKE '%KR%' OR a.response_org = 'ALL') AND a.decision_status != 'completed' AND a.sent_time >= DATE('now', '-{days} days')"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "kr_agenda_keywords_v2",
+    "template_version": "2.0",
+    "template_category": "keyword_analysis",
+    "query_info": {
+      "natural_questions": [
+        "KR이 응답해야하는 의제들의 주요 키워드",
+        "한국 응답 필요 의제의 핵심어",
+        "KR 대응 의제 키워드 분석"
+      ],
+      "keywords": ["KR", "키워드", "주요", "핵심어"]
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT DISTINCT keywords FROM agenda_all WHERE (response_org LIKE '%KR%' OR response_org = 'ALL') AND decision_status != 'completed' AND keywords IS NOT NULL AND sent_time >= DATE('now', '-{days} days')"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "kr_response_keywords_v2",
+    "template_version": "2.0",
+    "template_category": "keyword_analysis",
+    "query_info": {
+      "natural_questions": [
+        "KR이 응답해야 하는 의제들의 회신 중 중요 키워드",
+        "한국 응답 의제의 회신 키워드",
+        "KR 관련 응답들의 핵심어"
+      ],
+      "keywords": ["KR", "회신", "응답", "키워드"]
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT r.agenda_code, r.keywords FROM agenda_responses_content r JOIN agenda_all a ON r.agenda_code = a.agenda_code WHERE r.sender_organization = 'KR' AND r.sent_time >= DATE('now', '-{days} days')"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "keyword_search_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 논의된 의제들 중에 {keywords}에 대해서 논의되고 있는 의제",
+        "{keywords} 관련 의제 검색",
+        "{keywords}에 대한 논의 사항"
+      ],
+      "keywords": ["검색", "키워드", "논의", "관련"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%{keywords}%' OR subject LIKE '%{keywords}%' OR body LIKE '%{keywords}%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [
+        {"name": "keywords", "type": "string"}
+      ],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "meeting_notification_mails_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 회의 개최관련 해서 알림을 준 메일",
+        "회의 개최 공지 메일",
+        "미팅 일정 알림 메일"
+      ],
+      "keywords": ["회의", "개최", "알림", "meeting", "notification"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE mail_type = 'notification' AND (subject LIKE '%meeting%' OR subject LIKE '%회의%' OR body LIKE '%meeting%' OR body LIKE '%회의%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "yearly_agenda_count_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "올해 모든 패널의 아젠다 갯수",
+        "올해 발행된 전체 의제 수",
+        "금년도 총 아젠다 개수"
+      ],
+      "keywords": ["올해", "아젠다", "갯수", "전체"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT COUNT(*) as count FROM agenda_all WHERE strftime('%Y', sent_time) = strftime('%Y', 'now')"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "yearly_created_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "올해 생성된 아젠다가 무엇인가요?",
+        "금년도 발행 의제 목록",
+        "올해 만들어진 아젠다들"
+      ],
+      "keywords": ["올해", "생성", "아젠다", "목록"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE strftime('%Y', sent_time) = strftime('%Y', 'now') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "org_mail_count_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "각 조직별로 보낸 메일 수를 집계해 주세요",
+        "기관별 발송 메일 통계",
+        "조직별 메일 발송 현황"
+      ],
+      "keywords": ["조직별", "메일수", "집계", "통계"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT sender_organization, COUNT(*) as mail_count FROM agenda_all WHERE sender_organization IS NOT NULL GROUP BY sender_organization ORDER BY mail_count DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_5_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근에 생성된 agenda 5개를 보여주세요",
+        "가장 최근 의제 5개",
+        "최신 아젠다 5건"
+      ],
+      "keywords": ["최근", "5개", "최신", "아젠다"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all ORDER BY sent_time DESC LIMIT 5"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_notification_mails_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 notification 타입의 메일만 조회해 주세요",
+        "알림 타입 메일 목록",
+        "notification 메일들"
+      ],
+      "keywords": ["notification", "알림", "타입", "메일"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE mail_type = 'notification' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "panel_agenda_count_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "최근 패널 별 agenda 수를 집계해주세요",
+        "패널별 의제 통계",
+        "각 패널의 아젠다 개수"
+      ],
+      "keywords": ["패널별", "집계", "통계", "수"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT agenda_panel, COUNT(*) as agenda_count FROM agenda_all WHERE sent_time >= DATE('now', '-{days} days') AND agenda_panel IS NOT NULL GROUP BY agenda_panel ORDER BY agenda_count DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "imo_related_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 IMO와 관련된 agenda를 모두 찾아주세요",
+        "IMO 관련 의제 검색",
+        "국제해사기구 관련 아젠다"
+      ],
+      "keywords": ["IMO", "국제해사기구", "관련"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%IMO%' OR subject LIKE '%IMO%' OR body LIKE '%IMO%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "ur_revision_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 UR 관련해서 재개정 요구사항과 관련된 아젠다를 찾아줘",
+        "UR 개정 관련 의제",
+        "통일규칙 재개정 요구사항"
+      ],
+      "keywords": ["UR", "재개정", "개정", "요구사항"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%UR%' OR subject LIKE '%UR%' OR body LIKE '%UR%') AND (keywords LIKE '%revision%' OR keywords LIKE '%개정%' OR body LIKE '%revision%' OR body LIKE '%개정%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "pr_revision_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 PR 관련해서 재개정 요구사항과 관련된 아젠다를 찾아줘",
+        "PR 개정 관련 의제",
+        "절차 요구사항 재개정"
+      ],
+      "keywords": ["PR", "재개정", "개정", "요구사항"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%PR%' OR subject LIKE '%PR%' OR body LIKE '%PR%') AND (keywords LIKE '%revision%' OR keywords LIKE '%개정%' OR body LIKE '%revision%' OR body LIKE '%개정%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "eg_related_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근에 EG 관련해서 논의된 아젠다 찾아줘",
+        "EG 관련 의제",
+        "Expert Group 논의 사항"
+      ],
+      "keywords": ["EG", "Expert Group", "전문가그룹"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%EG%' OR subject LIKE '%EG%' OR body LIKE '%EG%' OR keywords LIKE '%Expert Group%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "monthly_agenda_response_status_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "올해 월별 agenda 발송 및 그 아젠다에 대한 응답 현황",
+        "월별 의제 발송 및 응답 통계",
+        "월간 아젠다 응답률"
+      ],
+      "keywords": ["월별", "발송", "응답", "현황", "통계"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT strftime('%Y-%m', a.sent_time) as month, COUNT(DISTINCT a.agenda_code) as sent_count, COUNT(DISTINCT r.agenda_code) as response_count FROM agenda_all a LEFT JOIN agenda_responses_content r ON a.agenda_code = r.agenda_code WHERE strftime('%Y', a.sent_time) = strftime('%Y', 'now') GROUP BY month ORDER BY month"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_24h_sent_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "time_based_query",
+    "query_info": {
+      "natural_questions": [
+        "최근 24시간 이내에 발송한 agenda가 있나요?",
+        "어제부터 오늘까지 보낸 의제",
+        "24시간 내 발송 아젠다"
+      ],
+      "keywords": ["24시간", "발송", "최근", "어제"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE sent_time >= datetime('now', '-1 day') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_24h_received_mails_v2",
+    "template_version": "2.0",
+    "template_category": "time_based_query",
+    "query_info": {
+      "natural_questions": [
+        "최근 24시간 이내에 수신한 메일이 있나요?",
+        "어제부터 받은 메일",
+        "24시간 내 수신 메일"
+      ],
+      "keywords": ["24시간", "수신", "받은", "메일"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE created_at >= datetime('now', '-1 day') ORDER BY created_at DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_24h_responded_orgs_v2",
+    "template_version": "2.0",
+    "template_category": "time_based_query",
+    "query_info": {
+      "natural_questions": [
+        "최근 24시간 이내에 응답한 기관이 있나요?",
+        "어제부터 답변한 조직",
+        "24시간 내 응답 기관"
+      ],
+      "keywords": ["24시간", "응답", "기관", "답변"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT DISTINCT sender_organization FROM agenda_responses_content WHERE sent_time >= datetime('now', '-1 day') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "pending_agenda_error_reasons_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_analysis",
+    "query_info": {
+      "natural_questions": [
+        "처리되지 않은 pending agenda의 오류 이유들",
+        "대기 중인 의제의 에러 원인",
+        "pending 상태 오류 분석"
+      ],
+      "keywords": ["pending", "오류", "이유", "에러"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT error_reason, COUNT(*) as count FROM agenda_pending WHERE error_reason IS NOT NULL GROUP BY error_reason ORDER BY count DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "vessel_inventory_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "Vessel Asset Inventory 관련 agenda",
+        "선박 자산 목록 관련 의제",
+        "Vessel Inventory 아젠다"
+      ],
+      "keywords": ["Vessel", "Asset", "Inventory", "선박", "자산"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%Vessel%Inventory%' OR subject LIKE '%Vessel%Inventory%' OR body LIKE '%Vessel%Inventory%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 180
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "generic_keyword_search_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "{keywords} 관련 agenda",
+        "{keywords}에 대한 의제",
+        "{keywords} 아젠다 검색"
+      ],
+      "keywords": ["검색", "관련", "키워드"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%{keywords}%' OR subject LIKE '%{keywords}%' OR body LIKE '%{keywords}%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [
+        {"name": "keywords", "type": "string"}
+      ],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "consolidated_status_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_status",
+    "query_info": {
+      "natural_questions": [
+        "최근 consolidated 상태의 agenda 목록",
+        "통합 완료된 의제들",
+        "consolidated 상태 아젠다"
+      ],
+      "keywords": ["consolidated", "통합", "상태"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE decision_status = 'consolidated' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "multilateral_recent_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "MULTILATERAL의 최근 아젠다 리스트",
+        "다자간 협의 의제 목록",
+        "MULTILATERAL 아젠다"
+      ],
+      "keywords": ["MULTILATERAL", "다자간", "협의"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE sender_type = 'MULTILATERAL' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 90
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "deadline_within_week_v2",
+    "template_version": "2.0",
+    "template_category": "time_based_query",
+    "query_info": {
+      "natural_questions": [
+        "마감일이 일주일 이내인 agenda",
+        "7일 내 마감 의제",
+        "일주일 안에 끝나는 아젠다"
+      ],
+      "keywords": ["마감일", "일주일", "7일", "deadline"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE has_deadline = 1 AND deadline BETWEEN datetime('now') AND datetime('now', '+7 days') ORDER BY deadline ASC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "deadline_within_3days_v2",
+    "template_version": "2.0",
+    "template_category": "time_based_query",
+    "query_info": {
+      "natural_questions": [
+        "마감일이 삼일 이내인 agenda",
+        "3일 내 마감 의제",
+        "긴급 마감 아젠다"
+      ],
+      "keywords": ["마감일", "삼일", "3일", "긴급"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE has_deadline = 1 AND deadline BETWEEN datetime('now') AND datetime('now', '+3 days') ORDER BY deadline ASC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "today_response_required_v2",
+    "template_version": "2.0",
+    "template_category": "time_based_query",
+    "query_info": {
+      "natural_questions": [
+        "오늘 응답해야 하는 agenda",
+        "오늘 마감인 의제",
+        "금일 답변 필요 아젠다"
+      ],
+      "keywords": ["오늘", "응답", "마감", "today"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE has_deadline = 1 AND DATE(deadline) = DATE('now') ORDER BY deadline ASC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "cyber_keyword_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "키워드에 'cyber'가 포함된 agenda",
+        "사이버 관련 의제",
+        "cyber 키워드 아젠다"
+      ],
+      "keywords": ["cyber", "사이버", "보안"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE keywords LIKE '%cyber%' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 180
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_month_chair_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 한 달간 생성된 chair agenda",
+        "최근 의장 의제",
+        "한달 내 chair 아젠다"
+      ],
+      "keywords": ["chair", "의장", "한달", "최근"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_chair WHERE sent_time >= DATE('now', '-30 days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "no_response_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "organization_response",
+    "query_info": {
+      "natural_questions": [
+        "아직 아무도 응답하지 않은 agenda",
+        "무응답 의제",
+        "답변 없는 아젠다"
+      ],
+      "keywords": ["무응답", "미응답", "답변없음"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT a.* FROM agenda_all a LEFT JOIN agenda_responses_content r ON a.agenda_code = r.agenda_code WHERE r.id IS NULL AND a.sent_time >= DATE('now', '-{days} days') ORDER BY a.sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_weblink_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 webLink가 있는 agenda 목록",
+        "웹링크 포함 의제",
+        "링크 있는 아젠다"
+      ],
+      "keywords": ["webLink", "링크", "웹"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE webLink IS NOT NULL AND webLink != '' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_attachment_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 첨부 파일이 있는 agenda 목록",
+        "첨부파일 포함 의제",
+        "파일 첨부된 아젠다"
+      ],
+      "keywords": ["첨부파일", "attachment", "파일"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE hasAttachments = 1 AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 30
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "digital_transformation_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "Digital Transformation 관련 agenda",
+        "디지털 전환 의제",
+        "디지털화 관련 아젠다"
+      ],
+      "keywords": ["Digital", "Transformation", "디지털", "전환"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%Digital%Transformation%' OR subject LIKE '%Digital%Transformation%' OR body LIKE '%Digital%Transformation%' OR keywords LIKE '%디지털%전환%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 180
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "org_avg_response_time_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "조직별 평균 응답 소요 시간",
+        "기관별 평균 답변 시간",
+        "조직별 응답 속도"
+      ],
+      "keywords": ["평균", "응답시간", "조직별", "통계"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT r.sender_organization, AVG(julianday(r.sent_time) - julianday(a.sent_time)) as avg_response_days FROM agenda_responses_content r JOIN agenda_all a ON r.agenda_code = a.agenda_code GROUP BY r.sender_organization ORDER BY avg_response_days"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "kr_avg_response_time_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "응답메일 중 KR 평균 응답 시간",
+        "한국의 평균 답변 시간",
+        "KR 응답 속도 통계"
+      ],
+      "keywords": ["KR", "평균", "응답시간", "한국"]
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT AVG(julianday(r.sent_time) - julianday(a.sent_time)) as avg_response_days FROM agenda_responses_content r JOIN agenda_all a ON r.agenda_code = a.agenda_code WHERE r.sender_organization = 'KR'"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "kr_response_time_exclude_creation_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "아젠다 생성을 제외하고 KR 평균 응답시간",
+        "KR의 순수 응답 시간",
+        "한국 답변만의 평균 시간"
+      ],
+      "keywords": ["KR", "응답시간", "제외", "평균"]
+    },
+    "target_scope": {
+      "scope_type": "specific_organization",
+      "target_organizations": ["KR"],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT AVG(julianday(r.sent_time) - julianday(a.sent_time)) as avg_response_days FROM agenda_responses_content r JOIN agenda_all a ON r.agenda_code = a.agenda_code WHERE r.sender_organization = 'KR' AND a.sender_organization != 'KR'"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "other_type_senders_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "other 타입의 발신자 목록",
+        "기타 유형 발송자",
+        "other 타입 sender"
+      ],
+      "keywords": ["other", "기타", "발신자", "타입"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT DISTINCT sender, sender_organization FROM agenda_all WHERE sender_type = 'other' ORDER BY sender_organization"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "recent_updated_chair_10_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "최근 업데이트된 chair agenda 10개",
+        "최신 수정 의장 의제 10건",
+        "업데이트된 chair 아젠다"
+      ],
+      "keywords": ["업데이트", "chair", "의장", "10개"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_chair ORDER BY created_at DESC LIMIT 10"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "chair_no_deadline_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "마감일이 없는 chair agenda",
+        "무기한 의장 의제",
+        "데드라인 없는 chair 아젠다"
+      ],
+      "keywords": ["마감일없음", "chair", "의장", "무기한"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_chair WHERE has_deadline = 0 OR deadline IS NULL ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "active_time_statistics_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "가장 활발한 시간대의 agenda 발송 통계",
+        "시간대별 의제 발송 현황",
+        "피크 타임 아젠다 통계"
+      ],
+      "keywords": ["시간대", "활발", "통계", "발송"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT strftime('%H', sent_time) as hour, COUNT(*) as count FROM agenda_all GROUP BY hour ORDER BY count DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "unknown_type_senders_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "UNKNOWN 타입의 발신자 정보",
+        "미확인 발송자 목록",
+        "UNKNOWN sender 정보"
+      ],
+      "keywords": ["UNKNOWN", "미확인", "발신자", "정보"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT DISTINCT sender, sender_address, COUNT(*) as mail_count FROM agenda_all WHERE sender_type = 'UNKNOWN' GROUP BY sender, sender_address ORDER BY mail_count DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "completed_pending_process_time_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_statistics",
+    "query_info": {
+      "natural_questions": [
+        "처리 완료된 pending agenda의 처리 시간",
+        "완료된 대기 의제 처리 소요시간",
+        "pending 처리 완료 시간"
+      ],
+      "keywords": ["완료", "pending", "처리시간", "소요시간"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT agenda_code, julianday(processed_at) - julianday(created_at) as process_days FROM agenda_pending WHERE status = 'completed' ORDER BY process_days DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [],
+      "default_params": {}
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  },
+  {
+    "template_id": "msc_110_agendas_v2",
+    "template_version": "2.0",
+    "template_category": "agenda_search",
+    "query_info": {
+      "natural_questions": [
+        "MSC 110 관련 agenda 찾기",
+        "MSC 110 세션 의제",
+        "해사안전위원회 110차 아젠다"
+      ],
+      "keywords": ["MSC", "110", "해사안전위원회"]
+    },
+    "target_scope": {
+      "scope_type": "all",
+      "target_organizations": [],
+      "target_panels": "all"
+    },
+    "sql_template": {
+      "query": "SELECT * FROM agenda_all WHERE (keywords LIKE '%MSC 110%' OR subject LIKE '%MSC 110%' OR body LIKE '%MSC 110%') AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC"
+    },
+    "parameters": {
+      "required_params": [],
+      "optional_params": [
+        {"name": "days", "type": "integer"}
+      ],
+      "default_params": {
+        "days": 180
+      }
+    },
+    "embedding_config": {
+      "model": "text-embedding-3-large",
+      "dimension": 1536
+    }
+  }
+]
