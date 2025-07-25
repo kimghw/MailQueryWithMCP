@@ -72,7 +72,11 @@ class SynonymService:
             '보류': 'pending',
             '미처리': 'pending',
             '진행중': 'pending',
+            '진행 중': 'pending',
+            '진행중인': 'pending',
             '검토중': 'pending',
+            '처리중': 'pending',
+            '미완료': 'pending',
             
             # 시간 표현
             '최근': 'recent',
@@ -82,7 +86,10 @@ class SynonymService:
             '금일': 'today',
             '당일': 'today',
             '전일': 'yesterday',
+            '작일': 'yesterday',
             '익일': 'tomorrow',
+            '내일': 'tomorrow',
+            '명일': 'tomorrow',
             '이번주': 'this_week',
             '지난주': 'last_week',
             '금주': 'this_week',
@@ -113,7 +120,21 @@ class SynonymService:
             '보고서': 'report',
             '리포트': 'report',
             '회의록': 'minutes',
-            '의사록': 'minutes'
+            '의사록': 'minutes',
+            '메일': 'mail',
+            '이메일': 'mail',
+            'email': 'mail',
+            '편지': 'mail',
+            
+            # 마감/기한 관련
+            '마감': 'deadline',
+            '기한': 'deadline',
+            '마감일': 'deadline',
+            
+            # 긴급도 관련
+            '임박': 'urgent',
+            '긴급': 'urgent',
+            '시급': 'urgent'
         }
         
         # 선급/기관 동의어 사전

@@ -2,7 +2,7 @@
   "version": "1.0.0-unified",
   "description": "IACSGRAPH 통합 쿼리 템플릿 - 모든 버전 통합 (v2.6 ~ v2.10)",
   "last_updated": "2025-07-25",
-  "total_templates": 174,
+  "total_templates": 175,
   "metadata": {
     "includes_versions": [
       "v2.6",
@@ -19,7 +19,7 @@
       "agenda_analysis": 26,
       "keyword_analysis": 15,
       "agenda_search": 29,
-      "system_config": 4,
+      "system_config": 5,
       "data_quality": 3,
       "organization_analysis": 2,
       "meeting_info": 5,
@@ -8074,6 +8074,37 @@
           }
         }
       ]
+    },
+    {
+      "template_id": "test_upload_functionality_v2",
+      "template_version": "1.0.0",
+      "template_category": "system_config",
+      "query_info": {
+        "natural_questions": [
+          "템플릿 업로드 테스트",
+          "시스템 테스트 템플릿",
+          "업로드 기능 검증용 템플릿"
+        ],
+        "keywords": [
+          "테스트",
+          "업로드",
+          "시스템",
+          "검증",
+          "test",
+          "upload"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT 'Template upload test at 2025-07-25T16:59:20.364115' as test_result",
+        "system": "템플릿 업로드 기능을 테스트하기 위한 쿼리입니다.",
+        "user": "시스템 테스트를 위한 템플릿입니다."
+      },
+      "parameters": []
     }
   ]
 }

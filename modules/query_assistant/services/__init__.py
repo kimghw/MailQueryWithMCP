@@ -1,4 +1,6 @@
 """Services for Query Assistant module"""
 
-# Don't import modules that might cause circular dependencies
-__all__ = []
+# Export the vector stores
+from .vector_store_unified import VectorStoreUnified
+
+__all__ = ['VectorStoreUnified']

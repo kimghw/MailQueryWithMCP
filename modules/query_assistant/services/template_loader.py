@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 
 from ..database.template_manager import TemplateManager
-from ..services.vector_store_http import VectorStoreHTTP
+from ..services.vector_store_unified import VectorStoreUnified
 from ..schema import VectorSearchResult
 
 logger = logging.getLogger(__name__)
@@ -14,9 +14,9 @@ logger = logging.getLogger(__name__)
 class TemplateLoader:
     """Load and search templates from Database and VectorDB"""
     
-    def __init__(self, db_url: str = "sqlite:///templates.db", vector_store: Optional[VectorStoreHTTP] = None):
+    def __init__(self, db_url: str = "sqlite:///templates.db", vector_store: Optional[VectorStoreUnified] = None):
         self.template_manager = TemplateManager(db_url=db_url, vector_store=vector_store)
-        self.vector_store = vector_store or VectorStoreHTTP()
+        self.vector_store = vector_store or VectorStoreUnified()
         self._cache = {}  # Simple in-memory cache
         
     def search_templates(
@@ -164,7 +164,7 @@ class TemplateLoader:
 _template_loader_instance = None
 
 
-def get_template_loader(db_url: str = "sqlite:///templates.db", vector_store: Optional[VectorStoreHTTP] = None) -> TemplateLoader:
+def get_template_loader(db_url: str = "sqlite:///templates.db", vector_store: Optional[VectorStoreUnified] = None) -> TemplateLoader:
     """Get singleton instance of TemplateLoader"""
     global _template_loader_instance
     if _template_loader_instance is None:

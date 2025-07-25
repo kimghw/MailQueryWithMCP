@@ -11,7 +11,7 @@ from .schema import (
     QueryTemplate, QueryExpansion, QueryResult, 
     VectorSearchResult, DEFAULT_PARAMS
 )
-from .services.vector_store_http import VectorStoreHTTP
+from .services.vector_store_unified import VectorStoreUnified
 from .services.keyword_expander import KeywordExpander
 from .services.db_connector import create_db_connector, DBConnector
 from .services.parameter_validator import ParameterValidator
@@ -63,7 +63,7 @@ class QueryAssistant:
             raise ConnectionError("Failed to connect to database")
         
         # Initialize vector store with HTTP embeddings
-        self.vector_store = VectorStoreHTTP(
+        self.vector_store = VectorStoreUnified(
             qdrant_url=qdrant_url,
             qdrant_port=qdrant_port,
             api_key=openai_api_key

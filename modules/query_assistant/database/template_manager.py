@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
 from .template_db_schema import QueryTemplateDB, get_session
-from ..services.vector_store_http import VectorStoreHTTP
+from ..services.vector_store_unified import VectorStoreUnified
 from ..schema import QueryTemplate
 
 logger = logging.getLogger(__name__)
@@ -26,10 +26,10 @@ class TemplateManager:
     def __init__(
         self, 
         db_url: str = "sqlite:///templates.db",
-        vector_store: Optional[VectorStoreHTTP] = None
+        vector_store: Optional[VectorStoreUnified] = None
     ):
         self.db_url = db_url
-        self.vector_store = vector_store or VectorStoreHTTP()
+        self.vector_store = vector_store or VectorStoreUnified()
         
     def get_db_session(self) -> Session:
         """Get database session"""
