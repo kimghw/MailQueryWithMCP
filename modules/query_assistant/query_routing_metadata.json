@@ -1,0 +1,160 @@
+{
+  "query_routing_rules": {
+    "llm_direct_response": {
+      "description": "Queries that should be answered directly by LLM without database search",
+      "patterns": [
+        {
+          "pattern": "기술개발 동향 분석",
+          "examples": [
+            "{agenda}와 관련해서 현재 기술개발 동향 분석해줘",
+            "{keywords} 관련해서 기술개발 동향 분석해줘"
+          ],
+          "reason": "기술 동향 분석은 LLM의 지식을 활용한 직접 응답이 적합"
+        },
+        {
+          "pattern": "기술 배경",
+          "examples": [
+            "{keyword}에 대한 기술 배경이 뭐지?"
+          ],
+          "reason": "기술 배경 설명은 LLM의 지식을 활용한 직접 응답이 적합"
+        }
+      ],
+      "routing_indicator": "기술개발 동향|기술 배경|technology trend|technical background"
+    },
+    
+    "vectordb_mcp_calls": {
+      "description": "Queries that should search VectorDB for documents and content",
+      "patterns": [
+        {
+          "pattern": "UR/PR 관련 내용",
+          "examples": [
+            "{agenda}와 관련해서 UR에 관련된 내용이 뭐지?",
+            "{keywords} 관련해서 UR에 관련된 내용이 뭐가 있지?",
+            "{agenda}와 관련해서 PR에 관련된 내용이 뭐지?",
+            "{keywords} 관련해서 PR에 관련된 내용이 뭐가 있지?"
+          ],
+          "keyword_extraction": "UR관련 keyword 추출 또는 PR관련 keyword 추출",
+          "reason": "UR/PR 규정 문서 검색이 필요"
+        },
+        {
+          "pattern": "다른 패널 유사 논의",
+          "examples": [
+            "{agenda}에서 다른 패널에서 유사한 논의가 진행된적 있는지?"
+          ],
+          "reason": "의미적 유사성 검색이 필요"
+        },
+        {
+          "pattern": "특정 주제 의제 검색",
+          "examples": [
+            "자율운항선박에 대해서 논의되고 있는 {agenda} 검색해줘",
+            "원격운항선박에 대해서 논의되고 있는 {agenda} 검색해줘"
+          ],
+          "keyword_extraction": "주제 keyword 추출",
+          "reason": "주제별 의미적 검색이 필요"
+        },
+        {
+          "pattern": "PT 정보",
+          "examples": [
+            "현재 진행 중인 PT 리스트",
+            "현재 진행 중인 PT의 참여기관",
+            "현재 진행 중인 PT의 참여자 정보 알려줘",
+            "현재 진행 중인 PT의 중요 내용은",
+            "최근 완료된 PT 리스트 알려줘",
+            "최근 완료된 PT의 주요 내용 알려줘",
+            "최근 완료된 PT의 참여 기관 알려줘",
+            "최근 완료된 PT의 참여자 정보 알려줘"
+          ],
+          "keyword_extraction": "PT 관련 keyword 추출",
+          "reason": "PT 관련 문서 검색이 필요"
+        }
+      ],
+      "routing_indicator": "UR.*관련|PR.*관련|PT.*리스트|PT.*참여|유사한 논의|자율운항선박|원격운항선박"
+    },
+    
+    "sql_query_templates": {
+      "description": "Queries that should use SQL templates for structured data",
+      "patterns": [
+        {
+          "pattern": "EG 작업 정보",
+          "examples": [
+            "SDTP에서 진행된 EG 작업 알려줘",
+            "SDTP에서 진행된 EG의 주요 진행 사항에 대해서 설명해줘",
+            "SDPT에서 {EG_organization}에 참여한 기관은?"
+          ],
+          "keyword_extraction": "EG, panel 관련 keyword 추출",
+          "reason": "구조화된 의제 데이터 조회"
+        },
+        {
+          "pattern": "회의 참석 정보",
+          "examples": [
+            "{agenda}에서 날짜별 회의에 참석할 수 있는 기관과 참석할 수 없는 기관을 정리해줘",
+            "{agenda}에서 기관별 회의 참석 가능여부 정리해줘"
+          ],
+          "reason": "응답 데이터 분석"
+        },
+        {
+          "pattern": "답변 요구 분석",
+          "examples": [
+            "{agenda}에서 다른 기관에 답변을 요구한 기관이 있는가?",
+            "{agenda}에서 다른 기관에 답변 또는 명확화를 요구하는 내용이 있나?"
+          ],
+          "reason": "응답 내용 분석"
+        },
+        {
+          "pattern": "키워드 분석",
+          "examples": [
+            "3개월 내 주요 키워드 분석해줘",
+            "작년 주요 키워드 분석해줘",
+            "2025년 주요 키워드 분석해줘"
+          ],
+          "reason": "통계적 키워드 분석"
+        }
+      ],
+      "routing_indicator": "EG.*작업|회의.*참석|답변.*요구|명확화.*요구|키워드 분석"
+    }
+  },
+  
+  "implementation_notes": {
+    "keyword_extraction": {
+      "UR_PR_keywords": [
+        "Unified Requirements",
+        "Procedural Requirements",
+        "UR",
+        "PR",
+        "규정",
+        "요구사항"
+      ],
+      "PT_keywords": [
+        "Project Team",
+        "PT",
+        "프로젝트팀",
+        "작업반"
+      ],
+      "autonomous_ship_keywords": [
+        "autonomous ship",
+        "MASS",
+        "자율운항선박",
+        "무인선박"
+      ],
+      "remote_ship_keywords": [
+        "remote ship",
+        "원격운항선박",
+        "원격제어선박"
+      ]
+    },
+    
+    "routing_priority": [
+      "1. Check if LLM direct response pattern",
+      "2. Check if VectorDB search pattern",
+      "3. Default to SQL template"
+    ],
+    
+    "hybrid_handling": {
+      "description": "Some queries might benefit from both SQL and VectorDB",
+      "examples": [
+        "EG 작업 관련 문서와 현황",
+        "PT 진행 상황과 관련 문서"
+      ]
+    }
+  }
+}

@@ -33,6 +33,10 @@ class EnhancedQueryRequest(BaseModel):
         None,
         description="LLM-extracted keywords from the query"
     )
+    query_scope: Optional[str] = Field(
+        None,
+        description="Query scope: 'all' (모든 패널/기관), 'one' (단일), 'more' (2개 이상)"
+    )
     
     # 기존 파라미터
     category: Optional[str] = Field(None, description="Query category filter")
@@ -90,12 +94,17 @@ The MCP server will automatically extract rule-based parameters:
 Claude should additionally extract:
 1. Dates from the query (e.g., "last week" → actual dates)
 2. Important keywords for better template matching
+3. Query scope:
+   - 'all': 모든 패널/기관에 관한 질의 (e.g., "모든 기관의 응답", "전체 패널 현황")
+   - 'one': 단일 패널/기관 질의 (e.g., "KR 응답", "PL 패널 의제")
+   - 'more': 2개 이상 패널/기관 질의 (e.g., "KR과 BV의 응답", "여러 기관")
 
 Example:
-Query: "Show me PL25016a Korean Register responses from last week"
+Query: "Show me all organizations' responses from last week"
 Claude extracts:
 - dates: {"start": "2024-01-15", "end": "2024-01-22"}
-- keywords: ["Korean Register", "KR", "response", "recent", "approval"]
+- keywords: ["response", "recent", "all", "organizations"]
+- scope: "all"
 
 MCP server will extract:
 - agenda_base: "PL25016"
@@ -159,20 +168,57 @@ MCP server will extract:
             # 2. LLM 파라미터 병합
             enhanced_params = rule_based_params.copy()
             
-            # dates 파라미터 처리
-            if request.extracted_dates:
-                if 'start' in request.extracted_dates and 'end' in request.extracted_dates:
-                    enhanced_params['date_range'] = {
-                        'start': datetime.fromisoformat(request.extracted_dates['start']),
-                        'end': datetime.fromisoformat(request.extracted_dates['end'])
-                    }
-                    # 날짜 차이로 days 계산
-                    delta = (enhanced_params['date_range']['end'] - enhanced_params['date_range']['start']).days
-                    enhanced_params['days'] = delta + 1
+            # Import enhanced date handler
+            from .services.enhanced_date_handler import EnhancedDateHandler
+            date_handler = EnhancedDateHandler()
+            
+            # dates 파라미터 처리 - 기본값 30일 적용
+            template_params = [
+                {
+                    "name": "date_range",
+                    "type": "date_range",
+                    "required": False,
+                    "default": {"type": "relative", "days": 30}  # 기본값 30일
+                }
+            ]
+            
+            # Process dates with enhanced handler
+            processed_params = date_handler.process_date_parameters(
+                template_params,
+                request.extracted_dates,
+                enhanced_params
+            )
+            enhanced_params.update(processed_params)
+            
+            # Calculate days for backward compatibility
+            if 'date_range' in enhanced_params:
+                date_range = enhanced_params['date_range']
+                if date_range.get('type') == 'relative':
+                    enhanced_params['days'] = date_range.get('days', 30)
+                elif date_range.get('type') == 'range' and 'from' in date_range and 'to' in date_range:
+                    try:
+                        start = datetime.fromisoformat(date_range['from'])
+                        end = datetime.fromisoformat(date_range['to'])
+                        enhanced_params['days'] = (end - start).days + 1
+                    except:
+                        enhanced_params['days'] = 30  # 기본값
             
             # keywords 파라미터 처리
             if request.extracted_keywords:
                 enhanced_params['llm_keywords'] = request.extracted_keywords
+            
+            # Import scope handler
+            from .services.query_scope_handler import QueryScopeHandler
+            scope_handler = QueryScopeHandler()
+            
+            # Process query scope
+            scope_info = scope_handler.process_scope_parameter(
+                request.query_scope,
+                request.query,
+                [enhanced_params.get('organization_code')] if enhanced_params.get('organization_code') else None
+            )
+            enhanced_params['scope_info'] = scope_info
+            logger.info(f"Query scope: {scope_info['scope']} - SQL: {scope_info['sql_condition']}")
             
             # 3. 템플릿 검색을 위한 키워드 준비
             search_keywords = rule_based_params.get('expanded_keywords', [])
