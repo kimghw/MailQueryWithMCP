@@ -1,5 +1,5 @@
 {
-  "version": "2.0-unified",
+  "version": "1.0.0-unified",
   "description": "IACSGRAPH 통합 쿼리 템플릿 - 모든 버전 통합 (v2.6 ~ v2.10)",
   "last_updated": "2025-07-25",
   "total_templates": 174,
@@ -40,12 +40,14 @@
       "sql": 156,
       "llm_direct": 3,
       "vectordb": 15
-    }
+    },
+    "standardized": true,
+    "all_versions_unified_to": "1.0.0"
   },
   "templates": [
     {
       "template_id": "all_panels_incomplete_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
@@ -93,7 +95,7 @@
     },
     {
       "template_id": "all_panels_recent_3months_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "time_based_query",
       "query_info": {
         "natural_questions": [
@@ -118,7 +120,22 @@
         "system": "최근 3개월(90일) 동안 발송된 모든 의제를 검색합니다. 최근 논의 동향을 파악하기 위한 쿼리입니다.",
         "user": "지난 3개월간 어떤 의제들이 논의되었는지 전체적인 현황을 보고 싶습니다. 패널별, 월별 분포도 알 수 있으면 좋겠습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -126,7 +143,7 @@
     },
     {
       "template_id": "org_no_response_ongoing_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -188,7 +205,7 @@
     },
     {
       "template_id": "org_response_required_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -250,7 +267,7 @@
     },
     {
       "template_id": "pending_agenda_count_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -277,7 +294,22 @@
         "system": "시스템에서 자동 분류하지 못해 agenda_pending 테이블에 저장된 메일의 개수를 조회합니다.",
         "user": "분류 보류 중인 메일이 몇 건인지 확인하고, 가능하다면 보류 사유별 분포도 알고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -285,7 +317,7 @@
     },
     {
       "template_id": "org_agenda_issues_summary_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -348,7 +380,7 @@
     },
     {
       "template_id": "org_agenda_keywords_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -410,7 +442,7 @@
     },
     {
       "template_id": "org_response_keywords_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -472,7 +504,7 @@
     },
     {
       "template_id": "keyword_search_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -519,7 +551,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -535,7 +567,7 @@
     },
     {
       "template_id": "meeting_notification_mails_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -584,7 +616,7 @@
     },
     {
       "template_id": "yearly_agenda_count_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -609,7 +641,22 @@
         "system": "조건에 맞는 레코드의 개수를 계산합니다.",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -617,7 +664,7 @@
     },
     {
       "template_id": "yearly_created_agendas_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -642,7 +689,22 @@
         "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -650,7 +712,7 @@
     },
     {
       "template_id": "org_mail_count_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -675,7 +737,22 @@
         "system": "조건에 맞는 레코드의 개수를 계산합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -683,7 +760,7 @@
     },
     {
       "template_id": "recent_5_agendas_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -708,7 +785,22 @@
         "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -716,7 +808,7 @@
     },
     {
       "template_id": "recent_notification_mails_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -764,7 +856,7 @@
     },
     {
       "template_id": "panel_agenda_count_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -812,7 +904,7 @@
     },
     {
       "template_id": "imo_related_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -843,7 +935,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -859,7 +951,7 @@
     },
     {
       "template_id": "ur_revision_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -891,7 +983,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -907,7 +999,7 @@
     },
     {
       "template_id": "pr_revision_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -939,7 +1031,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -955,7 +1047,7 @@
     },
     {
       "template_id": "eg_related_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -986,7 +1078,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1002,7 +1094,7 @@
     },
     {
       "template_id": "monthly_agenda_response_status_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -1028,7 +1120,22 @@
         "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -1036,7 +1143,7 @@
     },
     {
       "template_id": "pending_agenda_error_reasons_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -1069,7 +1176,7 @@
     },
     {
       "template_id": "vessel_inventory_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1102,7 +1209,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1118,7 +1225,7 @@
     },
     {
       "template_id": "generic_keyword_search_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1164,7 +1271,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1180,7 +1287,7 @@
     },
     {
       "template_id": "consolidated_status_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
@@ -1211,7 +1318,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1227,7 +1334,7 @@
     },
     {
       "template_id": "multilateral_recent_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1258,7 +1365,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1274,7 +1381,7 @@
     },
     {
       "template_id": "cyber_keyword_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1305,7 +1412,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1321,7 +1428,7 @@
     },
     {
       "template_id": "recent_month_chair_agendas_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1346,7 +1453,22 @@
         "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -1354,7 +1476,7 @@
     },
     {
       "template_id": "no_response_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -1401,7 +1523,7 @@
     },
     {
       "template_id": "recent_weblink_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1448,7 +1570,7 @@
     },
     {
       "template_id": "recent_attachment_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1495,7 +1617,7 @@
     },
     {
       "template_id": "digital_transformation_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1527,7 +1649,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1543,7 +1665,7 @@
     },
     {
       "template_id": "org_avg_response_time_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -1568,7 +1690,22 @@
         "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -1576,7 +1713,7 @@
     },
     {
       "template_id": "org_response_time_exclude_creation_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -1615,6 +1752,20 @@
             "type": "string",
             "placeholder": "{organization}"
           }
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ],
       "embedding_config": {
@@ -1624,7 +1775,7 @@
     },
     {
       "template_id": "other_type_senders_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1657,7 +1808,7 @@
     },
     {
       "template_id": "recent_updated_chair_10_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1682,7 +1833,22 @@
         "system": "데이터베이스에서 조건에 맞는 레코드를 검색합니다.",
         "user": "검색 조건에 해당하는 결과를 보고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -1690,7 +1856,7 @@
     },
     {
       "template_id": "chair_no_deadline_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1715,7 +1881,22 @@
         "system": "마감일 순으로 정렬하여 우선순위가 높은 항목을 먼저 표시합니다.",
         "user": "마감일이 임박한 순서대로 정리된 목록을 보고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -1723,7 +1904,7 @@
     },
     {
       "template_id": "active_time_statistics_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -1748,7 +1929,22 @@
         "system": "조건에 맞는 레코드의 개수를 계산합니다.",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -1756,7 +1952,7 @@
     },
     {
       "template_id": "unknown_type_senders_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1789,7 +1985,7 @@
     },
     {
       "template_id": "completed_pending_process_time_v2",
-      "template_version": "2.2",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -1822,7 +2018,7 @@
     },
     {
       "template_id": "msc_110_agendas_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -1853,7 +2049,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -1869,7 +2065,7 @@
     },
     {
       "template_id": "flexible_time_range_activities_v2",
-      "template_version": "2.3",
+      "template_version": "1.0.0",
       "template_category": "time_based_query",
       "query_info": {
         "natural_questions": [
@@ -1955,7 +2151,7 @@
     },
     {
       "template_id": "flexible_ongoing_deadline_agendas_v2",
-      "template_version": "2.5",
+      "template_version": "1.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
@@ -2060,7 +2256,7 @@
     },
     {
       "template_id": "_config_v2_5",
-      "template_version": "2.5",
+      "template_version": "1.0.0",
       "template_category": "system_config",
       "query_info": {
         "natural_questions": [
@@ -2075,7 +2271,7 @@
     },
     {
       "template_id": "monthly_response_rate_statistics_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -2108,7 +2304,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 365
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2120,7 +2316,7 @@
     },
     {
       "template_id": "sender_address_mismatch_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "data_quality",
       "query_info": {
         "natural_questions": [
@@ -2165,7 +2361,7 @@
     },
     {
       "template_id": "agenda_version_mismatch_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "data_quality",
       "query_info": {
         "natural_questions": [
@@ -2209,7 +2405,7 @@
     },
     {
       "template_id": "recent_updated_responses_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "time_based_query",
       "query_info": {
         "natural_questions": [
@@ -2235,11 +2431,26 @@
         "system": "최근 3일간 업데이트된 응답 내용을 조회합니다.",
         "user": "최근에 수정되거나 업데이트된 응답들을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "pending_by_error_reason_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -2269,7 +2480,7 @@
     },
     {
       "template_id": "latest_status_by_agenda_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
@@ -2313,7 +2524,7 @@
     },
     {
       "template_id": "weekday_agenda_statistics_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -2345,7 +2556,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2357,7 +2568,7 @@
     },
     {
       "template_id": "agendas_with_response_org_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -2400,7 +2611,7 @@
     },
     {
       "template_id": "quarterly_agenda_statistics_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_statistics",
       "query_info": {
         "natural_questions": [
@@ -2432,7 +2643,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 730
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2444,7 +2655,7 @@
     },
     {
       "template_id": "latest_response_organization_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -2469,11 +2680,26 @@
         "system": "마감일을 넘겨서 응답한 경우를 응답 지연일 순으로 정렬합니다.",
         "user": "어떤 기관이 가장 늦게 응답했는지와 해당 의제 정보를 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "response_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "urgent_created_agendas_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -2505,7 +2731,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2517,7 +2743,7 @@
     },
     {
       "template_id": "iacs_member_count_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "system_config",
       "query_info": {
         "natural_questions": [
@@ -2547,7 +2773,7 @@
     },
     {
       "template_id": "iacs_member_list_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "system_config",
       "query_info": {
         "natural_questions": [
@@ -2573,11 +2799,26 @@
         "system": "IACS 정회원 선급 기관 목록을 조회합니다.",
         "user": "IACS를 구성하는 선급 기관들의 전체 목록을 보고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "iacs_panel_structure_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "system_config",
       "query_info": {
         "natural_questions": [
@@ -2607,7 +2848,7 @@
     },
     {
       "template_id": "kr_participating_panels_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "organization_analysis",
       "query_info": {
         "natural_questions": [
@@ -2641,7 +2882,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 365
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2653,7 +2894,7 @@
     },
     {
       "template_id": "kr_chair_panels_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "organization_analysis",
       "query_info": {
         "natural_questions": [
@@ -2687,7 +2928,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 365
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2699,7 +2940,7 @@
     },
     {
       "template_id": "recent_meetings_list_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "meeting_info",
       "query_info": {
         "natural_questions": [
@@ -2731,7 +2972,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2743,7 +2984,7 @@
     },
     {
       "template_id": "recent_meeting_issues_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "meeting_info",
       "query_info": {
         "natural_questions": [
@@ -2776,7 +3017,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2788,7 +3029,7 @@
     },
     {
       "template_id": "ongoing_pt_list_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
@@ -2813,11 +3054,26 @@
         "system": "PT로 시작하는 의제 중 진행중인 프로젝트팀들을 찾습니다.",
         "user": "현재 활동중인 프로젝트팀들의 목록을 보고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "pt_participating_orgs_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
@@ -2846,7 +3102,7 @@
     },
     {
       "template_id": "pt_participants_info_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
@@ -2875,7 +3131,7 @@
     },
     {
       "template_id": "pt_important_content_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
@@ -2900,11 +3156,26 @@
         "system": "진행중인 PT의 중요 키워드가 포함된 의제를 찾습니다.",
         "user": "프로젝트팀에서 다루는 중요한 내용들을 파악하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "completed_pt_list_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
@@ -2936,7 +3207,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2948,7 +3219,7 @@
     },
     {
       "template_id": "completed_pt_content_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
@@ -2980,7 +3251,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -2992,7 +3263,7 @@
     },
     {
       "template_id": "keyword_analysis_3months_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -3017,11 +3288,26 @@
         "system": "최근 3개월간 가장 많이 언급된 키워드들을 빈도순으로 정렬합니다.",
         "user": "최근 3개월간 어떤 주제들이 많이 논의되었는지 키워드 분석을 보고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "keyword_analysis_lastyear_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -3046,11 +3332,26 @@
         "system": "작년 한 해 동안 가장 많이 언급된 키워드들을 분석합니다.",
         "user": "작년에 어떤 주제들이 주요하게 다뤄졌는지 키워드 분석을 보고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "keyword_analysis_2025_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -3074,11 +3375,26 @@
         "system": "2025년도의 주요 키워드들을 분석합니다.",
         "user": "2025년에 논의되고 있는 주요 키워드들을 파악하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "panel_completed_agendas_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3116,7 +3432,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -3128,7 +3444,7 @@
     },
     {
       "template_id": "panel_recent_agendas_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3178,7 +3494,7 @@
     },
     {
       "template_id": "org_panel_responses_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3234,7 +3550,7 @@
     },
     {
       "template_id": "keyword_related_agendas_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
@@ -3271,7 +3587,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -3283,7 +3599,7 @@
     },
     {
       "template_id": "org_urgent_response_required_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -3319,7 +3635,7 @@
     },
     {
       "template_id": "panel_org_response_required_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3375,7 +3691,7 @@
     },
     {
       "template_id": "panel_chair_recent_mails_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3424,7 +3740,7 @@
     },
     {
       "template_id": "panel_chair_response_required_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3473,7 +3789,7 @@
     },
     {
       "template_id": "panel_chair_keywords_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3510,7 +3826,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -3522,7 +3838,7 @@
     },
     {
       "template_id": "meeting_notification_mails_recent_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "meeting_info",
       "query_info": {
         "natural_questions": [
@@ -3567,7 +3883,7 @@
     },
     {
       "template_id": "chair_recent_mail_content_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "chair_communication",
       "query_info": {
         "natural_questions": [
@@ -3599,7 +3915,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 7
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -3611,7 +3927,7 @@
     },
     {
       "template_id": "panel_org_response_rate_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_statistics",
       "query_info": {
         "natural_questions": [
@@ -3668,7 +3984,7 @@
     },
     {
       "template_id": "panel_org_response_rate_yearly_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_statistics",
       "query_info": {
         "natural_questions": [
@@ -3706,12 +4022,26 @@
           "required": true,
           "default": "KR",
           "description": "Organization code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "panel_recent_keywords_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -3761,7 +4091,7 @@
     },
     {
       "template_id": "org_no_response_with_attachment_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -3812,7 +4142,7 @@
     },
     {
       "template_id": "specific_agenda_status_v2",
-      "template_version": "2.7",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -3843,12 +4173,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code (e.g., PL25016, UR14523a)"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "org_response_required_with_attachment_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -3899,7 +4243,7 @@
     },
     {
       "template_id": "agenda_has_attachment_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -3929,12 +4273,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_organization_opinion_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -3970,12 +4328,26 @@
           "type": "string",
           "required": true,
           "description": "Organization code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_related_agendas_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4012,7 +4384,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -4024,7 +4396,7 @@
     },
     {
       "template_id": "agenda_org_opinion_agreements_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4060,12 +4432,26 @@
           "type": "string",
           "required": true,
           "description": "Organization code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_org_opinion_disagreements_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4101,12 +4487,26 @@
           "type": "string",
           "required": true,
           "description": "Organization code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_multiple_org_opinions_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4147,12 +4547,26 @@
             "field": "sender_organization",
             "placeholder": "{organizations}"
           }
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_fastest_responder_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4182,12 +4596,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_keywords_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -4221,7 +4649,7 @@
     },
     {
       "template_id": "agenda_response_keywords_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -4256,7 +4684,7 @@
     },
     {
       "template_id": "agenda_keywords_related_panel_agendas_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4292,12 +4720,26 @@
           "type": "string",
           "required": true,
           "description": "Panel code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_kr_opinion_agreements_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4329,12 +4771,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_kr_opinion_disagreements_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4366,12 +4822,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_ur_related_responses_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4401,12 +4871,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "recent_eg_related_content_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -4437,7 +4921,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -4449,7 +4933,7 @@
     },
     {
       "template_id": "recent_future_work_discussions_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4481,7 +4965,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 90
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -4493,7 +4977,7 @@
     },
     {
       "template_id": "agenda_issue_organization_opinions_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4523,12 +5007,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_main_issues_related_list_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4565,7 +5063,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -4577,7 +5075,7 @@
     },
     {
       "template_id": "agenda_ur_related_content_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -4612,7 +5110,7 @@
     },
     {
       "template_id": "agenda_imo_related_content_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -4642,12 +5140,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_completion_status_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
@@ -4677,12 +5189,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_important_issues_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4717,7 +5243,7 @@
     },
     {
       "template_id": "agenda_previous_discussions_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4747,12 +5273,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_other_panels_discussion_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4787,7 +5327,7 @@
     },
     {
       "template_id": "agenda_other_panels_agendas_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4817,12 +5357,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_kr_response_check_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -4854,12 +5408,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "response_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "panel_ongoing_responded_orgs_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -4894,7 +5462,7 @@
     },
     {
       "template_id": "panel_no_response_orgs_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -4929,7 +5497,7 @@
     },
     {
       "template_id": "agenda_responses_analysis_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -4959,12 +5527,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "mail_content_agenda_comparison_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -5000,12 +5582,26 @@
           "type": "string",
           "required": false,
           "description": "Keywords from mail content to compare"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_description_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_search",
       "query_info": {
         "natural_questions": [
@@ -5035,12 +5631,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "recent_progress_status_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
@@ -5083,7 +5693,7 @@
     },
     {
       "template_id": "kr_opinion_based_reply_draft_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -5116,12 +5726,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "upcoming_meetings_v2",
-      "template_version": "2.8",
+      "template_version": "1.0.0",
       "template_category": "meeting_info",
       "query_info": {
         "natural_questions": [
@@ -5146,11 +5770,26 @@
         "system": "향후 예정된 회의 정보를 찾습니다.",
         "user": "앞으로 예정된 회의 일정을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "eg_work_in_panel_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -5187,7 +5826,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -5199,7 +5838,7 @@
     },
     {
       "template_id": "eg_main_progress_in_panel_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -5237,7 +5876,7 @@
           "required": false,
           "default": {
             "type": "relative",
-            "days": 180
+            "days": 30
           },
           "sql_builder": {
             "type": "date_range",
@@ -5249,7 +5888,7 @@
     },
     {
       "template_id": "eg_participating_orgs_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -5290,7 +5929,7 @@
     },
     {
       "template_id": "agenda_meeting_attendance_by_date_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -5320,12 +5959,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_meeting_attendance_by_org_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -5355,12 +6008,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_org_request_to_others_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -5390,12 +6057,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "agenda_clarification_requests_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "agenda_analysis",
       "query_info": {
         "natural_questions": [
@@ -5425,12 +6106,26 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "panel_keywords_3months_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -5454,11 +6149,26 @@
         "system": "최근 3개월간 가장 많이 언급된 키워드를 분석합니다.",
         "user": "최근 3개월 동안 어떤 키워드가 자주 논의되었는지 분석하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "panel_keywords_lastyear_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -5482,11 +6192,26 @@
         "system": "작년 한 해 동안 가장 많이 언급된 키워드를 분석합니다.",
         "user": "작년에 어떤 키워드가 주요하게 다뤄졌는지 분석하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "panel_keywords_2025_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -5510,11 +6235,26 @@
         "system": "2025년도의 주요 키워드를 분석합니다.",
         "user": "2025년에 논의되고 있는 주요 키워드를 분석하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "panel_keywords_by_year_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -5544,12 +6284,26 @@
           "type": "string",
           "required": true,
           "description": "Year (e.g., 2024, 2025)"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "tech_trend_analysis_llm_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "llm_direct_response",
       "query_info": {
         "natural_questions": [
@@ -5588,7 +6342,7 @@
     },
     {
       "template_id": "keyword_tech_trend_llm_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "llm_direct_response",
       "query_info": {
         "natural_questions": [
@@ -5627,7 +6381,7 @@
     },
     {
       "template_id": "tech_background_llm_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "llm_direct_response",
       "query_info": {
         "natural_questions": [
@@ -5666,7 +6420,7 @@
     },
     {
       "template_id": "agenda_ur_content_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5706,7 +6460,7 @@
     },
     {
       "template_id": "keywords_ur_content_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5746,7 +6500,7 @@
     },
     {
       "template_id": "agenda_pr_content_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5786,7 +6540,7 @@
     },
     {
       "template_id": "keywords_pr_content_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5826,7 +6580,7 @@
     },
     {
       "template_id": "agenda_similar_panel_discussion_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5865,7 +6619,7 @@
     },
     {
       "template_id": "autonomous_ship_agenda_search_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5905,7 +6659,7 @@
     },
     {
       "template_id": "remote_ship_agenda_search_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5945,7 +6699,7 @@
     },
     {
       "template_id": "ongoing_pt_list_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -5978,7 +6732,7 @@
     },
     {
       "template_id": "ongoing_pt_participants_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -6011,7 +6765,7 @@
     },
     {
       "template_id": "ongoing_pt_members_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -6044,7 +6798,7 @@
     },
     {
       "template_id": "ongoing_pt_content_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -6077,7 +6831,7 @@
     },
     {
       "template_id": "completed_pt_list_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -6106,11 +6860,26 @@
         "system": "VectorDB에서 완료된 PT 정보를 검색합니다.",
         "user": "최근 완료된 Project Team 목록을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "completed_pt_content_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -6139,11 +6908,26 @@
         "system": "VectorDB에서 완료된 PT의 주요 내용을 검색합니다.",
         "user": "완료된 PT의 주요 성과와 내용을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "completed_pt_participants_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -6172,11 +6956,26 @@
         "system": "VectorDB에서 완료된 PT의 참여기관 정보를 검색합니다.",
         "user": "완료된 PT에 참여했던 기관들을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "completed_pt_members_vectordb_v2",
-      "template_version": "2.9",
+      "template_version": "1.0.0",
       "template_category": "vectordb_search",
       "query_info": {
         "natural_questions": [
@@ -6205,11 +7004,26 @@
         "system": "VectorDB에서 완료된 PT의 참여자 정보를 검색합니다.",
         "user": "완료된 PT의 참여자 명단을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "sender_address_mismatch_detail_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "data_quality",
       "query_info": {
         "natural_questions": [
@@ -6233,11 +7047,26 @@
         "system": "sender와 sender_address가 일치하지 않는 경우를 찾습니다.",
         "user": "발신자와 발신자 주소가 다른 경우를 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "latest_responder_org_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "response_analysis",
       "query_info": {
         "natural_questions": [
@@ -6261,11 +7090,26 @@
         "system": "의제 발송 후 가장 늦게 응답한 기관과 해당 의제를 찾습니다.",
         "user": "어떤 기관이 가장 늦게 응답했는지 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "urgent_deadline_agendas_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "deadline_analysis",
       "query_info": {
         "natural_questions": [
@@ -6289,11 +7133,26 @@
         "system": "발송일부터 마감일까지 기간이 가장 짧은 의제들을 찾습니다.",
         "user": "마감일이 촉박하게 설정된 의제들을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "iacs_member_composition_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "organization_info",
       "query_info": {
         "natural_questions": [
@@ -6317,11 +7176,26 @@
         "system": "IACS 정회원 목록을 조회합니다.",
         "user": "IACS 회원 기관들의 구성을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "sdtp_completed_agenda_results_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -6347,11 +7221,26 @@
         "system": "SDTP 패널에서 완료된 의제들의 결과를 조회합니다.",
         "user": "SDTP에서 완료된 의제들의 결과를 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "recent_sdtp_agenda_list_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -6377,11 +7266,26 @@
         "system": "최근 30일간 SDTP에서 논의된 의제들을 조회합니다.",
         "user": "최근 SDTP에서 논의된 의제 목록을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "recent_kr_sdtp_responses_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -6410,11 +7314,26 @@
         "system": "최근 30일간 KR이 SDTP에서 응답한 내역을 조회합니다.",
         "user": "최근 KR이 SDTP 패널에서 응답한 내용을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "kr_response_required_issues_summary_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -6441,11 +7360,26 @@
         "system": "KR이 응답해야 하는 의제들의 주요 이슈와 다른 기관들의 의견을 정리합니다.",
         "user": "KR이 응답해야 하는 의제들의 주요 이슈와 다른 기관들의 의견을 한눈에 보고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "kr_response_required_keywords_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -6475,7 +7409,7 @@
     },
     {
       "template_id": "kr_responses_keywords_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -6506,7 +7440,7 @@
     },
     {
       "template_id": "recent_keywords_discussion_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
@@ -6545,12 +7479,26 @@
             ],
             "placeholder": "{keyword_conditions}"
           }
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     },
     {
       "template_id": "kr_urgent_response_required_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -6580,7 +7528,7 @@
     },
     {
       "template_id": "sdtp_kr_response_required_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -6608,11 +7556,26 @@
         "system": "SDTP 패널에서 KR이 응답해야 하는 의제들을 조회합니다.",
         "user": "SDTP에서 KR이 응답해야 하는 의제들을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "recent_sdtp_chair_mails_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -6639,11 +7602,26 @@
         "system": "최근 30일간 SDTP 의장이 보낸 메일들을 조회합니다.",
         "user": "최근 SDTP 의장이 보낸 메일 목록을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "sdtp_chair_response_required_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "panel_specific",
       "query_info": {
         "natural_questions": [
@@ -6669,11 +7647,26 @@
         "system": "SDTP 의장이 보낸 메일 중 응답이 필요한 의제들을 조회합니다.",
         "user": "SDTP 의장이 보낸 메일 중 응답이 필요한 것들을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "sdtp_chair_mail_keywords_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -6699,11 +7692,26 @@
         "system": "SDTP 의장이 보낸 메일들의 주요 키워드를 분석합니다.",
         "user": "SDTP 의장이 주로 어떤 주제로 메일을 보내는지 키워드를 통해 파악하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "recent_meeting_notification_mails_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "meeting_info",
       "query_info": {
         "natural_questions": [
@@ -6727,11 +7735,26 @@
         "system": "최근 30일간 회의 개최 관련 알림 메일들을 조회합니다.",
         "user": "최근 회의 개최 알림 메일들을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "recent_chair_mail_content_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "mail_content",
       "query_info": {
         "natural_questions": [
@@ -6755,11 +7778,26 @@
         "system": "최근 7일간 의장이 보낸 메일 내용을 조회합니다.",
         "user": "최근 의장이 보낸 메일의 내용을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "kr_response_rate_sdtp_recent_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
@@ -6788,11 +7826,26 @@
         "system": "최근 30일간 SDTP에서 발행된 의제에 대한 KR의 응답률을 계산합니다.",
         "user": "최근 SDTP에서 KR의 응답률을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "kr_response_rate_sdtp_period_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
@@ -6836,7 +7889,7 @@
     },
     {
       "template_id": "kr_response_rate_sdtp_yearly_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
@@ -6865,11 +7918,26 @@
         "system": "올해 SDTP에서 발행된 의제에 대한 KR의 응답률을 계산합니다.",
         "user": "올해 SDTP에서 KR의 응답률을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "recent_sdtp_keywords_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
@@ -6895,11 +7963,26 @@
         "system": "최근 30일간 SDTP에서 논의된 의제들의 주요 키워드를 분석합니다.",
         "user": "최근 SDTP에서 어떤 키워드들이 주로 논의되었는지 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "kr_no_response_chair_attachment_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "organization_response",
       "query_info": {
         "natural_questions": [
@@ -6926,11 +8009,26 @@
         "system": "KR이 응답하지 않은 의제 중 의장이 첨부파일과 함께 보낸 것들을 찾습니다.",
         "user": "KR이 아직 응답하지 않은 의제 중에서 의장이 첨부파일을 포함해서 보낸 것들을 확인하고 싶습니다."
       },
-      "parameters": []
+      "parameters": [
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
+        }
+      ]
     },
     {
       "template_id": "agenda_ongoing_status_check_v2",
-      "template_version": "2.10",
+      "template_version": "1.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
@@ -6960,6 +8058,20 @@
           "type": "string",
           "required": true,
           "description": "Agenda code"
+        },
+        {
+          "name": "date_range",
+          "type": "date_range",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "date_range",
+            "field": "sent_time",
+            "placeholder": "{date_condition}"
+          }
         }
       ]
     }
