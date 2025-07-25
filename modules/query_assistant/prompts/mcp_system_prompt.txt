@@ -9,17 +9,24 @@ IACSGRAPH 해양 데이터베이스 쿼리 처리 시스템입니다.
    - 중국선급 → CCS
    - 미국선급 → ABS
    - (기타 조직 코드: DNV, BV, LR, RINA, RS, IRS, PRS, CRS, TL, IMO, IACS, MULTILATERAL, Chair)
-3. dates: 날짜 변환
-   - 어제 → 어제 날짜
+3. period: 기간 추출 (시작날짜와 종료날짜)
+   - 어제 → 어제 하루만
+   - 오늘 → 오늘 하루만
    - 최근 → 최근 30일
-   - 이번주 → 이번 주
-   - 지난달 → 지난 달
+   - 이번주 → 이번 주 월요일부터 오늘까지
+   - 지난주 → 지난 주 월요일부터 일요일까지
+   - 이번달 → 이번 달 1일부터 오늘까지
+   - 지난달 → 지난 달 1일부터 말일까지
+   - 최근 3개월 → 3개월 전부터 오늘까지
+   - 애매하면 → 기본값: 현재 날짜 기준 3개월
 4. query_scope: "all"(모든 기관), "one"(단일 기관), "more"(여러 기관)
 
 예시:
-- "한국선급 응답 현황" → organization: "KR", keywords: ["한국선급", "KR", "응답", "현황"]
-- "어제 받은 이메일" → dates: 어제 날짜, keywords: ["어제", "받은", "이메일"]
-- "최근 아젠다" → dates: 최근 30일, keywords: ["최근", "아젠다"]
+- "한국선급 응답 현황" → organization: "KR", keywords: ["한국선급", "KR", "응답", "현황"], period: 기본값 3개월
+- "어제 받은 이메일" → period: {"start": "2024-03-04", "end": "2024-03-04"}, keywords: ["어제", "받은", "이메일"]
+- "최근 아젠다" → period: {"start": "2024-02-05", "end": "2024-03-05"}, keywords: ["최근", "아젠다"]
+- "2024년 1월부터 3월까지" → period: {"start": "2024-01-01", "end": "2024-03-31"}
+- "작년 실적" → period: {"start": "2023-01-01", "end": "2023-12-31"}
 
 MCP 도구 호출:
 <use_mcp_tool>
@@ -28,7 +35,7 @@ MCP 도구 호출:
 <arguments>
 {
   "query": "원본 질의",
-  "extracted_dates": null,
+  "extracted_period": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"},
   "extracted_keywords": [],
   "extracted_organization": null,
   "query_scope": "one",

@@ -51,7 +51,7 @@ Additionally, respond in JSON format:
         "limit": number or null,
         "keyword": null
     }},
-    "extracted_dates": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}} or null,
+    "extracted_period": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}} or null,
     "intent": "search|list|analyze|count",
     "confidence": 0.0-1.0
 }}"""
@@ -129,17 +129,29 @@ Additionally, respond in JSON format:
         print(f"[LLM] Extracted parameters: {analysis['parameters']}")
         
         # Convert LLM parameters to MCP format
-        extracted_dates = None
+        extracted_period = None
         
-        # Use extracted_dates if available from LLM
-        if 'extracted_dates' in analysis and analysis['extracted_dates']:
-            extracted_dates = analysis['extracted_dates']
+        # Use extracted_period if available from LLM
+        if 'extracted_period' in analysis and analysis['extracted_period']:
+            extracted_period = analysis['extracted_period']
+        elif 'extracted_dates' in analysis and analysis['extracted_dates']:
+            # Backward compatibility: extracted_dates → extracted_period
+            extracted_period = analysis['extracted_dates']
         elif analysis['parameters'].get('days'):
-            # Convert days to date range
+            # Convert days to period
             from datetime import datetime, timedelta
             end_date = datetime.now()
             start_date = end_date - timedelta(days=analysis['parameters']['days'])
-            extracted_dates = {
+            extracted_period = {
+                'start': start_date.strftime('%Y-%m-%d'),
+                'end': end_date.strftime('%Y-%m-%d')
+            }
+        else:
+            # Default: 3 months if period is ambiguous
+            from datetime import datetime, timedelta
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=90)
+            extracted_period = {
                 'start': start_date.strftime('%Y-%m-%d'),
                 'end': end_date.strftime('%Y-%m-%d')
             }
@@ -173,7 +185,7 @@ Additionally, respond in JSON format:
             # This is what Claude Desktop sends to MCP server
             mcp_request = EnhancedQueryRequest(
                 query=query,
-                extracted_dates=extracted_dates,
+                extracted_period=extracted_period,
                 extracted_keywords=analysis['keywords'],
                 extracted_organization=extracted_organization,
                 query_scope=query_scope,
@@ -185,7 +197,7 @@ Additionally, respond in JSON format:
             
             print(f"\n📤 MCP Enhanced Request:")
             print(f"  Query: {mcp_request.query}")
-            print(f"  Extracted Dates: {mcp_request.extracted_dates}")
+            print(f"  Extracted Period: {mcp_request.extracted_period}")
             print(f"  Extracted Keywords: {mcp_request.extracted_keywords}")
             print(f"  Extracted Organization: {mcp_request.extracted_organization}")
             print(f"  Query Scope: {mcp_request.query_scope}")
@@ -205,7 +217,7 @@ Additionally, respond in JSON format:
                 "tool": "query_with_llm_params",  # Enhanced MCP tool name
                 "arguments": {    # Original MCP request as dict
                     "query": mcp_request.query,
-                    "extracted_dates": mcp_request.extracted_dates,
+                    "extracted_period": mcp_request.extracted_period,
                     "extracted_keywords": mcp_request.extracted_keywords,
                     "extracted_organization": mcp_request.extracted_organization,
                     "query_scope": mcp_request.query_scope,
@@ -235,7 +247,7 @@ Additionally, respond in JSON format:
                 "tool": "query_with_llm_params",
                 "arguments": {
                     "query": query,
-                    "extracted_dates": extracted_dates if 'extracted_dates' in locals() else None,
+                    "extracted_period": extracted_period if 'extracted_period' in locals() else None,
                     "extracted_keywords": analysis['keywords'],
                     "extracted_organization": extracted_organization if 'extracted_organization' in locals() else None,
                     "query_scope": query_scope if 'query_scope' in locals() else 'one',
@@ -256,8 +268,9 @@ Additionally, respond in JSON format:
                 "extracted_params": {},
                 "rule_based_params": {},
                 "llm_contribution": {
-                    "dates": extracted_dates if 'extracted_dates' in locals() else None,
-                    "keywords": analysis['keywords']
+                    "period": extracted_period if 'extracted_period' in locals() else None,
+                    "keywords": analysis['keywords'],
+                    "organization": extracted_organization if 'extracted_organization' in locals() else None
                 },
                 "llm_analysis": analysis
             }

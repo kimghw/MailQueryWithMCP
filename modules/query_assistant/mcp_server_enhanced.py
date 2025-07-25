@@ -25,9 +25,9 @@ class EnhancedQueryRequest(BaseModel):
     query: str = Field(..., description="Natural language query")
     
     # LLM이 추출한 파라미터들
-    extracted_dates: Optional[Dict[str, str]] = Field(
+    extracted_period: Optional[Dict[str, str]] = Field(
         None, 
-        description="LLM-extracted date parameters (e.g., {'start': '2024-01-01', 'end': '2024-01-31'})"
+        description="LLM-extracted period with start and end dates (e.g., {'start': '2024-01-01', 'end': '2024-01-31'})"
     )
     extracted_keywords: Optional[List[str]] = Field(
         None,
@@ -96,7 +96,7 @@ The MCP server will automatically extract rule-based parameters:
 - status, limit, etc.
 
 Claude should additionally extract:
-1. Dates from the query (e.g., "last week" → actual dates)
+1. Period from the query with start/end dates (e.g., "last week" → {"start": "2024-02-26", "end": "2024-03-04"})
 2. Important keywords for better template matching
 3. Query scope:
    - 'all': 모든 패널/기관에 관한 질의 (e.g., "모든 기관의 응답", "전체 패널 현황")
@@ -106,7 +106,7 @@ Claude should additionally extract:
 Example:
 Query: "Show me all organizations' responses from last week"
 Claude extracts:
-- dates: {"start": "2024-01-15", "end": "2024-01-22"}
+- period: {"start": "2024-01-15", "end": "2024-01-22"}
 - keywords: ["response", "recent", "all", "organizations"]
 - scope: "all"
 
@@ -191,23 +191,23 @@ MCP server will extract:
             from .services.enhanced_date_handler import EnhancedDateHandler
             date_handler = EnhancedDateHandler()
             
-            # dates 파라미터 처리 - LLM 우선
-            if request.extracted_dates:
-                # LLM이 추출한 날짜 우선 사용
+            # period 파라미터 처리 - LLM 우선
+            if request.extracted_period:
+                # LLM이 추출한 기간 우선 사용
                 enhanced_params['date_range'] = {
                     'type': 'range',
-                    'from': request.extracted_dates['start'],
-                    'to': request.extracted_dates['end']
+                    'from': request.extracted_period['start'],
+                    'to': request.extracted_period['end']
                 }
                 # Calculate days for backward compatibility
                 try:
                     from datetime import datetime
-                    start = datetime.fromisoformat(request.extracted_dates['start'])
-                    end = datetime.fromisoformat(request.extracted_dates['end'])
+                    start = datetime.fromisoformat(request.extracted_period['start'])
+                    end = datetime.fromisoformat(request.extracted_period['end'])
                     enhanced_params['days'] = (end - start).days + 1
                 except:
                     enhanced_params['days'] = 30
-                logger.info(f"Using LLM-extracted dates: {request.extracted_dates}")
+                logger.info(f"Using LLM-extracted period: {request.extracted_period}")
             else:
                 # 기존 로직: 규칙 기반 날짜 추출 또는 기본값
                 template_params = [
@@ -307,8 +307,9 @@ MCP server will extract:
                     'organization': rule_based_params.get('organization')
                 },
                 'llm_contribution': {
-                    'dates': request.extracted_dates,
-                    'keywords': request.extracted_keywords
+                    'period': request.extracted_period,
+                    'keywords': request.extracted_keywords,
+                    'organization': request.extracted_organization
                 }
             }
             
