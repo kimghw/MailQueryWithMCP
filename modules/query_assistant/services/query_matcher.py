@@ -58,16 +58,15 @@ class QueryMatcher:
         extracted_params = self.parameter_extractor.extract_parameters(query)
         keywords = extracted_params.get('keywords', [])
         
-        # If no keywords extracted, try to extract from query
-        if not keywords:
-            # Simple keyword extraction from query
-            import re
-            words = re.findall(r'\w+', query)
-            keywords = [w for w in words if len(w) > 1]  # Filter out single characters
+        # Disable simple keyword extraction - only use rule-based extraction and LLM
+        # if not keywords:
+        #     # Simple keyword extraction from query
+        #     import re
+        #     words = re.findall(r'\w+', query)
+        #     keywords = [w for w in words if len(w) > 1]  # Filter out single characters
         
-        # Don't expand keywords - use original keywords only
-        # expanded_keywords = self.synonym_service.expand_keywords(keywords)
-        expanded_keywords = keywords  # Use original keywords without expansion
+        # Use keywords as-is (empty if none extracted by rules)
+        expanded_keywords = keywords
         
         # Only print debug if not suppressed
         if os.environ.get('SUPPRESS_DEBUG') != '1':

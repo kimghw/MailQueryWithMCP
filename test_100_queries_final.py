@@ -158,8 +158,11 @@ def analyze_results(test_results: List[Dict]) -> Dict[str, Any]:
         if result['matched']:
             category_stats[category]['matched'] += 1
             # Check if category matches (simplified check)
-            if result['best_match'] and category in result['best_match'].get('template', {}).get('category', '').lower():
-                category_stats[category]['correct'] += 1
+            if result['best_match']:
+                # best_match contains 'category' field directly
+                match_category = result['best_match'].get('category', '').lower()
+                if category in match_category:
+                    category_stats[category]['correct'] += 1
     
     return {
         'total_queries': total,

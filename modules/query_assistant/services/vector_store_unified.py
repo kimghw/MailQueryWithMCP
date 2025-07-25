@@ -136,10 +136,13 @@ class VectorStoreUnified:
                 template_keywords = set(result.payload.get("keywords", []))
                 query_keywords = set(keywords)
                 keyword_matches = list(template_keywords.intersection(query_keywords))
-                keyword_score = len(keyword_matches) / max(len(query_keywords), 1)
+                keyword_score = len(keyword_matches) / max(len(query_keywords), 1) if keywords else 0
                 
-                # Combine vector and keyword scores
-                combined_score = (result.score * 0.7) + (keyword_score * 0.3)
+                # Use only vector score when no keywords available
+                if not keywords:
+                    combined_score = result.score  # 100% vector similarity
+                else:
+                    combined_score = (result.score * 0.7) + (keyword_score * 0.3)
                 
                 if combined_score >= score_threshold:
                     # Extract parameters from payload
