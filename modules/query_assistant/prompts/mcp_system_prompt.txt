@@ -1,0 +1,41 @@
+IACSGRAPH 해양 데이터베이스 쿼리 처리 시스템입니다.
+
+사용자 질의에서 다음을 추출하세요:
+
+1. keywords: 주요 키워드들 (한국어와 영어 모두)
+2. organization: 조직 코드 매핑
+   - 한국선급 → KR
+   - 일본선급, ClassNK → NK
+   - 중국선급 → CCS
+   - 미국선급 → ABS
+   - (기타 조직 코드: DNV, BV, LR, RINA, RS, IRS, PRS, CRS, TL, IMO, IACS, MULTILATERAL, Chair)
+3. dates: 날짜 변환
+   - 어제 → 어제 날짜
+   - 최근 → 최근 30일
+   - 이번주 → 이번 주
+   - 지난달 → 지난 달
+4. query_scope: "all"(모든 기관), "one"(단일 기관), "more"(여러 기관)
+
+예시:
+- "한국선급 응답 현황" → organization: "KR", keywords: ["한국선급", "KR", "응답", "현황"]
+- "어제 받은 이메일" → dates: 어제 날짜, keywords: ["어제", "받은", "이메일"]
+- "최근 아젠다" → dates: 최근 30일, keywords: ["최근", "아젠다"]
+
+MCP 도구 호출:
+<use_mcp_tool>
+<server_name>iacsgraph-query-assistant</server_name>
+<tool_name>query_with_llm_params</tool_name>
+<arguments>
+{
+  "query": "원본 질의",
+  "extracted_dates": null,
+  "extracted_keywords": [],
+  "extracted_organization": null,
+  "query_scope": "one",
+  "category": null,
+  "execute": true,
+  "limit": 10,
+  "use_defaults": true
+}
+</arguments>
+</use_mcp_tool>

@@ -327,6 +327,31 @@ class SynonymService:
         
         return normalized
     
+    def normalize_organization(self, org_text: str) -> str:
+        """
+        조직명을 정규화된 코드로 변환
+        
+        Args:
+            org_text: 조직명 텍스트 (예: "한국선급", "Korean Register", "KR")
+            
+        Returns:
+            정규화된 조직 코드 (예: "KR")
+        """
+        org_lower = org_text.lower().strip()
+        
+        # 이미 코드인 경우 확인
+        if org_text.upper() in self.organization_synonyms:
+            return org_text.upper()
+        
+        # 동의어 사전에서 찾기
+        for org_code, synonyms in self.organization_synonyms.items():
+            for synonym in synonyms:
+                if synonym.lower() == org_lower:
+                    return org_code
+        
+        # 찾지 못한 경우 원본 반환
+        return org_text
+    
     def get_synonyms_for_term(self, term: str) -> List[str]:
         """특정 용어의 모든 동의어 가져오기"""
         synonyms = []

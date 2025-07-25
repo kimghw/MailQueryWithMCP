@@ -33,6 +33,10 @@ class EnhancedQueryRequest(BaseModel):
         None,
         description="LLM-extracted keywords from the query"
     )
+    extracted_organization: Optional[str] = Field(
+        None,
+        description="LLM-extracted organization code (e.g., 'KR', 'IMO', 'IACS')"
+    )
     query_scope: Optional[str] = Field(
         None,
         description="Query scope: 'all' (모든 패널/기관), 'one' (단일), 'more' (2개 이상)"
@@ -165,30 +169,63 @@ MCP server will extract:
             extractor = QueryParameterExtractor()
             rule_based_params = extractor.extract_parameters(request.query)
             
-            # 2. LLM 파라미터 병합
+            # 2. LLM 파라미터 병합 - LLM 우선
             enhanced_params = rule_based_params.copy()
+            
+            # organization 파라미터 처리 - LLM 우선, 동의어 처리
+            if request.extracted_organization:
+                # LLM이 추출한 조직 사용 (이미 정규화된 코드)
+                enhanced_params['organization'] = request.extracted_organization
+                enhanced_params['organization_code'] = request.extracted_organization
+                logger.info(f"Using LLM-extracted organization: {request.extracted_organization}")
+            elif enhanced_params.get('organization'):
+                # 규칙 기반 추출된 조직이 있으면 동의어 처리
+                from ..common.services.synonym_service import SynonymService
+                synonym_service = SynonymService()
+                normalized_org = synonym_service.normalize_organization(enhanced_params['organization'])
+                enhanced_params['organization'] = normalized_org
+                enhanced_params['organization_code'] = normalized_org
+                logger.info(f"Normalized organization: {enhanced_params.get('organization_text')} → {normalized_org}")
             
             # Import enhanced date handler
             from .services.enhanced_date_handler import EnhancedDateHandler
             date_handler = EnhancedDateHandler()
             
-            # dates 파라미터 처리 - 기본값 30일 적용
-            template_params = [
-                {
-                    "name": "date_range",
-                    "type": "date_range",
-                    "required": False,
-                    "default": {"type": "relative", "days": 30}  # 기본값 30일
+            # dates 파라미터 처리 - LLM 우선
+            if request.extracted_dates:
+                # LLM이 추출한 날짜 우선 사용
+                enhanced_params['date_range'] = {
+                    'type': 'range',
+                    'from': request.extracted_dates['start'],
+                    'to': request.extracted_dates['end']
                 }
-            ]
-            
-            # Process dates with enhanced handler
-            processed_params = date_handler.process_date_parameters(
-                template_params,
-                request.extracted_dates,
-                enhanced_params
-            )
-            enhanced_params.update(processed_params)
+                # Calculate days for backward compatibility
+                try:
+                    from datetime import datetime
+                    start = datetime.fromisoformat(request.extracted_dates['start'])
+                    end = datetime.fromisoformat(request.extracted_dates['end'])
+                    enhanced_params['days'] = (end - start).days + 1
+                except:
+                    enhanced_params['days'] = 30
+                logger.info(f"Using LLM-extracted dates: {request.extracted_dates}")
+            else:
+                # 기존 로직: 규칙 기반 날짜 추출 또는 기본값
+                template_params = [
+                    {
+                        "name": "date_range",
+                        "type": "date_range",
+                        "required": False,
+                        "default": {"type": "relative", "days": 30}  # 기본값 30일
+                    }
+                ]
+                
+                # Process dates with enhanced handler
+                processed_params = date_handler.process_date_parameters(
+                    template_params,
+                    None,  # No LLM dates
+                    enhanced_params
+                )
+                enhanced_params.update(processed_params)
             
             # Calculate days for backward compatibility
             if 'date_range' in enhanced_params:
@@ -203,9 +240,12 @@ MCP server will extract:
                     except:
                         enhanced_params['days'] = 30  # 기본값
             
-            # keywords 파라미터 처리
+            # keywords 파라미터 처리 - LLM 키워드 우선
             if request.extracted_keywords:
                 enhanced_params['llm_keywords'] = request.extracted_keywords
+                # LLM 키워드를 메인 키워드로 사용
+                enhanced_params['keywords'] = request.extracted_keywords
+                logger.info(f"Using LLM-extracted keywords: {request.extracted_keywords}")
             
             # Import scope handler
             from .services.query_scope_handler import QueryScopeHandler
@@ -221,9 +261,16 @@ MCP server will extract:
             logger.info(f"Query scope: {scope_info['scope']} - SQL: {scope_info['sql_condition']}")
             
             # 3. 템플릿 검색을 위한 키워드 준비
-            search_keywords = rule_based_params.get('expanded_keywords', [])
+            # LLM 키워드를 우선으로 사용
             if request.extracted_keywords:
-                search_keywords.extend(request.extracted_keywords)
+                search_keywords = request.extracted_keywords.copy()
+                # 규칙 기반 키워드 추가 (중복 제거)
+                rule_keywords = rule_based_params.get('keywords', [])
+                for kw in rule_keywords:
+                    if kw not in search_keywords:
+                        search_keywords.append(kw)
+            else:
+                search_keywords = rule_based_params.get('keywords', [])
             
             # 4. 쿼리 실행을 위한 파라미터 준비
             # QueryAssistant에 전달할 파라미터 구성
@@ -235,6 +282,7 @@ MCP server will extract:
                 'date_range': enhanced_params.get('date_range'),
                 'days': enhanced_params.get('days'),
                 'status': enhanced_params.get('status'),
+                'keywords': search_keywords,  # 템플릿 매칭용 키워드
                 'llm_keywords': enhanced_params.get('llm_keywords'),
                 'expanded_keywords': list(set(search_keywords))  # 중복 제거
             }
