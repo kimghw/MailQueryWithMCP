@@ -180,9 +180,8 @@ MCP server will extract:
                 logger.info(f"Using LLM-extracted organization: {request.extracted_organization}")
             elif enhanced_params.get('organization'):
                 # 규칙 기반 추출된 조직이 있으면 동의어 처리
-                from ..common.services.synonym_service import SynonymService
-                synonym_service = SynonymService()
-                normalized_org = synonym_service.normalize_organization(enhanced_params['organization'])
+                # Use the synonym service from the extractor which has preprocessing_repo
+                normalized_org = extractor.synonym_service.normalize_organization(enhanced_params['organization'])
                 enhanced_params['organization'] = normalized_org
                 enhanced_params['organization_code'] = normalized_org
                 logger.info(f"Normalized organization: {enhanced_params.get('organization_text')} → {normalized_org}")
@@ -284,7 +283,11 @@ MCP server will extract:
                 'status': enhanced_params.get('status'),
                 'keywords': search_keywords,  # 템플릿 매칭용 키워드
                 'llm_keywords': enhanced_params.get('llm_keywords'),
-                'expanded_keywords': list(set(search_keywords))  # 중복 제거
+                'expanded_keywords': list(set(search_keywords)),  # 중복 제거
+                # MCP parameters for SQL generation
+                'extracted_period': request.extracted_period,
+                'extracted_keywords': request.extracted_keywords,
+                'extracted_organization': request.extracted_organization
             }
             
             # 5. 쿼리 실행

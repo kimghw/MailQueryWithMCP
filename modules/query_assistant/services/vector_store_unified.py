@@ -165,25 +165,51 @@ class VectorStoreUnified:
                     # Each point now represents a single question
                     question = result.payload.get("question", "")
                     
+                    # Extract SQL query - check both old and new formats
+                    sql_query = result.payload.get("sql_query", "")
+                    sql_system = result.payload.get("sql_system", "")
+                    
+                    # If sql_query not found, try new unified format
+                    if not sql_query:
+                        sql_template = result.payload.get("sql_template", {})
+                        if isinstance(sql_template, dict):
+                            sql_query = sql_template.get("query", "")
+                            sql_system = sql_template.get("system", "")
+                    
+                    # Extract keywords - check both formats
+                    keywords = result.payload.get("keywords", [])
+                    if not keywords:
+                        query_info = result.payload.get("query_info", {})
+                        if isinstance(query_info, dict):
+                            keywords = query_info.get("keywords", [])
+                    
+                    # Extract tables from target_scope
+                    target_scope = result.payload.get("target_scope", {})
+                    tables = target_scope.get("tables", []) if isinstance(target_scope, dict) else []
+                    
                     # Reconstruct QueryTemplate
                     template = QueryTemplate(
                         template_id=result.payload["template_id"],
                         natural_questions=question,  # Single question
-                        sql_query=result.payload.get("sql_query", ""),
-                        sql_query_with_parameters=result.payload.get("sql_query", ""),  # Use same as sql_query
-                        keywords=result.payload.get("keywords", []),
+                        sql_query=sql_query,
+                        sql_query_with_parameters=sql_query,  # Use same as sql_query for unified format
+                        keywords=keywords,
                         category=result.payload.get("template_category", ""),
                         required_params=required_params,
                         query_filter=query_filter,
                         default_params=default_params,
                         usage_count=0,
-                        related_tables=result.payload.get("target_scope", {}).get("tables", []),
-                        to_agent_prompt=result.payload.get("sql_system", None),
+                        related_tables=tables,
+                        to_agent_prompt=sql_system,
                         template_version=result.payload.get("template_version", "1.0.0"),
                         embedding_model=self.model_name,
                         embedding_dimension=self.vector_size,
                         created_at=datetime.now()
                     )
+                    
+                    # Add parameters to template if available
+                    if hasattr(template, '__dict__'):
+                        template.__dict__['parameters'] = result.payload.get("parameters", [])
                     
                     # The matched question is the actual question
                     matched_question = question

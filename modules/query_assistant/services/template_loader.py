@@ -115,8 +115,12 @@ class TemplateLoader:
     def update_usage_stats(self, template_id: str) -> bool:
         """Update usage statistics for a template"""
         try:
-            # Update in VectorDB
-            success = self.vector_store.update_usage_stats(template_id)
+            # Update in VectorDB - check if method exists first
+            if hasattr(self.vector_store, 'update_usage_stats'):
+                success = self.vector_store.update_usage_stats(template_id)
+            else:
+                # Skip vector store update if method doesn't exist
+                success = True
             
             if success:
                 # Update in database

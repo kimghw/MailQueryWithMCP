@@ -18,6 +18,7 @@ from .services.parameter_validator import ParameterValidator
 from .services.domain_ner import DomainNER, EntityType
 from .repositories.preprocessing_repository import PreprocessingRepository
 from .services.template_loader import TemplateLoader
+from .services.sql_generator import SQLGenerator
 
 # Common parsers import
 from ..common.parsers import QueryParameterExtractor
@@ -71,32 +72,35 @@ class QueryAssistant:
         
         # Initialize preprocessing repository
         try:
-            preprocessing_repo = PreprocessingRepository()
+            self.preprocessing_repo = PreprocessingRepository()
             logger.info("Initialized preprocessing repository")
         except Exception as e:
             logger.warning(f"Failed to initialize preprocessing repository: {e}")
-            preprocessing_repo = None
+            self.preprocessing_repo = None
         
         # Initialize keyword expander with preprocessing repo
-        self.keyword_expander = KeywordExpander(preprocessing_repo)
+        self.keyword_expander = KeywordExpander(self.preprocessing_repo)
         
         # Initialize parameter validator
         self.parameter_validator = ParameterValidator(self.db_connector)
         
         # Initialize NER with preprocessing repository
-        if preprocessing_repo:
-            self.ner = DomainNER(preprocessing_repo)
+        if self.preprocessing_repo:
+            self.ner = DomainNER(self.preprocessing_repo)
             logger.info("Initialized NER with preprocessing dataset")
         else:
             self.ner = DomainNER()
             logger.info("Initialized NER without preprocessing dataset")
         
         # Initialize query parameter extractor
-        self.param_extractor = QueryParameterExtractor(preprocessing_repo)
+        self.param_extractor = QueryParameterExtractor(self.preprocessing_repo)
         logger.info("Initialized query parameter extractor")
         
         # Initialize template loader
         self.template_loader = TemplateLoader(vector_store=self.vector_store)
+        
+        # Initialize SQL generator
+        self.sql_generator = SQLGenerator()
         
     
     def process_query(
@@ -127,7 +131,7 @@ class QueryAssistant:
                 query=user_query,
                 keywords=expansion.expanded_keywords,
                 category=category,
-                limit=5,
+                limit=10,  # Get more candidates for filtering
                 score_threshold=0.3  # Lower threshold for better matching
             )
             
@@ -141,8 +145,43 @@ class QueryAssistant:
                     error="No matching query template found"
                 )
             
-            # Use the best matching template
-            best_match = search_results[0]
+            # Filter templates based on available parameters
+            # Combine all available parameter keys
+            available_params = set()
+            available_params.update(extracted_params.keys())
+            if additional_params:
+                available_params.update(additional_params.keys())
+            
+            # Also add parameters we can derive or have defaults for
+            available_params.update(['date_range', 'days', 'period', 'limit'])
+            
+            # Filter templates where we have all required parameters
+            valid_templates = []
+            for result in search_results:
+                template = result.template
+                required_params = set(template.required_params)
+                
+                # Check if we can satisfy all required parameters
+                can_satisfy = True
+                for req_param in required_params:
+                    # Check if we have the parameter or can derive it
+                    if req_param not in available_params:
+                        # Check if template has a default for this parameter
+                        if req_param not in template.default_params:
+                            can_satisfy = False
+                            break
+                
+                if can_satisfy:
+                    valid_templates.append(result)
+            
+            # If no valid templates, return the best match anyway (for error reporting)
+            if not valid_templates:
+                logger.warning(f"No templates with satisfiable parameters found, using best match")
+                best_match = search_results[0]
+            else:
+                # Use the highest scoring valid template
+                best_match = valid_templates[0]
+            
             template = best_match.template
             
             # Extract parameters from user query with NER results
@@ -213,7 +252,14 @@ class QueryAssistant:
             
             # Generate SQL - use parameterized version if parameters exist
             if parameters and any(parameters.values()):
-                sql = self._generate_sql(template.sql_query_with_parameters, parameters)
+                # Get MCP parameters if provided through additional_params
+                mcp_params = {}
+                if additional_params:
+                    for key in ['extracted_period', 'extracted_keywords', 'extracted_organization']:
+                        if key in additional_params:
+                            mcp_params[key] = additional_params[key]
+                
+                sql = self._generate_sql(template, parameters, mcp_params)
             else:
                 sql = template.sql_query
             
@@ -223,8 +269,12 @@ class QueryAssistant:
                 results = self._execute_sql(sql)
                 execution_time = (datetime.now() - start_time).total_seconds()
                 
-                # Update usage statistics
-                self.vector_store.update_usage_stats(template.template_id)
+                # Update usage statistics - check if method exists
+                if hasattr(self.vector_store, 'update_usage_stats'):
+                    self.vector_store.update_usage_stats(template.template_id)
+                else:
+                    # Log usage without updating vector store
+                    logger.debug(f"Template {template.template_id} used")
                 
                 return QueryResult(
                     query_id=template.template_id,
@@ -354,7 +404,7 @@ class QueryAssistant:
         if "organization" in template.required_params:
             # Use synonym service to extract organization
             from ..common.services.synonym_service import SynonymService
-            syn_service = SynonymService()
+            syn_service = SynonymService(self.preprocessing_repo)
             org_code = syn_service.get_organization_code(query)
             if org_code:
                 parameters["organization"] = org_code
@@ -401,24 +451,108 @@ class QueryAssistant:
         
         return parameters
     
-    def _generate_sql(self, template: str, parameters: Dict[str, Any]) -> str:
-        """Generate SQL from template and parameters"""
-        # Use common parser to fill placeholders
-        sql = self.param_extractor.fill_template_placeholders(template, parameters)
+    def _generate_sql(self, template: QueryTemplate, parameters: Dict[str, Any], mcp_params: Dict[str, Any] = None) -> str:
+        """Generate SQL from template and parameters using enhanced SQL generator"""
+        # Get template parameter definitions
+        template_param_defs = self._get_template_param_definitions(template)
         
-        # Replace placeholders
-        for param, value in parameters.items():
-            placeholder = "{" + param + "}"
-            if placeholder in sql:
-                # Handle different value types
-                if isinstance(value, str):
-                    sql = sql.replace(placeholder, str(value))
-                elif isinstance(value, (int, float)):
-                    sql = sql.replace(placeholder, str(value))
-                else:
-                    sql = sql.replace(placeholder, str(value))
+        # Use SQL generator with proper parameter merging
+        sql, merged_params = self.sql_generator.generate_sql(
+            sql_template=template.sql_query_with_parameters,
+            template_params=template_param_defs,
+            mcp_params=mcp_params or {},
+            synonym_params=parameters,
+            template_defaults=template.default_params
+        )
         
-        return sql.strip()
+        # Update parameters with merged values
+        parameters.update(merged_params)
+        
+        return sql
+    
+    def _get_template_param_definitions(self, template: QueryTemplate) -> List[Dict[str, Any]]:
+        """Get parameter definitions from template metadata"""
+        # Try to get parameters from the template object first
+        if hasattr(template, '__dict__') and 'parameters' in template.__dict__:
+            return template.__dict__['parameters']
+        
+        # Try to get parameters from the template object directly
+        if hasattr(template, 'parameters') and template.parameters:
+            return template.parameters
+        
+        # Fallback: construct basic param definitions from template
+        param_defs = []
+        
+        # Add required params
+        for param in template.required_params:
+            param_def = {
+                'name': param,
+                'type': 'string',
+                'required': True,
+                'sql_builder': {
+                    'type': 'string',
+                    'placeholder': f'{{{param}}}'
+                }
+            }
+            
+            # Special handling for known param types
+            if param == 'organization' or param == 'organization_code':
+                param_def['mcp_format'] = 'extracted_organization'
+                param_def['sql_builder'] = {
+                    'type': 'string',
+                    'placeholder': f'{{{param}}}'
+                }
+            elif param == 'period' or param == 'date_range':
+                param_def['type'] = 'period'
+                param_def['sql_builder'] = {
+                    'type': 'period',
+                    'field': 'sent_time',
+                    'placeholder': '{period_condition}'
+                }
+                param_def['mcp_format'] = 'extracted_period'
+            
+            param_defs.append(param_def)
+        
+        # Add optional params
+        for param in template.query_filter:
+            param_def = {
+                'name': param,
+                'type': 'string',
+                'required': False,
+                'sql_builder': {
+                    'type': 'string',
+                    'placeholder': f'{{{param}}}'
+                }
+            }
+            
+            # Special handling for known param types
+            if param == 'limit':
+                param_def['type'] = 'number'
+                param_def['sql_builder']['type'] = 'number'
+            elif param == 'days':
+                param_def['type'] = 'number'
+                param_def['sql_builder']['type'] = 'number'
+            elif param == 'period':
+                param_def['type'] = 'period'
+                param_def['sql_builder'] = {
+                    'type': 'period',
+                    'field': 'sent_time',
+                    'placeholder': '{period_condition}'
+                }
+                param_def['mcp_format'] = 'extracted_period'
+            elif param == 'keywords' or param == 'keyword':
+                param_def['type'] = 'keywords'
+                param_def['sql_builder'] = {
+                    'type': 'keywords',
+                    'field': 'title',
+                    'operator': 'LIKE',
+                    'placeholder': '{keywords_condition}'
+                }
+                param_def['mcp_format'] = 'extracted_keywords'
+            
+            param_defs.append(param_def)
+        
+        return param_defs
     
     def _execute_sql(self, sql: str) -> List[Dict[str, Any]]:
         """Execute SQL query and return results"""

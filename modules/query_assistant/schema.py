@@ -24,6 +24,7 @@ class QueryTemplate(BaseModel):
     template_version: str = Field(default="1.0.0", description="템플릿 버전")
     embedding_model: str = Field(default="text-embedding-3-large", description="임베딩 모델명")
     embedding_dimension: int = Field(default=3072, description="임베딩 벡터 차원")
+    parameters: Optional[List[Dict[str, Any]]] = Field(default=None, description="템플릿 파라미터 정의")
     
     class Config:
         json_encoders = {

@@ -329,3 +329,23 @@ class PreprocessingRepository:
             
         finally:
             conn.close()
+    
+    def get_all_synonyms(self) -> List[Dict[str, Any]]:
+        """모든 동의어 조회 (term_type이 'synonym'인 항목들)"""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("""
+                SELECT original_term, normalized_term, usage_count, match_accuracy
+                FROM preprocessing_dataset 
+                WHERE term_type = 'synonym' AND is_active = 1
+                ORDER BY usage_count DESC
+            """)
+            
+            rows = cursor.fetchall()
+            return [dict(row) for row in rows]
+            
+        finally:
+            conn.close()

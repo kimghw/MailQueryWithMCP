@@ -156,7 +156,7 @@ Additionally, respond in JSON format:
                 'end': end_date.strftime('%Y-%m-%d')
             }
         
-        # Extract organization
+        # Extract organization from LLM or keywords
         extracted_organization = None
         if analysis['parameters'].get('organization'):
             extracted_organization = analysis['parameters']['organization']
@@ -164,6 +164,25 @@ Additionally, respond in JSON format:
             extracted_organization = analysis['parameters']['sender_organization']
         elif analysis['parameters'].get('response_org'):
             extracted_organization = analysis['parameters']['response_org']
+        
+        # If LLM didn't extract organization, check keywords
+        if not extracted_organization:
+            # Common organization mappings
+            org_keywords = {
+                '한국선급': 'KR',
+                'KR': 'KR',
+                '일본선급': 'NK',
+                'NK': 'NK',
+                '중국선급': 'CCS',
+                'CCS': 'CCS',
+                'IMO': 'IMO',
+                'IACS': 'IACS'
+            }
+            for keyword in analysis['keywords']:
+                if keyword in org_keywords:
+                    extracted_organization = org_keywords[keyword]
+                    print(f"[LLM] Extracted organization from keyword: {keyword} → {extracted_organization}")
+                    break
         
         # Determine query scope
         query_scope = 'one'  # default

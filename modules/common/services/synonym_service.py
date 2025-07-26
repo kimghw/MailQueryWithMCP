@@ -423,18 +423,23 @@ class SynonymService:
             (now - self._last_cache_update).seconds > self._cache_ttl):
             
             try:
-                # DB에서 모든 동의어 로드
-                synonyms = self.preprocessing_repo.get_all_synonyms()
-                
-                # 캐시 재구성
-                self._synonym_cache.clear()
-                for synonym in synonyms:
-                    original = synonym['original_term'].lower()
-                    normalized = synonym['normalized_term']
-                    self._synonym_cache[original] = normalized
-                
-                self._last_cache_update = now
-                logger.debug(f"Updated synonym cache with {len(self._synonym_cache)} entries")
+                # Check if preprocessing_repo has get_all_synonyms method
+                if hasattr(self.preprocessing_repo, 'get_all_synonyms'):
+                    # DB에서 모든 동의어 로드
+                    synonyms = self.preprocessing_repo.get_all_synonyms()
+                    
+                    # 캐시 재구성
+                    self._synonym_cache.clear()
+                    for synonym in synonyms:
+                        original = synonym['original_term'].lower()
+                        normalized = synonym['normalized_term']
+                        self._synonym_cache[original] = normalized
+                    
+                    self._last_cache_update = now
+                    logger.debug(f"Updated synonym cache with {len(self._synonym_cache)} entries")
+                else:
+                    logger.warning("PreprocessingRepository does not have get_all_synonyms method")
+                    self._last_cache_update = now  # Prevent repeated warnings
                 
             except Exception as e:
                 logger.error(f"Failed to update synonym cache: {e}")
