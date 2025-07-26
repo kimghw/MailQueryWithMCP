@@ -1,4 +1,4 @@
-"""Qdrant vector database uploader for templates"""
+"""Improved Qdrant vector database uploader for templates"""
 
 import json
 import os
@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 
 class QdrantTemplateUploader:
-    """Upload templates to Qdrant vector database"""
+    """Upload templates to Qdrant vector database with improved embedding"""
     
     def __init__(
         self,
@@ -34,7 +34,11 @@ class QdrantTemplateUploader:
         self.api_key = os.getenv('OPENAI_API_KEY')
         
         # Initialize Qdrant client
-        self.client = QdrantClient(url=self.qdrant_url, port=self.qdrant_port)
+        self.client = QdrantClient(
+            url=self.qdrant_url, 
+            port=self.qdrant_port,
+            check_compatibility=False  # 버전 호환성 경고 무시
+        )
         
     def create_collection(self, recreate: bool = False):
         """Create or recreate the collection"""
@@ -49,26 +53,29 @@ class QdrantTemplateUploader:
         try:
             self.client.get_collection(self.collection_name)
             logger.info(f"Collection {self.collection_name} already exists")
-            return
         except:
-            pass
-            
-        # Create new collection
-        self.client.create_collection(
-            collection_name=self.collection_name,
-            vectors_config=VectorParams(size=self.vector_size, distance=Distance.COSINE)
-        )
-        logger.info(f"Created collection: {self.collection_name}")
+            # Create new collection
+            self.client.create_collection(
+                collection_name=self.collection_name,
+                vectors_config=VectorParams(
+                    size=self.vector_size,
+                    distance=Distance.COSINE
+                )
+            )
+            logger.info(f"Created collection: {self.collection_name}")
         
-    def get_embedding(self, text: str) -> List[float]:
-        """Get embedding for text using OpenAI API"""
+    def get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
+        """Get embeddings for multiple texts in one API call"""
+        if not texts:
+            return []
+            
         headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
         }
         
         data = {
-            "input": text,
+            "input": texts,
             "model": self.embedding_model
         }
         
@@ -79,105 +86,182 @@ class QdrantTemplateUploader:
         )
         response.raise_for_status()
         
-        return response.json()['data'][0]['embedding']
+        # Extract embeddings in order
+        embeddings = []
+        for item in response.json()['data']:
+            embeddings.append(item['embedding'])
+        
+        return embeddings
         
     def prepare_template_text(self, template: Dict[str, Any]) -> str:
-        """Prepare template content for embedding"""
+        """Prepare template content for embedding - only meaningful text"""
         parts = []
         
-        # Add template ID and category
-        parts.append(f"Template ID: {template.get('template_id', '')}")
-        parts.append(f"Category: {template.get('template_category', '')}")
-        
-        # Add natural questions
+        # query_info의 user와 description 추가
         query_info = template.get('query_info', {})
+        
+        # user 필드 (사용자가 하는 질문)
+        user_query = query_info.get('user', '')
+        if user_query:
+            parts.append(user_query)
+            
+        # description 필드
+        description = query_info.get('description', '')
+        if description:
+            parts.append(description)
+        
+        # natural_questions 추가
         questions = query_info.get('natural_questions', [])
         if questions:
-            parts.append(f"Questions: {' | '.join(questions)}")
+            parts.extend(questions)
             
-        # Add keywords
-        keywords = query_info.get('keywords', [])
-        if keywords:
-            parts.append(f"Keywords: {', '.join(keywords)}")
-            
-        # Add SQL description
+        # sql_template의 system 필드 (쿼리 설명)
         sql_template = template.get('sql_template', {})
-        if sql_template.get('system'):
-            parts.append(f"Description: {sql_template['system']}")
+        system_desc = sql_template.get('system', '')
+        if system_desc:
+            parts.append(system_desc)
             
+        # user 필드 (SQL의 목적)
+        sql_user = sql_template.get('user', '')
+        if sql_user:
+            parts.append(sql_user)
+        
+        # 의미있는 텍스트만 결합
         return " ".join(parts)
         
-    def upload_templates(self, templates: List[Dict[str, Any]], batch_size: int = 10) -> int:
-        """Upload templates to Qdrant
+    def upload_templates(self, templates: List[Dict[str, Any]], batch_size: int = 50) -> int:
+        """Upload templates to Qdrant with individual embeddings for each natural question"""
         
-        Args:
-            templates: List of template dictionaries
-            batch_size: Number of templates to upload in each batch
-            
-        Returns:
-            Number of templates uploaded
-        """
-        points = []
-        uploaded = 0
+        total_uploaded = 0
+        all_embedding_requests = []
         
-        for i, template in enumerate(templates):
-            try:
-                # Skip config templates
-                template_id = template.get('template_id', '')
-                if template_id.startswith('_config'):
-                    logger.debug(f"Skipping config template: {template_id}")
-                    continue
-                    
-                # Prepare text and get embedding
-                text = self.prepare_template_text(template)
-                logger.debug(f"Getting embedding for template {i+1}/{len(templates)}: {template_id}")
-                embedding = self.get_embedding(text)
-                
-                # Create point
-                point = PointStruct(
-                    id=str(uuid.uuid4()),
-                    vector=embedding,
-                    payload={
-                        "template_id": template_id,
-                        "template_category": template.get('template_category', ''),
-                        "template_version": template.get('template_version', ''),
-                        "natural_questions": template.get('query_info', {}).get('natural_questions', []),
-                        "keywords": template.get('query_info', {}).get('keywords', []),
-                        "sql_query": template.get('sql_template', {}).get('query', ''),
-                        "sql_system": template.get('sql_template', {}).get('system', ''),
-                        "sql_user": template.get('sql_template', {}).get('user', ''),
-                        "target_scope": template.get('target_scope', {}),
-                        "parameters": template.get('parameters', []),
-                        "uploaded_at": datetime.now().isoformat()
-                    }
-                )
-                points.append(point)
-                
-                # Upload in batches
-                if len(points) >= batch_size:
-                    self.client.upsert(
-                        collection_name=self.collection_name,
-                        points=points
-                    )
-                    uploaded += len(points)
-                    logger.info(f"Uploaded batch of {len(points)} templates")
-                    points = []
-                    
-            except Exception as e:
-                logger.error(f"Error processing template {template_id}: {e}")
+        # First, collect all texts that need embedding
+        for template in templates:
+            # Skip config templates
+            if template.get('template_id', '').startswith('_config'):
                 continue
                 
-        # Upload remaining points
-        if points:
-            self.client.upsert(
-                collection_name=self.collection_name,
-                points=points
-            )
-            uploaded += len(points)
-            logger.info(f"Uploaded final batch of {len(points)} templates")
+            query_info = template.get('query_info', {})
+            sql_template = template.get('sql_template', {})
             
-        logger.info(f"Successfully uploaded {uploaded} templates to Qdrant")
-        return uploaded
+            # Get texts to embed
+            texts_to_embed = []
+            
+            # 1. system description separately
+            system_desc = sql_template.get('system', '')
+            if system_desc and system_desc.strip():
+                texts_to_embed.append({
+                    'text': system_desc,
+                    'type': 'system',
+                    'template': template
+                })
+            
+            # 2. sql user separately
+            sql_user = sql_template.get('user', '')
+            if sql_user and sql_user.strip():
+                texts_to_embed.append({
+                    'text': sql_user,
+                    'type': 'sql_user',
+                    'template': template
+                })
+            
+            # 3. query_info user separately
+            user_query = query_info.get('user', '')
+            if user_query and user_query.strip():
+                texts_to_embed.append({
+                    'text': user_query,
+                    'type': 'user',
+                    'template': template
+                })
+            
+            # 4. Each natural question individually
+            natural_questions = query_info.get('natural_questions', [])
+            for question in natural_questions:
+                if question.strip():
+                    texts_to_embed.append({
+                        'text': question,
+                        'type': 'natural_question',
+                        'template': template,
+                        'question': question
+                    })
+            
+            all_embedding_requests.extend(texts_to_embed)
+        
+        # Process embeddings in batches
+        points = []
+        
+        for batch_start in range(0, len(all_embedding_requests), batch_size):
+            batch_end = min(batch_start + batch_size, len(all_embedding_requests))
+            batch_requests = all_embedding_requests[batch_start:batch_end]
+            
+            try:
+                # Get texts for batch
+                texts = [req['text'] for req in batch_requests]
+                
+                # Get embeddings
+                logger.info(f"Getting embeddings for batch {batch_start//batch_size + 1} ({len(texts)} texts)")
+                embeddings = self.get_embeddings_batch(texts)
+                
+                # Create points for each embedding
+                for req, embedding in zip(batch_requests, embeddings):
+                    template = req['template']
+                    query_info = template.get('query_info', {})
+                    sql_template = template.get('sql_template', {})
+                    
+                    # Create payload with embedding type info
+                    payload = {
+                        "template_id": template.get('template_id', ''),
+                        "template_category": template.get('template_category', ''),
+                        "template_version": template.get('template_version', ''),
+                        "description": query_info.get('description', ''),
+                        "user": query_info.get('user', ''),
+                        "natural_questions": query_info.get('natural_questions', []),
+                        "keywords": query_info.get('keywords', []),
+                        "sql_query": sql_template.get('query', ''),
+                        "sql_system": sql_template.get('system', ''),
+                        "sql_user": sql_template.get('user', ''),
+                        "target_scope": template.get('target_scope', {}),
+                        "parameters": template.get('parameters', []),
+                        "related_tables": template.get('related_tables', []),
+                        "uploaded_at": datetime.now().isoformat(),
+                        "embedding_type": req['type'],
+                        "embedded_text": req['text']
+                    }
+                    
+                    # Add specific question if it's a natural question embedding
+                    if req['type'] == 'natural_question':
+                        payload['embedded_question'] = req['question']
+                    
+                    point = PointStruct(
+                        id=str(uuid.uuid4()),
+                        vector=embedding,
+                        payload=payload
+                    )
+                    points.append(point)
+                
+            except Exception as e:
+                logger.error(f"Error processing batch starting at {batch_start}: {e}")
+                continue
+        
+        # Upload all points in batches
+        for batch_start in range(0, len(points), 100):
+            batch_end = min(batch_start + 100, len(points))
+            batch_points = points[batch_start:batch_end]
+            
+            try:
+                self.client.upsert(
+                    collection_name=self.collection_name,
+                    points=batch_points
+                )
+                total_uploaded += len(batch_points)
+                logger.info(f"Uploaded batch of {len(batch_points)} points")
+                    
+            except Exception as e:
+                logger.error(f"Error uploading batch: {e}")
+                continue
+                
+        logger.info(f"Successfully uploaded {total_uploaded} points to Qdrant")
+        return total_uploaded
         
     def get_template_count(self) -> int:
         """Get count of templates in collection"""
@@ -185,18 +269,40 @@ class QdrantTemplateUploader:
         return info.points_count
         
     def search_templates(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search for templates using semantic search"""
-        embedding = self.get_embedding(query)
+        """Search for templates using semantic search
         
+        Returns unique templates with highest similarity scores
+        """
+        embedding = self.get_embeddings_batch([query])[0]
+        
+        # Search with more results to ensure we get enough unique templates
         results = self.client.search(
             collection_name=self.collection_name,
             query_vector=embedding,
-            limit=limit
+            limit=limit * 3  # Get more results since same template has multiple embeddings
         )
         
-        return [{
-            'template_id': r.payload.get('template_id'),
-            'category': r.payload.get('template_category'),
-            'score': r.score,
-            'questions': r.payload.get('natural_questions', [])
-        } for r in results]
+        # Group results by template_id and keep the highest score for each
+        template_scores = {}
+        for r in results:
+            template_id = r.payload.get('template_id')
+            if template_id not in template_scores or r.score > template_scores[template_id]['score']:
+                template_scores[template_id] = {
+                    'template_id': template_id,
+                    'category': r.payload.get('template_category'),
+                    'score': r.score,
+                    'description': r.payload.get('description'),
+                    'user': r.payload.get('user'),
+                    'sql_query': r.payload.get('sql_query'),
+                    'matched_text': r.payload.get('embedded_text', ''),
+                    'embedding_type': r.payload.get('embedding_type', '')
+                }
+        
+        # Sort by score and return top N unique templates
+        sorted_templates = sorted(
+            template_scores.values(), 
+            key=lambda x: x['score'], 
+            reverse=True
+        )
+        
+        return sorted_templates[:limit]
