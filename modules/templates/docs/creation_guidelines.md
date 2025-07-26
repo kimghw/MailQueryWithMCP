@@ -1,11 +1,13 @@
-# 쿼리 템플릿 작성 가이드라인 v2.3 (Updated Business Rules)
+# 쿼리 템플릿 작성 가이드라인 v3.0 (MCP Integration Update)
 
 ## 1. 핵심 원칙
 
 1. **필수 파라미터는 명확히 구분** - 사용자가 반드시 제공해야 하는 값
 2. **모든 파라미터는 플레이스홀더로** - 필수/선택 모두 `{param_name}` 형식 사용
-3. **선택 파라미터는 반드시 기본값 제공** - default_params에 합리적인 기본값 설정
-4. **자연어 질문 개수**:
+3. **선택 파라미터는 반드시 기본값 제공** - default에 합리적인 기본값 설정
+4. **MCP 통합 지원** - 모든 파라미터에 `mcp_format` 필드 필수
+5. **관련 테이블 명시** - `related_tables` 필드에 사용하는 테이블 목록 제공
+6. **자연어 질문 개수**:
    - 단순 쿼리: 3개
    - 복잡한 쿼리: 5개 이상
 
@@ -47,9 +49,24 @@ WHERE a.mail_type = 'request'
 - 마감일이 있고(has_deadline = 1) 아직 지나지 않은(deadline > datetime('now')) 의제만 해당
 - decision_status != 'completed' 확인
 
+### 조직 코드 사용
+IACSGRAPH에서 사용하는 조직 코드 (Classification Society):
+- **KR** - Korean Register (한국선급)
+- **NK** - Nippon Kaiji Kyokai (일본선급)
+- **CCS** - China Classification Society (중국선급)
+- **ABS** - American Bureau of Shipping (미국선급)
+- **DNV** - Det Norske Veritas (노르웨이선급)
+- **BV** - Bureau Veritas (프랑스선급)
+- **LR** - Lloyd's Register (영국선급)
+- **RINA** - Registro Italiano Navale (이탈리아선급)
+- **IRS** - Indian Register of Shipping (인도선급)
+- **PRS** - Polish Register of Shipping (폴란드선급)
+- **CRS** - Croatian Register of Shipping (크로아티아선급)
+- **TL** - Türk Loydu (터키선급)
+
 ## 테이블 구조 설명
 
-### 주요 테이블
+### 주요 테이블 (IACSGRAPH 실제 테이블)
 1. **agenda_all**: 모든 의제 메일을 저장하는 메인 테이블
    - 일반적인 의제 관련 메일들이 저장됨
    - 의제 상태, 발송 정보, 내용 등 포함
@@ -65,9 +82,14 @@ WHERE a.mail_type = 'request'
    - 시스템에서 자동 분류하지 못해 수동 처리가 필요한 메일
    - error_reason: 분류 실패 이유
 
-4. **agenda_responses_content**: 의제에 대한 응답 내용
-   - sender_organization: 응답한 조직
-   - agenda_code: 원본 의제 코드
+4. **agenda_responses_content**: 의제에 대한 응답 내용 (비정규화된 구조)
+   - agenda_base_version: 의제 기본 버전 (PK)
+   - 각 조직별 컬럼: ABS, BV, CCS, CRS, DNV, IRS, KR, NK, PRS, RINA, IL, TL, LR
+   - **주의**: 동적 컬럼 참조 불가 (arc.{organization} X)
+
+5. **agenda_responses_receivedtime**: 응답 수신 시간
+   - agenda_base_version: 의제 기본 버전 (PK)
+   - 각 조직별 수신 시간 컬럼
 
 ### 대기중인 안건 vs 보류중인 메일
 - **대기중인 안건 (응답 필요)**: 
@@ -84,13 +106,14 @@ WHERE a.mail_type = 'request'
 
 ### 2.1 표준 파라미터 목록
 다음 파라미터들이 추출되면 반드시 플레이스홀더로 처리:
-- `days` - 최근 N일 (integer)
-- `organization` - 조직명 (array - 다중 조직 지원)
-- `organization_code` - 조직 코드 (array - 다중 코드 지원)
-- `agenda_base_version` - 의제 기본 버전 (string)
+- `period` - 기간 (date range)
+- `organization` - 조직 코드 (string)
+- `organization_code` - 조직 코드 (string) 
 - `agenda_base` - 의제 기본 정보 (string)
-- `keywords` - 검색 키워드 (array - 다중 키워드 지원)
+- `agenda_base_version` - 의제 기본 버전 (string)
+- `keywords` - 검색 키워드 (array)
 - `status` - 상태 (string)
+- `limit` - 결과 제한 (integer)
 
 ### 2.2 플레이스홀더 사용 원칙
 ```sql
@@ -105,46 +128,86 @@ WHERE organization_code = 'KR'
   AND status = 'ongoing'
 ```
 
-### 2.3 통합 파라미터 구조
-파라미터는 하나의 배열로 통합 관리:
+### 2.2 MCP 통합 파라미터 구조
+모든 파라미터는 MCP 서버와의 통합을 위해 `mcp_format` 필드를 포함해야 함:
+
 ```json
 "parameters": [
   {
+    "name": "organization",
+    "type": "string",
+    "required": true,
+    "default": "KR",
+    "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+    "sql_builder": {
+      "type": "string",
+      "placeholder": "{organization}"
+    },
+    "mcp_format": "extracted_organization"
+  },
+  {
+    "name": "period",
+    "type": "period",
+    "required": false,
+    "default": {"type": "relative", "days": 30},
+    "sql_builder": {
+      "type": "period",
+      "field": "sent_time",
+      "placeholder": "{period_condition}"
+    },
+    "mcp_format": "extracted_period"
+  },
+  {
     "name": "keywords",
-    "type": "array",
+    "type": "keywords",
     "required": false,
     "default": [],
     "sql_builder": {
-      "type": "or_like",
-      "fields": ["keywords", "subject", "body"],
+      "type": "keywords",
+      "field": "keywords",
+      "operator": "LIKE",
       "placeholder": "{keywords_condition}"
-    }
-  },
-  {
-    "name": "days",
-    "type": "integer",
-    "required": false,
-    "default": 30
-  },
-  {
-    "name": "organization_code",
-    "type": "array",
-    "required": false,
-    "default": [],
-    "sql_builder": {
-      "type": "in",
-      "field": "organization_code",
-      "placeholder": "{org_condition}"
-    }
+    },
+    "mcp_format": "extracted_keywords"
   }
 ]
 ```
 
-### 2.4 다중 값 처리
-배열 타입 파라미터는 자동으로 다중 값 처리:
-- `keywords`: OR LIKE 조건으로 여러 키워드 검색
-- `organization_code`: IN 절로 여러 조직 필터링
-- `sql_builder`로 복잡한 SQL 조건 생성
+### 2.3 MCP Format 매핑
+파라미터 타입별 MCP format 매핑:
+- `period`, `date_range` → `"mcp_format": "extracted_period"`
+- `organization`, `organization_code` → `"mcp_format": "extracted_organization"`
+- `keywords`, `keyword` → `"mcp_format": "extracted_keywords"`
+- `agenda_base` → `"mcp_format": "agenda_base"`
+- `agenda_base_version` → `"mcp_format": "agenda_base_version"`
+- 기타 파라미터 → 직접 매핑 또는 없음
+
+### 2.4 SQL Builder 타입
+SQL 생성을 위한 빌더 타입:
+- `period`: 날짜 범위 조건 생성
+- `keywords`: 키워드 검색 조건 생성
+- `string`: 단순 문자열 치환
+- `number`: 숫자 값 치환
+- `direct_replace`: 여러 플레이스홀더 직접 치환
+
+### 2.5 동적 컬럼 참조 금지
+`agenda_responses_content` 테이블의 조직별 컬럼은 동적 참조 불가:
+
+```sql
+-- ❌ 잘못된 예시
+WHERE arc.{organization} IS NOT NULL
+
+-- ✅ 올바른 예시 (CASE 문 사용)
+WHERE CASE {organization}
+    WHEN 'KR' THEN arc.KR
+    WHEN 'ABS' THEN arc.ABS
+    WHEN 'BV' THEN arc.BV
+    -- ... 다른 조직들
+END IS NOT NULL
+
+-- ✅ 또는 SQL Generator가 처리하도록 특별한 플레이스홀더 사용
+WHERE {organization_response_condition}
+```
 
 ## 3. 자연어 질문 작성 규칙
 
@@ -174,21 +237,21 @@ WHERE organization_code = 'KR'
 ]
 ```
 
-## 4. 템플릿 구조 예시
+## 3. 템플릿 구조
 
-### 4.1 단순 쿼리 템플릿
+### 3.1 필수 필드
 ```json
 {
-  "template_id": "ongoing_agendas_v2",
-  "template_version": "2.3",
+  "template_id": "example_template_v2",
+  "template_version": "1.0.0",
   "template_category": "agenda_status",
   "query_info": {
     "natural_questions": [
-      "진행중인 의제 목록",
-      "ongoing 상태 아젠다",
-      "현재 진행 중인 안건"
+      "질문 1",
+      "질문 2",
+      "질문 3"
     ],
-    "keywords": ["진행중", "ongoing", "진행"]
+    "keywords": ["키워드1", "키워드2"]
   },
   "target_scope": {
     "scope_type": "all",
@@ -196,51 +259,139 @@ WHERE organization_code = 'KR'
     "target_panels": "all"
   },
   "sql_template": {
-    "query": "SELECT * FROM agenda_all WHERE decision_status = '{status}' AND sent_time >= DATE('now', '-{days} days') ORDER BY sent_time DESC",
-    "system": "현재 진행중인 의제를 최근 날짜순으로 검색합니다. 활발히 논의되고 있는 의제들을 파악하기 위한 쿼리입니다.",
-    "user": "진행중인 의제들의 목록을 보고 싶습니다. 의제 코드, 제목, 발송일자, 주요 내용을 포함해주세요."
+    "query": "SELECT * FROM agenda_all WHERE ...",
+    "system": "쿼리 목적 설명",
+    "user": "사용자 요구사항"
   },
   "parameters": [
-    {
-      "name": "status",
-      "type": "string",
-      "required": false,
-      "default": "ongoing"
-    },
-    {
-      "name": "days",
-      "type": "integer",
-      "required": false,
-      "default": 30
-    }
+    // MCP 통합 파라미터들
   ],
+  "related_tables": ["agenda_all"],
   "embedding_config": {
     "model": "text-embedding-3-large",
     "dimension": 1536
   },
-  "expected_response": {
-    "description": "진행중인 의제 목록을 시간순으로 정렬하여 제공",
-    "format": "list",
-    "example": "최근 30일간 진행중인 의제:\n\n1. [IMO-MEPC-82-01] 탄소집약도 지표 개정 (2024-03-15)\n2. [IOPCF-APR24-02] 보상기금 한도 검토 (2024-03-10)\n\n총 5건의 진행중인 의제가 있습니다."
-  }
+  "routing_type": "sql"
 }
 ```
 
-### 4.2 복잡한 쿼리 템플릿
+### 3.2 Related Tables 필드
+템플릿에서 사용하는 모든 테이블을 명시:
+```json
+"related_tables": ["agenda_all", "agenda_responses_content", "agenda_responses_receivedtime"]
+```
+
+사용 가능한 테이블:
+- `agenda_all`
+- `agenda_chair`
+- `agenda_pending`
+- `agenda_responses_content`
+- `agenda_responses_receivedtime`
+
+## 4. 자연어 질문 작성 규칙
+
+### 4.1 단순 쿼리 (3개)
+단일 조건이나 직관적인 조회:
+```json
+"natural_questions": [
+  "최근 진행중인 의제 목록",
+  "현재 ongoing 상태 아젠다",
+  "진행 중인 안건들 보여줘"
+]
+```
+
+### 4.2 복잡한 쿼리 (5개 이상)
+- 여러 조건 조합
+- JOIN이 필요한 경우
+- 집계/분석이 포함된 경우
+- 특수한 비즈니스 로직
+
+```json
+"natural_questions": [
+  "KR이 응답해야하는 의제 중 다른 기관의 의견 정리",
+  "KR이 답변 필요한 안건의 타기관 코멘트",
+  "KR 응답 대상 의제에 대한 각국 입장 요약",
+  "우리나라가 회신해야 할 아젠다의 타국 의견",
+  "KR 대응 필요 의제의 다른 나라 피드백 분석"
+]
+```
+
+## 5. 예시 템플릿
+
+### 5.1 단순 쿼리 템플릿 (MCP 통합)
 ```json
 {
-  "template_id": "kr_agenda_with_responses_v2",
-  "template_version": "2.3",
-  "template_category": "agenda_analysis",
+  "template_id": "org_recent_agendas_v2",
+  "template_version": "1.0.0",
+  "template_category": "agenda_status",
   "query_info": {
     "natural_questions": [
-      "KR이 응답해야하는 의제의 주요 이슈 및 다른 기관 의견",
-      "KR 답변 필요 안건의 쟁점과 타기관 입장",
-      "우리나라 대응 의제의 핵심 사항과 각국 코멘트",
-      "KR 회신 대상 아젠다의 이슈별 다른 나라 의견",
-      "KR이 응답할 의제에 대한 타국 피드백 종합"
+      "KR의 최근 의제 목록",
+      "한국선급 관련 최신 안건",
+      "KR이 참여한 최근 아젠다"
     ],
-    "keywords": ["KR", "이슈", "의견", "타기관", "분석"]
+    "keywords": ["최근", "의제", "목록"]
+  },
+  "target_scope": {
+    "scope_type": "specific_organization",
+    "target_organizations": ["KR"],
+    "target_panels": "all"
+  },
+  "sql_template": {
+    "query": "SELECT * FROM agenda_all WHERE sender_organization = {organization} AND {period_condition} ORDER BY sent_time DESC",
+    "system": "특정 조직의 최근 의제를 검색합니다.",
+    "user": "조직의 최근 활동 내역을 파악하고 싶습니다."
+  },
+  "parameters": [
+    {
+      "name": "organization",
+      "type": "string",
+      "required": true,
+      "default": "KR",
+      "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+      "sql_builder": {
+        "type": "string",
+        "placeholder": "{organization}"
+      },
+      "mcp_format": "extracted_organization"
+    },
+    {
+      "name": "period",
+      "type": "period",
+      "required": false,
+      "default": {"type": "relative", "days": 30},
+      "sql_builder": {
+        "type": "period",
+        "field": "sent_time",
+        "placeholder": "{period_condition}"
+      },
+      "mcp_format": "extracted_period"
+    }
+  ],
+  "related_tables": ["agenda_all"],
+  "embedding_config": {
+    "model": "text-embedding-3-large",
+    "dimension": 1536
+  },
+  "routing_type": "sql"
+}
+```
+
+### 5.2 복잡한 쿼리 템플릿 (응답 분석)
+```json
+{
+  "template_id": "org_response_analysis_v2",
+  "template_version": "1.0.0",
+  "template_category": "response_analysis",
+  "query_info": {
+    "natural_questions": [
+      "KR의 응답이 필요한 의제와 타기관 의견",
+      "한국선급이 답변해야 할 안건의 각국 입장",
+      "KR 응답 대상 의제에 대한 다른 나라 코멘트",
+      "우리나라가 회신할 아젠다의 타국 피드백",
+      "KR이 응답해야 하는 의제별 각국 의견 분석"
+    ],
+    "keywords": ["응답", "의견", "타기관", "분석", "KR"]
   },
   "target_scope": {
     "scope_type": "specific_organization",
@@ -273,7 +424,7 @@ WHERE organization_code = 'KR'
   ],
   "embedding_config": {
     "model": "text-embedding-3-large",
-    "dimension": 1536
+    "dimension": 3072
   },
   "expected_response": {
     "description": "KR 응답 필요 의제의 주요 이슈와 타기관 의견을 종합 분석하여 제공",

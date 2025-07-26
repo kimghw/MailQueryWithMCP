@@ -1,16 +1,13 @@
 {
-  "version": "9.0.0-parameter-consistency",
-  "description": "IACSGRAPH 통합 쿼리 템플릿 - 모든 버전 통합 (v2.6 ~ v2.10)",
+  "version": "10.0.0",
+  "description": "IACSGRAPH Query Templates with MCP Integration",
   "last_updated": "2025-01-26",
   "total_templates": 175,
   "metadata": {
-    "includes_versions": [
-      "v2.6",
-      "v2.7",
-      "v2.8",
-      "v2.9",
-      "v2.10"
-    ],
+    "last_updated": "2025-07-26",
+    "mcp_integration": true,
+    "parameter_format": "mcp_enhanced",
+    "includes_related_tables": true,
     "categories": {
       "agenda_status": 7,
       "time_based_query": 3,
@@ -41,287 +38,13 @@
       "llm_direct": 3,
       "vectordb": 15
     },
-    "standardized": true,
-    "all_versions_unified_to": "1.0.0",
-    "mcp_integration": true,
-    "mcp_format_version": "1.0",
-    "comprehensive_fixes": {
+    "total_sql_templates": 174,
+    "total_vectordb_templates": 0,
+    "total_llm_direct_templates": 0,
+    "dynamic_column_fix": {
       "date": "2025-01-26",
-      "description": "Comprehensive SQL fixes for all edge cases",
-      "modified_templates": 107
-    },
-    "sql_fixes": {
-      "date": "2025-01-26",
-      "description": "Complete SQL query rewrite for actual database schema",
-      "modified_templates": 11,
-      "fix_log": [
-        "org_no_response_ongoing_v2: Completely rewrote response query",
-        "org_agenda_issues_summary_v2: Completely rewrote response query",
-        "org_response_keywords_v2: Completely rewrote response query",
-        "no_response_agendas_v2: Completely rewrote response query",
-        "org_avg_response_time_v2: Completely rewrote response query",
-        "monthly_response_rate_statistics_v2: Completely rewrote response query",
-        "recent_updated_responses_v2: Completely rewrote response query",
-        "latest_response_organization_v2: Completely rewrote response query",
-        "org_panel_responses_v2: Completely rewrote response query"
-      ]
-    },
-    "complete_rewrite": {
-      "date": "2025-01-26",
-      "description": "Complete SQL rewrite for all templates",
-      "fixed_count": 82,
-      "fixed_templates": [
-        "Fixed: all_panels_incomplete_agendas_v2",
-        "Fixed: all_panels_recent_3months_v2",
-        "Fixed: org_no_response_ongoing_v2",
-        "Fixed: org_response_required_v2",
-        "Fixed: pending_agenda_count_v2",
-        "Fixed: org_agenda_issues_summary_v2",
-        "Fixed: org_agenda_keywords_v2",
-        "Fixed: org_response_keywords_v2",
-        "Fixed: keyword_search_agendas_v2",
-        "Fixed: meeting_notification_mails_v2",
-        "Fixed: yearly_agenda_count_v2",
-        "Fixed: yearly_created_agendas_v2",
-        "Fixed: org_mail_count_v2",
-        "Fixed: recent_5_agendas_v2",
-        "Fixed: recent_notification_mails_v2",
-        "Fixed: panel_agenda_count_v2",
-        "Fixed: imo_related_agendas_v2",
-        "Fixed: ur_revision_agendas_v2",
-        "Fixed: pr_revision_agendas_v2",
-        "Fixed: eg_related_agendas_v2",
-        "Fixed: monthly_agenda_response_status_v2",
-        "Fixed: vessel_inventory_agendas_v2",
-        "Fixed: generic_keyword_search_v2",
-        "Fixed: consolidated_status_agendas_v2",
-        "Fixed: cyber_keyword_agendas_v2",
-        "Fixed: recent_month_chair_agendas_v2",
-        "Fixed: no_response_agendas_v2",
-        "Fixed: recent_attachment_agendas_v2",
-        "Fixed: digital_transformation_agendas_v2",
-        "Fixed: org_avg_response_time_v2",
-        "Fixed: org_response_time_exclude_creation_v2",
-        "Fixed: chair_no_deadline_v2",
-        "Fixed: active_time_statistics_v2",
-        "Fixed: completed_pending_process_time_v2",
-        "Fixed: flexible_time_range_activities_v2",
-        "Fixed: flexible_ongoing_deadline_agendas_v2",
-        "Fixed: monthly_response_rate_statistics_v2",
-        "Fixed: recent_updated_responses_v2",
-        "Fixed: weekday_agenda_statistics_v2",
-        "Fixed: quarterly_agenda_statistics_v2",
-        "Fixed: latest_response_organization_v2",
-        "Fixed: urgent_created_agendas_v2",
-        "Fixed: kr_participating_panels_v2",
-        "Fixed: kr_chair_panels_v2",
-        "Fixed: pt_participating_orgs_v2",
-        "Fixed: pt_participants_info_v2",
-        "Fixed: keyword_analysis_3months_v2",
-        "Fixed: panel_org_response_required_v2",
-        "Fixed: panel_org_response_rate_v2",
-        "Fixed: panel_org_response_rate_yearly_v2"
-      ]
-    },
-    "sql_syntax_fixes": {
-      "date": "2025-01-26",
-      "description": "Fixed all SQL syntax errors and column references",
-      "fixed_count": 120,
-      "fixes": [
-        "Fixed: all_panels_incomplete_agendas_v2",
-        "Fixed: all_panels_recent_3months_v2",
-        "Fixed: pending_agenda_count_v2",
-        "Fixed: keyword_search_agendas_v2",
-        "Fixed: meeting_notification_mails_v2",
-        "Fixed: yearly_agenda_count_v2",
-        "Fixed: yearly_created_agendas_v2",
-        "Fixed: org_mail_count_v2",
-        "Fixed: recent_5_agendas_v2",
-        "Fixed: recent_notification_mails_v2",
-        "Fixed: panel_agenda_count_v2",
-        "Fixed: imo_related_agendas_v2",
-        "Fixed: ur_revision_agendas_v2",
-        "Fixed: pr_revision_agendas_v2",
-        "Fixed: eg_related_agendas_v2",
-        "Fixed: vessel_inventory_agendas_v2",
-        "Fixed: generic_keyword_search_v2",
-        "Fixed: consolidated_status_agendas_v2",
-        "Fixed: multilateral_recent_agendas_v2",
-        "Fixed: cyber_keyword_agendas_v2",
-        "Fixed: recent_month_chair_agendas_v2",
-        "Fixed: no_response_agendas_v2",
-        "Fixed: recent_weblink_agendas_v2",
-        "Fixed: recent_attachment_agendas_v2",
-        "Fixed: digital_transformation_agendas_v2",
-        "Fixed: other_type_senders_v2",
-        "Fixed: recent_updated_chair_10_v2",
-        "Fixed: chair_no_deadline_v2",
-        "Fixed: active_time_statistics_v2",
-        "Fixed: unknown_type_senders_v2",
-        "Fixed: completed_pending_process_time_v2",
-        "Fixed: msc_110_agendas_v2",
-        "Fixed: flexible_time_range_activities_v2",
-        "Fixed: flexible_ongoing_deadline_agendas_v2",
-        "Fixed: sender_address_mismatch_v2",
-        "Fixed: agenda_version_mismatch_v2",
-        "Fixed: latest_status_by_agenda_v2",
-        "Fixed: weekday_agenda_statistics_v2",
-        "Fixed: agendas_with_response_org_v2",
-        "Fixed: quarterly_agenda_statistics_v2",
-        "Fixed: latest_response_organization_v2",
-        "Fixed: urgent_created_agendas_v2",
-        "Fixed: iacs_panel_structure_v2",
-        "Fixed: kr_participating_panels_v2",
-        "Fixed: kr_chair_panels_v2",
-        "Fixed: recent_meetings_list_v2",
-        "Fixed: recent_meeting_issues_v2",
-        "Fixed: ongoing_pt_list_v2",
-        "Fixed: pt_participating_orgs_v2",
-        "Fixed: pt_participants_info_v2"
-      ]
-    },
-    "complete_sql_fix": {
-      "date": "2025-01-26",
-      "description": "Fixed all remaining SQL queries based on test results",
-      "fixed_count": 21,
-      "fixes": [
-        "Fixed: all_panels_incomplete_agendas_v2",
-        "Fixed: all_panels_recent_3months_v2",
-        "Fixed: org_response_keywords_v2",
-        "Fixed: keyword_search_agendas_v2",
-        "Fixed: recent_5_agendas_v2",
-        "Fixed: consolidated_status_agendas_v2",
-        "Fixed: recent_month_chair_agendas_v2",
-        "Fixed: recent_updated_chair_10_v2",
-        "Fixed: completed_pending_process_time_v2",
-        "Fixed: flexible_time_range_activities_v2",
-        "Fixed: latest_response_organization_v2",
-        "Fixed: pt_participating_orgs_v2",
-        "Fixed: pt_participants_info_v2",
-        "Fixed: org_panel_responses_v2",
-        "Fixed: org_urgent_response_required_v2",
-        "Fixed: panel_ongoing_responded_orgs_v2",
-        "Fixed: panel_no_response_orgs_v2",
-        "Fixed: eg_participating_orgs_v2",
-        "Fixed: latest_responder_org_v2",
-        "Fixed: kr_responses_keywords_v2",
-        "Fixed: recent_keywords_discussion_v2"
-      ]
-    },
-    "final_fixes": {
-      "date": "2025-01-26",
-      "description": "Final comprehensive SQL fixes",
-      "fixed_count": 49,
-      "fixes": [
-        "Pattern fixed: keyword_search_agendas_v2",
-        "Pattern fixed: recent_5_agendas_v2",
-        "Fixed: recent_attachment_agendas_v2",
-        "Pattern fixed: recent_updated_chair_10_v2",
-        "Pattern fixed: latest_response_organization_v2",
-        "Fixed: iacs_panel_structure_v2",
-        "Fixed: keyword_analysis_3months_v2",
-        "Fixed: keyword_analysis_lastyear_v2",
-        "Fixed: keyword_analysis_2025_v2",
-        "Fixed: panel_completed_agendas_v2",
-        "Fixed: panel_recent_agendas_v2",
-        "Fixed: keyword_related_agendas_v2",
-        "Fixed: panel_chair_recent_mails_v2",
-        "Fixed: panel_chair_response_required_v2",
-        "Fixed: panel_chair_keywords_v2",
-        "Fixed: chair_recent_mail_content_v2",
-        "Fixed: panel_recent_keywords_v2",
-        "Fixed: agenda_related_agendas_v2",
-        "Fixed: agenda_org_opinion_agreements_v2",
-        "Fixed: agenda_org_opinion_disagreements_v2",
-        "Fixed: agenda_response_keywords_v2",
-        "Fixed: agenda_keywords_related_panel_agendas_v2",
-        "Fixed: agenda_ur_related_responses_v2",
-        "Fixed: recent_eg_related_content_v2",
-        "Fixed: agenda_issue_organization_opinions_v2",
-        "Fixed: agenda_main_issues_related_list_v2",
-        "Fixed: agenda_other_panels_discussion_v2",
-        "Fixed: agenda_other_panels_agendas_v2",
-        "Fixed: agenda_responses_analysis_v2",
-        "Fixed: mail_content_agenda_comparison_v2",
-        "Fixed: kr_opinion_based_reply_draft_v2",
-        "Fixed: eg_work_in_panel_v2",
-        "Fixed: panel_keywords_3months_v2",
-        "Fixed: panel_keywords_lastyear_v2",
-        "Fixed: panel_keywords_2025_v2",
-        "Fixed: panel_keywords_by_year_v2",
-        "Pattern fixed: latest_responder_org_v2",
-        "Fixed: sdtp_completed_agenda_results_v2",
-        "Fixed: recent_sdtp_agenda_list_v2",
-        "Fixed: kr_response_required_keywords_v2",
-        "Pattern fixed: recent_keywords_discussion_v2",
-        "Fixed: kr_urgent_response_required_v2",
-        "Fixed: sdtp_kr_response_required_v2",
-        "Fixed: recent_sdtp_chair_mails_v2",
-        "Fixed: sdtp_chair_response_required_v2",
-        "Fixed: sdtp_chair_mail_keywords_v2",
-        "Fixed: recent_chair_mail_content_v2",
-        "Fixed: recent_sdtp_keywords_v2",
-        "Fixed: kr_no_response_chair_attachment_v2"
-      ]
-    },
-    "placeholder_fixes": {
-      "date": "2025-01-26",
-      "description": "Fixed placeholder replacement issues",
-      "fixed_count": 42,
-      "fixes": [
-        "Fixed: org_response_keywords_v2",
-        "Pattern fixed: keyword_search_agendas_v2",
-        "Pattern fixed: yearly_agenda_count_v2",
-        "Fixed: recent_5_agendas_v2",
-        "Pattern fixed: panel_agenda_count_v2",
-        "Pattern fixed: monthly_agenda_response_status_v2",
-        "Pattern fixed: consolidated_status_agendas_v2",
-        "Fixed: recent_updated_chair_10_v2",
-        "Pattern fixed: active_time_statistics_v2",
-        "Fixed: completed_pending_process_time_v2",
-        "Fixed: flexible_time_range_activities_v2",
-        "Pattern fixed: latest_status_by_agenda_v2",
-        "Pattern fixed: weekday_agenda_statistics_v2",
-        "Pattern fixed: quarterly_agenda_statistics_v2",
-        "Fixed: latest_response_organization_v2",
-        "Fixed: pt_participating_orgs_v2",
-        "Fixed: pt_participants_info_v2",
-        "Fixed: keyword_analysis_3months_v2",
-        "Fixed: keyword_analysis_lastyear_v2",
-        "Fixed: keyword_analysis_2025_v2",
-        "Fixed: panel_recent_agendas_v2",
-        "Fixed: org_panel_responses_v2",
-        "Fixed: org_urgent_response_required_v2",
-        "Fixed: panel_chair_recent_mails_v2",
-        "Fixed: panel_chair_keywords_v2",
-        "Fixed: chair_recent_mail_content_v2",
-        "Fixed: panel_recent_keywords_v2",
-        "Fixed: panel_ongoing_responded_orgs_v2",
-        "Fixed: panel_no_response_orgs_v2",
-        "Pattern fixed: recent_progress_status_v2",
-        "Fixed: eg_participating_orgs_v2",
-        "Fixed: panel_keywords_3months_v2",
-        "Fixed: panel_keywords_lastyear_v2",
-        "Fixed: panel_keywords_2025_v2",
-        "Fixed: panel_keywords_by_year_v2",
-        "Fixed: latest_responder_org_v2",
-        "Fixed: sdtp_completed_agenda_results_v2",
-        "Fixed: kr_response_required_keywords_v2",
-        "Fixed: kr_responses_keywords_v2",
-        "Pattern fixed: recent_keywords_discussion_v2",
-        "Fixed: kr_urgent_response_required_v2",
-        "Fixed: recent_chair_mail_content_v2"
-      ]
-    },
-    "quoted_placeholder_fix": {
-      "date": "2025-01-26",
-      "description": "Removed quotes around placeholders",
-      "fixed_count": 47
-    },
-    "parameter_consistency_fix": {
-      "date": "2025-01-26",
-      "description": "Added missing period parameters to templates using {period_start}/{period_end}",
-      "fixed_count": 11
+      "fixed_count": 16,
+      "description": "Fixed dynamic column references to use CASE statements"
     }
   },
   "templates": [
@@ -371,9 +94,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "all_panels_recent_3months_v2",
@@ -421,9 +147,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "org_no_response_ongoing_v2",
@@ -451,7 +180,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT a.* \n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.decision_status IN ('created', 'ongoing', 'comment')\n                AND (arc.agenda_base_version IS NULL OR arc.{organization} IS NULL)\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
+        "query": "SELECT a.* \n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.decision_status IN ('created', 'ongoing', 'comment')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
         "system": "진행중인 의제 중 한국(KR)이 아직 응답하지 않은 의제를 찾습니다. LEFT JOIN으로 응답 테이블과 연결하여 응답이 없는 경우를 필터링합니다.",
         "user": "한국이 아직 응답하지 않은 진행중 의제를 확인하여 신속한 대응이 필요한 항목을 파악하고 싶습니다. 마감일과 중요도 정보도 함께 제공해주세요."
       },
@@ -461,31 +190,12 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code (e.g., KR, US, JP, CN)",
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
           "sql_builder": {
             "type": "string",
             "placeholder": "{organization}"
           },
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -505,7 +215,7 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "routing_type": "sql",
       "fix_notes": [
@@ -513,6 +223,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -541,7 +255,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.{organization} IS NULL)\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
+        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
         "system": "의장(Chair)이 발송한 요청 메일 중 한국(KR)이 응답해야 하는 의제를 검색합니다. response_org에 KR이 포함되거나 ALL인 경우, 마감일이 유효한 미완료 의제를 찾습니다.",
         "user": "한국이 응답해야 하는 의제들을 마감일 순으로 정리해서 보고 싶습니다. 긴급도에 따라 우선순위를 표시하고, 각 의제의 요청사항을 명확히 파악할 수 있도록 해주세요."
       },
@@ -551,31 +265,12 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code (e.g., KR, US, JP, CN)",
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
           "sql_builder": {
             "type": "string",
             "placeholder": "{organization}"
           },
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -595,9 +290,13 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
+      ]
     },
     {
       "template_id": "pending_agenda_count_v2",
@@ -647,9 +346,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "org_agenda_issues_summary_v2",
@@ -678,7 +380,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.keywords,\n                    a.deadline,\n                    CASE WHEN arc.KR IS NOT NULL THEN 'KR: ' || SUBSTR(arc.KR, 1, 100) ELSE '' END ||\n                    CASE WHEN arc.NK IS NOT NULL THEN ' NK: ' || SUBSTR(arc.NK, 1, 100) ELSE '' END ||\n                    CASE WHEN arc.CCS IS NOT NULL THEN ' CCS: ' || SUBSTR(arc.CCS, 1, 100) ELSE '' END as other_responses\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.{organization} IS NULL)\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
+        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.keywords,\n                    a.deadline,\n                    CASE WHEN arc.KR IS NOT NULL THEN 'KR: ' || SUBSTR(arc.KR, 1, 100) ELSE '' END ||\n                    CASE WHEN arc.NK IS NOT NULL THEN ' NK: ' || SUBSTR(arc.NK, 1, 100) ELSE '' END ||\n                    CASE WHEN arc.CCS IS NOT NULL THEN ' CCS: ' || SUBSTR(arc.CCS, 1, 100) ELSE '' END as other_responses\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
         "system": "한국이 응답해야 하는 의제와 관련된 다른 기관들의 응답을 함께 조회합니다. 의제별 주요 이슈와 각국의 입장을 종합적으로 파악하기 위한 쿼리입니다.",
         "user": "한국이 응답해야 하는 의제들에 대해 다른 나라들은 어떤 의견을 제시했는지 종합적으로 분석해서 보고 싶습니다. 주요 쟁점과 각국 입장차이를 명확히 정리해주세요."
       },
@@ -688,31 +390,12 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code (e.g., KR, US, JP, CN)",
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
           "sql_builder": {
             "type": "string",
             "placeholder": "{organization}"
           },
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -732,7 +415,7 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "routing_type": "sql",
       "fix_notes": [
@@ -740,6 +423,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -768,7 +455,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT \n                    a.keywords,\n                    COUNT(*) as count\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL' OR arc.{organization} IS NOT NULL)\n                AND a.keywords IS NOT NULL\n                AND {period_condition}\n                GROUP BY a.keywords\n                ORDER BY count DESC",
+        "query": "SELECT \n                    a.keywords,\n                    COUNT(*) as count\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL' OR (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL))\n                AND a.keywords IS NOT NULL\n                AND {period_condition}\n                GROUP BY a.keywords\n                ORDER BY count DESC",
         "system": "데이터베이스에서 조건에 맞는 레코드를 검색합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
         "user": "검색 조건에 해당하는 결과를 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
@@ -778,31 +465,12 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code (e.g., KR, US, JP, CN)",
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
           "sql_builder": {
             "type": "string",
             "placeholder": "{organization}"
           },
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -822,9 +490,13 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
+      ]
     },
     {
       "template_id": "org_response_keywords_v2",
@@ -852,7 +524,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT \n                    a.agenda_code,\n                    a.keywords,\n                    arc.{organization} as response_content\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE arc.{organization} IS NOT NULL\n                AND a.keywords IS NOT NULL\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
+        "query": "SELECT \n                    a.agenda_code,\n                    a.keywords,\n                    CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END as response_content\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END IS NOT NULL\n                AND a.keywords IS NOT NULL\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
         "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
@@ -862,31 +534,12 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code (e.g., KR, US, JP, CN)",
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
           "sql_builder": {
             "type": "string",
             "placeholder": "{organization}"
           },
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -906,7 +559,7 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "routing_type": "sql",
       "fix_notes": [
@@ -914,6 +567,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -978,9 +635,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "meeting_notification_mails_v2",
@@ -1029,9 +689,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "yearly_agenda_count_v2",
@@ -1079,9 +742,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "yearly_created_agendas_v2",
@@ -1129,9 +795,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "org_mail_count_v2",
@@ -1179,9 +848,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "recent_5_agendas_v2",
@@ -1229,9 +901,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "recent_notification_mails_v2",
@@ -1279,9 +954,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "panel_agenda_count_v2",
@@ -1329,9 +1007,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "imo_related_agendas_v2",
@@ -1378,9 +1059,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "ur_revision_agendas_v2",
@@ -1428,9 +1112,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "pr_revision_agendas_v2",
@@ -1478,9 +1165,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "eg_related_agendas_v2",
@@ -1527,9 +1217,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "monthly_agenda_response_status_v2",
@@ -1578,7 +1271,7 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "routing_type": "sql",
       "fix_notes": [
@@ -1586,6 +1279,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -1618,9 +1315,12 @@
       "parameters": [],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_pending"
+      ]
     },
     {
       "template_id": "vessel_inventory_agendas_v2",
@@ -1669,9 +1369,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "generic_keyword_search_v2",
@@ -1734,9 +1437,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "consolidated_status_agendas_v2",
@@ -1783,9 +1489,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "multilateral_recent_agendas_v2",
@@ -1832,9 +1541,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "cyber_keyword_agendas_v2",
@@ -1881,9 +1593,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "recent_month_chair_agendas_v2",
@@ -1931,9 +1646,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_chair"
+      ]
     },
     {
       "template_id": "no_response_agendas_v2",
@@ -1980,7 +1698,7 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "routing_type": "sql",
       "fix_notes": [
@@ -1988,6 +1706,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -2035,9 +1757,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "recent_attachment_agendas_v2",
@@ -2084,9 +1809,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "digital_transformation_agendas_v2",
@@ -2134,9 +1862,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "org_avg_response_time_v2",
@@ -2161,7 +1892,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT \n                    {organization} as organization,\n                    COUNT(*) as total_responses,\n                    AVG(julianday(art.{organization}) - julianday(a.sent_time)) as avg_response_days\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                INNER JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE arc.{organization} IS NOT NULL\n                AND art.{organization} IS NOT NULL\n                AND {period_condition}",
+        "query": "SELECT \n                    {organization} as organization,\n                    COUNT(*) as total_responses,\n                    AVG(julianday(CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END) - julianday(a.sent_time)) as avg_response_days\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                INNER JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)\n                AND CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END IS NOT NULL\n                AND {period_condition}",
         "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
@@ -2184,7 +1915,7 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "routing_type": "sql",
       "fix_notes": [
@@ -2192,6 +1923,11 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
       ]
     },
     {
@@ -2220,7 +1956,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT \n                    {organization} as organization,\n                    COUNT(*) as count,\n                    AVG(julianday(art.{organization}) - julianday(a.sent_time)) as avg_days\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                INNER JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE arc.{organization} IS NOT NULL\n                AND art.{organization} IS NOT NULL\n                AND a.decision_status != 'created'\n                AND {period_condition}",
+        "query": "SELECT \n                    {organization} as organization,\n                    COUNT(*) as count,\n                    AVG(julianday(CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END) - julianday(a.sent_time)) as avg_days\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                INNER JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)\n                AND CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END IS NOT NULL\n                AND a.decision_status != 'created'\n                AND {period_condition}",
         "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
@@ -2230,31 +1966,12 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code (e.g., KR, US, JP, CN)",
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
           "sql_builder": {
             "type": "string",
             "placeholder": "{organization}"
           },
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -2274,7 +1991,7 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "routing_type": "sql",
       "fix_notes": [
@@ -2282,6 +1999,11 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
       ]
     },
     {
@@ -2314,9 +2036,12 @@
       "parameters": [],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "recent_updated_chair_10_v2",
@@ -2364,9 +2089,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_chair"
+      ]
     },
     {
       "template_id": "chair_no_deadline_v2",
@@ -2414,9 +2142,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "active_time_statistics_v2",
@@ -2464,9 +2195,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "unknown_type_senders_v2",
@@ -2498,9 +2232,12 @@
       "parameters": [],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "completed_pending_process_time_v2",
@@ -2550,9 +2287,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "msc_110_agendas_v2",
@@ -2599,9 +2339,12 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "flexible_time_range_activities_v2",
@@ -2700,13 +2443,16 @@
       ],
       "embedding_config": {
         "model": "text-embedding-3-large",
-        "dimension": 1536
+        "dimension": 3072
       },
       "expected_response": {
         "description": "지정된 시간 범위와 활동 유형에 따른 메일/의제 목록",
         "sample_size": 10
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "flexible_ongoing_deadline_agendas_v2",
@@ -2814,7 +2560,10 @@
         "description": "진행중인 의제 목록을 마감일 우선순위로 정렬하여 제공",
         "sample_size": 20
       },
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "_config_v2_5",
@@ -2829,7 +2578,8 @@
       "config": {
         "similarity_threshold": 0.5,
         "description": "Minimum similarity score required for template matching"
-      }
+      },
+      "related_tables": []
     },
     {
       "template_id": "monthly_response_rate_statistics_v2",
@@ -2882,6 +2632,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -2935,6 +2689,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -2987,6 +2744,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3040,6 +2800,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -3071,7 +2835,10 @@
         "user": "어떤 이유로 의제들이 pending 상태인지 통계를 보고 싶습니다."
       },
       "parameters": [],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_pending"
+      ]
     },
     {
       "template_id": "latest_status_by_agenda_v2",
@@ -3123,6 +2890,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3169,7 +2939,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "agendas_with_response_org_v2",
@@ -3220,6 +2993,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3272,6 +3048,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3324,6 +3103,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -3376,6 +3159,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3407,7 +3193,8 @@
         "user": "IACS에 소속된 정회원 선급은 몇 개인지 알고 싶습니다."
       },
       "parameters": [],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "iacs_member_list_v2",
@@ -3454,7 +3241,8 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "iacs_panel_structure_v2",
@@ -3491,7 +3279,8 @@
           "date": "2025-01-26",
           "fixes": []
         }
-      ]
+      ],
+      "related_tables": []
     },
     {
       "template_id": "kr_participating_panels_v2",
@@ -3545,6 +3334,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3599,6 +3391,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3651,6 +3446,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3704,6 +3502,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -3750,7 +3551,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "pt_participating_orgs_v2",
@@ -3804,6 +3608,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -3858,6 +3666,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -3904,7 +3716,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "completed_pt_list_v2",
@@ -3950,7 +3765,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "completed_pt_content_v2",
@@ -3996,7 +3814,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "keyword_analysis_3months_v2",
@@ -4042,7 +3863,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "keyword_analysis_lastyear_v2",
@@ -4088,7 +3912,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "keyword_analysis_2025_v2",
@@ -4133,7 +3960,10 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ]
     },
     {
       "template_id": "panel_completed_agendas_v2",
@@ -4191,6 +4021,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4249,6 +4082,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4273,7 +4109,7 @@
         "target_panels": []
       },
       "sql_template": {
-        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.agenda_panel,\n                    arc.{organization} as response_content\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE arc.{organization} IS NOT NULL\n                AND a.agenda_panel = {panel}\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
+        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.agenda_panel,\n                    CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END as response_content\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END IS NOT NULL\n                AND a.agenda_panel = {panel}\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
         "system": "특정 기관이 특정 패널에서 응답한 내역을 조회합니다.",
         "user": "해당 기관이 특정 패널에서 어떤 응답을 했는지 확인하고 싶습니다."
       },
@@ -4283,27 +4119,8 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code (e.g., KR, BV, CCS)",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "panel",
@@ -4333,6 +4150,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -4366,7 +4187,8 @@
           "name": "keyword",
           "type": "string",
           "required": true,
-          "description": "Search keyword"
+          "description": "Search keyword",
+          "mcp_format": "extracted_keywords"
         },
         {
           "name": "period",
@@ -4390,6 +4212,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4414,7 +4239,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.deadline < DATE('now', '+7 days')\n                AND a.decision_status != 'completed'\n                AND (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.{organization} IS NULL)\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.deadline ASC",
+        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.deadline < DATE('now', '+7 days')\n                AND a.decision_status != 'completed'\n                AND (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.deadline ASC",
         "system": "특정 기관이 7일 이내 응답해야 하는 긴급 의제를 찾습니다.",
         "user": "마감이 임박한 긴급 응답 필요 의제를 확인하고 싶습니다."
       },
@@ -4424,27 +4249,8 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -4470,6 +4276,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -4494,7 +4304,7 @@
         "target_panels": []
       },
       "sql_template": {
-        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.{organization} IS NULL)\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
+        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
         "system": "특정 패널에서 특정 기관이 응답해야 하는 의제를 조회합니다.",
         "user": "특정 패널에서 우리 기관이 응답해야 하는 의제들을 확인하고 싶습니다."
       },
@@ -4510,27 +4320,8 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -4554,6 +4345,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -4611,6 +4406,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4668,6 +4466,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4725,6 +4526,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4778,6 +4582,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4830,6 +4637,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -4855,7 +4665,7 @@
         "target_panels": []
       },
       "sql_template": {
-        "query": "SELECT \n                    {organization} as organization,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE WHEN arc.{organization} IS NOT NULL THEN a.agenda_code END) as responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN arc.{organization} IS NOT NULL THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}",
+        "query": "SELECT \n                    {organization} as organization,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) as responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}",
         "system": "특정 패널에서 특정 기관의 응답률을 계산합니다.",
         "user": "특정 패널에서 우리 기관의 응답률을 확인하고 싶습니다."
       },
@@ -4871,27 +4681,8 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -4915,6 +4706,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -4940,7 +4735,7 @@
         "target_panels": []
       },
       "sql_template": {
-        "query": "SELECT \n                    strftime('%Y', a.sent_time) as year,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE WHEN arc.{organization} IS NOT NULL THEN a.agenda_code END) as responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN arc.{organization} IS NOT NULL THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}\n                GROUP BY year\n                ORDER BY year DESC",
+        "query": "SELECT \n                    strftime('%Y', a.sent_time) as year,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) as responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}\n                GROUP BY year\n                ORDER BY year DESC",
         "system": "올해 특정 패널에서 특정 기관의 응답률을 계산합니다.",
         "user": "올해 특정 패널에서 우리 기관의 응답률을 확인하고 싶습니다."
       },
@@ -4956,27 +4751,8 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -5000,6 +4776,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5058,6 +4838,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -5083,7 +4866,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.{organization} IS NULL)\n                AND a.hasAttachments = 1\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
+        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND a.hasAttachments = 1\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
         "system": "의장이 첨부파일과 함께 보낸 의제 중 특정 기관이 미응답한 것을 찾습니다.",
         "user": "의장이 첨부파일과 함께 보낸 의제 중 우리가 아직 응답하지 않은 것을 확인하고 싶습니다."
       },
@@ -5093,27 +4876,8 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -5137,6 +4901,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5197,6 +4965,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -5222,7 +4993,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.{organization} IS NULL)\n                AND a.hasAttachments = 1\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
+        "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND a.hasAttachments = 1\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
         "system": "특정 기관이 응답해야 하는 의제 중 의장이 첨부파일과 함께 보낸 것을 찾습니다.",
         "user": "의장이 보낸 메일 중 우리가 응답해야 하는 것들에 첨부파일이 있는지 확인하고 싶습니다."
       },
@@ -5232,27 +5003,8 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -5276,6 +5028,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5335,6 +5091,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -5359,7 +5118,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    arc.{organization} as opinion\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND arc.{organization} IS NOT NULL",
+        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END as opinion\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)",
         "system": "특정 의제에 대한 특정 기관의 응답 의견을 조회합니다.",
         "user": "특정 의제에 대해 특정 기관이 어떤 의견을 제시했는지 확인하고 싶습니다."
       },
@@ -5374,27 +5133,8 @@
           "name": "organization",
           "type": "string",
           "required": true,
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -5420,6 +5160,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5479,6 +5223,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -5518,27 +5265,8 @@
           "name": "organization",
           "type": "string",
           "required": true,
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -5564,6 +5292,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5603,27 +5335,8 @@
           "name": "organization",
           "type": "string",
           "required": true,
-          "description": "Organization code",
-          "mcp_format": "extracted_organization",
-          "validation": [
-            "KR",
-            "NK",
-            "CCS",
-            "ABS",
-            "DNV",
-            "BV",
-            "LR",
-            "RINA",
-            "RS",
-            "IRS",
-            "PRS",
-            "CRS",
-            "TL",
-            "IMO",
-            "IACS",
-            "MULTILATERAL",
-            "Chair"
-          ]
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "mcp_format": "extracted_organization"
         },
         {
           "name": "period",
@@ -5649,6 +5362,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5720,6 +5437,10 @@
             "Fixed placeholder: {organizations}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5779,6 +5500,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_receivedtime"
       ]
     },
     {
@@ -5822,6 +5547,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -5866,6 +5594,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -5931,6 +5663,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -5992,6 +5727,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6053,6 +5792,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6112,6 +5855,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6163,6 +5910,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_chair"
       ]
     },
     {
@@ -6215,6 +5966,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6274,6 +6028,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6333,6 +6091,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6377,6 +6138,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6436,6 +6200,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6495,6 +6262,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6539,6 +6309,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6598,6 +6371,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6642,6 +6418,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6701,6 +6480,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -6762,6 +6544,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6821,6 +6607,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6880,6 +6670,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6939,6 +6733,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -6978,7 +6776,8 @@
           "name": "keyword",
           "type": "string",
           "required": false,
-          "description": "Keywords from mail content to compare"
+          "description": "Keywords from mail content to compare",
+          "mcp_format": "extracted_keywords"
         },
         {
           "name": "period",
@@ -7004,6 +6803,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7063,6 +6866,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7114,6 +6920,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7176,6 +6985,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7228,6 +7041,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7285,6 +7101,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7343,6 +7162,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7410,6 +7233,10 @@
             "Fixed placeholder: {eg_organization}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7469,6 +7296,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7528,6 +7359,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7552,7 +7387,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    arc.{organization} as org_request,\n                    CASE \n                        WHEN arc.{organization} LIKE '%request%' OR arc.{organization} LIKE '%ask%' \n                        THEN 'Has Request' \n                        ELSE 'No Request' \n                    END as request_status\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE arc.{organization} IS NOT NULL\n                AND (arc.{organization} LIKE '%request%' OR arc.{organization} LIKE '%ask%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
+        "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END as org_request,\n                    CASE \n                        WHEN CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%request%' OR CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%ask%' \n                        THEN 'Has Request' \n                        ELSE 'No Request' \n                    END as request_status\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)\n                AND (CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%request%' OR CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%ask%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
         "system": "특정 의제에서 다른 기관에 답변이나 설명을 요구한 내용을 찾습니다.",
         "user": "특정 의제에서 기관 간 답변 요구가 있었는지 확인하고 싶습니다."
       },
@@ -7587,6 +7422,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7646,6 +7485,10 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -7697,6 +7540,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7748,6 +7594,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7799,6 +7648,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7856,6 +7708,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -7896,7 +7751,8 @@
           "description": "Agenda code"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "keyword_tech_trend_llm_v2",
@@ -7937,7 +7793,8 @@
           "mcp_format": "extracted_keywords"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "tech_background_llm_v2",
@@ -7974,10 +7831,12 @@
           "name": "keyword",
           "type": "string",
           "required": true,
-          "description": "Keyword to explain"
+          "description": "Keyword to explain",
+          "mcp_format": "extracted_keywords"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "agenda_ur_content_vectordb_v2",
@@ -8018,7 +7877,8 @@
           "description": "Agenda code"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "keywords_ur_content_vectordb_v2",
@@ -8060,7 +7920,8 @@
           "mcp_format": "extracted_keywords"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "agenda_pr_content_vectordb_v2",
@@ -8101,7 +7962,8 @@
           "description": "Agenda code"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "keywords_pr_content_vectordb_v2",
@@ -8143,7 +8005,8 @@
           "mcp_format": "extracted_keywords"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "agenda_similar_panel_discussion_vectordb_v2",
@@ -8183,7 +8046,8 @@
           "description": "Agenda code"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "autonomous_ship_agenda_search_vectordb_v2",
@@ -8224,7 +8088,8 @@
           "description": "Specific agenda pattern"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "remote_ship_agenda_search_vectordb_v2",
@@ -8265,7 +8130,8 @@
           "description": "Specific agenda pattern"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "ongoing_pt_list_vectordb_v2",
@@ -8299,7 +8165,8 @@
         "user": "현재 진행 중인 Project Team 목록을 확인하고 싶습니다."
       },
       "parameters": [],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "ongoing_pt_participants_vectordb_v2",
@@ -8333,7 +8200,8 @@
         "user": "진행 중인 PT에 참여하는 기관들을 확인하고 싶습니다."
       },
       "parameters": [],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "ongoing_pt_members_vectordb_v2",
@@ -8367,7 +8235,8 @@
         "user": "진행 중인 PT의 참여자 명단을 확인하고 싶습니다."
       },
       "parameters": [],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "ongoing_pt_content_vectordb_v2",
@@ -8401,7 +8270,8 @@
         "user": "진행 중인 PT의 주요 작업 내용을 확인하고 싶습니다."
       },
       "parameters": [],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "completed_pt_list_vectordb_v2",
@@ -8451,7 +8321,8 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "completed_pt_content_vectordb_v2",
@@ -8501,7 +8372,8 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "completed_pt_participants_vectordb_v2",
@@ -8551,7 +8423,8 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "completed_pt_members_vectordb_v2",
@@ -8601,7 +8474,8 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "sender_address_mismatch_detail_v2",
@@ -8652,6 +8526,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -8703,6 +8580,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_receivedtime"
       ]
     },
     {
@@ -8754,6 +8635,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -8799,7 +8683,8 @@
           "mcp_format": "extracted_period"
         }
       ],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     },
     {
       "template_id": "sdtp_completed_agenda_results_v2",
@@ -8852,6 +8737,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -8905,6 +8793,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -8961,6 +8852,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9015,6 +8910,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9070,6 +8969,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9126,6 +9029,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9193,6 +9100,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9248,6 +9158,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9303,6 +9217,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9357,6 +9275,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9410,6 +9331,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9463,6 +9387,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9514,6 +9441,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9565,6 +9495,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9621,6 +9554,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9673,6 +9610,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9729,6 +9670,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9782,6 +9727,9 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9836,6 +9784,10 @@
           "date": "2025-01-26",
           "fixes": []
         }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content"
       ]
     },
     {
@@ -9895,6 +9847,9 @@
             "Fixed placeholder: {agenda}"
           ]
         }
+      ],
+      "related_tables": [
+        "agenda_all"
       ]
     },
     {
@@ -9927,7 +9882,8 @@
         "user": "시스템 테스트를 위한 템플릿입니다."
       },
       "parameters": [],
-      "routing_type": "sql"
+      "routing_type": "sql",
+      "related_tables": []
     }
   ]
 }
