@@ -171,6 +171,12 @@ class SQLGenerator:
                 condition = self._build_keywords_condition(field, operator, merged_params)
                 sql = sql.replace(placeholder, condition)
                 
+            elif builder_type == 'direct_replace' and 'placeholders' in sql_builder:
+                # Direct replacement for multiple placeholders from single parameter
+                if param_def.get('name') == 'period' and 'period_start' in merged_params:
+                    sql = sql.replace('{period_start}', f"'{merged_params['period_start']}'")
+                    sql = sql.replace('{period_end}', f"'{merged_params['period_end']}'")
+                
             elif builder_type == 'string' and placeholder in sql:
                 # Direct string replacement
                 param_name = param_def.get('name')

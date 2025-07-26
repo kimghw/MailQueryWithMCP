@@ -1,5 +1,5 @@
 {
-  "version": "8.0.0-quoted-placeholder-fix",
+  "version": "9.0.0-parameter-consistency",
   "description": "IACSGRAPH 통합 쿼리 템플릿 - 모든 버전 통합 (v2.6 ~ v2.10)",
   "last_updated": "2025-01-26",
   "total_templates": 175,
@@ -317,6 +317,11 @@
       "date": "2025-01-26",
       "description": "Removed quotes around placeholders",
       "fixed_count": 47
+    },
+    "parameter_consistency_fix": {
+      "date": "2025-01-26",
+      "description": "Added missing period parameters to templates using {period_start}/{period_end}",
+      "fixed_count": 11
     }
   },
   "templates": [
@@ -2524,7 +2529,25 @@
         "system": "데이터베이스에서 조건에 맞는 레코드를 검색합니다.",
         "user": "검색 조건에 해당하는 결과를 보고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "embedding_config": {
         "model": "text-embedding-3-large",
         "dimension": 1536
@@ -2654,6 +2677,23 @@
             "type": "period",
             "field": "dynamic",
             "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
           },
           "mcp_format": "extracted_period"
         }
@@ -3739,7 +3779,25 @@
         "system": "진행중인 PT에 응답한 기관들을 통해 참여 기관을 파악합니다.",
         "user": "각 프로젝트팀에 어떤 기관들이 참여하고 있는지 확인하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "routing_type": "sql",
       "fix_notes": [
         {
@@ -3775,7 +3833,25 @@
         "system": "진행중인 PT의 응답자 정보를 통해 참여자를 파악합니다.",
         "user": "프로젝트팀에 참여하는 구체적인 담당자 정보를 알고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "routing_type": "sql",
       "fix_notes": [
         {
@@ -4369,6 +4445,23 @@
             "MULTILATERAL",
             "Chair"
           ]
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
         }
       ],
       "routing_type": "sql",
@@ -6703,6 +6796,23 @@
           "type": "string",
           "required": true,
           "description": "Panel code"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
         }
       ],
       "routing_type": "sql",
@@ -6745,6 +6855,23 @@
           "type": "string",
           "required": true,
           "description": "Panel code"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
         }
       ],
       "routing_type": "sql",
@@ -7256,6 +7383,23 @@
           "type": "string",
           "required": true,
           "description": "EG organization name"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
         }
       ],
       "routing_type": "sql",
@@ -8901,7 +9045,25 @@
         "system": "KR이 응답해야 하는 의제들의 주요 키워드를 분석합니다.",
         "user": "KR이 응답해야 하는 의제들에서 자주 나타나는 키워드를 파악하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "routing_type": "sql",
       "fix_notes": [
         {
@@ -8939,7 +9101,25 @@
         "system": "KR이 응답해야 하는 의제들에 대한 회신들의 주요 키워드를 분석합니다.",
         "user": "KR이 응답해야 하는 의제들에 대해 다른 기관들이 회신한 내용의 주요 키워드를 파악하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "routing_type": "sql",
       "fix_notes": [
         {
@@ -9043,7 +9223,25 @@
         "system": "KR이 7일 이내에 응답해야 하는 긴급 의제들을 찾습니다.",
         "user": "KR이 긴급하게 응답해야 하는 의제들을 확인하고 싶습니다."
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "routing_type": "sql",
       "fix_notes": [
         {
