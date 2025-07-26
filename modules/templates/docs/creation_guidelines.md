@@ -1,4 +1,13 @@
-# 쿼리 템플릿 작성 가이드라인 v3.0 (MCP Integration Update)
+# 쿼리 템플릿 작성 가이드라인 v3.1 (Database Schema Reference Update)
+
+## 0. 데이터베이스 스키마 참조
+
+템플릿 작성 시 `query_templates_unified.json`의 metadata.database_schema를 참조하세요:
+- **table_schemas**: 각 테이블의 구조와 컬럼 정보
+- **organization_codes**: 사용 가능한 조직 코드 목록
+- **query_guidelines**: 쿼리 작성 시 주의사항
+
+스키마 정보는 템플릿 파일의 메타데이터에서 확인 가능합니다.
 
 ## 1. 핵심 원칙
 
@@ -586,7 +595,16 @@ WHERE (response_org LIKE '%{organization_code}%' OR response_org = 'ALL')
 - [ ] SQL 템플릿에 system, user 필드를 포함했는가?
 - [ ] expected_response를 작성했는가?
 
-## 8. 복잡도 판단 기준
+## 8. 주의사항
+
+1. **동적 컬럼 참조 금지**: `arc.{organization}` 같은 패턴 사용 불가
+2. **MCP 통합 필수**: 모든 파라미터에 `mcp_format` 필드 필수
+3. **테이블 명시**: 사용하는 모든 테이블을 `related_tables`에 포함
+4. **조직 코드 정확성**: KR, NK, CCS 등 실제 DB의 조직 코드만 사용
+5. **기간 파라미터**: `period` 타입 사용 시 `mcp_format: "extracted_period"` 필수
+6. **스키마 참조**: 템플릿 작성 전 metadata.database_schema 확인 필수
+
+## 9. 복잡도 판단 기준
 
 ### 단순 (3개 질문)
 - 단일 테이블 조회
@@ -600,3 +618,14 @@ WHERE (response_org LIKE '%{organization_code}%' OR response_org = 'ALL')
 - 서브쿼리
 - 케이스별 처리 로직
 - 다양한 표현이 가능한 비즈니스 요구사항
+
+## 10. 버전 정보
+
+- **v3.1** (2025-01-26): 데이터베이스 스키마 참조 방법 추가
+  - metadata.database_schema 참조 방법 추가
+  - 체크리스트 업데이트
+- **v3.0** (2025-01-26): MCP 통합 구조 반영
+  - `mcp_format` 필드 추가
+  - `related_tables` 필드 추가
+  - 동적 컬럼 참조 해결 방안 추가
+  - 실제 조직 코드 목록 반영

@@ -45,6 +45,301 @@
       "date": "2025-01-26",
       "fixed_count": 16,
       "description": "Fixed dynamic column references to use CASE statements"
+    },
+    "database_schema": {
+      "table_schemas": {
+        "agenda_all": {
+          "description": "모든 의제 메일을 저장하는 메인 테이블",
+          "primary_key": "id",
+          "key_columns": [
+            {
+              "name": "agenda_base_version",
+              "type": "TEXT",
+              "description": "의제 기본 버전 (예: PL25016a)"
+            },
+            {
+              "name": "sender_organization",
+              "type": "TEXT",
+              "description": "발신 조직 코드 (KR, NK, CCS 등)"
+            },
+            {
+              "name": "decision_status",
+              "type": "TEXT",
+              "description": "의제 상태 (created, ongoing, comment, completed)"
+            },
+            {
+              "name": "sent_time",
+              "type": "TIMESTAMP",
+              "description": "메일 발송 시간"
+            },
+            {
+              "name": "subject",
+              "type": "TEXT",
+              "description": "메일 제목"
+            },
+            {
+              "name": "keywords",
+              "type": "TEXT",
+              "description": "키워드 목록"
+            },
+            {
+              "name": "response_org",
+              "type": "TEXT",
+              "description": "응답 요청 조직 (ALL 또는 특정 조직)"
+            }
+          ],
+          "usage_notes": "일반적인 의제 조회의 기본 테이블"
+        },
+        "agenda_chair": {
+          "description": "의장(Chair)이 발송한 의제 메일",
+          "primary_key": "id",
+          "key_columns": [
+            {
+              "name": "agenda_base_version",
+              "type": "TEXT",
+              "description": "의제 기본 버전"
+            },
+            {
+              "name": "mail_type",
+              "type": "TEXT",
+              "description": "메일 유형 (request: 응답요청, notification: 알림)"
+            },
+            {
+              "name": "has_deadline",
+              "type": "INTEGER",
+              "description": "마감일 존재 여부 (0 또는 1)"
+            },
+            {
+              "name": "deadline",
+              "type": "TIMESTAMP",
+              "description": "응답 마감일"
+            },
+            {
+              "name": "decision_status",
+              "type": "TEXT",
+              "description": "의제 상태"
+            },
+            {
+              "name": "response_org",
+              "type": "TEXT",
+              "description": "응답 요청 조직"
+            },
+            {
+              "name": "created_at",
+              "type": "TIMESTAMP",
+              "description": "생성 시간"
+            }
+          ],
+          "usage_notes": "응답이 필요한 의제 조회 시 사용. mail_type='request' AND has_deadline=1 조건 필수"
+        },
+        "agenda_pending": {
+          "description": "시스템에서 자동 분류하지 못한 보류 메일",
+          "primary_key": "id",
+          "key_columns": [
+            {
+              "name": "subject",
+              "type": "TEXT",
+              "description": "메일 제목"
+            },
+            {
+              "name": "error_reason",
+              "type": "TEXT",
+              "description": "분류 실패 이유"
+            },
+            {
+              "name": "created_at",
+              "type": "TIMESTAMP",
+              "description": "수신 시간"
+            }
+          ],
+          "usage_notes": "대기중인 안건이 아님. 수동 처리가 필요한 미분류 메일"
+        },
+        "agenda_responses_content": {
+          "description": "의제에 대한 각 조직의 응답 내용 (비정규화 구조)",
+          "primary_key": "agenda_base_version",
+          "key_columns": [
+            {
+              "name": "agenda_base_version",
+              "type": "TEXT",
+              "description": "의제 기본 버전 (PK)"
+            },
+            {
+              "name": "ABS",
+              "type": "TEXT",
+              "description": "ABS 조직의 응답 내용"
+            },
+            {
+              "name": "BV",
+              "type": "TEXT",
+              "description": "BV 조직의 응답 내용"
+            },
+            {
+              "name": "CCS",
+              "type": "TEXT",
+              "description": "CCS 조직의 응답 내용"
+            },
+            {
+              "name": "CRS",
+              "type": "TEXT",
+              "description": "CRS 조직의 응답 내용"
+            },
+            {
+              "name": "DNV",
+              "type": "TEXT",
+              "description": "DNV 조직의 응답 내용"
+            },
+            {
+              "name": "IRS",
+              "type": "TEXT",
+              "description": "IRS 조직의 응답 내용"
+            },
+            {
+              "name": "KR",
+              "type": "TEXT",
+              "description": "KR 조직의 응답 내용"
+            },
+            {
+              "name": "NK",
+              "type": "TEXT",
+              "description": "NK 조직의 응답 내용"
+            },
+            {
+              "name": "PRS",
+              "type": "TEXT",
+              "description": "PRS 조직의 응답 내용"
+            },
+            {
+              "name": "RINA",
+              "type": "TEXT",
+              "description": "RINA 조직의 응답 내용"
+            },
+            {
+              "name": "IL",
+              "type": "TEXT",
+              "description": "IL 조직의 응답 내용"
+            },
+            {
+              "name": "TL",
+              "type": "TEXT",
+              "description": "TL 조직의 응답 내용"
+            },
+            {
+              "name": "LR",
+              "type": "TEXT",
+              "description": "LR 조직의 응답 내용"
+            }
+          ],
+          "usage_notes": "각 조직별 응답은 별도 컬럼. 동적 컬럼 참조 불가, CASE 문 사용 필요"
+        },
+        "agenda_responses_receivedtime": {
+          "description": "의제에 대한 각 조직의 응답 수신 시간",
+          "primary_key": "agenda_base_version",
+          "key_columns": [
+            {
+              "name": "agenda_base_version",
+              "type": "TEXT",
+              "description": "의제 기본 버전 (PK)"
+            },
+            {
+              "name": "ABS",
+              "type": "TIMESTAMP",
+              "description": "ABS 응답 수신 시간"
+            },
+            {
+              "name": "BV",
+              "type": "TIMESTAMP",
+              "description": "BV 응답 수신 시간"
+            },
+            {
+              "name": "CCS",
+              "type": "TIMESTAMP",
+              "description": "CCS 응답 수신 시간"
+            },
+            {
+              "name": "CRS",
+              "type": "TIMESTAMP",
+              "description": "CRS 응답 수신 시간"
+            },
+            {
+              "name": "DNV",
+              "type": "TIMESTAMP",
+              "description": "DNV 응답 수신 시간"
+            },
+            {
+              "name": "IRS",
+              "type": "TIMESTAMP",
+              "description": "IRS 응답 수신 시간"
+            },
+            {
+              "name": "KR",
+              "type": "TIMESTAMP",
+              "description": "KR 응답 수신 시간"
+            },
+            {
+              "name": "NK",
+              "type": "TIMESTAMP",
+              "description": "NK 응답 수신 시간"
+            },
+            {
+              "name": "PRS",
+              "type": "TIMESTAMP",
+              "description": "PRS 응답 수신 시간"
+            },
+            {
+              "name": "RINA",
+              "type": "TIMESTAMP",
+              "description": "RINA 응답 수신 시간"
+            },
+            {
+              "name": "IL",
+              "type": "TIMESTAMP",
+              "description": "IL 응답 수신 시간"
+            },
+            {
+              "name": "TL",
+              "type": "TIMESTAMP",
+              "description": "TL 응답 수신 시간"
+            },
+            {
+              "name": "LR",
+              "type": "TIMESTAMP",
+              "description": "LR 응답 수신 시간"
+            }
+          ],
+          "usage_notes": "응답 시간 분석 시 사용. 구조는 agenda_responses_content와 동일"
+        }
+      },
+      "organization_codes": {
+        "KR": "Korean Register (한국선급)",
+        "NK": "Nippon Kaiji Kyokai (일본선급)",
+        "CCS": "China Classification Society (중국선급)",
+        "ABS": "American Bureau of Shipping (미국선급)",
+        "DNV": "Det Norske Veritas (노르웨이선급)",
+        "BV": "Bureau Veritas (프랑스선급)",
+        "LR": "Lloyd's Register (영국선급)",
+        "RINA": "Registro Italiano Navale (이탈리아선급)",
+        "IRS": "Indian Register of Shipping (인도선급)",
+        "PRS": "Polish Register of Shipping (폴란드선급)",
+        "CRS": "Croatian Register of Shipping (크로아티아선급)",
+        "TL": "Türk Loydu (터키선급)",
+        "IL": "International Register (국제선급)"
+      },
+      "database_info": {
+        "type": "SQLite",
+        "path": "/home/kimghw/IACSGRAPH/data/iacsgraph.db",
+        "description": "IACS(국제선급연합) 의제 관리 데이터베이스"
+      },
+      "query_guidelines": {
+        "response_required": "agenda_chair 테이블에서 mail_type='request' AND has_deadline=1 AND deadline > datetime('now') AND decision_status != 'completed'",
+        "organization_response": "agenda_responses_content의 조직별 컬럼은 CASE 문으로 접근",
+        "date_filtering": "DATE('now', '-N days') 형식 사용",
+        "status_values": [
+          "created",
+          "ongoing",
+          "comment",
+          "completed"
+        ]
+      }
     }
   },
   "templates": [
@@ -72,8 +367,8 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE a.decision_status != 'completed' \n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "아직 완료되지 않은 모든 의제를 검색합니다. decision_status가 'completed'가 아닌 모든 의제를 찾아 진행 상황을 파악합니다.",
-        "user": "완료되지 않은 의제들의 전체 현황을 파악하고 싶습니다. 의제별 현재 상태, 마감일, 담당 조직 정보를 확인할 수 있도록 해주세요."
+        "system": "사용자는 업무 진행 상황을 전체적으로 파악하려고 합니다. 이를 위해:\n1. agenda_all 테이블에서 decision_status != 'completed' 조건으로 미완료 의제를 필터링합니다\n2. 모든 상태(created, ongoing, comment)의 의제를 포함하여 포괄적인 현황을 제공합니다\n3. sent_time DESC로 정렬하여 최신 의제부터 확인할 수 있게 합니다\n4. 기간 파라미터를 통해 특정 기간의 업무 적체 현황을 분석할 수 있도록 합니다\n5. 발신 조직별 분포를 파악하여 어느 조직의 의제가 많이 대기 중인지 확인 가능합니다",
+        "user": "모든 패널에서 아직 완료되지 않은 의제들을 확인하고 싶습니다. 각 의제의 현재 상태(created, ongoing, comment 등), 발송일, 발신 조직, 제목을 보여주시고, 최근 것부터 정렬해주세요. 특정 기간 내의 미완료 의제만 보고 싶은 경우도 있으니 기간 설정이 가능하면 좋겠습니다."
       },
       "parameters": [
         {
@@ -125,7 +420,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE a.sent_time >= DATE('now', '-90 days') \n                ORDER BY a.sent_time DESC",
-        "system": "최근 3개월(90일) 동안 발송된 모든 의제를 검색합니다. 최근 논의 동향을 파악하기 위한 쿼리입니다.",
+        "system": "3개월 단위의 의제 동향을 분석하여 중기 업무 계획을 수립하는 데 활용하는 시계열 분석 쿼리입니다. 기본 90일 설정은 분기별 보고서 작성에 최적화되어 있으며, 파라미터 조정으로 월별, 반기별 분석도 가능합니다. 전체 패널의 활동을 한눈에 파악하여 특정 시기의 업무 집중도를 측정하고, 계절적 패턴이나 회의 주기에 따른 의제 증감을 예측할 수 있습니다.",
         "user": "지난 3개월간 어떤 의제들이 논의되었는지 전체적인 현황을 보고 싶습니다. 패널별, 월별 분포도 알 수 있으면 좋겠습니다."
       },
       "parameters": [
@@ -181,8 +476,8 @@
       },
       "sql_template": {
         "query": "SELECT a.* \n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.decision_status IN ('created', 'ongoing', 'comment')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "진행중인 의제 중 한국(KR)이 아직 응답하지 않은 의제를 찾습니다. LEFT JOIN으로 응답 테이블과 연결하여 응답이 없는 경우를 필터링합니다.",
-        "user": "한국이 아직 응답하지 않은 진행중 의제를 확인하여 신속한 대응이 필요한 항목을 파악하고 싶습니다. 마감일과 중요도 정보도 함께 제공해주세요."
+        "system": "사용자는 응답 누락을 방지하고 적시에 의견을 제시하려고 합니다. 이를 위해:\n1. agenda_all과 agenda_responses_content를 LEFT JOIN하여 응답 여부를 확인합니다\n2. decision_status = 'ongoing'으로 현재 진행중인 의제만 필터링합니다\n3. arc.sender_organization IS NULL 조건으로 해당 조직이 응답하지 않은 것만 선택합니다\n4. 다른 조직들의 응답 상황도 함께 조회하여 우선순위 판단을 지원합니다\n5. 기간 조건을 추가하여 최근 의제에 집중할 수 있도록 합니다\n6. 국제 협력에서 무응답은 부정적으로 해석될 수 있으므로 신속한 파악이 중요합니다",
+        "user": "우리 조직(KR)이 아직 응답하지 않은 진행중인 의제들을 찾아주세요. 현재 활발히 논의되고 있는데 우리가 의견을 제시하지 않은 것들이 궁금합니다. 각 의제의 제목, 발송일, 다른 조직들의 응답 여부도 함께 보여주시면 우선순위를 정하는데 도움이 될 것 같습니다."
       },
       "parameters": [
         {
@@ -256,7 +551,7 @@
       },
       "sql_template": {
         "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "의장(Chair)이 발송한 요청 메일 중 한국(KR)이 응답해야 하는 의제를 검색합니다. response_org에 KR이 포함되거나 ALL인 경우, 마감일이 유효한 미완료 의제를 찾습니다.",
+        "system": "조직이 명시적으로 응답해야 하는 의제를 우선순위별로 관리하는 전략적 대응 쿼리입니다. response_org LIKE '%{organization}%' OR response_org = 'ALL' 조건으로 직접 지정된 응답 요청과 전체 대상 요청을 모두 포착합니다. deadline 오름차순 정렬로 긴급도를 시각화하며, LEFT JOIN으로 이미 응답한 의제를 제외하여 실제 대응이 필요한 항목만 표시합니다. 마감일 준수는 국제 표준화 과정에서의 영향력과 직결됩니다.",
         "user": "한국이 응답해야 하는 의제들을 마감일 순으로 정리해서 보고 싶습니다. 긴급도에 따라 우선순위를 표시하고, 각 의제의 요청사항을 명확히 파악할 수 있도록 해주세요."
       },
       "parameters": [
@@ -324,8 +619,8 @@
       },
       "sql_template": {
         "query": "SELECT \n                    decision_status,\n                    COUNT(*) as count\n                FROM agenda_all a\n                WHERE a.decision_status IN ('pending', 'created', 'ongoing')\n                AND {period_condition}\n                GROUP BY decision_status\n                ORDER BY count DESC",
-        "system": "시스템에서 자동 분류하지 못해 agenda_pending 테이블에 저장된 메일의 개수를 조회합니다.",
-        "user": "분류 보류 중인 메일이 몇 건인지 확인하고, 가능하다면 보류 사유별 분포도 알고 싶습니다."
+        "system": "사용자는 조직별 활동성을 정량적으로 비교하려고 합니다. 이를 위해:\n1. decision_status = 'ongoing'으로 진행중인 의제만 필터링합니다\n2. GROUP BY sender_organization으로 조직별 집계를 수행합니다\n3. COUNT(*)로 각 조직의 의제 수를 계산합니다\n4. ORDER BY COUNT(*) DESC로 가장 활발한 조직부터 표시합니다\n5. 이 통계는 각 조직의 관심 분야와 영향력을 간접적으로 나타냅니다\n6. 전략적 파트너십이나 협력 우선순위 결정에 활용할 수 있습니다",
+        "user": "현재 진행중인(ongoing) 의제들이 어느 조직에서 많이 발송되었는지 통계를 보고 싶습니다. 각 조직별로 진행중인 의제가 몇 개씩 있는지 집계해서 보여주시고, 가장 활발한 조직부터 순서대로 정렬해주세요. 이를 통해 각 조직의 활동성과 영향력을 파악하고 싶습니다."
       },
       "parameters": [
         {
@@ -381,7 +676,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.keywords,\n                    a.deadline,\n                    CASE WHEN arc.KR IS NOT NULL THEN 'KR: ' || SUBSTR(arc.KR, 1, 100) ELSE '' END ||\n                    CASE WHEN arc.NK IS NOT NULL THEN ' NK: ' || SUBSTR(arc.NK, 1, 100) ELSE '' END ||\n                    CASE WHEN arc.CCS IS NOT NULL THEN ' CCS: ' || SUBSTR(arc.CCS, 1, 100) ELSE '' END as other_responses\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "한국이 응답해야 하는 의제와 관련된 다른 기관들의 응답을 함께 조회합니다. 의제별 주요 이슈와 각국의 입장을 종합적으로 파악하기 위한 쿼리입니다.",
+        "system": "특정 조직의 주요 이슈와 관심사를 종합 분석하는 조직 프로파일링 쿼리입니다. 해당 조직이 발송한 의제와 응답한 의제를 모두 분석하여 핵심 관심 분야와 전략적 우선순위를 파악합니다. CASE 문을 활용한 동적 컬럼 참조로 조직별 응답을 효율적으로 추출하며, 이를 통해 협상 전략 수립과 협력 가능 분야 도출에 활용할 수 있습니다. 특히 타 조직의 의제 패턴 분석은 미래 협력이나 경쟁 관계 예측에 중요한 인사이트를 제공합니다.",
         "user": "한국이 응답해야 하는 의제들에 대해 다른 나라들은 어떤 의견을 제시했는지 종합적으로 분석해서 보고 싶습니다. 주요 쟁점과 각국 입장차이를 명확히 정리해주세요."
       },
       "parameters": [
@@ -456,7 +751,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.keywords,\n                    COUNT(*) as count\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL' OR (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL))\n                AND a.keywords IS NOT NULL\n                AND {period_condition}\n                GROUP BY a.keywords\n                ORDER BY count DESC",
-        "system": "데이터베이스에서 조건에 맞는 레코드를 검색합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "조직별 키워드 출현 빈도를 분석하여 전문 분야와 관심사를 매핑하는 텍스트 분석 쿼리입니다. 특정 조직이 자주 사용하는 키워드를 추출하여 해당 조직의 기술적 강점, 정책적 입장, 미래 전략 방향을 간접적으로 파악할 수 있습니다. 시계열 분석과 결합하면 조직의 관심사 변화 추이를 추적할 수 있어 장기적 협력 전략 수립에 유용합니다.",
         "user": "검색 조건에 해당하는 결과를 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -525,7 +820,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.keywords,\n                    CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END as response_content\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END IS NOT NULL\n                AND a.keywords IS NOT NULL\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
-        "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
+        "system": "조직이 응답한 의제들의 키워드를 분석하여 대응 패턴을 파악하는 응답 행동 분석 쿼리입니다. 어떤 키워드가 포함된 의제에 적극적으로 응답하는지 분석하여 해당 조직의 민감 이슈와 전략적 관심사를 식별합니다. 이는 의제 제안 시 특정 조직의 지지나 반대를 예측하는 데 활용할 수 있습니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
       "parameters": [
@@ -597,8 +892,8 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE (\n                    CASE \n                        WHEN COALESCE(COALESCE({keywords}, ''), 'test') = '' THEN 1=1\n                        ELSE (a.keywords LIKE '%' || COALESCE(COALESCE({keywords}, ''), 'test') || '%' OR a.subject LIKE '%' || COALESCE(COALESCE({keywords}, ''), 'test') || '%')\n                    END\n                )\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
-        "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
+        "system": "사용자는 특정 주제와 관련된 모든 의제를 빠짐없이 찾으려고 합니다. 이를 위해:\n1. keywords, subject, body 세 필드를 모두 검색하여 재현율을 최대화합니다\n2. LIKE '%keyword%' 패턴으로 부분 매칭을 지원하여 다양한 표현을 포착합니다\n3. OR 조건으로 연결하여 어느 필드에든 매칭되면 결과에 포함시킵니다\n4. 대소문자 구분 없이 검색하여 모든 변형을 찾습니다\n5. sent_time DESC로 정렬하여 최신 동향을 우선 확인할 수 있게 합니다\n6. 기간 조건과 결합하여 특정 시기의 키워드 트렌드를 분석할 수 있습니다",
+        "user": "특정 키워드와 관련된 모든 의제를 검색하고 싶습니다. 제목, 본문, 키워드 필드 어디에든 해당 단어가 포함된 의제를 모두 찾아주세요. 검색 결과는 최신순으로 정렬하고, 각 의제가 어느 필드에서 매칭되었는지도 알 수 있으면 좋겠습니다. 부분 일치도 포함해서 포괄적으로 검색해주세요."
       },
       "parameters": [
         {
@@ -667,7 +962,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE mail_type = 'NOTIFICATION' \n                AND (subject LIKE '%meeting%' OR subject LIKE '%회의%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "IMO 회의 관련 공식 통지 메일을 추적하는 일정 관리 쿼리입니다. mail_type = 'notification'으로 회의 안내, 일정 변경, 장소 안내 등 행정적 통지를 필터링합니다. 이를 통해 중요 회의 일정을 놓치지 않고 사전 준비를 철저히 할 수 있으며, 참석자 구성이나 의제 사전 배포 등의 정보도 함께 파악할 수 있습니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -720,7 +1015,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%Y', sent_time) as year,\n                    COUNT(*) as agenda_count\n                FROM agenda_all a\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY year\n                ORDER BY year DESC",
-        "system": "조건에 맞는 레코드의 개수를 계산합니다.",
+        "system": "연도별 의제 수를 집계하여 장기 트렌드를 분석하는 시계열 통계 쿼리입니다. strftime('%Y', sent_time)으로 연도별 그룹핑을 수행하며, IMO의 정책 방향 변화나 국제 해사 이슈의 중요도 변화를 거시적으로 파악할 수 있습니다. 과거 데이터 분석을 통해 미래 업무량 예측과 자원 계획 수립이 가능합니다.",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다."
       },
       "parameters": [
@@ -773,7 +1068,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%Y', sent_time) as year,\n                    COUNT(*) as created_count\n                FROM agenda_all a\n                WHERE a.decision_status = 'created'\n                AND {period_condition}\n                GROUP BY year\n                ORDER BY year DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "연도별 신규 생성 의제만을 집계하는 혁신 지표 쿼리입니다. decision_status = 'created'로 새롭게 제안된 의제만 필터링하여 국제 해사 분야의 새로운 이슈와 트렌드를 조기에 감지합니다. 특정 연도에 급증한 신규 의제는 규제 환경 변화나 기술 혁신의 신호일 수 있습니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -826,7 +1121,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    sender_organization,\n                    COUNT(*) as mail_count\n                FROM agenda_all a\n                WHERE sender_organization IS NOT NULL\n                AND {period_condition}\n                GROUP BY sender_organization\n                ORDER BY mail_count DESC",
-        "system": "조건에 맞는 레코드의 개수를 계산합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
+        "system": "【목적】 의제 관련 정량적 지표를 산출하여 의사결정 지원 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
       "parameters": [
@@ -879,7 +1174,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC\n                LIMIT 5",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -932,7 +1227,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE mail_type = 'NOTIFICATION'\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "최근 발송된 모든 통지 메일을 시간순으로 조회하는 정보 업데이트 쿼리입니다. 회의 일정 변경, 문서 업데이트, 절차 변경 등 다양한 행정 통지를 실시간으로 파악하여 조직의 대응 준비도를 높입니다. 특히 긴급 통지나 예외적 상황에 대한 신속한 인지가 가능합니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -985,7 +1280,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_panel,\n                    COUNT(*) as agenda_count\n                FROM agenda_all a\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY agenda_panel\n                ORDER BY agenda_count DESC",
-        "system": "조건에 맞는 레코드의 개수를 계산합니다.",
+        "system": "각 패널별 의제 수를 집계하여 업무 분포를 파악하는 워크로드 분석 쿼리입니다. subject에서 패널 정보를 추출하고 GROUP BY로 집계하여 어느 패널이 가장 활발한 활동을 보이는지 정량화합니다. 이를 통해 패널별 전문 인력 배치와 역량 개발 우선순위를 결정할 수 있습니다.",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다."
       },
       "parameters": [
@@ -1037,7 +1332,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE (keywords LIKE '%IMO%' OR a.subject LIKE '%IMO%' OR a.body LIKE '%IMO%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "IMO 본부 직접 관련 의제를 추출하는 정책 중요도 분석 쿼리입니다. 키워드나 발신자 정보를 통해 IMO 사무국이 직접 관여하는 high-level 의제를 식별합니다. 이러한 의제는 정책적 중요도가 높고 광범위한 영향을 미치므로 특별 관리와 전략적 대응이 필요합니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1090,7 +1385,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE (keywords LIKE '%UR%' OR a.subject LIKE '%UR%' OR subject LIKE '%Unified Requirement%')\n                AND (keywords LIKE '%revision%' OR subject LIKE '%revision%' OR body LIKE '%revision%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "Unified Requirements(UR) 개정 관련 의제를 추적하는 기술 규정 변경 모니터링 쿼리입니다. UR은 선급 공통 규칙으로 모든 선박에 적용되므로 개정 사항은 조선 및 해운 산업에 직접적 영향을 미칩니다. 개정 제안부터 최종 승인까지의 과정을 추적하여 기술적 대응과 비용 영향을 사전 평가할 수 있습니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1143,7 +1438,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE (keywords LIKE '%PR%' OR a.subject LIKE '%PR%' OR subject LIKE '%Procedural Requirement%')\n                AND (keywords LIKE '%revision%' OR subject LIKE '%revision%' OR body LIKE '%revision%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "Procedural Requirements(PR) 개정 의제를 모니터링하는 절차 변경 추적 쿼리입니다. PR은 검사 및 인증 절차와 관련되므로 선급 업무 프로세스에 직접적 영향을 미칩니다. 절차 변경은 시스템 개선과 인력 교육이 필요하므로 충분한 준비 기간 확보가 중요합니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1195,7 +1490,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE (a.keywords LIKE '%EG%' OR keywords LIKE '%Expert Group%' OR a.subject LIKE '%Expert Group%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "Expert Group(EG) 관련 의제를 추출하는 전문가 그룹 활동 분석 쿼리입니다. EG는 기술적 세부사항을 다루는 전문가 집단으로, 이들의 논의 결과는 향후 규정의 기술적 기반이 됩니다. EG 활동을 모니터링하여 기술 표준의 방향성을 조기에 파악하고 R&D 투자 방향을 결정할 수 있습니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1249,7 +1544,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%Y-%m', a.sent_time) as month,\n                    a.agenda_panel,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE \n                        WHEN arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.CCS IS NOT NULL \n                        THEN a.agenda_code \n                    END) as responded_agendas\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY month, a.agenda_panel\n                ORDER BY month DESC, a.agenda_panel",
-        "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다.",
+        "system": "월별 응답 현황을 매트릭스 형태로 분석하는 성과 대시보드 쿼리입니다. 각 월의 전체 의제 대비 응답 완료, 진행중, 미응답 비율을 계산하여 조직의 월별 대응 성과를 시각화합니다. 계절적 패턴이나 특정 월의 업무 과부하를 식별하여 인력 운영 최적화에 활용합니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다."
       },
       "parameters": [
@@ -1309,7 +1604,7 @@
       },
       "sql_template": {
         "query": "SELECT error_reason, COUNT(*) as count FROM agenda_pending WHERE error_reason IS NOT NULL GROUP BY error_reason ORDER BY count DESC",
-        "system": "조건에 맞는 레코드의 개수를 계산합니다.",
+        "system": "시스템 분류 오류를 원인별로 집계하는 품질 개선 분석 쿼리입니다. agenda_pending 테이블의 error_reason을 GROUP BY하여 가장 빈번한 오류 유형을 식별합니다. 이를 통해 시스템 개선 우선순위를 결정하고, 반복적 오류에 대한 자동화 규칙을 개발할 수 있습니다.",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다."
       },
       "parameters": [],
@@ -1347,7 +1642,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE (a.keywords LIKE '%vessel%' AND keywords LIKE '%inventory%')\n                OR (subject LIKE '%vessel%' AND subject LIKE '%inventory%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "선박 인벤토리 관련 의제를 추출하는 환경 규제 준수 쿼리입니다. 유해물질 목록, 재활용 준비 등 선박 생애주기 관리와 관련된 의제를 추적합니다. 이는 환경 규제 강화에 따른 compliance 요구사항을 사전에 파악하여 대응 전략을 수립하는 데 필수적입니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1399,7 +1694,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE (a.keywords LIKE '%' || {keyword} || '%' OR a.subject LIKE '%' || {keyword} || '%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한. 키워드 기반 의제 필터링 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 키워드 검색, 기간 설정 가능",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1467,7 +1762,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.decision_status,\n                    COUNT(*) as count,\n                    GROUP_CONCAT(a.agenda_code, ', ') as agenda_codes\n                FROM agenda_all a\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY a.decision_status\n                ORDER BY count DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "【목적】 의제 진행 상태를 파악하여 업무 우선순위를 관리 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -1519,7 +1814,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a WHERE sender_type = 'MULTILATERAL' AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -1571,7 +1866,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE (keywords LIKE '%cyber%' OR a.subject LIKE '%cyber%' OR a.body LIKE '%cyber%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "사이버 보안 관련 의제를 전문 검색하는 디지털 위험 관리 쿼리입니다. 'cyber', 'security', 'digital' 등의 키워드로 해사 사이버 보안 논의를 추적합니다. 디지털화가 가속화되면서 사이버 보안은 핵심 이슈로 부상했으며, 관련 규제와 가이드라인을 선제적으로 파악하여 리스크를 관리해야 합니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1624,7 +1919,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_chair a\n                WHERE a.created_at >= DATE('now', '-30 days')\n                ORDER BY a.created_at DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_chair 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -1676,7 +1971,7 @@
       },
       "sql_template": {
         "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.sender_type = 'CHAIR'\n                AND (\n                    arc.agenda_base_version IS NULL OR (\n                        arc.KR IS NULL AND arc.NK IS NULL AND arc.CCS IS NULL AND \n                        arc.ABS IS NULL AND arc.DNV IS NULL AND arc.BV IS NULL AND \n                        arc.LR IS NULL AND arc.RINA IS NULL AND arc.IRS IS NULL AND \n                        arc.IRS IS NULL AND arc.PRS IS NULL AND arc.CRS IS NULL AND \n                        arc.TL IS NULL AND arc.IL IS NULL\n                    )\n                )\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 기간 설정 가능",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다."
       },
       "parameters": [
@@ -1735,7 +2030,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a WHERE webLink IS NOT NULL AND webLink != '' AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -1787,7 +2082,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE a.hasAttachments = 1 \n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -1840,7 +2135,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a \n                WHERE (keywords LIKE '%digital%' OR a.subject LIKE '%digital%')\n                AND (keywords LIKE '%transformation%' OR subject LIKE '%transformation%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "디지털 전환 관련 의제를 포괄적으로 검색하는 혁신 트렌드 분석 쿼리입니다. 자율운항, 전자증서, 디지털 트윈 등 해사 산업의 디지털 혁신 주제를 추적합니다. 이를 통해 미래 기술 투자 방향을 설정하고 디지털 역량 개발 로드맵을 수립할 수 있습니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -1893,8 +2188,8 @@
       },
       "sql_template": {
         "query": "SELECT \n                    {organization} as organization,\n                    COUNT(*) as total_responses,\n                    AVG(julianday(CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END) - julianday(a.sent_time)) as avg_response_days\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                INNER JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)\n                AND CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END IS NOT NULL\n                AND {period_condition}",
-        "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
-        "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
+        "system": "사용자는 조직별 응답 효율성을 벤치마킹하려고 합니다. 이를 위해:\n1. agenda_all의 sent_time과 agenda_responses_receivedtime의 각 조직 컬럼을 조인합니다\n2. JULIANDAY 함수로 두 날짜 간 차이를 정확한 일수로 계산합니다\n3. CASE문으로 각 조직별 응답 시간을 동적으로 추출합니다\n4. AVG 함수로 조직별 평균 응답 시간을 산출합니다\n5. 빠른 응답은 적극적 참여와 준비도를 나타내는 지표입니다\n6. 우리 조직과 비교하여 개선 목표를 설정할 수 있습니다",
+        "user": "각 조직이 의제에 응답하는데 평균적으로 얼마나 걸리는지 분석해주세요. 의제가 발송된 시점부터 각 조직이 응답한 시점까지의 기간을 일 단위로 계산하고, 조직별 평균값을 보여주세요. 이를 통해 각 조직의 대응 신속성을 비교하고, 우리 조직의 개선점을 찾고 싶습니다."
       },
       "parameters": [
         {
@@ -1957,7 +2252,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    {organization} as organization,\n                    COUNT(*) as count,\n                    AVG(julianday(CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END) - julianday(a.sent_time)) as avg_days\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                INNER JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)\n                AND CASE {organization}\n            WHEN 'ABS' THEN art.ABS\n            WHEN 'BV' THEN art.BV\n            WHEN 'CCS' THEN art.CCS\n            WHEN 'CRS' THEN art.CRS\n            WHEN 'DNV' THEN art.DNV\n            WHEN 'IRS' THEN art.IRS\n            WHEN 'KR' THEN art.KR\n            WHEN 'NK' THEN art.NK\n            WHEN 'PRS' THEN art.PRS\n            WHEN 'RINA' THEN art.RINA\n            WHEN 'IL' THEN art.IL\n            WHEN 'TL' THEN art.TL\n            WHEN 'LR' THEN art.LR\n        END IS NOT NULL\n                AND a.decision_status != 'created'\n                AND {period_condition}",
-        "system": "여러 테이블을 연결하여 관련 정보를 종합적으로 조회합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
+        "system": "의제 생성일 제외한 순수 응답 시간을 측정하는 정밀 성과 분석 쿼리입니다. 의제가 생성된 당일 응답은 제외하여 실제 검토와 의사결정에 소요된 시간만을 측정합니다. 이는 더 정확한 프로세스 효율성 평가를 가능하게 합니다.",
         "user": "관련된 정보들을 종합하여 전체적인 현황을 파악하고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
       "parameters": [
@@ -2030,7 +2325,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT sender, a.sender_organization FROM agenda_all a WHERE sender_type = 'other' ORDER BY a.sender_organization",
-        "system": "데이터베이스에서 조건에 맞는 레코드를 검색합니다. 특정 조직과 관련된 데이터를 필터링합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 타 기관의 응답 및 입장 포함 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험",
         "user": "검색 조건에 해당하는 결과를 보고 싶습니다. 해당 조직의 관점에서 필요한 정보를 파악하고 싶습니다."
       },
       "parameters": [],
@@ -2067,7 +2362,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_chair a\n                ORDER BY a.created_at DESC\n                LIMIT 10",
-        "system": "데이터베이스에서 조건에 맞는 레코드를 검색합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_chair 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "검색 조건에 해당하는 결과를 보고 싶습니다."
       },
       "parameters": [
@@ -2120,7 +2415,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE sender_type = 'CHAIR'\n                AND (has_deadline = 0 OR deadline IS NULL)\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "마감일 순으로 정렬하여 우선순위가 높은 항목을 먼저 표시합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "마감일이 임박한 순서대로 정리된 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -2173,7 +2468,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%H', sent_time) as hour,\n                    COUNT(*) as mail_count\n                FROM agenda_all a\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY hour\n                ORDER BY hour",
-        "system": "조건에 맞는 레코드의 개수를 계산합니다.",
+        "system": "【목적】 의제 관련 정량적 지표를 산출하여 의사결정 지원 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다."
       },
       "parameters": [
@@ -2226,7 +2521,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT a.sender, sender_address, COUNT(*) as mail_count FROM agenda_all a WHERE sender_type = 'UNKNOWN' GROUP BY a.sender, sender_address ORDER BY mail_count DESC",
-        "system": "조건에 맞는 레코드의 개수를 계산합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【효과】 정보 접근성 향상으로 업무 생산성 증대",
         "user": "해당 조건의 총 개수를 확인하고 싶습니다."
       },
       "parameters": [],
@@ -2263,7 +2558,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.sent_time,\n                    a.decision_status,\n                    julianday('now') - julianday(a.sent_time) as days_pending\n                FROM agenda_all a\n                WHERE a.decision_status IN ('completed', 'pending')\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY days_pending DESC",
-        "system": "데이터베이스에서 조건에 맞는 레코드를 검색합니다.",
+        "system": "의제가 완료되기까지의 전체 처리 시간을 분석하는 프로세스 최적화 쿼리입니다. created에서 completed까지의 전체 생애주기를 측정하여 병목 구간을 식별하고 프로세스 개선 기회를 발굴합니다. 장기간 pending 상태인 의제는 특별 관리가 필요한 복잡한 이슈일 가능성이 높습니다.",
         "user": "검색 조건에 해당하는 결과를 보고 싶습니다."
       },
       "parameters": [
@@ -2317,7 +2612,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a WHERE (a.keywords LIKE '%MSC 110%' OR a.subject LIKE '%MSC 110%' OR a.body LIKE '%MSC 110%') AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "발송 시간 순으로 정렬하여 최신 정보를 우선 제공합니다. 키워드 매칭을 통해 관련성 높은 결과를 필터링합니다.",
+        "system": "MSC 110차 회의 관련 의제를 집중 분석하는 회의별 준비 쿼리입니다. 특정 회의 세션과 관련된 모든 의제를 추출하여 회의 준비를 체계적으로 지원합니다. 주요 의제, 각국 입장, 예상 쟁점 등을 사전에 파악하여 효과적인 회의 전략을 수립할 수 있습니다.",
         "user": "최근에 발송된 순서대로 정리된 목록을 보고 싶습니다. 특정 키워드와 관련된 항목들을 중점적으로 확인하고 싶습니다."
       },
       "parameters": [
@@ -2389,7 +2684,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE a.decision_status IN ('created', 'ongoing', 'comment')\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
-        "system": "지정된 시간 범위 내의 활동(수신/발송/응답)을 조회합니다. activity_type에 따라 적절한 테이블과 조건을 적용합니다.",
+        "system": "【목적】 시간 축에 따른 의제 동향을 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "지정된 기간 동안의 메일/의제 활동 내역을 시간순으로 보고 싶습니다."
       },
       "parameters": [
@@ -2502,7 +2797,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE a.decision_status = 'ongoing'\n                AND {period_condition}\n                ORDER BY \n                    CASE WHEN has_deadline = 1 THEN deadline ELSE DATE('9999-12-31') END ASC,\n                    sent_time DESC",
-        "system": "진행중인 의제를 조회합니다. 마감일이 있는 경우 마감일 기준 필터링이 가능하며, 마감일순 또는 발송일순으로 정렬됩니다.",
+        "system": "【목적】 의제 진행 상태를 파악하여 업무 우선순위를 관리 【구현】 agenda_all 테이블 활용. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "현재 진행중인 의제들을 보고 싶습니다. 마감일이 있는 것과 없는 것 모두 포함하여, 긴급한 순서대로 정리해주세요."
       },
       "parameters": [
@@ -2606,7 +2901,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%Y-%m', a.sent_time) as month,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE \n                        WHEN arc.agenda_base_version IS NOT NULL AND (\n                            arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.CCS IS NOT NULL OR\n                            arc.ABS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.BV IS NOT NULL\n                        ) THEN a.agenda_code \n                    END) as responded_agendas,\n                    ROUND(CAST(COUNT(DISTINCT CASE \n                        WHEN arc.agenda_base_version IS NOT NULL AND (\n                            arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.CCS IS NOT NULL OR\n                            arc.ABS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.BV IS NOT NULL\n                        ) THEN a.agenda_code \n                    END) AS FLOAT) / COUNT(DISTINCT a.agenda_code) * 100, 2) as response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.sender_type = 'CHAIR'\n                AND {period_condition}\n                GROUP BY month\n                ORDER BY month DESC",
-        "system": "월별로 전체 의제 수 대비 응답된 의제 수의 비율을 계산합니다.",
+        "system": "【목적】 의제 관련 정량적 지표를 산출하여 의사결정 지원 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "각 월별로 얼마나 많은 의제에 응답이 있었는지 응답률 통계를 보고 싶습니다."
       },
       "parameters": [
@@ -2663,7 +2958,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.sender, sender_address, a.subject, a.sent_time FROM agenda_all a WHERE a.sender != sender_address AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "sender와 sender_address 필드가 일치하지 않는 데이터를 찾습니다.",
+        "system": "발신자 정보 불일치를 탐지하는 데이터 검증 쿼리입니다. sender_organization과 sender_email의 도메인이 일치하지 않는 경우를 찾아 잠재적 오류나 비정상적 발송을 식별합니다. 이는 데이터 신뢰성 확보와 보안 관점에서 중요한 검증 과정입니다.",
         "user": "발신자 정보가 일치하지 않는 의제들을 확인하여 데이터 정합성을 점검하고 싶습니다."
       },
       "parameters": [
@@ -2718,7 +3013,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, agenda_base, agenda_version, a.subject, a.sent_time FROM agenda_all a WHERE a.agenda_code != (agenda_base || agenda_version) AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "agenda_code가 agenda_base와 agenda_version의 조합과 일치하지 않는 경우를 찾습니다.",
+        "system": "의제 버전 정보 불일치를 검출하는 일관성 검증 쿼리입니다. agenda_base와 agenda_base_version 간의 불일치나 비정상적 버전 패턴을 찾아 데이터 무결성을 보장합니다. 버전 관리는 의제 추적과 이력 관리의 기본이므로 정확성이 필수적입니다.",
         "user": "의제 코드의 구성이 올바른지 확인하고 싶습니다."
       },
       "parameters": [
@@ -2774,7 +3069,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    arc.updated_at,\n                    CASE WHEN arc.KR IS NOT NULL THEN 'KR ' ELSE '' END ||\n                    CASE WHEN arc.NK IS NOT NULL THEN 'NK ' ELSE '' END ||\n                    CASE WHEN arc.CCS IS NOT NULL THEN 'CCS ' ELSE '' END ||\n                    CASE WHEN arc.ABS IS NOT NULL THEN 'ABS ' ELSE '' END ||\n                    CASE WHEN arc.DNV IS NOT NULL THEN 'DNV ' ELSE '' END ||\n                    CASE WHEN arc.BV IS NOT NULL THEN 'BV ' ELSE '' END as responded_orgs\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE arc.updated_at >= DATE('now', '-3 days')\n                ORDER BY arc.updated_at DESC",
-        "system": "최근 3일간 업데이트된 응답 내용을 조회합니다.",
+        "system": "【목적】 시간 축에 따른 의제 동향을 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 수정되거나 업데이트된 응답들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -2831,7 +3126,7 @@
       },
       "sql_template": {
         "query": "SELECT error_reason, COUNT(*) as count FROM agenda_pending GROUP BY error_reason ORDER BY count DESC",
-        "system": "pending 상태인 의제들을 오류 사유별로 집계합니다.",
+        "system": "【목적】 의제 관련 정량적 지표를 산출하여 의사결정 지원 【구현】 agenda_pending 테이블 활용 【효과】 데이터 기반 의사결정으로 업무 효율성 향상",
         "user": "어떤 이유로 의제들이 pending 상태인지 통계를 보고 싶습니다."
       },
       "parameters": [],
@@ -2864,7 +3159,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.decision_status, a.deadline, a.sent_time, CASE WHEN a.deadline < DATE('now') AND a.decision_status != 'completed' THEN '마감 지남' ELSE '진행중' END as deadline_status FROM agenda_all a WHERE a.sent_time BETWEEN {period_start} AND {period_end} ORDER BY a.sent_time DESC",
-        "system": "각 의제의 최신 상태와 마감일 경과 여부를 확인합니다.",
+        "system": "【목적】 의제 진행 상태를 파악하여 업무 우선순위를 관리 【구현】 agenda_all 테이블 활용. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "모든 의제들의 현재 상태를 한눈에 보고 싶습니다."
       },
       "parameters": [
@@ -2919,7 +3214,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    CASE strftime('%w', sent_time)\n                        WHEN '0' THEN '일요일'\n                        WHEN '1' THEN '월요일'\n                        WHEN '2' THEN '화요일'\n                        WHEN '3' THEN '수요일'\n                        WHEN '4' THEN '목요일'\n                        WHEN '5' THEN '금요일'\n                        WHEN '6' THEN '토요일'\n                    END as weekday,\n                    COUNT(*) as agenda_count\n                FROM agenda_all a\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY strftime('%w', sent_time)\n                ORDER BY strftime('%w', sent_time)",
-        "system": "요일별로 발송된 의제 수를 집계합니다.",
+        "system": "요일별 의제 발송 패턴을 분석하는 업무 패턴 분석 쿼리입니다. strftime('%w', sent_time)으로 요일을 추출하여 언제 가장 많은 의제가 발송되는지 파악합니다. 이는 업무 계획과 모니터링 일정 최적화에 활용할 수 있으며, 국가별 업무 문화 차이도 간접적으로 파악할 수 있습니다.",
         "user": "어떤 요일에 의제가 많이 발송되는지 패턴을 파악하고 싶습니다."
       },
       "parameters": [
@@ -2967,7 +3262,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, response_org, a.deadline, a.sent_time FROM agenda_all a WHERE response_org IS NOT NULL AND response_org != '' AND response_org != 'ALL' AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "특정 기관이 응답해야 하는 것으로 지정된 의제들을 조회합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "어떤 의제들이 특정 기관의 응답을 요구하는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -3022,7 +3317,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%Y', sent_time) || '-Q' || ((CAST(strftime('%m', sent_time) AS INTEGER) - 1) / 3 + 1) as quarter,\n                    COUNT(*) as agenda_count,\n                    COUNT(DISTINCT agenda_panel) as active_panels\n                FROM agenda_all a\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY quarter\n                ORDER BY quarter DESC",
-        "system": "분기별로 발송된 의제 수와 활동 패널 수를 집계합니다.",
+        "system": "분기별 의제 통계를 종합 분석하는 정기 보고서용 쿼리입니다. 의제 수, 응답률, 주요 키워드, 활발한 조직 등을 분기 단위로 집계하여 경영진 보고와 전략 검토에 활용합니다. YoY, QoQ 비교를 통해 성장률과 트렌드를 명확히 제시할 수 있습니다.",
         "user": "분기별로 의제 발송 현황과 활동 패널 수를 파악하고 싶습니다."
       },
       "parameters": [
@@ -3077,7 +3372,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE\n                        WHEN arc.KR IS NOT NULL THEN 'KR'\n                        WHEN arc.NK IS NOT NULL THEN 'NK'\n                        WHEN arc.CCS IS NOT NULL THEN 'CCS'\n                        WHEN arc.ABS IS NOT NULL THEN 'ABS'\n                        WHEN arc.DNV IS NOT NULL THEN 'DNV'\n                        WHEN arc.BV IS NOT NULL THEN 'BV'\n                        WHEN arc.LR IS NOT NULL THEN 'LR'\n                        WHEN arc.RINA IS NOT NULL THEN 'RINA'\n                        ELSE 'None'\n                    END as last_responder,\n                    arc.updated_at\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY arc.updated_at DESC\n                LIMIT 1",
-        "system": "마감일을 넘겨서 응답한 경우를 응답 지연일 순으로 정렬합니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "어떤 기관이 가장 늦게 응답했는지와 해당 의제 정보를 확인하고 싶습니다."
       },
       "parameters": [
@@ -3133,7 +3428,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE a.decision_status = 'created'\n                AND deadline < DATE('now', '+7 days')\n                AND deadline >= DATE('now')\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "생성일과 마감일 사이의 기간이 7일 미만인 긴급 의제들을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "마감일까지 시간이 촉박하게 생성된 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -3189,7 +3484,7 @@
       },
       "sql_template": {
         "query": "SELECT COUNT(DISTINCT organization_code) as member_count FROM (SELECT 'KR' as organization_code UNION SELECT 'BV' UNION SELECT 'CCS' UNION SELECT 'DNV' UNION SELECT 'LR' UNION SELECT 'ABS' UNION SELECT 'NK' UNION SELECT 'RINA' UNION SELECT 'RS' UNION SELECT 'IRS' UNION SELECT 'PRS')",
-        "system": "IACS 정회원 선급 기관의 수를 조회합니다.",
+        "system": "【목적】 System Config 관련 데이터 조회 및 분석 【구현】 집계 함수로 통계 산출",
         "user": "IACS에 소속된 정회원 선급은 몇 개인지 알고 싶습니다."
       },
       "parameters": [],
@@ -3221,7 +3516,7 @@
       },
       "sql_template": {
         "query": "SELECT organization_code, organization_name FROM (SELECT 'KR' as organization_code, 'Korean Register' as organization_name UNION SELECT 'BV', 'Bureau Veritas' UNION SELECT 'CCS', 'China Classification Society' UNION SELECT 'DNV', 'DNV' UNION SELECT 'LR', 'Lloyd''s Register' UNION SELECT 'ABS', 'American Bureau of Shipping' UNION SELECT 'NK', 'Nippon Kaiji Kyokai (ClassNK)' UNION SELECT 'RINA', 'RINA' UNION SELECT 'RS', 'Russian Maritime Register of Shipping' UNION SELECT 'IRS', 'Indian Register of Shipping' UNION SELECT 'PRS', 'Polish Register of Shipping') ORDER BY organization_code",
-        "system": "IACS 정회원 선급 기관 목록을 조회합니다.",
+        "system": "【목적】 System Config 관련 데이터 조회 및 분석 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "IACS를 구성하는 선급 기관들의 전체 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -3269,7 +3564,7 @@
       },
       "sql_template": {
         "query": "SELECT panel_code, panel_name, panel_type FROM (\n                    SELECT 'GPG' as panel_code, 'General Policy Group' as panel_name, 'Policy' as panel_type\n                    UNION ALL\n                    SELECT 'MSC' as panel_code, 'Machinery Safety Committee' as panel_name, 'Technical' as panel_type\n                    UNION ALL\n                    SELECT 'HSC' as panel_code, 'Hull Safety Committee' as panel_name, 'Technical' as panel_type\n                    UNION ALL\n                    SELECT 'ESC' as panel_code, 'Environmental Safety Committee' as panel_name, 'Technical' as panel_type\n                    UNION ALL\n                    SELECT 'SDTP' as panel_code, 'Ship Design & Technology Panel' as panel_name, 'Technical' as panel_type\n                )",
-        "system": "IACS 내부의 패널 구조와 종류를 조회합니다.",
+        "system": "【목적】 System Config 관련 데이터 조회 및 분석",
         "user": "IACS 내부에 어떤 패널들이 있고 어떻게 구성되어 있는지 알고 싶습니다."
       },
       "parameters": [],
@@ -3308,7 +3603,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_panel, \n                    COUNT(*) as agenda_count\n                FROM agenda_all a\n                WHERE (response_org = 'KR' OR response_org = 'ALL' OR sender_organization = 'KR')\n                AND {period_condition}\n                GROUP BY agenda_panel\n                ORDER BY agenda_count DESC",
-        "system": "KR이 응답하거나 발신한 의제가 있는 패널들을 활동량과 함께 조회합니다.",
+        "system": "【목적】 Organization Analysis 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "한국선급이 어떤 패널에서 활동하고 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -3365,7 +3660,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_panel, \n                    COUNT(*) as chair_count\n                FROM agenda_all a\n                WHERE sender_organization = 'KR'\n                AND sender_type = 'CHAIR'\n                AND {period_condition}\n                GROUP BY agenda_panel\n                ORDER BY chair_count DESC",
-        "system": "KR이 의장 자격으로 발송한 의제가 있는 패널들을 찾습니다.",
+        "system": "【목적】 Organization Analysis 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "한국선급이 의장으로 활동하는 패널들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -3420,7 +3715,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT a.agenda_panel, a.subject, a.sent_time FROM agenda_all a WHERE (a.subject LIKE '%meeting%' OR a.subject LIKE '%회의%' OR mail_type = 'meeting') AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "회의 관련 메일이나 의제를 찾아 최근 회의 정보를 추출합니다.",
+        "system": "【목적】 Meeting Info 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 진행된 회의들의 목록을 확인하고 싶습니다."
       },
       "parameters": [
@@ -3476,7 +3771,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_panel, a.subject, a.keywords, a.body FROM agenda_all a WHERE (a.subject LIKE '%meeting%' OR a.subject LIKE '%회의%' OR mail_type = 'meeting') AND (a.body LIKE '%decision%' OR a.body LIKE '%결정%' OR a.body LIKE '%agreed%') AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "회의 관련 메일 중 결정사항이나 합의사항이 포함된 내용을 찾습니다.",
+        "system": "【목적】 Meeting Info 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 회의에서 논의된 주요 이슈와 결정사항을 확인하고 싶습니다."
       },
       "parameters": [
@@ -3531,7 +3826,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT agenda_base as pt_code, COUNT(*) as activity_count, MAX(a.sent_time) as last_activity FROM agenda_all a WHERE agenda_base LIKE 'PT%' AND a.decision_status = 'ongoing' GROUP BY agenda_base ORDER BY last_activity DESC",
-        "system": "PT로 시작하는 의제 중 진행중인 프로젝트팀들을 찾습니다.",
+        "system": "현재 활동 중인 프로젝트 팀 목록을 조회하는 협업 현황 파악 쿼리입니다. 각 PT의 목적, 참여 조직, 진행 상황을 종합적으로 파악하여 참여 기회를 모색하거나 협력 전략을 수립할 수 있습니다. 전략적으로 중요한 PT에는 적극적 참여가 필요합니다.",
         "user": "현재 활동중인 프로젝트팀들의 목록을 보고 싶습니다."
       },
       "parameters": [
@@ -3580,7 +3875,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    org_name,\n                    SUM(response_count) as total_responses\n                FROM (\n                    SELECT 'KR' as org_name, COUNT(*) as response_count\n                    FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE a.keywords LIKE '%PT%' AND arc.KR IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                    \n                    UNION ALL\n                    \n                    SELECT 'NK' as org_name, COUNT(*) as response_count\n                    FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE a.keywords LIKE '%PT%' AND arc.NK IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                    \n                    UNION ALL\n                    \n                    SELECT 'CCS' as org_name, COUNT(*) as response_count\n                    FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE a.keywords LIKE '%PT%' AND arc.CCS IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                )\n                GROUP BY org_name\n                ORDER BY total_responses DESC",
-        "system": "진행중인 PT에 응답한 기관들을 통해 참여 기관을 파악합니다.",
+        "system": "프로젝트 팀별 참여 조직을 분석하는 네트워크 매핑 쿼리입니다. 어떤 조직들이 함께 협력하는지 패턴을 분석하여 잠재적 파트너십 기회를 발굴합니다. 특정 주제에 관심 있는 조직들을 식별하여 공동 제안이나 연합 형성에 활용할 수 있습니다.",
         "user": "각 프로젝트팀에 어떤 기관들이 참여하고 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -3638,7 +3933,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE WHEN arc.KR IS NOT NULL THEN 'KR ' ELSE '' END ||\n                    CASE WHEN arc.NK IS NOT NULL THEN 'NK ' ELSE '' END ||\n                    CASE WHEN arc.CCS IS NOT NULL THEN 'CCS ' ELSE '' END ||\n                    CASE WHEN arc.ABS IS NOT NULL THEN 'ABS ' ELSE '' END ||\n                    CASE WHEN arc.DNV IS NOT NULL THEN 'DNV ' ELSE '' END as participants\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.keywords LIKE '%PT%'\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
-        "system": "진행중인 PT의 응답자 정보를 통해 참여자를 파악합니다.",
+        "system": "【목적】 Project Team 관련 데이터 조회 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "프로젝트팀에 참여하는 구체적인 담당자 정보를 알고 싶습니다."
       },
       "parameters": [
@@ -3696,7 +3991,7 @@
       },
       "sql_template": {
         "query": "SELECT agenda_base as pt_code, a.subject, a.keywords, a.body FROM agenda_all a WHERE agenda_base LIKE 'PT%' AND a.decision_status = 'ongoing' AND (a.keywords LIKE '%important%' OR a.keywords LIKE '%중요%' OR a.keywords LIKE '%critical%') ORDER BY a.sent_time DESC",
-        "system": "진행중인 PT의 중요 키워드가 포함된 의제를 찾습니다.",
+        "system": "프로젝트 팀의 핵심 논의 내용을 추출하는 인사이트 마이닝 쿼리입니다. PT 내부의 기술적 논의, 합의 사항, 미해결 이슈 등을 분석하여 향후 규정 방향을 예측합니다. 이는 선제적 기술 개발과 포지셔닝에 핵심 정보를 제공합니다.",
         "user": "프로젝트팀에서 다루는 중요한 내용들을 파악하고 싶습니다."
       },
       "parameters": [
@@ -3745,7 +4040,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT agenda_base as pt_code, COUNT(*) as total_activities, MAX(a.sent_time) as updated_at FROM agenda_all a WHERE agenda_base LIKE 'PT%' AND a.decision_status = 'completed' AND {period_condition} GROUP BY agenda_base ORDER BY updated_at DESC",
-        "system": "최근 완료된 PT들의 목록을 조회합니다.",
+        "system": "【목적】 Project Team 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 완료된 프로젝트팀들의 목록을 확인하고 싶습니다."
       },
       "parameters": [
@@ -3794,7 +4089,7 @@
       },
       "sql_template": {
         "query": "SELECT agenda_base as pt_code, a.subject, a.keywords, a.body FROM agenda_all a WHERE agenda_base LIKE 'PT%' AND a.decision_status = 'completed' AND (a.subject LIKE '%final%' OR a.subject LIKE '%complete%' OR a.subject LIKE '%완료%') AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "완료된 PT의 최종 보고서나 완료 관련 의제를 찾습니다.",
+        "system": "【목적】 Project Team 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "완료된 프로젝트팀의 주요 성과와 결과를 확인하고 싶습니다."
       },
       "parameters": [
@@ -3843,7 +4138,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                WHERE a.sent_time >= DATE('now', '-90 days') \n                AND a.keywords IS NOT NULL \n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 20",
-        "system": "최근 3개월간 가장 많이 언급된 키워드들을 빈도순으로 정렬합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 3개월간 어떤 주제들이 많이 논의되었는지 키워드 분석을 보고 싶습니다."
       },
       "parameters": [
@@ -3892,7 +4187,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                WHERE strftime('%Y', a.sent_time) = strftime('%Y', 'now', '-1 year')\n                AND a.keywords IS NOT NULL \n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 20",
-        "system": "작년 한 해 동안 가장 많이 언급된 키워드들을 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "작년에 어떤 주제들이 주요하게 다뤄졌는지 키워드 분석을 보고 싶습니다."
       },
       "parameters": [
@@ -3940,7 +4235,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                WHERE strftime('%Y', a.sent_time) = '2025'\n                AND a.keywords IS NOT NULL \n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 20",
-        "system": "2025년도의 주요 키워드들을 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "2025년에 논의되고 있는 주요 키워드들을 파악하고 싶습니다."
       },
       "parameters": [
@@ -3989,7 +4284,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.decision_status, a.keywords, a.body \n                FROM agenda_all a \n                WHERE a.agenda_panel = {panel} \n                AND a.decision_status = 'completed' \n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "특정 패널에서 완료된 의제들의 결과를 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "해당 패널에서 완료된 의제들의 최종 결과를 확인하고 싶습니다."
       },
       "parameters": [
@@ -4050,7 +4345,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sender_organization, a.decision_status, a.sent_time \n                FROM agenda_all a \n                WHERE a.agenda_panel = {panel} \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC \n                LIMIT 10",
-        "system": "특정 패널의 최근 의제들을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "해당 패널에서 최근에 논의된 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4110,7 +4405,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.agenda_panel,\n                    CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END as response_content\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE CASE {organization}\n                WHEN 'ABS' THEN arc.ABS\n                WHEN 'BV' THEN arc.BV\n                WHEN 'CCS' THEN arc.CCS\n                WHEN 'CRS' THEN arc.CRS\n                WHEN 'DNV' THEN arc.DNV\n                WHEN 'IRS' THEN arc.IRS\n                WHEN 'KR' THEN arc.KR\n                WHEN 'NK' THEN arc.NK\n                WHEN 'PRS' THEN arc.PRS\n                WHEN 'RINA' THEN arc.RINA\n                WHEN 'IL' THEN arc.IL\n                WHEN 'TL' THEN arc.TL\n                WHEN 'LR' THEN arc.LR\n            END IS NOT NULL\n                AND a.agenda_panel = {panel}\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
-        "system": "특정 기관이 특정 패널에서 응답한 내역을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "해당 기관이 특정 패널에서 어떤 응답을 했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -4179,7 +4474,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.agenda_panel, a.keywords, a.sent_time \n                FROM agenda_all a \n                WHERE (a.keywords LIKE '%' || {keyword} || '%' OR a.subject LIKE '%' || {keyword} || '%')\n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "특정 키워드가 포함된 의제들을 검색합니다.",
+        "system": "【목적】 Keyword Search 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한. 키워드 기반 의제 필터링 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 주제에 대해 논의되고 있는 의제들을 찾고 싶습니다."
       },
       "parameters": [
@@ -4240,7 +4535,7 @@
       },
       "sql_template": {
         "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.deadline < DATE('now', '+7 days')\n                AND a.decision_status != 'completed'\n                AND (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.deadline ASC",
-        "system": "특정 기관이 7일 이내 응답해야 하는 긴급 의제를 찾습니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "마감이 임박한 긴급 응답 필요 의제를 확인하고 싶습니다."
       },
       "parameters": [
@@ -4305,7 +4600,7 @@
       },
       "sql_template": {
         "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "특정 패널에서 특정 기관이 응답해야 하는 의제를 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "특정 패널에서 우리 기관이 응답해야 하는 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4374,7 +4669,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sender, a.sent_time \n                FROM agenda_all a \n                WHERE a.agenda_panel = {panel} \n                AND a.sender_type = 'CHAIR' \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC \n                LIMIT 10",
-        "system": "특정 패널 의장이 발송한 최근 메일을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "패널 의장이 최근에 보낸 메일들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4434,7 +4729,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.response_org, a.deadline, a.sent_time \n                FROM agenda_all a \n                WHERE a.agenda_panel = {panel} \n                AND a.sender_type = 'CHAIR' \n                AND a.response_org IS NOT NULL \n                AND {period_condition} \n                ORDER BY a.deadline ASC",
-        "system": "특정 패널 의장이 응답을 요청한 의제들을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "패널 의장이 응답을 요청한 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4494,7 +4789,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                WHERE a.agenda_panel = {panel} \n                AND a.sender LIKE '%CHAIR%' \n                AND a.keywords IS NOT NULL \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 10",
-        "system": "특정 패널 의장이 보낸 메일의 주요 키워드를 분석합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "패널 의장이 주로 다루는 주제들을 키워드로 파악하고 싶습니다."
       },
       "parameters": [
@@ -4556,7 +4851,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.agenda_panel, a.subject, a.sender, a.sent_time FROM agenda_all a WHERE (a.subject LIKE '%meeting%' OR a.subject LIKE '%회의%') AND (a.subject LIKE '%notice%' OR a.subject LIKE '%notification%' OR a.subject LIKE '%알림%' OR a.subject LIKE '%공지%' OR a.subject LIKE '%개최%') AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "회의 개최 알림이나 공지가 포함된 메일을 찾습니다.",
+        "system": "【목적】 Meeting Info 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 회의 일정이나 개최 공지 메일을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4611,7 +4906,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_panel, a.agenda_code, a.subject, a.body, a.sender, a.sent_time \n                FROM agenda_all a \n                WHERE a.sender_type = 'CHAIR' \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC \n                LIMIT 10",
-        "system": "모든 패널의 의장이 보낸 최근 메일 내용을 조회합니다.",
+        "system": "【목적】 Chair Communication 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "의장들이 최근에 보낸 메일의 구체적인 내용을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4666,7 +4961,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    {organization} as organization,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) as responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}",
-        "system": "특정 패널에서 특정 기관의 응답률을 계산합니다.",
+        "system": "【목적】 Panel Statistics 관련 데이터 조회 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "특정 패널에서 우리 기관의 응답률을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4736,7 +5031,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%Y', a.sent_time) as year,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) as responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL) THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}\n                GROUP BY year\n                ORDER BY year DESC",
-        "system": "올해 특정 패널에서 특정 기관의 응답률을 계산합니다.",
+        "system": "【목적】 Panel Statistics 관련 데이터 조회 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "올해 특정 패널에서 우리 기관의 응답률을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4806,7 +5101,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                WHERE a.agenda_panel = {panel} \n                AND a.keywords IS NOT NULL \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 10",
-        "system": "특정 패널에서 최근 논의된 주요 키워드를 분석합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 패널에서 최근 어떤 주제들이 주로 논의되는지 키워드로 파악하고 싶습니다."
       },
       "parameters": [
@@ -4867,7 +5162,7 @@
       },
       "sql_template": {
         "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND a.hasAttachments = 1\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "의장이 첨부파일과 함께 보낸 의제 중 특정 기관이 미응답한 것을 찾습니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "의장이 첨부파일과 함께 보낸 의제 중 우리가 아직 응답하지 않은 것을 확인하고 싶습니다."
       },
       "parameters": [
@@ -4931,7 +5226,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_code,\n                    subject,\n                    decision_status,\n                    deadline,\n                    sent_time,\n                    sender_organization\n                FROM agenda_all a\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제 코드의 현재 상태를 조회합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제가 현재 어떤 상태인지 확인하고 싶습니다."
       },
       "parameters": [
@@ -4994,7 +5289,7 @@
       },
       "sql_template": {
         "query": "SELECT a.*\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = {organization} OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR (arc.ABS IS NULL AND arc.BV IS NULL AND arc.CCS IS NULL AND \n                           arc.CRS IS NULL AND arc.DNV IS NULL AND arc.IRS IS NULL AND \n                           arc.KR IS NULL AND arc.NK IS NULL AND arc.PRS IS NULL AND \n                           arc.RINA IS NULL AND arc.IL IS NULL AND arc.TL IS NULL AND arc.LR IS NULL))\n                AND a.hasAttachments = 1\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "특정 기관이 응답해야 하는 의제 중 의장이 첨부파일과 함께 보낸 것을 찾습니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "의장이 보낸 메일 중 우리가 응답해야 하는 것들에 첨부파일이 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5057,7 +5352,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE a.agenda_code = {agenda}\n                AND hasAttachments = 1",
-        "system": "특정 의제의 첨부파일 유무를 확인합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에 첨부파일이 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5119,7 +5414,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END as opinion\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)",
-        "system": "특정 의제에 대한 특정 기관의 응답 의견을 조회합니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 조직별 필터링, 기간 설정 가능",
         "user": "특정 의제에 대해 특정 기관이 어떤 의견을 제시했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5189,7 +5484,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT a2.agenda_code, a2.subject, a2.keywords, a2.sent_time \n                FROM agenda_all a1 \n                JOIN agenda_all a2 ON a1.keywords = a2.keywords \n                WHERE a1.agenda_code = {agenda} \n                AND a2.agenda_code != {agenda} \n                AND {period_condition} \n                ORDER BY a2.sent_time DESC",
-        "system": "특정 의제와 키워드나 제목이 유사한 관련 의제들을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용 【조건】 타 기관의 응답 및 입장 포함. 사용자 지정 기간 내 데이터로 제한 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제와 관련된 다른 의제들을 찾아서 검토하고 싶습니다."
       },
       "parameters": [
@@ -5251,7 +5546,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    CASE \n                        WHEN arc2.KR IS NOT NULL THEN 'KR' \n                        WHEN arc2.NK IS NOT NULL THEN 'NK' \n                        WHEN arc2.CCS IS NOT NULL THEN 'CCS' \n                        ELSE 'Other' \n                    END as organization,\n                    COUNT(*) as count\n                FROM agenda_all a1\n                JOIN agenda_responses_content arc1 ON a1.agenda_base_version = arc1.agenda_base_version\n                JOIN agenda_all a2 ON a1.keywords = a2.keywords\n                JOIN agenda_responses_content arc2 ON a2.agenda_base_version = arc2.agenda_base_version\n                WHERE a1.agenda_code = {agenda}\n                AND arc1.{organization} IS NOT NULL\n                AND a2.agenda_code != {agenda}\n                GROUP BY organization",
-        "system": "특정 의제에서 특정 기관 의견에 동의하거나 지지를 표명한 다른 기관들을 찾습니다.",
+        "system": "특정 의제에 대한 조직 간 의견 일치를 분석하는 합의 형성 분석 쿼리입니다. 동일하거나 유사한 입장을 가진 조직들을 클러스터링하여 자연스러운 연합 형성 가능성을 평가합니다. 이는 의제 통과 가능성 예측과 로비 전략 수립에 핵심 정보입니다.",
         "user": "특정 기관의 의견에 어떤 기관들이 동의했는지와 그 근거를 확인하고 싶습니다."
       },
       "parameters": [
@@ -5321,7 +5616,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    CASE \n                        WHEN arc2.KR IS NOT NULL THEN 'KR' \n                        WHEN arc2.NK IS NOT NULL THEN 'NK' \n                        WHEN arc2.CCS IS NOT NULL THEN 'CCS' \n                        ELSE 'Other' \n                    END as organization,\n                    COUNT(*) as count\n                FROM agenda_all a1\n                JOIN agenda_responses_content arc1 ON a1.agenda_base_version = arc1.agenda_base_version\n                JOIN agenda_all a2 ON a1.keywords = a2.keywords\n                JOIN agenda_responses_content arc2 ON a2.agenda_base_version = arc2.agenda_base_version\n                WHERE a1.agenda_code = {agenda}\n                AND arc1.{organization} IS NOT NULL\n                AND a2.agenda_code != {agenda}\n                AND arc1.{organization} != arc2.{organization}\n                GROUP BY organization",
-        "system": "특정 의제에서 특정 기관 의견에 반대하거나 우려를 표명한 다른 기관들을 찾습니다.",
+        "system": "의견 대립 상황을 분석하는 갈등 지점 식별 쿼리입니다. 상반된 입장을 가진 조직들을 식별하여 협상의 난이도와 타협점을 예측합니다. 주요 대립 지점을 사전에 파악하면 중재안이나 대안 제시를 통해 교착 상태를 해결할 수 있습니다.",
         "user": "특정 기관의 의견에 어떤 기관들이 반대했는지와 그 근거를 확인하고 싶습니다."
       },
       "parameters": [
@@ -5391,7 +5686,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE WHEN arc.KR IS NOT NULL THEN 'KR: ' || SUBSTR(arc.KR, 1, 100) || '\n' ELSE '' END ||\n                    CASE WHEN arc.NK IS NOT NULL THEN 'NK: ' || SUBSTR(arc.NK, 1, 100) || '\n' ELSE '' END ||\n                    CASE WHEN arc.CCS IS NOT NULL THEN 'CCS: ' || SUBSTR(arc.CCS, 1, 100) || '\n' ELSE '' END ||\n                    CASE WHEN arc.ABS IS NOT NULL THEN 'ABS: ' || SUBSTR(arc.ABS, 1, 100) || '\n' ELSE '' END ||\n                    CASE WHEN arc.DNV IS NOT NULL THEN 'DNV: ' || SUBSTR(arc.DNV, 1, 100) || '\n' ELSE '' END ||\n                    CASE WHEN arc.BV IS NOT NULL THEN 'BV: ' || SUBSTR(arc.BV, 1, 100) ELSE '' END as all_opinions\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제에 대한 여러 기관의 의견을 조회합니다.",
+        "system": "복수 조직의 의견을 동시에 비교하는 다자간 입장 분석 쿼리입니다. 3개 이상 조직의 응답을 매트릭스 형태로 비교하여 복잡한 의견 지형도를 시각화합니다. 이는 다자간 협상에서 coalition building과 compromise 전략 수립에 필수적입니다.",
         "user": "특정 의제에 대해 여러 기관들이 어떤 의견을 제시했는지 비교하고 싶습니다."
       },
       "parameters": [
@@ -5466,7 +5761,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE\n                        WHEN art.KR <= COALESCE(art.NK, 999999) AND art.KR <= COALESCE(art.CCS, 999999) \n                             AND art.KR IS NOT NULL THEN 'KR'\n                        WHEN art.NK <= COALESCE(art.KR, 999999) AND art.NK <= COALESCE(art.CCS, 999999) \n                             AND art.NK IS NOT NULL THEN 'NK'\n                        WHEN art.CCS <= COALESCE(art.KR, 999999) AND art.CCS <= COALESCE(art.NK, 999999) \n                             AND art.CCS IS NOT NULL THEN 'CCS'\n                        ELSE 'None'\n                    END as fastest_responder,\n                    CASE\n                        WHEN art.KR <= COALESCE(art.NK, 999999) AND art.KR <= COALESCE(art.CCS, 999999) \n                             AND art.KR IS NOT NULL THEN julianday(art.KR) - julianday(a.sent_time)\n                        WHEN art.NK <= COALESCE(art.KR, 999999) AND art.NK <= COALESCE(art.CCS, 999999) \n                             AND art.NK IS NOT NULL THEN julianday(art.NK) - julianday(a.sent_time)\n                        WHEN art.CCS <= COALESCE(art.KR, 999999) AND art.CCS <= COALESCE(art.NK, 999999) \n                             AND art.CCS IS NOT NULL THEN julianday(art.CCS) - julianday(a.sent_time)\n                        ELSE NULL\n                    END as response_days\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제에 가장 먼저 응답한 기관과 그 의견을 조회합니다.",
+        "system": "의제별 최초 응답자를 식별하는 선도 조직 분석 쿼리입니다. 특정 이슈에 가장 먼저 반응하는 조직은 해당 분야의 리더십을 가진 경우가 많습니다. 이들의 초기 입장은 후속 논의의 방향을 설정하므로 주의 깊은 분석이 필요합니다.",
         "user": "어떤 기관이 가장 빨리 응답했고 어떤 의견을 제시했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5528,7 +5823,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_code,\n                    subject,\n                    keywords\n                FROM agenda_all a\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제의 키워드를 조회합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용 【효과】 핵심 이슈 조기 감지 및 대응 방안 마련",
         "user": "특정 의제의 주요 키워드를 확인하고 싶습니다."
       },
       "parameters": [
@@ -5575,7 +5870,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    CASE \n                        WHEN arc.KR IS NOT NULL THEN 'KR' \n                        WHEN arc.NK IS NOT NULL THEN 'NK' \n                        WHEN arc.CCS IS NOT NULL THEN 'CCS' \n                        ELSE 'None' \n                    END as responder,\n                    a.keywords,\n                    SUBSTR(COALESCE(arc.KR, arc.NK, arc.CCS), 1, 200) as response_excerpt\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제에 대한 응답들의 주요 키워드를 집계합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all, agenda_responses_content 테이블 활용 【효과】 핵심 이슈 조기 감지 및 대응 방안 마련",
         "user": "특정 의제에 대한 응답들에서 어떤 키워드들이 많이 언급되었는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5623,7 +5918,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT a2.agenda_code, a2.subject, a2.keywords \n                FROM agenda_all a1 \n                JOIN agenda_all a2 ON a1.keywords = a2.keywords AND a1.agenda_panel = a2.agenda_panel\n                WHERE a1.agenda_code = {agenda} \n                AND a2.agenda_code != {agenda} \n                AND {period_condition}\n                ORDER BY a2.sent_time DESC",
-        "system": "특정 의제의 키워드와 관련된 특정 패널의 다른 의제들을 찾습니다.",
+        "system": "특정 의제의 키워드와 관련된 다른 패널 의제를 찾는 크로스 패널 연관성 분석 쿼리입니다. 동일한 기술이나 규제가 여러 패널에서 다르게 논의되는 경우를 발견하여 일관성 있는 대응 전략을 수립할 수 있습니다. 패널 간 상충되는 결정을 사전에 방지하는 데도 유용합니다.",
         "user": "특정 의제의 키워드가 다른 패널에서도 논의되고 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5693,7 +5988,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    'KR Opinion: ' || SUBSTR(arc.KR, 1, 200) as kr_opinion,\n                    CASE WHEN arc.NK LIKE '%agree%' OR arc.NK LIKE '%support%' THEN 'NK agrees' ELSE '' END ||\n                    CASE WHEN arc.CCS LIKE '%agree%' OR arc.CCS LIKE '%support%' THEN ' CCS agrees' ELSE '' END ||\n                    CASE WHEN arc.ABS LIKE '%agree%' OR arc.ABS LIKE '%support%' THEN ' ABS agrees' ELSE '' END as agreements\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND arc.KR IS NOT NULL",
-        "system": "특정 의제에서 KR의 의견에 동의한 기관들과 이슈를 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "우리(KR)의 의견에 어떤 기관들이 동의했고 어떤 이슈에 대해 동의했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5758,7 +6053,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    'KR Opinion: ' || SUBSTR(arc.KR, 1, 200) as kr_opinion,\n                    CASE WHEN arc.NK LIKE '%disagree%' OR arc.NK LIKE '%oppose%' THEN 'NK disagrees' ELSE '' END ||\n                    CASE WHEN arc.CCS LIKE '%disagree%' OR arc.CCS LIKE '%oppose%' THEN ' CCS disagrees' ELSE '' END ||\n                    CASE WHEN arc.ABS LIKE '%disagree%' OR arc.ABS LIKE '%oppose%' THEN ' ABS disagrees' ELSE '' END as disagreements\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND arc.KR IS NOT NULL",
-        "system": "특정 의제에서 KR의 의견에 반대한 기관들과 이슈를 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "우리(KR)의 의견에 어떤 기관들이 반대했고 어떤 이슈에 대해 반대했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5821,7 +6116,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    CASE \n                        WHEN arc.KR IS NOT NULL THEN 'KR' \n                        WHEN arc.NK IS NOT NULL THEN 'NK' \n                        WHEN arc.CCS IS NOT NULL THEN 'CCS' \n                        ELSE 'None' \n                    END as responder,\n                    SUBSTR(COALESCE(arc.KR, arc.NK, arc.CCS), 1, 200) as response_excerpt\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND (a.keywords LIKE '%UR%' OR a.subject LIKE '%UR%')",
-        "system": "특정 의제에서 UR(Uniform Requirement)과 관련된 응답을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에서 UR과 관련된 내용이 논의되었는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5884,7 +6179,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    'agenda' as source_type, \n                    agenda_code, \n                    subject, \n                    keywords, \n                    sent_time \n                FROM agenda_all \n                WHERE (keywords LIKE '%EG%' OR subject LIKE '%Expert Group%')\n                AND {period_condition}\n                \n                UNION ALL\n                \n                SELECT \n                    'chair' as source_type,\n                    agenda_code,\n                    subject,\n                    keywords,\n                    created_at as sent_time\n                FROM agenda_chair\n                WHERE (keywords LIKE '%EG%' OR subject LIKE '%Expert Group%')\n                AND created_at >= DATE('now', '-30 days')\n                \n                ORDER BY sent_time DESC",
-        "system": "최근 의제와 응답에서 EG(Expert Group) 관련 내용을 찾습니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all, agenda_chair 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 Expert Group과 관련된 논의가 있었는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -5940,7 +6235,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.body, a.sent_time FROM agenda_all a WHERE (a.body LIKE '%future work%' OR a.body LIKE '%향후 작업%' OR a.body LIKE '%to be developed%' OR a.body LIKE '%추후 개발%' OR a.body LIKE '%next meeting%' OR a.body LIKE '%다음 회의%') AND {period_condition} ORDER BY a.sent_time DESC",
-        "system": "향후 작업 계획이나 약속이 포함된 최근 논의를 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근에 향후 작업하기로 합의한 내용들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -5994,7 +6289,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.keywords,\n                    CASE \n                        WHEN arc.KR IS NOT NULL THEN 'KR: ' || SUBSTR(arc.KR, 1, 100)\n                        ELSE ''\n                    END ||\n                    CASE \n                        WHEN arc.NK IS NOT NULL THEN ' NK: ' || SUBSTR(arc.NK, 1, 100)\n                        ELSE ''\n                    END ||\n                    CASE \n                        WHEN arc.CCS IS NOT NULL THEN ' CCS: ' || SUBSTR(arc.CCS, 1, 100)\n                        ELSE ''\n                    END as opinions\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND a.keywords LIKE '%' || {issue} || '%'",
-        "system": "특정 의제의 이슈별로 각 기관의 의견을 정리합니다.",
+        "system": "특정 이슈에 대한 전체 조직의 의견 스펙트럼을 분석하는 포지션 매핑 쿼리입니다. 찬성부터 반대까지의 의견 분포를 정량화하여 의제의 통과 가능성과 필요한 로비 강도를 예측합니다. 중립적 입장의 조직들은 설득 대상으로 중요합니다.",
         "user": "특정 의제의 주요 이슈들에 대해 각 기관이 어떤 의견을 가지고 있는지 이슈별로 정리해서 보고 싶습니다."
       },
       "parameters": [
@@ -6057,7 +6352,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT a2.agenda_code, a2.subject, a2.keywords, a2.agenda_panel \n                FROM agenda_all a1 \n                JOIN agenda_all a2 ON a1.keywords = a2.keywords \n                WHERE a1.agenda_code = {agenda} \n                AND a2.agenda_code != {agenda} \n                AND {period_condition}\n                ORDER BY a2.sent_time DESC",
-        "system": "특정 의제의 주요 이슈와 관련된 다른 의제들을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제의 주요 이슈가 다른 의제에서도 논의되고 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -6119,7 +6414,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.body, a.keywords FROM agenda_all a WHERE a.agenda_code = 'PLACEHOLDER_AGENDA' AND (a.body LIKE '%UR%' OR a.keywords LIKE '%UR%' OR a.subject LIKE '%Uniform Requirement%')",
-        "system": "특정 의제에서 UR 관련 내용을 찾습니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【효과】 정보 접근성 향상으로 업무 생산성 증대",
         "user": "특정 의제에 UR과 관련된 내용이 포함되어 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -6166,7 +6461,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.body, a.keywords FROM agenda_all a WHERE a.agenda_code = 'PLACEHOLDER_AGENDA' AND (a.body LIKE '%IMO%' OR a.keywords LIKE '%IMO%' OR a.subject LIKE '%International Maritime Organization%')",
-        "system": "특정 의제에서 IMO 관련 내용을 찾습니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에 IMO와 관련된 내용이 포함되어 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -6228,7 +6523,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_code,\n                    subject,\n                    decision_status,\n                    CASE \n                        WHEN decision_status = 'completed' THEN 'Completed'\n                        WHEN decision_status = 'decision' THEN 'Decision Made'\n                        ELSE 'In Progress'\n                    END as status\n                FROM agenda_all a\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제의 완료 여부를 확인합니다.",
+        "system": "【목적】 의제 진행 상태를 파악하여 업무 우선순위를 관리 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제가 종료되었는지 현재 상태를 확인하고 싶습니다."
       },
       "parameters": [
@@ -6290,7 +6585,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.keywords, a.body FROM agenda_all a WHERE (a.agenda_code = 'PLACEHOLDER_AGENDA' OR agenda_base = 'PLACEHOLDER_AGENDA') AND (a.keywords LIKE '%important%' OR a.keywords LIKE '%중요%' OR a.keywords LIKE '%critical%' OR a.keywords LIKE '%핵심%')",
-        "system": "특정 의제의 중요 이슈를 키워드와 내용에서 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용 【효과】 선제적 대응 전략 수립으로 경쟁력 확보",
         "user": "특정 의제에서 다루는 중요한 이슈들이 무엇인지 파악하고 싶습니다."
       },
       "parameters": [
@@ -6337,7 +6632,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sent_time, a.decision_status FROM agenda_all a WHERE agenda_base = SUBSTR('PLACEHOLDER_AGENDA', 1, LENGTH('PLACEHOLDER_AGENDA')-1) AND a.agenda_code < 'PLACEHOLDER_AGENDA' ORDER BY a.agenda_code DESC",
-        "system": "동일한 의제 베이스의 이전 버전들을 찾아 논의 이력을 확인합니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "이 의제가 이전에도 논의된 적이 있는지 이력을 확인하고 싶습니다."
       },
       "parameters": [
@@ -6399,7 +6694,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT a2.agenda_panel, COUNT(DISTINCT a2.agenda_code) as agenda_count \n                FROM agenda_all a1 \n                JOIN agenda_all a2 ON a1.keywords = a2.keywords \n                WHERE a1.agenda_code = {agenda} \n                AND a2.agenda_panel != a1.agenda_panel \n                GROUP BY a2.agenda_panel \n                ORDER BY agenda_count DESC",
-        "system": "특정 의제와 유사한 키워드를 가진 다른 패널들을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 타 기관의 응답 및 입장 포함 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험",
         "user": "이 의제와 관련된 주제가 다른 패널에서도 논의되고 있는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -6446,7 +6741,7 @@
       },
       "sql_template": {
         "query": "SELECT DISTINCT a2.agenda_panel, a2.agenda_code, a2.subject, a2.keywords \n                FROM agenda_all a1 \n                JOIN agenda_all a2 ON a1.keywords = a2.keywords \n                WHERE a1.agenda_code = {agenda} \n                AND a2.agenda_panel != a1.agenda_panel \n                AND {period_condition}\n                ORDER BY a2.sent_time DESC",
-        "system": "특정 의제와 유사한 키워드를 가진 다른 패널의 의제들을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all 테이블 활용 【조건】 타 기관의 응답 및 입장 포함. 사용자 지정 기간 내 데이터로 제한 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험 【입력】 사용자가 기간 설정 가능",
         "user": "이 의제와 관련된 주제를 다루는 다른 패널의 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -6510,7 +6805,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.deadline,\n                    CASE \n                        WHEN arc.KR IS NOT NULL THEN 'Responded' \n                        ELSE 'No Response' \n                    END as kr_status,\n                    arc.KR as kr_response\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제에 KR이 응답했는지 확인합니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에 우리(KR)가 응답했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -6573,7 +6868,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE WHEN arc.KR IS NOT NULL THEN 'KR ' ELSE '' END ||\n                    CASE WHEN arc.NK IS NOT NULL THEN 'NK ' ELSE '' END ||\n                    CASE WHEN arc.CCS IS NOT NULL THEN 'CCS ' ELSE '' END ||\n                    CASE WHEN arc.ABS IS NOT NULL THEN 'ABS ' ELSE '' END ||\n                    CASE WHEN arc.DNV IS NOT NULL THEN 'DNV ' ELSE '' END as responded_orgs\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.decision_status = 'ongoing'\n                AND arc.agenda_base_version IS NOT NULL\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
-        "system": "특정 패널의 진행중인 의제에 응답한 기관들을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 패널에서 진행중인 의제들에 어떤 기관들이 응답했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -6636,7 +6931,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.deadline,\n                    'Waiting: ' ||\n                    CASE WHEN arc.KR IS NULL AND (a.response_org = 'KR' OR a.response_org = 'ALL') THEN 'KR ' ELSE '' END ||\n                    CASE WHEN arc.NK IS NULL AND (a.response_org = 'NK' OR a.response_org = 'ALL') THEN 'NK ' ELSE '' END ||\n                    CASE WHEN arc.CCS IS NULL AND (a.response_org = 'CCS' OR a.response_org = 'ALL') THEN 'CCS ' ELSE '' END as no_response_orgs\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND a.sender_type = 'CHAIR'\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.deadline ASC",
-        "system": "특정 패널의 진행중인 의제에 응답하지 않은 기관들을 찾습니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 기간 설정 가능",
         "user": "특정 패널에서 아직 응답하지 않은 기관들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -6699,7 +6994,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    CASE \n                        WHEN arc.KR IS NOT NULL THEN 'KR' \n                        WHEN arc.NK IS NOT NULL THEN 'NK' \n                        WHEN arc.CCS IS NOT NULL THEN 'CCS' \n                        ELSE 'None' \n                    END as responder,\n                    SUBSTR(COALESCE(arc.KR, arc.NK, arc.CCS), 1, 500) as response_content,\n                    arc.updated_at\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제에 대한 모든 응답을 분석하여 각 기관의 입장을 파악합니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에 대한 지금까지의 모든 응답을 종합적으로 분석하고 싶습니다."
       },
       "parameters": [
@@ -6762,7 +7057,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    CASE \n                        WHEN arc.KR IS NOT NULL THEN 'KR' \n                        WHEN arc.NK IS NOT NULL THEN 'NK' \n                        WHEN arc.CCS IS NOT NULL THEN 'CCS' \n                        ELSE 'None' \n                    END as responder,\n                    a.body as mail_content,\n                    SUBSTR(COALESCE(arc.KR, arc.NK, arc.CCS), 1, 500) as response_content\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제의 기존 응답들과 새로운 내용을 비교 분석합니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한. 키워드 기반 의제 필터링 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "새로운 메일 내용이 기존 응답들과 어떻게 다른지 비교 분석하고 싶습니다."
       },
       "parameters": [
@@ -6832,7 +7127,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_code,\n                    subject,\n                    body,\n                    keywords,\n                    decision_status\n                FROM agenda_all a\n                WHERE a.agenda_code = {agenda}",
-        "system": "특정 의제의 전체 정보를 조회합니다.",
+        "system": "【목적】 다양한 조건으로 의제를 검색하여 필요 정보 신속 획득 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에 대한 전반적인 정보를 확인하고 싶습니다."
       },
       "parameters": [
@@ -6894,7 +7189,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_panel, COUNT(DISTINCT a.agenda_code) as agenda_count, COUNT(DISTINCT CASE WHEN a.decision_status = 'ongoing' THEN a.agenda_code END) as ongoing_count, COUNT(DISTINCT CASE WHEN a.decision_status = 'completed' THEN a.agenda_code END) as completed_count FROM agenda_all a WHERE a.sent_time BETWEEN {period_start} AND {period_end} GROUP BY a.agenda_panel ORDER BY agenda_count DESC",
-        "system": "최근 각 패널별 진행 현황을 집계합니다.",
+        "system": "【목적】 의제 진행 상태를 파악하여 업무 우선순위를 관리 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 전체적인 진행 현황을 파악하고 싶습니다."
       },
       "parameters": [
@@ -6951,7 +7246,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code, \n                    a.subject, \n                    COALESCE(arc.KR, arc.NK, arc.CCS) as existing_responses, \n                    a.keywords, \n                    arc.updated_at \n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_code = {agenda}\n                AND {period_condition}",
-        "system": "KR의 이전 의견들을 조회하여 회신 작성의 기초 자료로 활용합니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "우리(KR)의 이전 의견을 참고하여 일관성 있는 회신을 작성하고 싶습니다."
       },
       "parameters": [
@@ -7015,7 +7310,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_panel, a.subject, a.body, a.sent_time FROM agenda_all a WHERE (a.subject LIKE '%meeting%' OR a.subject LIKE '%회의%') AND (a.body LIKE '%scheduled%' OR a.body LIKE '%planned%' OR a.body LIKE '%예정%' OR a.body LIKE '%개최%') AND a.deadline > DATE('now') ORDER BY a.deadline ASC",
-        "system": "향후 예정된 회의 정보를 찾습니다.",
+        "system": "향후 예정된 회의 일정을 조회하는 미래 일정 관리 쿼리입니다. 회의 날짜, 장소, 주요 의제 등을 사전에 파악하여 출장 계획과 사전 준비를 체계적으로 진행할 수 있습니다. 복수 회의가 겹치는 경우 우선순위 결정에도 활용됩니다.",
         "user": "앞으로 예정된 회의 일정을 확인하고 싶습니다."
       },
       "parameters": [
@@ -7069,7 +7364,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.keywords, a.sent_time, a.decision_status \n                FROM agenda_all a \n                WHERE a.agenda_panel = {panel} \n                AND (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "특정 패널에서 진행된 Expert Group 관련 작업을 찾습니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 패널의 EG 작업 현황을 확인하고 싶습니다."
       },
       "parameters": [
@@ -7130,7 +7425,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.decision_status,\n                    COUNT(CASE WHEN arc.KR IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.NK IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.CCS IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.ABS IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.DNV IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.BV IS NOT NULL THEN 1 END) as response_count\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = {panel}\n                AND (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                AND {period_condition}\n                GROUP BY a.agenda_code, a.subject, a.decision_status\n                ORDER BY response_count DESC, a.sent_time DESC",
-        "system": "특정 패널의 EG 주요 진행사항과 응답 현황을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 패널에서 진행된 EG의 주요 진행 상황을 파악하고 싶습니다."
       },
       "parameters": [
@@ -7191,7 +7486,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    org_name,\n                    COUNT(*) as participation_count\n                FROM (\n                    SELECT 'KR' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                    AND arc.KR IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                    \n                    UNION ALL\n                    \n                    SELECT 'NK' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                    AND arc.NK IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                    \n                    UNION ALL\n                    \n                    SELECT 'CCS' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                    AND arc.CCS IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                )\n                GROUP BY org_name\n                ORDER BY participation_count DESC",
-        "system": "특정 패널의 특정 EG에 참여한 기관들을 찾습니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 Expert Group에 어떤 기관들이 참여했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -7262,7 +7557,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.sent_time as meeting_date,\n                    a.agenda_code,\n                    a.subject,\n                    (CASE WHEN arc.KR IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.NK IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.CCS IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.ABS IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.DNV IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.BV IS NOT NULL THEN 1 ELSE 0 END) as attendance_count\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.mail_type = 'NOTIFICATION'\n                AND a.subject LIKE '%meeting%'\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "특정 의제의 회의 참석 가능 여부를 기관별로 정리합니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제의 회의에 어떤 기관이 참석 가능한지 정리하고 싶습니다."
       },
       "parameters": [
@@ -7325,7 +7620,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    org_name,\n                    COUNT(*) as meetings_attended\n                FROM (\n                    SELECT 'KR' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE a.mail_type = 'NOTIFICATION' AND a.subject LIKE '%meeting%'\n                    AND arc.KR IS NOT NULL AND {period_condition}\n                    \n                    UNION ALL\n                    \n                    SELECT 'NK' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE a.mail_type = 'NOTIFICATION' AND a.subject LIKE '%meeting%'\n                    AND arc.NK IS NOT NULL AND {period_condition}\n                    \n                    UNION ALL\n                    \n                    SELECT 'CCS' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE a.mail_type = 'NOTIFICATION' AND a.subject LIKE '%meeting%'\n                    AND arc.CCS IS NOT NULL AND {period_condition}\n                )\n                GROUP BY org_name\n                ORDER BY meetings_attended DESC",
-        "system": "특정 의제의 기관별 회의 참석 가능 여부를 집계합니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "각 기관이 회의에 참석 가능한지 한눈에 보고 싶습니다."
       },
       "parameters": [
@@ -7388,7 +7683,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END as org_request,\n                    CASE \n                        WHEN CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%request%' OR CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%ask%' \n                        THEN 'Has Request' \n                        ELSE 'No Request' \n                    END as request_status\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (arc.ABS IS NOT NULL OR arc.BV IS NOT NULL OR arc.CCS IS NOT NULL OR \n                                  arc.CRS IS NOT NULL OR arc.DNV IS NOT NULL OR arc.IRS IS NOT NULL OR \n                                  arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.PRS IS NOT NULL OR \n                                  arc.RINA IS NOT NULL OR arc.IL IS NOT NULL OR arc.TL IS NOT NULL OR arc.LR IS NOT NULL)\n                AND (CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%request%' OR CASE {organization}\n            WHEN 'ABS' THEN arc.ABS\n            WHEN 'BV' THEN arc.BV\n            WHEN 'CCS' THEN arc.CCS\n            WHEN 'CRS' THEN arc.CRS\n            WHEN 'DNV' THEN arc.DNV\n            WHEN 'IRS' THEN arc.IRS\n            WHEN 'KR' THEN arc.KR\n            WHEN 'NK' THEN arc.NK\n            WHEN 'PRS' THEN arc.PRS\n            WHEN 'RINA' THEN arc.RINA\n            WHEN 'IL' THEN arc.IL\n            WHEN 'TL' THEN arc.TL\n            WHEN 'LR' THEN arc.LR\n        END LIKE '%ask%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "특정 의제에서 다른 기관에 답변이나 설명을 요구한 내용을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 타 기관의 응답 및 입장 포함. 사용자 지정 기간 내 데이터로 제한 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에서 기관 간 답변 요구가 있었는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -7451,7 +7746,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE WHEN arc.KR LIKE '%clarif%' THEN 'KR requests clarification' ELSE '' END ||\n                    CASE WHEN arc.NK LIKE '%clarif%' THEN ' NK requests clarification' ELSE '' END ||\n                    CASE WHEN arc.CCS LIKE '%clarif%' THEN ' CCS requests clarification' ELSE '' END as clarification_requests\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (arc.KR LIKE '%clarif%' OR arc.NK LIKE '%clarif%' OR arc.CCS LIKE '%clarif%')\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "특정 의제에서 명확화나 추가 설명을 요구한 내용을 찾습니다.",
+        "system": "【목적】 의제의 심층적 분석을 통한 전략적 인사이트 도출 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 조건별 분기 처리 【조건】 타 기관의 응답 및 입장 포함. 사용자 지정 기간 내 데이터로 제한 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제에서 기관 간 명확화 요구가 있었는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -7514,7 +7809,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count \n                FROM agenda_all a \n                WHERE a.sent_time >= DATE('now', '-90 days') \n                AND a.keywords IS NOT NULL \n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 20",
-        "system": "최근 3개월간 가장 많이 언급된 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 3개월 동안 어떤 키워드가 자주 논의되었는지 분석하고 싶습니다."
       },
       "parameters": [
@@ -7568,7 +7863,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count,\n                    COUNT(DISTINCT a.agenda_code) as agenda_count\n                FROM agenda_all a \n                WHERE strftime('%Y', a.sent_time) = strftime('%Y', 'now', '-1 year')\n                AND a.keywords IS NOT NULL \n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 20",
-        "system": "작년 한 해 동안 가장 많이 언급된 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "작년에 어떤 키워드가 주요하게 다뤄졌는지 분석하고 싶습니다."
       },
       "parameters": [
@@ -7622,7 +7917,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count,\n                    COUNT(DISTINCT a.agenda_code) as agenda_count\n                FROM agenda_all a \n                WHERE strftime('%Y', a.sent_time) = '2025'\n                AND a.keywords IS NOT NULL \n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 20",
-        "system": "2025년도의 주요 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "2025년에 논의되고 있는 주요 키워드를 분석하고 싶습니다."
       },
       "parameters": [
@@ -7676,7 +7971,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count,\n                    GROUP_CONCAT(DISTINCT a.agenda_panel) as panels\n                FROM agenda_all a \n                WHERE strftime('%Y', a.sent_time) = strftime('%Y', 'now')\n                AND a.keywords IS NOT NULL \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY a.keywords \n                ORDER BY frequency DESC \n                LIMIT 20",
-        "system": "특정 연도의 주요 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 연도에 어떤 키워드가 주요하게 다뤄졌는지 분석하고 싶습니다."
       },
       "parameters": [
@@ -7740,7 +8035,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by LLM direct response, not SQL",
-        "system": "LLM이 직접 기술개발 동향을 분석하여 응답합니다.",
+        "system": "【목적】 Llm Direct Response 관련 데이터 조회 및 분석",
         "user": "특정 의제와 관련된 현재 기술개발 동향을 분석하고 싶습니다."
       },
       "parameters": [
@@ -7781,7 +8076,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by LLM direct response, not SQL",
-        "system": "LLM이 직접 키워드 관련 기술개발 동향을 분석하여 응답합니다.",
+        "system": "【목적】 Llm Direct Response 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능 【입력】 사용자가 키워드 검색 가능",
         "user": "특정 키워드와 관련된 기술개발 동향을 분석하고 싶습니다."
       },
       "parameters": [
@@ -7823,7 +8118,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by LLM direct response, not SQL",
-        "system": "LLM이 직접 기술 배경을 설명합니다.",
+        "system": "【목적】 Llm Direct Response 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능",
         "user": "특정 키워드의 기술적 배경을 이해하고 싶습니다."
       },
       "parameters": [
@@ -7866,7 +8161,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP, not SQL",
-        "system": "VectorDB에서 UR 관련 문서를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "특정 의제와 관련된 UR 내용을 찾고 싶습니다."
       },
       "parameters": [
@@ -7908,7 +8203,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP, not SQL",
-        "system": "VectorDB에서 키워드와 관련된 UR 문서를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능 【입력】 사용자가 키워드 검색 가능",
         "user": "특정 키워드와 관련된 UR 내용을 찾고 싶습니다."
       },
       "parameters": [
@@ -7951,7 +8246,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP, not SQL",
-        "system": "VectorDB에서 PR 관련 문서를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "특정 의제와 관련된 PR 내용을 찾고 싶습니다."
       },
       "parameters": [
@@ -7993,7 +8288,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP, not SQL",
-        "system": "VectorDB에서 키워드와 관련된 PR 문서를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능 【입력】 사용자가 키워드 검색 가능",
         "user": "특정 키워드와 관련된 PR 내용을 찾고 싶습니다."
       },
       "parameters": [
@@ -8035,7 +8330,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for semantic similarity search",
-        "system": "VectorDB에서 유사한 논의를 의미적으로 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 타 기관의 응답 및 입장 포함 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험",
         "user": "다른 패널에서 유사한 주제로 논의된 내용을 찾고 싶습니다."
       },
       "parameters": [
@@ -8077,7 +8372,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for topic-based search",
-        "system": "VectorDB에서 자율운항선박 관련 의제를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "자율운항선박과 관련된 의제를 찾고 싶습니다."
       },
       "parameters": [
@@ -8119,7 +8414,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for topic-based search",
-        "system": "VectorDB에서 원격운항선박 관련 의제를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "원격운항선박과 관련된 의제를 찾고 싶습니다."
       },
       "parameters": [
@@ -8161,7 +8456,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for PT information",
-        "system": "VectorDB에서 진행 중인 PT 정보를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "현재 진행 중인 Project Team 목록을 확인하고 싶습니다."
       },
       "parameters": [],
@@ -8196,7 +8491,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for PT participant information",
-        "system": "VectorDB에서 PT 참여기관 정보를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "진행 중인 PT에 참여하는 기관들을 확인하고 싶습니다."
       },
       "parameters": [],
@@ -8231,7 +8526,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for PT member information",
-        "system": "VectorDB에서 PT 참여자 정보를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "진행 중인 PT의 참여자 명단을 확인하고 싶습니다."
       },
       "parameters": [],
@@ -8266,7 +8561,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for PT content",
-        "system": "VectorDB에서 PT의 중요 내용을 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
         "user": "진행 중인 PT의 주요 작업 내용을 확인하고 싶습니다."
       },
       "parameters": [],
@@ -8301,7 +8596,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for completed PT information",
-        "system": "VectorDB에서 완료된 PT 정보를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 완료된 Project Team 목록을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8352,7 +8647,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for completed PT content",
-        "system": "VectorDB에서 완료된 PT의 주요 내용을 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "완료된 PT의 주요 성과와 내용을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8403,7 +8698,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for completed PT participants",
-        "system": "VectorDB에서 완료된 PT의 참여기관 정보를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "완료된 PT에 참여했던 기관들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8454,7 +8749,7 @@
       },
       "sql_template": {
         "query": "-- This query should be handled by VectorDB MCP for completed PT members",
-        "system": "VectorDB에서 완료된 PT의 참여자 정보를 검색합니다.",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "완료된 PT의 참여자 명단을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8500,7 +8795,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.sender, sender_address, a.subject, a.sent_time FROM agenda_all a WHERE a.sender != sender_address ORDER BY a.sent_time DESC",
-        "system": "sender와 sender_address가 일치하지 않는 경우를 찾습니다.",
+        "system": "【목적】 Data Quality 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 타 기관의 응답 및 입장 포함. 사용자 지정 기간 내 데이터로 제한 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험 【입력】 사용자가 기간 설정 가능",
         "user": "발신자와 발신자 주소가 다른 경우를 확인하고 싶습니다."
       },
       "parameters": [
@@ -8554,7 +8849,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    CASE\n                        WHEN art.KR IS NOT NULL THEN 'KR'\n                        WHEN art.NK IS NOT NULL THEN 'NK'\n                        WHEN art.CCS IS NOT NULL THEN 'CCS'\n                        WHEN art.ABS IS NOT NULL THEN 'ABS'\n                        ELSE 'None'\n                    END as last_responder,\n                    art.updated_at\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\n                WHERE a.sent_time BETWEEN {period_start} AND {period_end}\n                AND art.updated_at IS NOT NULL\n                ORDER BY art.updated_at DESC\n                LIMIT 1",
-        "system": "의제 발송 후 가장 늦게 응답한 기관과 해당 의제를 찾습니다.",
+        "system": "【목적】 각국 응답을 종합 분석하여 국제 동향 파악 【구현】 agenda_all, agenda_responses_receivedtime 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "어떤 기관이 가장 늦게 응답했는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -8609,7 +8904,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE a.deadline < DATE('now', '+3 days')\n                AND deadline >= DATE('now')\n                AND decision_status != 'completed'\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "발송일부터 마감일까지 기간이 가장 짧은 의제들을 찾습니다.",
+        "system": "【목적】 마감일 관리를 통한 적시 대응 체계 구축 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "마감일이 촉박하게 설정된 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8663,7 +8958,7 @@
       },
       "sql_template": {
         "query": "SELECT organization_code, organization_name FROM (SELECT 'KR' as organization_code, 'Korean Register' as organization_name UNION SELECT 'BV', 'Bureau Veritas' UNION SELECT 'CCS', 'China Classification Society' UNION SELECT 'DNV', 'DNV' UNION SELECT 'LR', 'Lloyd''s Register' UNION SELECT 'ABS', 'American Bureau of Shipping' UNION SELECT 'NK', 'Nippon Kaiji Kyokai' UNION SELECT 'RINA', 'Registro Italiano Navale' UNION SELECT 'RS', 'Russian Maritime Register' UNION SELECT 'IRS', 'Indian Register of Shipping' UNION SELECT 'PRS', 'Polish Register of Shipping' UNION SELECT 'TL', 'Türk Loydu') ORDER BY organization_code",
-        "system": "IACS 정회원 목록을 조회합니다.",
+        "system": "IACS(국제선급연합회) 회원사 구성과 역할을 분석하는 조직 구조 파악 쿼리입니다. 각 선급의 전문 분야, 담당 패널, 리더십 포지션 등을 종합 분석하여 IACS 내 영향력 구조를 파악합니다. 이는 전략적 파트너십과 경쟁 관계 이해에 필수적입니다.",
         "user": "IACS 회원 기관들의 구성을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8711,7 +9006,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code, \n                    a.subject, \n                    a.decision_status, \n                    a.sent_time as updated_at, \n                    '' as result_summary\n                FROM agenda_all a \n                WHERE a.agenda_panel = 'SDTP' \n                AND a.decision_status = 'completed' \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
-        "system": "SDTP 패널에서 완료된 의제들의 결과를 조회합니다.",
+        "system": "SDTP(Safe Decarbonization Transition Programme) 패널의 완료 의제 결과를 분석하는 탈탄소화 성과 추적 쿼리입니다. 친환경 전환과 관련된 의제들의 최종 결정사항을 추적하여 규제 방향과 기술 요구사항을 파악합니다. 탈탄소화는 해운업계의 최대 과제로, 관련 결정사항은 막대한 투자와 기술 개발을 요구합니다.",
         "user": "SDTP에서 완료된 의제들의 결과를 확인하고 싶습니다."
       },
       "parameters": [
@@ -8767,7 +9062,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sent_time, a.decision_status \n                FROM agenda_all a \n                WHERE a.agenda_panel = 'SDTP' \n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "최근 30일간 SDTP에서 논의된 의제들을 조회합니다.",
+        "system": "SDTP 패널의 최근 의제 목록을 조회하는 탈탄소화 동향 모니터링 쿼리입니다. 대체 연료, 에너지 효율, 탄소 포집 등 다양한 탈탄소화 주제의 최신 논의를 추적합니다. 이를 통해 그린 기술 투자 우선순위와 R&D 방향을 결정할 수 있습니다.",
         "user": "최근 SDTP에서 논의된 의제 목록을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8826,7 +9121,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, arc.updated_at, a.agenda_panel FROM agenda_responses_content arc JOIN agenda_all a ON a.agenda_code = a.agenda_code WHERE CASE WHEN arc.KR IS NOT NULL THEN 'KR' WHEN arc.NK IS NOT NULL THEN 'NK' WHEN arc.CCS IS NOT NULL THEN 'CCS' WHEN arc.ABS IS NOT NULL THEN 'ABS' WHEN arc.DNV IS NOT NULL THEN 'DNV' WHEN arc.BV IS NOT NULL THEN 'BV' WHEN arc.LR IS NOT NULL THEN 'LR' WHEN arc.RINA IS NOT NULL THEN 'RINA' WHEN arc.IRS IS NOT NULL THEN 'RS' WHEN arc.IRS IS NOT NULL THEN 'IRS' WHEN arc.PRS IS NOT NULL THEN 'PRS' WHEN arc.CRS IS NOT NULL THEN 'CRS' WHEN arc.TL IS NOT NULL THEN 'TL' WHEN arc.IL IS NOT NULL THEN 'IL' ELSE NULL END = 'KR' AND a.agenda_panel = 'SDTP' AND arc.updated_at >= DATE('now', '-30 days') ORDER BY arc.updated_at DESC",
-        "system": "최근 30일간 KR이 SDTP에서 응답한 내역을 조회합니다.",
+        "system": "KR의 SDTP 패널 응답 내역을 분석하는 탈탄소화 전략 검토 쿼리입니다. 우리 조직이 탈탄소화 의제에 어떤 입장을 취했는지 추적하여 일관성 있는 정책 수립과 대외 커뮤니케이션을 지원합니다. 과거 입장과의 일관성 유지는 국제적 신뢰도에 중요합니다.",
         "user": "최근 KR이 SDTP 패널에서 응답한 내용을 확인하고 싶습니다."
       },
       "parameters": [
@@ -8884,7 +9179,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.subject,\n                    a.keywords,\n                    a.deadline,\n                    a.decision_status\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = 'KR' OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.KR IS NULL)\n                AND {period_condition}\n                ORDER BY a.deadline ASC",
-        "system": "KR이 응답해야 하는 의제들의 주요 이슈와 다른 기관들의 의견을 정리합니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 타 기관의 응답 및 입장 포함 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 기간 설정 가능",
         "user": "KR이 응답해야 하는 의제들의 주요 이슈와 다른 기관들의 의견을 한눈에 보고 싶습니다."
       },
       "parameters": [
@@ -8941,7 +9236,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org LIKE '%KR%' OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.KR IS NULL)\n                AND a.keywords IS NOT NULL \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                GROUP BY a.keywords \n                ORDER BY frequency DESC",
-        "system": "KR이 응답해야 하는 의제들의 주요 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 기간 설정 가능",
         "user": "KR이 응답해야 하는 의제들에서 자주 나타나는 키워드를 파악하고 싶습니다."
       },
       "parameters": [
@@ -9001,7 +9296,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code,\n                    a.keywords,\n                    SUBSTR(arc.KR, 1, 200) as kr_response\n                FROM agenda_all a\n                INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE arc.KR IS NOT NULL\n                AND a.keywords IS NOT NULL\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC",
-        "system": "KR이 응답해야 하는 의제들에 대한 회신들의 주요 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "KR이 응답해야 하는 의제들에 대해 다른 기관들이 회신한 내용의 주요 키워드를 파악하고 싶습니다."
       },
       "parameters": [
@@ -9058,7 +9353,7 @@
       },
       "sql_template": {
         "query": "SELECT * FROM agenda_all a\n                WHERE (\n                    CASE \n                        WHEN COALESCE(COALESCE({keywords}, ''), 'test') = '' THEN a.keywords IS NOT NULL\n                        ELSE a.keywords LIKE '%' || COALESCE(COALESCE({keywords}, ''), 'test') || '%'\n                    END\n                )\n                AND {period_condition}\n                ORDER BY a.sent_time DESC",
-        "system": "최근 30일간 특정 키워드가 논의된 의제들을 찾습니다.",
+        "system": "【목적】 Keyword Search 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한. 키워드 기반 의제 필터링 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 키워드 검색, 기간 설정 가능",
         "user": "최근에 특정 키워드와 관련하여 논의되고 있는 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9130,7 +9425,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    a.agenda_code, \n                    a.subject, \n                    a.deadline, \n                    julianday(a.deadline) - julianday('now') as days_remaining\n                FROM agenda_all a \n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE (a.response_org = 'KR' OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.KR IS NULL)\n                AND a.deadline >= DATE('now')\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.deadline ASC",
-        "system": "KR이 7일 이내에 응답해야 하는 긴급 의제들을 찾습니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 기간 설정 가능",
         "user": "KR이 긴급하게 응답해야 하는 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9191,7 +9486,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sent_time, a.deadline \n                FROM agenda_all a \n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = 'SDTP' \n                AND (a.response_org = 'KR' OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.KR IS NULL)\n                AND {period_condition} \n                ORDER BY a.deadline ASC",
-        "system": "SDTP 패널에서 KR이 응답해야 하는 의제들을 조회합니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 기간 설정 가능",
         "user": "SDTP에서 KR이 응답해야 하는 의제들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9249,7 +9544,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sender, a.sent_time \n                FROM agenda_all a \n                WHERE a.agenda_panel = 'SDTP' \n                AND (a.sender LIKE '%CHAIR%' OR a.sender_type = 'CHAIR')\n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "최근 30일간 SDTP 의장이 보낸 메일들을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 SDTP 의장이 보낸 메일 목록을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9305,7 +9600,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sent_time, a.response_org \n                FROM agenda_all a \n                WHERE a.agenda_panel = 'SDTP' \n                AND a.sender_type = 'CHAIR' \n                AND a.response_org IS NOT NULL \n                AND {period_condition} \n                ORDER BY a.sent_time DESC",
-        "system": "SDTP 의장이 보낸 메일 중 응답이 필요한 의제들을 조회합니다.",
+        "system": "【목적】 패널별 특화된 의제 관리 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "SDTP 의장이 보낸 메일 중 응답이 필요한 것들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9361,7 +9656,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                WHERE a.agenda_panel = 'SDTP' \n                AND (a.sender LIKE '%CHAIR%' OR a.sender_type = 'CHAIR')\n                AND a.keywords IS NOT NULL \n                AND {period_condition} \n                GROUP BY a.keywords \n                ORDER BY frequency DESC",
-        "system": "SDTP 의장이 보낸 메일들의 주요 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "SDTP 의장이 주로 어떤 주제로 메일을 보내는지 키워드를 통해 파악하고 싶습니다."
       },
       "parameters": [
@@ -9415,7 +9710,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sender, a.sent_time FROM agenda_all a WHERE (a.subject LIKE '%meeting%' OR a.subject LIKE '%회의%') AND (a.subject LIKE '%notice%' OR a.subject LIKE '%notification%' OR a.subject LIKE '%알림%' OR a.subject LIKE '%개최%') AND a.sent_time >= DATE('now', '-30 days') ORDER BY a.sent_time DESC",
-        "system": "최근 30일간 회의 개최 관련 알림 메일들을 조회합니다.",
+        "system": "【목적】 Meeting Info 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 회의 개최 알림 메일들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9469,7 +9764,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sender, a.body, a.sent_time \n                FROM agenda_all a \n                WHERE (a.sender LIKE '%CHAIR%' OR a.sender_type = 'CHAIR')\n                AND a.sent_time BETWEEN {period_start} AND {period_end}\n                ORDER BY a.sent_time DESC \n                LIMIT 10",
-        "system": "최근 7일간 의장이 보낸 메일 내용을 조회합니다.",
+        "system": "【목적】 Mail Content 관련 데이터 조회 및 분석 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 의장이 보낸 메일의 내용을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9528,7 +9823,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    COUNT(DISTINCT a.agenda_code) as total_sdtp_agendas,\n                    COUNT(DISTINCT CASE WHEN arc.KR IS NOT NULL THEN a.agenda_code END) as kr_responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN arc.KR IS NOT NULL THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as kr_response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = 'SDTP'\n                AND a.sender_type = 'CHAIR'\n                AND a.sent_time >= DATE('now', '-30 days')",
-        "system": "최근 30일간 SDTP에서 발행된 의제에 대한 KR의 응답률을 계산합니다.",
+        "system": "【목적】 Statistics 관련 데이터 조회 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 SDTP에서 KR의 응답률을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9588,7 +9883,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    COUNT(DISTINCT a.agenda_code) as total_sdtp_agendas,\n                    COUNT(DISTINCT CASE WHEN arc.KR IS NOT NULL THEN a.agenda_code END) as kr_responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN arc.KR IS NOT NULL THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as kr_response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = 'SDTP'\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}",
-        "system": "특정 기간 동안 SDTP에서 발행된 의제에 대한 KR의 응답률을 계산합니다.",
+        "system": "【목적】 Statistics 관련 데이터 조회 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 기간 동안 SDTP에서 KR의 응답률을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9644,7 +9939,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    strftime('%Y', a.sent_time) as year,\n                    COUNT(DISTINCT a.agenda_code) as total_sdtp_agendas,\n                    COUNT(DISTINCT CASE WHEN arc.KR IS NOT NULL THEN a.agenda_code END) as kr_responded,\n                    ROUND(CAST(COUNT(DISTINCT CASE WHEN arc.KR IS NOT NULL THEN a.agenda_code END) AS FLOAT) / \n                          COUNT(DISTINCT a.agenda_code) * 100, 2) as kr_response_rate\n                FROM agenda_all a\n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.agenda_panel = 'SDTP'\n                AND a.sender_type = 'CHAIR'\n                AND {period_condition}\n                GROUP BY year\n                ORDER BY year DESC",
-        "system": "올해 SDTP에서 발행된 의제에 대한 KR의 응답률을 계산합니다.",
+        "system": "【목적】 Statistics 관련 데이터 조회 및 분석 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합. 집계 함수로 통계 산출. 조건별 분기 처리 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "올해 SDTP에서 KR의 응답률을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9701,7 +9996,7 @@
       },
       "sql_template": {
         "query": "SELECT a.keywords, COUNT(*) as frequency \n                FROM agenda_all a \n                WHERE a.agenda_panel = 'SDTP' \n                AND a.sent_time >= DATE('now', '-30 days')\n                AND a.keywords IS NOT NULL \n                GROUP BY a.keywords \n                ORDER BY frequency DESC",
-        "system": "최근 30일간 SDTP에서 논의된 의제들의 주요 키워드를 분석합니다.",
+        "system": "【목적】 주요 키워드 기반으로 의제 트렌드 파악 【구현】 agenda_all 테이블 활용. 집계 함수로 통계 산출 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "최근 SDTP에서 어떤 키워드들이 주로 논의되었는지 확인하고 싶습니다."
       },
       "parameters": [
@@ -9758,7 +10053,7 @@
       },
       "sql_template": {
         "query": "SELECT a.agenda_code, a.subject, a.sender, a.hasAttachments, a.sent_time, a.deadline \n                FROM agenda_all a \n                LEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                WHERE a.sender_type = 'CHAIR' \n                AND (a.response_org = 'KR' OR a.response_org = 'ALL')\n                AND (arc.agenda_base_version IS NULL OR arc.KR IS NULL)\n                AND a.hasAttachments = 1 \n                AND {period_condition} \n                ORDER BY a.deadline ASC",
-        "system": "KR이 응답하지 않은 의제 중 의장이 첨부파일과 함께 보낸 것들을 찾습니다.",
+        "system": "【목적】 조직별 응답 현황을 모니터링하여 대응 전략 수립 【구현】 agenda_all, agenda_responses_content 테이블 활용. 테이블 조인으로 연관 데이터 통합 【조건】 아직 응답하지 않은 의제 필터링. 사용자 지정 기간 내 데이터로 제한 【효과】 미응답 의제 파악으로 업무 누락 방지 【주의】 응답 지연 시 의사결정 과정에서 배제될 가능성 【입력】 사용자가 기간 설정 가능",
         "user": "KR이 아직 응답하지 않은 의제 중에서 의장이 첨부파일을 포함해서 보낸 것들을 확인하고 싶습니다."
       },
       "parameters": [
@@ -9813,7 +10108,7 @@
       },
       "sql_template": {
         "query": "SELECT \n                    agenda_code,\n                    subject,\n                    decision_status,\n                    deadline,\n                    CASE \n                        WHEN deadline < DATE('now') THEN 'Overdue'\n                        WHEN deadline < DATE('now', '+7 days') THEN 'Due Soon'\n                        ELSE 'On Track'\n                    END as deadline_status\n                FROM agenda_all a\n                WHERE a.agenda_code = {agenda}\n                AND decision_status IN ('ongoing', 'created', 'comment')",
-        "system": "특정 의제의 현재 진행 상태를 확인합니다.",
+        "system": "【목적】 의제 진행 상태를 파악하여 업무 우선순위를 관리 【구현】 agenda_all 테이블 활용 【조건】 사용자 지정 기간 내 데이터로 제한 【효과】 시간적 맥락을 고려한 트렌드 분석 가능 【입력】 사용자가 기간 설정 가능",
         "user": "특정 의제가 현재 진행 중인지 확인하고 싶습니다."
       },
       "parameters": [
@@ -9878,7 +10173,7 @@
       },
       "sql_template": {
         "query": "SELECT 'Template upload test at 2025-07-25T16:59:20.364115' as test_result",
-        "system": "템플릿 업로드 기능을 테스트하기 위한 쿼리입니다.",
+        "system": "【목적】 System Config 관련 데이터 조회 및 분석",
         "user": "시스템 테스트를 위한 템플릿입니다."
       },
       "parameters": [],
