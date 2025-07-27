@@ -4,7 +4,7 @@
 import argparse
 import logging
 from pathlib import Path
-from uploaders import TemplateUploader
+from .uploaders import TemplateUploader
 
 # Configure logging
 logging.basicConfig(

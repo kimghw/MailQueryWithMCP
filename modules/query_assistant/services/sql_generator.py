@@ -86,7 +86,29 @@ class SQLGenerator:
                 # Handle different default types
                 if isinstance(default_value, dict):
                     if default_value.get('type') == 'relative' and 'days' in default_value:
-                        merged[param_name] = default_value['days']
+                        # For relative date defaults, calculate period_start and period_end
+                        from datetime import datetime, timedelta
+                        days = default_value['days']
+                        end_date = datetime.now()
+                        start_date = end_date - timedelta(days=days)
+                        
+                        merged[param_name] = days
+                        
+                        # Set extracted_period if mcp_format is extracted_period
+                        if param_def.get('mcp_format') == 'extracted_period':
+                            merged['extracted_period'] = {
+                                'start': start_date.strftime('%Y-%m-%d'),
+                                'end': end_date.strftime('%Y-%m-%d')
+                            }
+                        
+                        # Also set period_start and period_end for compatibility
+                        merged['period_start'] = start_date.strftime('%Y-%m-%d')
+                        merged['period_end'] = end_date.strftime('%Y-%m-%d')
+                        merged['date_range'] = {
+                            'type': 'range',
+                            'from': start_date.strftime('%Y-%m-%d'),
+                            'to': end_date.strftime('%Y-%m-%d')
+                        }
                     else:
                         merged[param_name] = default_value
                 else:
