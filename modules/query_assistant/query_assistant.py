@@ -11,7 +11,7 @@ from .schema import (
     QueryTemplate, QueryExpansion, QueryResult, 
     VectorSearchResult, DEFAULT_PARAMS
 )
-from .services.vector_store_unified import VectorStoreUnified
+from .services import VectorStoreUnified
 from .services.keyword_expander import KeywordExpander
 from .services.db_connector import create_db_connector, DBConnector
 from .services.parameter_validator import ParameterValidator

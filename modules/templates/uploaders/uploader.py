@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Dict, Any, Optional, List
 
 from .sql_uploader import SQLTemplateUploader
-from .qdrant_uploader import QdrantTemplateUploader
+from .vector_uploader import VectorUploader
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ class TemplateUploader:
         collection_name: str = "query_templates_unified"
     ):
         self.sql_uploader = SQLTemplateUploader(db_path)
-        self.qdrant_uploader = QdrantTemplateUploader(
+        self.vector_uploader = VectorUploader(
             qdrant_url=qdrant_url,
             qdrant_port=qdrant_port,
             collection_name=collection_name
@@ -51,17 +51,17 @@ class TemplateUploader:
         logger.info(f"Uploaded {count} templates to SQL database")
         return count
         
-    def upload_to_qdrant(self, templates: List[Dict[str, Any]], recreate: bool = False) -> int:
-        """Upload templates to Qdrant vector database"""
-        logger.info("Uploading templates to Qdrant...")
+    def upload_to_vector_db(self, templates: List[Dict[str, Any]], recreate: bool = False) -> int:
+        """Upload templates to vector database"""
+        logger.info("Uploading templates to vector database...")
         
         # Create/recreate collection
-        self.qdrant_uploader.create_collection(recreate=recreate)
+        self.vector_uploader.create_collection(recreate=recreate)
         
         # Upload templates
-        count = self.qdrant_uploader.upload_templates(templates)
+        count = self.vector_uploader.upload_templates(templates)
         
-        logger.info(f"Uploaded {count} templates to Qdrant")
+        logger.info(f"Uploaded {count} vectors to vector database")
         return count
         
     def upload_all(
@@ -87,28 +87,28 @@ class TemplateUploader:
         # Upload to both databases
         results = {
             'sql': self.upload_to_sql(templates, version),
-            'qdrant': self.upload_to_qdrant(templates, recreate_qdrant)
+            'vector_db': self.upload_to_vector_db(templates, recreate_qdrant)
         }
         
         # Verify counts
         sql_count = self.sql_uploader.get_template_count(version)
-        qdrant_count = self.qdrant_uploader.get_template_count()
+        vector_count = self.vector_uploader.get_template_count()
         
         results['sql_total'] = sql_count
-        results['qdrant_total'] = qdrant_count
+        results['vector_db_total'] = vector_count
         
-        logger.info(f"Upload complete - SQL: {sql_count}, Qdrant: {qdrant_count}")
+        logger.info(f"Upload complete - SQL: {sql_count}, Vector DB: {vector_count}")
         
         return results
         
     def verify_sync(self, version: str = "unified") -> Dict[str, Any]:
-        """Verify that SQL and Qdrant are in sync"""
+        """Verify that SQL and vector DB are in sync"""
         sql_count = self.sql_uploader.get_template_count(version)
-        qdrant_count = self.qdrant_uploader.get_template_count()
+        vector_count = self.vector_uploader.get_template_count()
         
+        # Note: vector_count will be higher due to individual embeddings
         return {
             'sql_count': sql_count,
-            'qdrant_count': qdrant_count,
-            'in_sync': sql_count == qdrant_count,
-            'difference': abs(sql_count - qdrant_count)
+            'vector_count': vector_count,
+            'avg_vectors_per_template': vector_count / sql_count if sql_count > 0 else 0
         }

@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 
 from .template_db_schema import QueryTemplateDB, get_session
-from ..services.vector_store_unified import VectorStoreUnified
+from ..services import VectorStoreUnified
 from ..schema import QueryTemplate
 
 logger = logging.getLogger(__name__)

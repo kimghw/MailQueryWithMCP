@@ -1,4 +1,4 @@
-"""Improved Qdrant vector database uploader for templates"""
+"""Vector database uploader for templates with individual embeddings"""
 
 import json
 import os
@@ -10,13 +10,14 @@ import requests
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 from dotenv import load_dotenv
+from pathlib import Path
 
 load_dotenv()
 logger = logging.getLogger(__name__)
 
 
-class QdrantTemplateUploader:
-    """Upload templates to Qdrant vector database with improved embedding"""
+class VectorUploader:
+    """Upload templates to vector database with individual embeddings per question/component"""
     
     def __init__(
         self,
@@ -33,11 +34,14 @@ class QdrantTemplateUploader:
         self.vector_size = vector_size
         self.api_key = os.getenv('OPENAI_API_KEY')
         
+        if not self.api_key:
+            raise ValueError("OpenAI API key is required for embeddings")
+        
         # Initialize Qdrant client
         self.client = QdrantClient(
             url=self.qdrant_url, 
             port=self.qdrant_port,
-            check_compatibility=False  # 버전 호환성 경고 무시
+            check_compatibility=False
         )
         
     def create_collection(self, recreate: bool = False):
@@ -92,42 +96,6 @@ class QdrantTemplateUploader:
             embeddings.append(item['embedding'])
         
         return embeddings
-        
-    def prepare_template_text(self, template: Dict[str, Any]) -> str:
-        """Prepare template content for embedding - only meaningful text"""
-        parts = []
-        
-        # query_info의 user와 description 추가
-        query_info = template.get('query_info', {})
-        
-        # user 필드 (사용자가 하는 질문)
-        user_query = query_info.get('user', '')
-        if user_query:
-            parts.append(user_query)
-            
-        # description 필드
-        description = query_info.get('description', '')
-        if description:
-            parts.append(description)
-        
-        # natural_questions 추가
-        questions = query_info.get('natural_questions', [])
-        if questions:
-            parts.extend(questions)
-            
-        # sql_template의 system 필드 (쿼리 설명)
-        sql_template = template.get('sql_template', {})
-        system_desc = sql_template.get('system', '')
-        if system_desc:
-            parts.append(system_desc)
-            
-        # user 필드 (SQL의 목적)
-        sql_user = sql_template.get('user', '')
-        if sql_user:
-            parts.append(sql_user)
-        
-        # 의미있는 텍스트만 결합
-        return " ".join(parts)
         
     def upload_templates(self, templates: List[Dict[str, Any]], batch_size: int = 50) -> int:
         """Upload templates to Qdrant with individual embeddings for each natural question"""
@@ -267,42 +235,47 @@ class QdrantTemplateUploader:
         """Get count of templates in collection"""
         info = self.client.get_collection(self.collection_name)
         return info.points_count
+    
+    def upload_from_file(self, template_file: str = None) -> int:
+        """Load templates from file and upload to vector database"""
+        if template_file is None:
+            # Default template file path
+            template_file = Path(__file__).parent.parent / "data" / "unified" / "query_templates_unified.json"
         
-    def search_templates(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search for templates using semantic search
+        with open(template_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
         
-        Returns unique templates with highest similarity scores
-        """
-        embedding = self.get_embeddings_batch([query])[0]
+        templates = data.get('templates', [])
+        logger.info(f"Found {len(templates)} templates in {template_file}")
         
-        # Search with more results to ensure we get enough unique templates
-        results = self.client.search(
-            collection_name=self.collection_name,
-            query_vector=embedding,
-            limit=limit * 3  # Get more results since same template has multiple embeddings
-        )
+        # Create/recreate collection
+        self.create_collection(recreate=True)
         
-        # Group results by template_id and keep the highest score for each
-        template_scores = {}
-        for r in results:
-            template_id = r.payload.get('template_id')
-            if template_id not in template_scores or r.score > template_scores[template_id]['score']:
-                template_scores[template_id] = {
-                    'template_id': template_id,
-                    'category': r.payload.get('template_category'),
-                    'score': r.score,
-                    'description': r.payload.get('description'),
-                    'user': r.payload.get('user'),
-                    'sql_query': r.payload.get('sql_query'),
-                    'matched_text': r.payload.get('embedded_text', ''),
-                    'embedding_type': r.payload.get('embedding_type', '')
-                }
-        
-        # Sort by score and return top N unique templates
-        sorted_templates = sorted(
-            template_scores.values(), 
-            key=lambda x: x['score'], 
-            reverse=True
-        )
-        
-        return sorted_templates[:limit]
+        # Upload templates
+        return self.upload_templates(templates)
+
+
+def main():
+    """Main function to upload templates"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Upload templates to vector database')
+    parser.add_argument('--file', type=str, help='Template file path')
+    parser.add_argument('--recreate', action='store_true', help='Recreate collection')
+    args = parser.parse_args()
+    
+    # Initialize uploader
+    uploader = VectorUploader()
+    
+    # Upload from file
+    if args.file:
+        count = uploader.upload_from_file(args.file)
+    else:
+        count = uploader.upload_from_file()
+    
+    print(f"Upload complete! Total vectors: {count}")
+    print(f"Templates in collection: {uploader.get_template_count()}")
+
+
+if __name__ == "__main__":
+    main()

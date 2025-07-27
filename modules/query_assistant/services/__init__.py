@@ -1,6 +1,10 @@
 """Services for Query Assistant module"""
 
 # Export the vector stores
-from .vector_store_unified import VectorStoreUnified
+from .vector_store import VectorStore, VectorSearchResult
 
-__all__ = ['VectorStoreUnified']
+# Backward compatibility aliases
+VectorStoreUnified = VectorStore
+UnifiedVectorSearchResult = VectorSearchResult
+
+__all__ = ['VectorStore', 'VectorSearchResult', 'VectorStoreUnified', 'UnifiedVectorSearchResult']

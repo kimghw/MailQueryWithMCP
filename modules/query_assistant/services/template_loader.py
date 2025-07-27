@@ -5,7 +5,7 @@ import logging
 from datetime import datetime
 
 from ..database.template_manager import TemplateManager
-from ..services.vector_store_unified import VectorStoreUnified
+from . import VectorStoreUnified
 from ..schema import VectorSearchResult
 
 logger = logging.getLogger(__name__)
