@@ -1,0 +1,1150 @@
+{
+  "version": "10.0.0",
+  "description": "IACSGRAPH Query Templates - Part 7 of 9",
+  "part_info": {
+    "part_number": 7,
+    "total_parts": 9,
+    "templates_in_this_part": 20,
+    "template_range": "121-140",
+    "metadata_file": "metadata.json"
+  },
+  "templates": [
+    {
+      "template_id": "upcoming_meetings_v2",
+      "template_version": "1.0.0",
+      "template_category": "meeting_info",
+      "query_info": {
+        "natural_questions": [
+          "향후 예정된 회의 알려줘",
+          "예정된 회의 일정",
+          "upcoming meetings"
+        ],
+        "keywords": [
+          "향후",
+          "예정",
+          "회의",
+          "upcoming"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT ac.agenda_panel, ac.subject, ac.body, ac.sent_time\nFROM agenda_chair ac\nWHERE ac.mail_type = 'REQUEST' AND ac.has_deadline = 1 AND (ac.subject LIKE '%meeting%' OR ac.subject LIKE '%회의%') AND (ac.body LIKE '%scheduled%' OR ac.body LIKE '%planned%' OR ac.body LIKE '%예정%' OR ac.body LIKE '%개최%') AND ac.deadline > DATE('now')\nORDER BY ac.deadline ASC",
+        "system": "사용자는 향후 회의를 체계적으로 준비하려고 합니다.\n1. 미래 날짜의 회의 정보를 모두 추출합니다\n2. 회의별 주요 의제와 예상 논점을 정리합니다\n3. 참가 필요성과 우선순위를 평가합니다\n4. 사전 준비 자료와 입장 정리 일정을 계획합니다\n5. 출장 및 인력 배치 계획을 수립합니다",
+        "sql_prompt": "향후 예정된 회의 알려줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_chair"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "eg_work_in_panel_v2",
+      "template_version": "1.0.0",
+      "template_category": "panel_specific",
+      "query_info": {
+        "natural_questions": [
+          "{panel}에서 진행된 EG 작업 알려줘",
+          "{panel} EG 작업 현황",
+          "EG work in {panel}"
+        ],
+        "keywords": [
+          "EG",
+          "작업",
+          "Expert Group"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "specific_panel",
+        "target_organizations": [],
+        "target_panels": []
+      },
+      "sql_template": {
+        "query": "SELECT a.agenda_code, a.subject, a.keywords, a.sent_time, a.decision_status\nFROM agenda_all a\nWHERE a.agenda_panel = {panel} \n                AND (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                AND {period_condition}\nORDER BY a.sent_time DESC",
+        "system": "사용자는 패널별 EG 활동을 체계적으로 파악하려고 합니다.\n1. 패널 내 활성 EG와 그 작업 범위를 조회합니다\n2. 각 EG의 목적과 예상 결과물을 확인합니다\n3. 현재 진행 단계와 일정을 파악합니다\n4. 우리의 참여 필요성을 평가합니다\n5. EG 결과가 미칠 영향을 사전에 예측합니다",
+        "sql_prompt": "{panel}에서 진행된 EG 작업 알려줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "panel",
+          "type": "string",
+          "required": true,
+          "description": "Panel code (e.g., SDTP)",
+          "sql_builder": {
+            "type": "string",
+            "placeholder": "{panel}"
+          }
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "eg_main_progress_in_panel_v2",
+      "template_version": "1.0.0",
+      "template_category": "panel_specific",
+      "query_info": {
+        "natural_questions": [
+          "{panel}에서 진행된 EG의 주요 진행 사항에 대해서 설명해줘",
+          "{panel} EG 주요 진행사항",
+          "main EG progress in {panel}"
+        ],
+        "keywords": [
+          "EG",
+          "진행사항",
+          "Expert Group",
+          "progress"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "specific_panel",
+        "target_organizations": [],
+        "target_panels": []
+      },
+      "sql_template": {
+        "query": "SELECT a.agenda_code,\n                    a.subject,\n                    a.decision_status,\n                    COUNT(CASE WHEN arc.KR IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.NK IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.CCS IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.ABS IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.DNV IS NOT NULL THEN 1 END) +\n                    COUNT(CASE WHEN arc.BV IS NOT NULL THEN 1 END) as response_count\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\nWHERE a.agenda_panel = {panel}\n                AND (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                AND {period_condition}\nORDER BY response_count DESC, a.sent_time DESC",
+        "system": "사용자는 EG의 주요 성과를 신속히 파악하려고 합니다.\n1. EG 회의 결과와 주요 결정사항을 추출합니다\n2. 기술적 합의와 미해결 이슈를 구분합니다\n3. 향후 작업 계획과 일정을 확인합니다\n4. 우리에게 미치는 영향을 평가합니다\n5. 필요한 후속 조치를 계획합니다",
+        "sql_prompt": "{panel}에서 진행된 EG의 주요 진행 사항에 대해서 설명해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "panel",
+          "type": "string",
+          "required": true,
+          "description": "Panel code (e.g., SDTP)",
+          "sql_builder": {
+            "type": "string",
+            "placeholder": "{panel}"
+          }
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "eg_participating_orgs_v2",
+      "template_version": "1.0.0",
+      "template_category": "panel_specific",
+      "query_info": {
+        "natural_questions": [
+          "{panel}에서 {eg_organization}에 참여한 기관은?",
+          "{panel} {eg_organization} 참여 기관",
+          "organizations in {eg_organization} at {panel}"
+        ],
+        "keywords": [
+          "참여",
+          "기관",
+          "EG"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "specific_panel",
+        "target_organizations": [],
+        "target_panels": []
+      },
+      "sql_template": {
+        "query": "SELECT org_name,\n                    COUNT(*) as participation_count\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\nWHERE (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                    AND arc.KR IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                    \n                    UNION ALL\n                    \n                    SELECT 'NK' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                    AND arc.NK IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                    \n                    UNION ALL\n                    \n                    SELECT 'CCS' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\n                    WHERE (a.keywords LIKE '%EG%' OR a.subject LIKE '%Expert Group%')\n                    AND arc.CCS IS NOT NULL \n                    AND a.sent_time BETWEEN {period_start} AND {period_end}\n                )\nORDER BY participation_count DESC",
+        "system": "사용자는 EG 참여를 통한 영향력 구조를 파악하려고 합니다.\n1. EG별 참여 조직과 역할을 조회합니다\n2. 주도적 역할을 하는 조직을 식별합니다\n3. 기술 전문성과 영향력을 평가합니다\n4. 협력 또는 경쟁 관계를 분석합니다\n5. 전략적 EG 참여 계획을 수립합니다",
+        "sql_prompt": "{panel}에서 {eg_organization}에 참여한 기관은?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "panel",
+          "type": "string",
+          "required": true,
+          "description": "Panel code"
+        },
+        {
+          "name": "eg_organization",
+          "type": "string",
+          "required": true,
+          "description": "EG organization name"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": [
+            "Fixed placeholder: {eg_organization}"
+          ]
+        }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "agenda_meeting_attendance_by_date_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_analysis",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}에서 날짜별 회의에 참석할 수 있는 기관과 참석할 수 없는 기관을 정리해줘",
+          "{agenda} 날짜별 참석 가능 기관",
+          "meeting attendance by date for {agenda}"
+        ],
+        "keywords": [
+          "날짜별",
+          "참석",
+          "회의"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT ac.sent_time as meeting_date,\n                    ac.agenda_code,\n                    ac.subject,\n                    (CASE WHEN arc.KR IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.NK IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.CCS IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.ABS IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.DNV IS NOT NULL THEN 1 ELSE 0 END +\n                     CASE WHEN arc.BV IS NOT NULL THEN 1 ELSE 0 END) as attendance_count\nFROM agenda_chair ac\nLEFT JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON ac.agenda_base_version = art.agenda_base_version\nWHERE ac.mail_type = 'REQUEST' AND ac.has_deadline = 1 AND ac.mail_type = 'NOTIFICATION'\n                AND ac.subject LIKE '%meeting%'\n                AND {period_condition}\nORDER BY ac.sent_time DESC",
+        "system": "사용자는 특정 회의의 참석 현황을 파악하려고 합니다.\n1. 해당 날짜의 회의 참석 기록을 조회합니다\n2. 조직별, 직급별 참석자를 분류합니다\n3. 주요 의사결정권자의 참석 여부를 확인합니다\n4. 참석 패턴으로 조직의 관심도를 평가합니다\n5. 네트워킹 기회와 로비 대상을 식별합니다",
+        "sql_prompt": "{agenda}에서 날짜별 회의에 참석할 수 있는 기관과 참석할 수 없는 기관을 정리해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": [
+            "Fixed placeholder: {agenda}"
+          ]
+        }
+      ],
+      "related_tables": [
+        "agenda_chair",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "의제 분석 결과를 다음과 같이 정리해주세요:\n1. 주요 의제별 핵심 내용 요약\n2. 이해관계자별 입장 정리\n3. 쟁점 사항 및 리스크 분석\n4. 예상되는 영향 및 파급효과\n5. 대응 전략 및 권고사항"
+    },
+    {
+      "template_id": "agenda_meeting_attendance_by_org_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_analysis",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}에서 기관별 회의 참석 가능여부 정리해줘",
+          "{agenda} 기관별 참석 현황",
+          "meeting attendance by organization for {agenda}"
+        ],
+        "keywords": [
+          "기관별",
+          "참석",
+          "가능여부"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT org_name,\n                    COUNT(*) as meetings_attended\nFROM agenda_chair ac\nLEFT JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON ac.agenda_base_version = art.agenda_base_version\nWHERE ac.mail_type = 'REQUEST' AND ac.has_deadline = 1 AND ac.mail_type = 'NOTIFICATION' AND ac.subject LIKE '%meeting%'\n                    AND arc.KR IS NOT NULL AND {period_condition}\n                    \n                    UNION ALL\n                    \n                    SELECT 'NK' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\n                    WHERE ac.mail_type = 'NOTIFICATION' AND ac.subject LIKE '%meeting%'\n                    AND arc.NK IS NOT NULL AND {period_condition}\n                    \n                    UNION ALL\n                    \n                    SELECT 'CCS' as org_name FROM agenda_all a\n                    INNER JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\n                    WHERE ac.mail_type = 'NOTIFICATION' AND ac.subject LIKE '%meeting%'\n                    AND arc.CCS IS NOT NULL AND {period_condition}\n                )\nORDER BY meetings_attended DESC",
+        "system": "사용자는 조직의 회의 참여 패턴을 분석하려고 합니다.\n1. 조직별 회의 참석 이력을 시계열로 조회합니다\n2. 자주 참석하는 회의 유형을 식별합니다\n3. 불참한 중요 회의를 파악합니다\n4. 참석 패턴으로 전략적 우선순위를 추론합니다\n5. 향후 만날 가능성이 높은 회의를 예측합니다",
+        "sql_prompt": "{agenda}에서 기관별 회의 참석 가능여부 정리해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": [
+            "Fixed placeholder: {agenda}"
+          ]
+        }
+      ],
+      "related_tables": [
+        "agenda_chair",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "의제 분석 결과를 다음과 같이 정리해주세요:\n1. 주요 의제별 핵심 내용 요약\n2. 이해관계자별 입장 정리\n3. 쟁점 사항 및 리스크 분석\n4. 예상되는 영향 및 파급효과\n5. 대응 전략 및 권고사항"
+    },
+    {
+      "template_id": "agenda_org_request_to_others_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_analysis",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}에서 다른 기관에 답변을 요구한 기관이 있는가?",
+          "{agenda} 답변 요구 기관",
+          "organizations requesting responses in {agenda}"
+        ],
+        "keywords": [
+          "답변",
+          "요구",
+          "request"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT ac.agenda_code,\n                    ac.subject,\n                    arc.KR as org_request,\n                    CASE \n                        WHEN arc.KR LIKE '%request%' OR arc.KR LIKE '%ask%' \n                        THEN 'Has Request' \n                        ELSE 'No Request' \n                    END as request_status\nFROM agenda_chair ac\nLEFT JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON ac.agenda_base_version = art.agenda_base_version\nWHERE ac.mail_type = 'REQUEST' AND ac.has_deadline = 1 AND arc.KR IS NOT NULL\n                AND (arc.KR LIKE '%request%' OR arc.KR LIKE '%ask%')\n                AND ac.sent_time >= DATE('now', '-30 days')\nORDER BY ac.sent_time DESC",
+        "system": "사용자는 조직 간 요청 패턴을 분석하려고 합니다.\n1. 특정 조직이 발송한 요청 메일을 추출합니다\n2. 요청 대상 조직과 요청 내용을 분석합니다\n3. 빈번한 요청은 해당 분야의 필요를 나타냅니다\n4. 협력 제공으로 관계를 강화할 기회를 찾습니다\n5. 전략적 파트너십 구축에 활용합니다",
+        "sql_prompt": "{agenda}에서 다른 기관에 답변을 요구한 기관이 있는가?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code",
+          "default": "SDTP-III-2025-01"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": [
+            "Fixed placeholder: {agenda}"
+          ]
+        }
+      ],
+      "related_tables": [
+        "agenda_chair",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "의제 분석 결과를 다음과 같이 정리해주세요:\n1. 주요 의제별 핵심 내용 요약\n2. 이해관계자별 입장 정리\n3. 쟁점 사항 및 리스크 분석\n4. 예상되는 영향 및 파급효과\n5. 대응 전략 및 권고사항"
+    },
+    {
+      "template_id": "agenda_clarification_requests_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_analysis",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}에서 다른 기관에 답변 또는 명확화를 요구하는 내용이 있나?",
+          "{agenda} 명확화 요구 사항",
+          "clarification requests in {agenda}"
+        ],
+        "keywords": [
+          "명확화",
+          "clarification",
+          "답변요구"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT ac.agenda_code,\n                    ac.subject,\n                    CASE WHEN arc.KR LIKE '%clarif%' THEN 'KR requests clarification' ELSE '' END ||\n                    CASE WHEN arc.NK LIKE '%clarif%' THEN ' NK requests clarification' ELSE '' END ||\n                    CASE WHEN arc.CCS LIKE '%clarif%' THEN ' CCS requests clarification' ELSE '' END as clarification_requests\nFROM agenda_chair ac\nLEFT JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON ac.agenda_base_version = art.agenda_base_version\nWHERE ac.mail_type = 'REQUEST' AND ac.has_deadline = 1 AND (arc.KR LIKE '%clarif%' OR arc.NK LIKE '%clarif%' OR arc.CCS LIKE '%clarif%')\n                AND {period_condition}\nORDER BY ac.sent_time DESC",
+        "system": "사용자는 의제의 불명확한 부분을 파악하려고 합니다.\n1. clarification 요청이 포함된 의제를 검색합니다\n2. 불명확했던 부분과 질문 내용을 분석합니다\n3. 반복되는 불명확성 패턴을 식별합니다\n4. 우리 제안 시 명확성 확보 방안을 도출합니다\n5. 효과적인 커뮤니케이션 전략을 수립합니다",
+        "sql_prompt": "{agenda}에서 다른 기관에 답변 또는 명확화를 요구하는 내용이 있나?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": [
+            "Fixed placeholder: {agenda}"
+          ]
+        }
+      ],
+      "related_tables": [
+        "agenda_chair",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "의제 분석 결과를 다음과 같이 정리해주세요:\n1. 주요 의제별 핵심 내용 요약\n2. 이해관계자별 입장 정리\n3. 쟁점 사항 및 리스크 분석\n4. 예상되는 영향 및 파급효과\n5. 대응 전략 및 권고사항"
+    },
+    {
+      "template_id": "panel_keywords_3months_v2",
+      "template_version": "1.0.0",
+      "template_category": "keyword_analysis",
+      "query_info": {
+        "natural_questions": [
+          "3개월 내 주요 키워드 분석해줘",
+          "최근 3개월 주요 키워드",
+          "3-month keyword analysis"
+        ],
+        "keywords": [
+          "3개월",
+          "키워드",
+          "분석"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count\nFROM agenda_all a\nWHERE a.sent_time >= DATE('now', '-90 days') \n                AND a.keywords IS NOT NULL\nORDER BY frequency DESC",
+        "system": "사용자는 패널의 최근 관심사를 키워드로 파악하려고 합니다.\n1. 패널의 3개월 의제에서 키워드를 추출합니다\n2. 빈도와 증가율을 분석하여 트렌드를 파악합니다\n3. 새롭게 등장한 키워드에 특히 주목합니다\n4. 패널의 단기 우선순위를 이해합니다\n5. 즉각적인 대응이 필요한 이슈를 식별합니다",
+        "sql_prompt": "3개월 내 주요 키워드 분석해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "키워드 분석 결과를 다음과 같이 정리해주세요:\n1. 상위 빈출 키워드와 출현 횟수\n2. 키워드 클러스터 및 주제 그룹\n3. 시간대별 키워드 트렌드\n4. 신규 출현 키워드 식별\n5. 키워드 기반 이슈 예측"
+    },
+    {
+      "template_id": "panel_keywords_lastyear_v2",
+      "template_version": "1.0.0",
+      "template_category": "keyword_analysis",
+      "query_info": {
+        "natural_questions": [
+          "작년 주요 키워드 분석해줘",
+          "작년도 키워드 현황",
+          "last year keyword analysis"
+        ],
+        "keywords": [
+          "작년",
+          "키워드",
+          "분석"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count,\n                    COUNT(DISTINCT a.agenda_code) as agenda_count\nFROM agenda_all a\nWHERE strftime('%Y', a.sent_time) = strftime('%Y', 'now', '-1 year')\n                AND a.keywords IS NOT NULL\nORDER BY frequency DESC",
+        "system": "사용자는 패널의 연간 이슈 트렌드를 분석하려고 합니다.\n1. 전년도 패널 의제의 키워드를 월별로 집계합니다\n2. 시간에 따른 키워드 변화를 추적합니다\n3. 지속적 이슈와 일시적 이슈를 구분합니다\n4. 패널의 중장기 방향성을 파악합니다\n5. 올해 예상되는 주요 이슈를 예측합니다",
+        "sql_prompt": "작년 주요 키워드 분석해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "키워드 분석 결과를 다음과 같이 정리해주세요:\n1. 상위 빈출 키워드와 출현 횟수\n2. 키워드 클러스터 및 주제 그룹\n3. 시간대별 키워드 트렌드\n4. 신규 출현 키워드 식별\n5. 키워드 기반 이슈 예측"
+    },
+    {
+      "template_id": "panel_keywords_2025_v2",
+      "template_version": "1.0.0",
+      "template_category": "keyword_analysis",
+      "query_info": {
+        "natural_questions": [
+          "2025년 주요 키워드 분석해줘",
+          "2025년도 키워드 현황",
+          "2025 keyword analysis"
+        ],
+        "keywords": [
+          "2025년",
+          "키워드",
+          "분석"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count,\n                    COUNT(DISTINCT a.agenda_code) as agenda_count\nFROM agenda_all a\nWHERE strftime('%Y', a.sent_time) = '2025'\n                AND a.keywords IS NOT NULL\nORDER BY frequency DESC",
+        "system": "사용자는 패널의 올해 새로운 트렌드를 파악하려고 합니다.\n1. 2025년 패널 의제의 키워드를 추출합니다\n2. 전년 대비 새로운 키워드를 식별합니다\n3. 급증하는 키워드의 배경을 분석합니다\n4. 올해의 패널 우선순위 변화를 이해합니다\n5. 신속한 대응 전략을 수립합니다",
+        "sql_prompt": "2025년 주요 키워드 분석해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "키워드 분석 결과를 다음과 같이 정리해주세요:\n1. 상위 빈출 키워드와 출현 횟수\n2. 키워드 클러스터 및 주제 그룹\n3. 시간대별 키워드 트렌드\n4. 신규 출현 키워드 식별\n5. 키워드 기반 이슈 예측"
+    },
+    {
+      "template_id": "panel_keywords_by_year_v2",
+      "template_version": "1.0.0",
+      "template_category": "keyword_analysis",
+      "query_info": {
+        "natural_questions": [
+          "{year}년 주요 키워드 분석해줘",
+          "{year}년도 키워드 현황",
+          "{year} keyword analysis"
+        ],
+        "keywords": [
+          "키워드",
+          "분석",
+          "연도별"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT a.keywords, \n                    COUNT(*) as frequency, \n                    COUNT(DISTINCT a.agenda_panel) as panel_count,\n                    GROUP_CONCAT(DISTINCT a.agenda_panel) as panels\nFROM agenda_all a\nWHERE strftime('%Y', a.sent_time) = strftime('%Y', 'now')\n                AND a.keywords IS NOT NULL \n                AND a.sent_time BETWEEN {period_start} AND {period_end}\nORDER BY frequency DESC",
+        "system": "사용자는 패널의 장기 트렌드를 분석하려고 합니다.\n1. 여러 년도의 키워드를 연도별로 집계합니다\n2. 키워드의 생명주기를 추적합니다\n3. 지속적으로 중요한 핵심 키워드를 식별합니다\n4. 쇠퇴하는 이슈와 부상하는 이슈를 구분합니다\n5. 장기 전략 수립에 필요한 인사이트를 제공합니다",
+        "sql_prompt": "{year}년 주요 키워드 분석해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "year",
+          "type": "string",
+          "required": true,
+          "description": "Year (e.g., 2024, 2025)"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "키워드 분석 결과를 다음과 같이 정리해주세요:\n1. 상위 빈출 키워드와 출현 횟수\n2. 키워드 클러스터 및 주제 그룹\n3. 시간대별 키워드 트렌드\n4. 신규 출현 키워드 식별\n5. 키워드 기반 이슈 예측"
+    },
+    {
+      "template_id": "tech_trend_analysis_llm_v2",
+      "template_version": "1.0.0",
+      "template_category": "llm_direct_response",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}와 관련해서 현재 기술개발 동향 분석해줘",
+          "{agenda} 기술개발 동향",
+          "technology trend for {agenda}"
+        ],
+        "keywords": [
+          "기술개발",
+          "동향",
+          "분석"
+        ]
+      },
+      "routing_info": {
+        "route_to": "llm_direct",
+        "reason": "기술 동향 분석은 LLM의 지식을 활용한 직접 응답이 적합합니다"
+      },
+      "target_scope": {
+        "scope_type": "analysis",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version",
+        "system": "【목적】 Llm Direct Response 관련 데이터 조회 및 분석",
+        "sql_prompt": "{agenda}와 관련해서 현재 기술개발 동향 분석해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "keyword_tech_trend_llm_v2",
+      "template_version": "1.0.0",
+      "template_category": "llm_direct_response",
+      "query_info": {
+        "natural_questions": [
+          "{keywords} 관련해서 기술개발 동향 분석해줘",
+          "{keywords} 기술 동향",
+          "technology trend for {keywords}"
+        ],
+        "keywords": [
+          "기술개발",
+          "동향",
+          "keyword"
+        ]
+      },
+      "routing_info": {
+        "route_to": "llm_direct",
+        "reason": "기술 동향 분석은 LLM의 지식을 활용한 직접 응답이 적합합니다"
+      },
+      "target_scope": {
+        "scope_type": "analysis",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version",
+        "system": "【목적】 Llm Direct Response 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능 【입력】 사용자가 키워드 검색 가능",
+        "sql_prompt": "{keywords} 관련해서 기술개발 동향 분석해줘를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "keywords",
+          "type": "array",
+          "required": true,
+          "description": "Keywords to analyze",
+          "mcp_format": "extracted_keywords"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "tech_background_llm_v2",
+      "template_version": "1.0.0",
+      "template_category": "llm_direct_response",
+      "query_info": {
+        "natural_questions": [
+          "{keyword}에 대한 기술 배경이 뭐지?",
+          "{keyword} 기술 배경",
+          "technical background of {keyword}"
+        ],
+        "keywords": [
+          "기술",
+          "배경",
+          "background"
+        ]
+      },
+      "routing_info": {
+        "route_to": "llm_direct",
+        "reason": "기술 배경 설명은 LLM의 지식을 활용한 직접 응답이 적합합니다"
+      },
+      "target_scope": {
+        "scope_type": "explanation",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version",
+        "system": "【목적】 Llm Direct Response 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능",
+        "sql_prompt": "{keyword}에 대한 기술 배경이 뭐지?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "keyword",
+          "type": "string",
+          "required": true,
+          "description": "Keyword to explain",
+          "mcp_format": "extracted_keywords"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "agenda_ur_content_vectordb_v2",
+      "template_version": "1.0.0",
+      "template_category": "vectordb_search",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}와 관련해서 UR에 관련된 내용이 뭐지?",
+          "{agenda} UR 관련 내용",
+          "UR content related to {agenda}"
+        ],
+        "keywords": [
+          "UR",
+          "관련",
+          "내용"
+        ]
+      },
+      "routing_info": {
+        "route_to": "vectordb",
+        "keyword_extraction": "UR 관련 keyword 추출",
+        "reason": "UR 규정 문서는 VectorDB에서 검색해야 합니다"
+      },
+      "target_scope": {
+        "scope_type": "document_search",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
+        "sql_prompt": "{agenda}와 관련해서 UR에 관련된 내용이 뭐지?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "keywords_ur_content_vectordb_v2",
+      "template_version": "1.0.0",
+      "template_category": "vectordb_search",
+      "query_info": {
+        "natural_questions": [
+          "{keywords} 관련해서 UR에 관련된 내용이 뭐가 있지?",
+          "{keywords} UR 관련 내용",
+          "UR content related to {keywords}"
+        ],
+        "keywords": [
+          "UR",
+          "관련",
+          "keywords"
+        ]
+      },
+      "routing_info": {
+        "route_to": "vectordb",
+        "keyword_extraction": "UR 관련 keyword 추출",
+        "reason": "UR 규정 문서는 VectorDB에서 검색해야 합니다"
+      },
+      "target_scope": {
+        "scope_type": "document_search",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능 【입력】 사용자가 키워드 검색 가능",
+        "sql_prompt": "{keywords} 관련해서 UR에 관련된 내용이 뭐가 있지?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "keywords",
+          "type": "array",
+          "required": true,
+          "description": "Keywords to search",
+          "mcp_format": "extracted_keywords"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "agenda_pr_content_vectordb_v2",
+      "template_version": "1.0.0",
+      "template_category": "vectordb_search",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}와 관련해서 PR에 관련된 내용이 뭐지?",
+          "{agenda} PR 관련 내용",
+          "PR content related to {agenda}"
+        ],
+        "keywords": [
+          "PR",
+          "관련",
+          "내용"
+        ]
+      },
+      "routing_info": {
+        "route_to": "vectordb",
+        "keyword_extraction": "PR 관련 keyword 추출",
+        "reason": "PR 규정 문서는 VectorDB에서 검색해야 합니다"
+      },
+      "target_scope": {
+        "scope_type": "document_search",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석",
+        "sql_prompt": "{agenda}와 관련해서 PR에 관련된 내용이 뭐지?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "keywords_pr_content_vectordb_v2",
+      "template_version": "1.0.0",
+      "template_category": "vectordb_search",
+      "query_info": {
+        "natural_questions": [
+          "{keywords} 관련해서 PR에 관련된 내용이 뭐가 있지?",
+          "{keywords} PR 관련 내용",
+          "PR content related to {keywords}"
+        ],
+        "keywords": [
+          "PR",
+          "관련",
+          "keywords"
+        ]
+      },
+      "routing_info": {
+        "route_to": "vectordb",
+        "keyword_extraction": "PR 관련 keyword 추출",
+        "reason": "PR 규정 문서는 VectorDB에서 검색해야 합니다"
+      },
+      "target_scope": {
+        "scope_type": "document_search",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 키워드 기반 의제 필터링 【효과】 특정 주제에 대한 집중적 모니터링 가능 【입력】 사용자가 키워드 검색 가능",
+        "sql_prompt": "{keywords} 관련해서 PR에 관련된 내용이 뭐가 있지?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "keywords",
+          "type": "array",
+          "required": true,
+          "description": "Keywords to search",
+          "mcp_format": "extracted_keywords"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    },
+    {
+      "template_id": "agenda_similar_panel_discussion_vectordb_v2",
+      "template_version": "1.0.0",
+      "template_category": "vectordb_search",
+      "query_info": {
+        "natural_questions": [
+          "{agenda}에서 다른 패널에서 유사한 논의가 진행된적 있는지?",
+          "{agenda} 타패널 유사 논의",
+          "similar discussions in other panels for {agenda}"
+        ],
+        "keywords": [
+          "유사",
+          "논의",
+          "다른패널"
+        ]
+      },
+      "routing_info": {
+        "route_to": "vectordb",
+        "reason": "의미적 유사성 검색은 VectorDB가 적합합니다"
+      },
+      "target_scope": {
+        "scope_type": "similarity_search",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a",
+        "system": "【목적】 Vectordb Search 관련 데이터 조회 및 분석 【조건】 타 기관의 응답 및 입장 포함 【효과】 국제 동향 파악으로 전략적 포지셔닝 가능 【주의】 타국 입장 미파악 시 고립된 의견 제시 위험",
+        "sql_prompt": "{agenda}에서 다른 패널에서 유사한 논의가 진행된적 있는지?를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "agenda",
+          "type": "string",
+          "required": true,
+          "description": "Agenda code"
+        }
+      ],
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조회 결과를 다음과 같이 분석해주세요:\n1. 전체 데이터 요약 및 주요 수치\n2. 중요 항목 우선순위 정렬\n3. 패턴 및 트렌드 분석\n4. 이상 징후 또는 특이사항\n5. 후속 조치 권고사항"
+    }
+  ]
+}

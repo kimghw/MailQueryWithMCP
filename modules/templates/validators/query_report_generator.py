@@ -52,6 +52,16 @@ class QueryReportGenerator:
                 report.write(f"Category: {template.get('template_category', 'N/A')}\n")
                 report.write("-" * 120 + "\n\n")
                 
+                # Get query_info for natural questions
+                query_info = template.get('query_info', {})
+                natural_questions = query_info.get('natural_questions', [])
+                
+                if natural_questions:
+                    report.write("NATURAL QUESTIONS:\n")
+                    for i, question in enumerate(natural_questions, 1):
+                        report.write(f"  {i}. {question}\n")
+                    report.write("\n")
+                
                 # Get SQL query
                 sql_template = template.get('sql_template', {})
                 sql_query = sql_template.get('query', '')
@@ -83,8 +93,9 @@ class QueryReportGenerator:
                     report.write(f"EXECUTION RESULT: SUCCESS ({len(results)} rows)\n\n")
                     
                     if results:
-                        # Show sample results
-                        report.write("SAMPLE RESULTS (first 5 rows):\n")
+                        # Show results (up to 30 rows)
+                        rows_to_show = min(len(results), 30)
+                        report.write(f"QUERY RESULTS ({len(results)} total rows, showing {rows_to_show}):\n")
                         report.write("-" * 80 + "\n")
                         
                         # Column headers
@@ -94,7 +105,7 @@ class QueryReportGenerator:
                             report.write("-" * 80 + "\n")
                             
                             # Data rows
-                            for i, row in enumerate(results[:5]):
+                            for i, row in enumerate(results[:rows_to_show]):
                                 row_values = []
                                 for col in columns:
                                     value = str(row[col]) if row[col] is not None else 'NULL'
@@ -104,8 +115,8 @@ class QueryReportGenerator:
                                     row_values.append(value)
                                 report.write(" | ".join(row_values) + "\n")
                             
-                            if len(results) > 5:
-                                report.write(f"\n... and {len(results) - 5} more rows\n")
+                            if len(results) > 30:
+                                report.write(f"\n... and {len(results) - 30} more rows not shown\n")
                     else:
                         report.write("NO RESULTS RETURNED\n")
                 else:

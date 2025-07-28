@@ -1,0 +1,1128 @@
+{
+  "version": "10.0.0",
+  "description": "IACSGRAPH Query Templates - Part 2 of 9",
+  "part_info": {
+    "part_number": 2,
+    "total_parts": 9,
+    "templates_in_this_part": 20,
+    "template_range": "21-40",
+    "metadata_file": "metadata.json"
+  },
+  "templates": [
+    {
+      "template_id": "monthly_agenda_response_status_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_statistics",
+      "query_info": {
+        "natural_questions": [
+          "올해 월별 agenda 발송 및 그 아젠다에 대한 응답 현황",
+          "월별 의제 발송 및 응답 통계",
+          "월간 아젠다 응답률"
+        ],
+        "keywords": [
+          "월별",
+          "발송",
+          "응답",
+          "현황",
+          "통계"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT strftime('%Y-%m', a.sent_time) as month,\n                    a.agenda_panel,\n                    COUNT(DISTINCT a.agenda_code) as total_agendas,\n                    COUNT(DISTINCT CASE \n                        WHEN arc.KR IS NOT NULL OR arc.NK IS NOT NULL OR arc.CCS IS NOT NULL \n                        THEN a.agenda_code \n                    END) as responded_agendas\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\nWHERE a.sent_time BETWEEN {period_start} AND {period_end}\nORDER BY month DESC, a.agenda_panel",
+        "system": "사용자는 월별 응답 성과를 체계적으로 추적하려고 합니다.\n1. strftime('%Y-%m', sent_time)으로 월별 그룹핑을 수행합니다\n2. 각 응답 상태별로 COUNT를 집계합니다\n3. 응답률 계산으로 월별 성과를 정량화합니다\n4. 계절적 패턴이나 특정 월의 업무 과부하를 식별합니다\n5. 인력 운영과 업무 분배 최적화에 활용합니다",
+        "sql_prompt": "월별  agenda 발송 및 그 아젠다에 대한 응답 현황를 집계하기 위해 관련 테이블을 조회하고 월별로 그룹화합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "통계 데이터를 다음과 같이 분석해주세요:\n1. 전체 통계 수치와 주요 지표 요약\n2. 시간대별/기간별 추이 분석\n3. 상위/하위 그룹 식별 및 특징\n4. 전년 대비 또는 전월 대비 변화율\n5. 특이사항 및 개선 제안"
+    },
+    {
+      "template_id": "pending_agenda_error_reasons_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_analysis",
+      "query_info": {
+        "natural_questions": [
+          "처리되지 않은 pending agenda의 오류 이유들",
+          "대기 중인 의제의 에러 원인",
+          "pending 상태 오류 분석"
+        ],
+        "keywords": [
+          "pending",
+          "오류",
+          "이유",
+          "에러"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT error_reason, COUNT(*) as count\nFROM agenda_chair ac\nWHERE ac.mail_type = 'REQUEST' AND ac.has_deadline = 1 AND error_reason IS NOT NULL AND ac.deadline > DATE('now')\nORDER BY count DESC",
+        "system": "사용자는 시스템 분류 오류를 분석하여 자동화를 개선하려고 합니다.\n1. agenda_pending 테이블의 error_reason을 GROUP BY로 집계합니다\n2. COUNT(*)로 각 오류 유형의 빈도를 계산합니다\n3. 빈도순 정렬로 가장 문제가 되는 오류를 식별합니다\n4. 반복적 오류 패턴에 대한 자동화 규칙을 개발할 수 있습니다\n5. 이를 통해 수동 처리 업무를 줄이고 효율성을 높입니다",
+        "sql_prompt": "처리되지 않은 pending agenda의 오류 이유들를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_chair"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "의제 분석 결과를 다음과 같이 정리해주세요:\n1. 주요 의제별 핵심 내용 요약\n2. 이해관계자별 입장 정리\n3. 쟁점 사항 및 리스크 분석\n4. 예상되는 영향 및 파급효과\n5. 대응 전략 및 권고사항"
+    },
+    {
+      "template_id": "vessel_inventory_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "Vessel Asset Inventory 관련 agenda",
+          "선박 자산 목록 관련 의제",
+          "Vessel Inventory 아젠다"
+        ],
+        "keywords": [
+          "Vessel",
+          "Asset",
+          "Inventory",
+          "선박",
+          "자산"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nWHERE (a.keywords LIKE '%vessel%' AND a.keywords LIKE '%inventory%')\n                OR (a.subject LIKE '%vessel%' AND a.subject LIKE '%inventory%')\n                AND {period_condition}\nORDER BY a.sent_time DESC",
+        "system": "사용자는 선박 환경 규제 준수를 위한 인벤토리 관련 동향을 파악하려고 합니다.\n1. 'inventory', 'IHM', 'hazardous materials' 등의 키워드로 검색합니다\n2. 선박 재활용과 유해물질 관리는 강화되는 환경 규제의 핵심입니다\n3. 규정 변경은 선주와 조선소에 큰 비용 부담을 야기합니다\n4. 조기 파악으로 compliance 전략을 수립할 시간을 확보합니다\n5. 기술 개발과 서비스 준비에 필요한 리드타임을 확보합니다",
+        "sql_prompt": "Vessel Asset Inventory 관련 agenda를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "generic_keyword_search_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "{keywords} 관련 agenda",
+          "{keywords}에 대한 의제",
+          "{keywords} 아젠다 검색"
+        ],
+        "keywords": [
+          "검색",
+          "관련",
+          "키워드"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nWHERE {keyword_condition}\n                AND a.sent_time >= DATE('now', '-30 days')\nORDER BY a.sent_time DESC",
+        "system": "사용자는 포괄적인 텍스트 검색을 수행하려고 합니다.\n1. 모든 텍스트 필드에서 키워드를 검색합니다\n2. LIKE 연산자로 부분 매칭을 지원합니다\n3. 대소문자 구분 없이 검색합니다\n4. 검색 결과는 관련성이나 최신순으로 정렬합니다\n5. 광범위한 정보 수집이 목적일 때 활용합니다",
+        "sql_prompt": "{keywords} 관련 agenda를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "keyword",
+          "type": "array",
+          "required": true,
+          "default": "",
+          "sql_builder": {
+            "type": "keywords",
+            "field": "a.keywords",
+            "operator": "LIKE",
+            "placeholder": "{keyword_condition}"
+          },
+          "mcp_format": "extracted_keywords"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "consolidated_status_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_status",
+      "query_info": {
+        "natural_questions": [
+          "최근 consolidated 상태의 agenda 목록",
+          "통합 완료된 의제들",
+          "consolidated 상태 아젠다"
+        ],
+        "keywords": [
+          "consolidated",
+          "통합",
+          "상태"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT a.decision_status,\n                    COUNT(*) as count,\n                    GROUP_CONCAT(a.agenda_code, ', ') as agenda_codes\nFROM agenda_all a\nWHERE a.sent_time BETWEEN {period_start} AND {period_end} \n                AND a.decision_status = 'consolidated'\nORDER BY count DESC",
+        "system": "사용자는 전체 의제의 상태별 분포를 종합적으로 파악하려고 합니다.\n1. 모든 상태의 의제를 카테고리별로 집계합니다\n2. 각 상태의 의미와 업무 단계를 명확히 합니다\n3. 상태별 전환 비율을 계산하여 프로세스 효율성을 평가합니다\n4. 병목 상태를 식별하여 개선점을 도출합니다\n5. 대시보드 형태로 시각화하기 좋은 데이터를 제공합니다",
+        "sql_prompt": "최근 consolidated 상태의 agenda 목록를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "의제 상태를 다음과 같이 분석해주세요:\n1. 상태별 의제 분포 현황\n2. 진행 지연 의제 식별\n3. 완료 예정 의제 현황\n4. 병목 구간 분석\n5. 프로세스 개선 제안"
+    },
+    {
+      "template_id": "multilateral_recent_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "MULTILATERAL의 최근 아젠다 리스트",
+          "다자간 협의 의제 목록",
+          "MULTILATERAL 아젠다"
+        ],
+        "keywords": [
+          "MULTILATERAL",
+          "다자간",
+          "협의"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nWHERE a.sender_type = 'MULTILATERAL' AND {period_condition}\nORDER BY a.sent_time DESC",
+        "system": "사용자는 다자간 협력이 필요한 의제를 식별하려고 합니다.\n1. response_org = 'ALL'이거나 복수 조직이 지정된 의제를 추출합니다\n2. 다자간 협의는 복잡도가 높고 시간이 오래 걸립니다\n3. 주요 이해관계자를 파악하고 입장을 분석합니다\n4. 연합 형성과 협상 전략이 특히 중요합니다\n5. 국제 협력의 성과는 조직의 영향력을 높입니다",
+        "sql_prompt": "MULTILATERAL의 최근 아젠다 리스트를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "cyber_keyword_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "키워드에 'cyber'가 포함된 agenda",
+          "사이버 관련 의제",
+          "cyber 키워드 아젠다"
+        ],
+        "keywords": [
+          "cyber",
+          "사이버",
+          "보안"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nWHERE (a.keywords LIKE '%cyber%' OR a.subject LIKE '%cyber%' OR a.body LIKE '%cyber%')\n                AND {period_condition}\nORDER BY a.sent_time DESC",
+        "system": "사용자는 해사 사이버 보안 규제 동향을 종합적으로 파악하려고 합니다.\n1. 사이버 보안 관련 다양한 키워드로 포괄적 검색을 수행합니다\n2. 선박 시스템의 디지털화로 사이버 위험이 증가하고 있습니다\n3. IMO의 사이버 보안 규제는 지속적으로 강화되는 추세입니다\n4. 관련 논의를 조기에 파악하여 보안 체계를 선제적으로 구축합니다\n5. 규제 준수와 실질적 보안 강화를 동시에 달성할 수 있습니다",
+        "sql_prompt": "키워드에 'cyber'가 포함된 agenda를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "recent_month_chair_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "최근 한 달간 생성된 chair agenda",
+          "최근 의장 의제",
+          "한달 내 chair 아젠다"
+        ],
+        "keywords": [
+          "chair",
+          "의장",
+          "한달",
+          "최근"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_chair ac\nWHERE ac.created_at >= DATE('now', '-30 days')\nORDER BY ac.created_at DESC",
+        "system": "사용자는 의장의 최근 활동을 집중 모니터링하려고 합니다.\n1. agenda_chair에서 최근 30일간의 모든 메일을 추출합니다\n2. mail_type별로 분류하여 의장의 활동 패턴을 분석합니다\n3. 요청사항과 통지사항의 비율로 패널 활동성을 평가합니다\n4. 의장의 우선순위와 관심사를 파악합니다\n5. 향후 패널 활동 방향을 예측하는 데 활용합니다",
+        "sql_prompt": "최근 한 달간 생성된 chair agenda를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_chair"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "no_response_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "organization_response",
+      "query_info": {
+        "natural_questions": [
+          "아직 아무도 응답하지 않은 agenda",
+          "무응답 의제",
+          "답변 없는 아젠다"
+        ],
+        "keywords": [
+          "무응답",
+          "미응답",
+          "답변없음"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT ac.*\nFROM agenda_chair ac\nLEFT JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON ac.agenda_base_version = art.agenda_base_version\nWHERE ac.sender_organization = 'Chair'\n                AND (\n                    arc.agenda_base_version IS NULL OR (\n                        arc.KR IS NULL AND arc.NK IS NULL AND arc.CCS IS NULL AND \n                        arc.ABS IS NULL AND arc.DNV IS NULL AND arc.BV IS NULL AND \n                        arc.LR IS NULL AND arc.RINA IS NULL AND arc.IRS IS NULL AND \n                        arc.IRS IS NULL AND arc.PRS IS NULL AND arc.CRS IS NULL AND \n                        arc.TL IS NULL AND arc.IL IS NULL\n                    )\n                )\n                AND {period_condition}\nORDER BY ac.sent_time DESC",
+        "system": "사용자는 무응답 의제의 특성을 분석하려고 합니다.\n1. agenda_responses_content에서 모든 조직 컬럼이 NULL인 의제를 찾습니다\n2. 무응답은 민감한 이슈이거나 합의 불가능한 주제일 수 있습니다\n3. 기술적 난이도나 비용 문제로 응답을 회피할 수도 있습니다\n4. 이러한 의제는 향후 논란이 될 가능성이 높습니다\n5. 선제적 입장 표명으로 논의를 주도할 기회가 될 수 있습니다",
+        "sql_prompt": "아직 아무도 응답하지 않은 agenda를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_chair",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "조직의 응답 현황을 다음과 같이 분석해주세요:\n1. 응답 필요 의제 수와 응답률\n2. 마감일별 긴급도 분류\n3. 주요 미응답 의제 내용 요약\n4. 타 조직 대비 응답 성과\n5. 우선 처리 필요 의제 추천"
+    },
+    {
+      "template_id": "recent_weblink_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "최근 webLink가 있는 agenda 목록",
+          "웹링크 포함 의제",
+          "링크 있는 아젠다"
+        ],
+        "keywords": [
+          "webLink",
+          "링크",
+          "웹"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nWHERE webLink IS NOT NULL AND webLink != '' AND {period_condition}\nORDER BY a.sent_time DESC",
+        "system": "사용자는 외부 참고 자료가 있는 의제를 확인하려고 합니다.\n1. has_weblink = 1인 최근 의제를 추출합니다\n2. 링크된 자료의 유형과 중요도를 평가합니다\n3. 외부 자료는 추가적인 맥락 정보를 제공합니다\n4. 링크 유효성과 접근 가능성을 확인합니다\n5. 중요 참고 자료는 로컬에 백업하여 보관합니다",
+        "sql_prompt": "최근 webLink가 있는 agenda 목록를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "recent_attachment_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "최근 첨부 파일이 있는 agenda 목록",
+          "첨부파일 포함 의제",
+          "파일 첨부된 아젠다"
+        ],
+        "keywords": [
+          "첨부파일",
+          "attachment",
+          "파일"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nWHERE a.hasAttachments = 1 \n                AND {period_condition}\nORDER BY a.sent_time DESC",
+        "system": "사용자는 첨부 문서가 있는 의제를 우선 검토하려고 합니다.\n1. has_attachment = 1인 최근 의제를 시간순으로 추출합니다\n2. 첨부파일은 상세 기술 사양이나 분석 데이터를 포함합니다\n3. 문서 검토에 필요한 전문가를 사전에 배정합니다\n4. 대용량 첨부는 다운로드 시간을 고려합니다\n5. 기술 문서의 버전 관리에 주의를 기울입니다",
+        "sql_prompt": "최근 첨부 파일이 있는 agenda 목록를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "digital_transformation_agendas_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "Digital Transformation 관련 agenda",
+          "디지털 전환 의제",
+          "디지털화 관련 아젠다"
+        ],
+        "keywords": [
+          "Digital",
+          "Transformation",
+          "디지털",
+          "전환"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_all a\nWHERE (a.keywords LIKE '%digital%' OR a.subject LIKE '%digital%')\n                AND (a.keywords LIKE '%transformation%' OR a.subject LIKE '%transformation%')\n                AND {period_condition}\nORDER BY a.sent_time DESC",
+        "system": "사용자는 해사 산업의 디지털 혁신 동향을 포괄적으로 모니터링하려고 합니다.\n1. 'digital', 'autonomous', 'electronic', 'data' 등 광범위한 키워드로 검색합니다\n2. 디지털 전환은 해사 산업의 미래 경쟁력을 좌우하는 핵심 요소입니다\n3. 규제 프레임워크가 기술 발전을 따라가는 과정을 추적합니다\n4. 미래 기술 투자 방향과 역량 개발 로드맵 수립에 활용합니다\n5. 선제적 대응으로 디지털 시대의 경쟁 우위를 확보할 수 있습니다",
+        "sql_prompt": "Digital Transformation 관련 agenda를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "org_avg_response_time_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_statistics",
+      "query_info": {
+        "natural_questions": [
+          "조직별 평균 응답 소요 시간",
+          "기관별 평균 답변 시간",
+          "조직별 응답 속도"
+        ],
+        "keywords": [
+          "평균",
+          "응답시간",
+          "조직별",
+          "통계"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT 'KR' as organization,\n                    COUNT(*) as total_responses,\n                    AVG(julianday(art.KR) - julianday(a.sent_time)) as avg_response_days\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\nWHERE arc.KR IS NOT NULL\n                AND art.KR IS NOT NULL\n                AND a.sent_time >= DATE('now', '-30 days')",
+        "system": "사용자는 조직별 응답 효율성을 정량적으로 비교하려고 합니다.\n1. agenda_all의 sent_time과 agenda_responses_receivedtime을 조인합니다\n2. JULIANDAY 함수로 정확한 일수 차이를 계산합니다\n3. CASE문으로 각 조직의 응답 시간을 동적으로 추출합니다\n4. AVG로 평균을 계산하고 조직별로 비교합니다\n5. 빠른 응답은 준비도와 적극성을 나타내는 중요한 지표입니다",
+        "sql_prompt": "조직별 평균 응답 소요 시간를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "통계 데이터를 다음과 같이 분석해주세요:\n1. 전체 통계 수치와 주요 지표 요약\n2. 시간대별/기간별 추이 분석\n3. 상위/하위 그룹 식별 및 특징\n4. 전년 대비 또는 전월 대비 변화율\n5. 특이사항 및 개선 제안"
+    },
+    {
+      "template_id": "org_response_time_exclude_creation_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_statistics",
+      "query_info": {
+        "natural_questions": [
+          "아젠다 생성을 제외하고 지정한 조직이 평균 응답시간",
+          "지정한 조직이의 순수 응답 시간",
+          "지정한 조직이 답변만의 평균 시간"
+        ],
+        "keywords": [
+          "organization",
+          "응답시간",
+          "조직",
+          "제외",
+          "KR",
+          "평균",
+          "기관"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "specific_organization",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT 'KR' as organization,\n                    COUNT(*) as count,\n                    AVG(julianday(art.KR) - julianday(a.sent_time)) as avg_days\nFROM agenda_all a\nLEFT JOIN agenda_responses_content arc ON a.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON a.agenda_base_version = art.agenda_base_version\nWHERE arc.KR IS NOT NULL\n                AND art.KR IS NOT NULL\n                AND a.decision_status != 'created'\n                AND a.sent_time >= DATE('now', '-30 days')",
+        "system": "사용자는 실질적인 검토 시간만을 측정하여 정확한 효율성을 평가하려고 합니다.\n1. 응답일과 발송일이 같은 경우를 제외하는 조건을 추가합니다\n2. 당일 응답은 사전 준비된 경우가 많아 일반적인 프로세스와 다릅니다\n3. 실제 검토 시간만 측정하여 프로세스 개선점을 도출합니다\n4. 조직별 비교를 통해 우리의 의사결정 속도를 객관적으로 평가합니다\n5. 병목 구간 식별과 프로세스 최적화에 활용합니다",
+        "sql_prompt": "아젠다 생성을 제외하고 지정한 조직이 평균 응답시간를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "organization",
+          "type": "string",
+          "required": true,
+          "default": "KR",
+          "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+          "sql_builder": {
+            "type": "string",
+            "placeholder": "{organization}"
+          },
+          "mcp_format": "extracted_organization"
+        },
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "a.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "fix_notes": [
+        {
+          "date": "2025-01-26",
+          "fixes": []
+        }
+      ],
+      "related_tables": [
+        "agenda_all",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "통계 데이터를 다음과 같이 분석해주세요:\n1. 전체 통계 수치와 주요 지표 요약\n2. 시간대별/기간별 추이 분석\n3. 상위/하위 그룹 식별 및 특징\n4. 전년 대비 또는 전월 대비 변화율\n5. 특이사항 및 개선 제안"
+    },
+    {
+      "template_id": "other_type_senders_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "other 타입의 발신자 목록",
+          "기타 유형 발송자",
+          "other 타입 sender"
+        ],
+        "keywords": [
+          "other",
+          "기타",
+          "발신자",
+          "타입"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT DISTINCT sender, a.sender_organization\nFROM agenda_all a\nWHERE a.sender_type = 'other'\nORDER BY a.sender_organization",
+        "system": "사용자는 비표준 발신자를 식별하여 데이터 품질을 관리하려고 합니다.\n1. sender_type = 'Other' 또는 비표준 조직 코드를 찾습니다\n2. 이러한 예외 사례는 추가 검증이 필요할 수 있습니다\n3. 새로운 참여 조직이나 임시 그룹일 가능성을 검토합니다\n4. 데이터 분류 규칙 개선에 활용합니다\n5. 정기적 모니터링으로 데이터 일관성을 유지합니다",
+        "sql_prompt": "other 타입의 발신자 목록를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "recent_updated_chair_10_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "최근 업데이트된 chair agenda 10개",
+          "최신 수정 의장 의제 10건",
+          "업데이트된 chair 아젠다"
+        ],
+        "keywords": [
+          "업데이트",
+          "chair",
+          "의장",
+          "10개"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_chair ac\nORDER BY ac.created_at DESC",
+        "system": "사용자는 의장의 최신 업데이트를 신속히 파악하려고 합니다.\n1. agenda_chair에서 updated_time 기준 최신 10개를 추출합니다\n2. 의장의 업데이트는 정책 방향 전환을 의미할 수 있습니다\n3. 변경 내용과 그 의도를 분석합니다\n4. 우리의 기존 입장과 충돌하는지 검토합니다\n5. 필요시 즉각적인 대응 전략 수정이 필요합니다",
+        "sql_prompt": "최근 업데이트된 chair agenda 10개를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_chair"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "chair_no_deadline_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "마감일이 없는 chair agenda",
+          "무기한 의장 의제",
+          "데드라인 없는 chair 아젠다"
+        ],
+        "keywords": [
+          "마감일없음",
+          "chair",
+          "의장",
+          "무기한"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT *\nFROM agenda_chair ac\nWHERE ac.mail_type = 'REQUEST' AND ac.has_deadline = 1 AND ac.sender_type = 'CHAIR'\n                AND (ac.has_deadline = 0 OR ac.deadline IS NULL)\n                AND {period_condition}\nORDER BY ac.sent_time DESC",
+        "system": "사용자는 정보성 메일과 액션 필요 메일을 구분하려고 합니다.\n1. agenda_chair에서 has_deadline = 0인 메일을 추출합니다\n2. 마감일 없는 메일은 주로 정보 공유 목적입니다\n3. 그러나 중요한 정책 발표일 수도 있으므로 내용 확인이 필요합니다\n4. 정기적으로 확인하여 중요 정보를 놓치지 않습니다\n5. 향후 의제로 발전할 수 있는 신호를 포착합니다",
+        "sql_prompt": "마감일이 없는 chair agenda를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "ac.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_chair"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "active_time_statistics_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_statistics",
+      "query_info": {
+        "natural_questions": [
+          "가장 활발한 시간대의 agenda 발송 통계",
+          "시간대별 의제 발송 현황",
+          "피크 타임 아젠다 통계"
+        ],
+        "keywords": [
+          "시간대",
+          "활발",
+          "통계",
+          "발송"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT strftime('%H', a.sent_time) as hour,\n                    COUNT(*) as mail_count\nFROM agenda_all a\nWHERE a.sent_time BETWEEN {period_start} AND {period_end}\nORDER BY hour",
+        "system": "사용자는 의제 처리 시간을 분석하여 프로세스를 이해하려고 합니다.\n1. created에서 completed까지의 기간을 계산합니다\n2. 의제 유형별, 패널별 평균 처리 시간을 분석합니다\n3. 장기간 pending되는 의제는 복잡하거나 논란이 있을 가능성이 높습니다\n4. 프로세스 병목 구간을 식별하여 개선점을 도출합니다\n5. 현실적인 일정 계획과 리소스 배분에 활용합니다",
+        "sql_prompt": "가장 활발한 시간대의 agenda 발송 통계를 위해 관련 데이터를 집계하고 그룹화합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "통계 데이터를 다음과 같이 분석해주세요:\n1. 전체 통계 수치와 주요 지표 요약\n2. 시간대별/기간별 추이 분석\n3. 상위/하위 그룹 식별 및 특징\n4. 전년 대비 또는 전월 대비 변화율\n5. 특이사항 및 개선 제안"
+    },
+    {
+      "template_id": "unknown_type_senders_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_search",
+      "query_info": {
+        "natural_questions": [
+          "UNKNOWN 타입의 발신자 정보",
+          "미확인 발송자 목록",
+          "UNKNOWN sender 정보"
+        ],
+        "keywords": [
+          "UNKNOWN",
+          "미확인",
+          "발신자",
+          "정보"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT DISTINCT a.sender, sender_address, COUNT(*) as mail_count\nFROM agenda_all a\nWHERE a.sender_type = 'UNKNOWN'\nORDER BY mail_count DESC",
+        "system": "사용자는 미분류 발신자를 처리하여 데이터 완전성을 확보하려고 합니다.\n1. sender_type = 'Unknown'인 레코드를 추출합니다\n2. 패턴 분석으로 분류 실패 원인을 파악합니다\n3. 수동 분류 후 자동화 규칙에 반영합니다\n4. 지속적인 개선으로 미분류율을 감소시킵니다\n5. 데이터 품질 향상은 분석 정확도 향상으로 이어집니다",
+        "sql_prompt": "UNKNOWN 타입의 발신자 정보를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_all"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "검색 결과를 다음과 같이 정리해주세요:\n1. 검색된 의제 수와 분포\n2. 관련도 높은 상위 의제 요약\n3. 시간순/중요도순 정렬 결과\n4. 검색 키워드별 매칭 현황\n5. 추가 검색 키워드 제안"
+    },
+    {
+      "template_id": "completed_pending_process_time_v2",
+      "template_version": "1.0.0",
+      "template_category": "agenda_statistics",
+      "query_info": {
+        "natural_questions": [
+          "처리 완료된 pending agenda의 처리 시간",
+          "완료된 대기 의제 처리 소요시간",
+          "pending 처리 완료 시간"
+        ],
+        "keywords": [
+          "완료",
+          "pending",
+          "처리시간",
+          "소요시간"
+        ]
+      },
+      "target_scope": {
+        "scope_type": "all",
+        "target_organizations": [],
+        "target_panels": "all"
+      },
+      "sql_template": {
+        "query": "SELECT ac.agenda_code,\n                    ac.subject,\n                    ac.sent_time,\n                    ac.decision_status,\n                    julianday('now') - julianday(ac.sent_time) as days_pending\nFROM agenda_chair ac\nWHERE ac.deadline > DATE('now')\nORDER BY days_pending DESC",
+        "system": "사용자는 의제 처리 지연 요인을 분석하여 프로세스를 개선하려고 합니다.\n1. created_time과 completed_time의 차이를 계산합니다\n2. 평균 이상으로 오래 걸린 케이스를 식별합니다\n3. 지연 의제의 특성을 분석하여 패턴을 찾습니다\n4. 복잡성, 이해 상충, 기술적 난이도 등의 요인을 추론합니다\n5. 프로세스 개선과 리스크 관리에 활용합니다",
+        "sql_prompt": "처리 완료된 pending agenda의 처리 시간를 위해 필요한 데이터를 조회하고 정렬합니다."
+      },
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": false,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "direct_replace",
+            "placeholders": [
+              "{period_start}",
+              "{period_end}"
+            ]
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
+      "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+      },
+      "routing_type": "sql",
+      "related_tables": [
+        "agenda_chair"
+      ],
+      "related_db": "iacsgraph.db",
+      "to_agent": "통계 데이터를 다음과 같이 분석해주세요:\n1. 전체 통계 수치와 주요 지표 요약\n2. 시간대별/기간별 추이 분석\n3. 상위/하위 그룹 식별 및 특징\n4. 전년 대비 또는 전월 대비 변화율\n5. 특이사항 및 개선 제안"
+    }
+  ]
+}
