@@ -192,5 +192,14 @@ enrollment/
 # Test result files
 *_test_result_*.json
 
+# Template test results
+modules/templates/test_results/
+
 # Embedding cache
 .embedding_cache/
+
+# Test results
+test_results/
+
+# Backup folders in query_templates_split
+modules/templates/data/query_templates_split/backup*/

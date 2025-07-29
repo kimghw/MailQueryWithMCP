@@ -53,6 +53,9 @@ class QueryExecutor:
                     # Don't add quotes if already in a LIKE clause
                     if f"LIKE '%{placeholder}%'" in sql_query:
                         final_query = final_query.replace(placeholder, default_value)
+                    # Check if placeholder is used as a column name (e.g., r.{organization})
+                    elif f"r.{placeholder}" in sql_query or f"c.{placeholder}" in sql_query:
+                        final_query = final_query.replace(placeholder, default_value)
                     else:
                         final_query = final_query.replace(placeholder, f"'{default_value}'")
                 elif isinstance(default_value, list):
@@ -79,9 +82,7 @@ class QueryExecutor:
             '{no_deadline_filter}': "deadline IS NULL",
             '{keywords_condition}': "(keywords LIKE '%PR%' OR subject LIKE '%PR%' OR keywords LIKE '%EG%' OR subject LIKE '%EG%')",
             '{keyword_condition}': "1=1",
-            '{organization}': "'KR'",
-            '{panel}': "'PL'",
-            '{agenda}': "'PL25017'",
+            '{agenda}': "PL24005",  # This should be agenda_base_version value
             '{issue_condition}': "1=1"
         }
         

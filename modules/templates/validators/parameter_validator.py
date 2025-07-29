@@ -59,7 +59,7 @@ class ParameterValidator:
             # Validate and process by type
             if param_type == 'string':
                 processed[param_name] = self._validate_string(param_name, value)
-            elif param_type == 'date_range':
+            elif param_type in ['date_range', 'period']:
                 processed[param_name] = self._validate_date_range(param_name, value, param_def)
             elif param_type == 'integer':
                 processed[param_name] = self._validate_integer(param_name, value)
@@ -99,8 +99,14 @@ class ParameterValidator:
                 continue
                 
             # Build SQL based on parameter type
-            if param_def.get('sql_builder'):
-                sql_value = self._build_sql_value(param_value, param_def['sql_builder'])
+            sql_builder = param_def.get('sql_builder', {})
+            
+            # Check if placeholder is defined in sql_builder
+            if sql_builder.get('placeholder'):
+                placeholder = sql_builder['placeholder']
+            
+            if sql_builder:
+                sql_value = self._build_sql_value(param_value, sql_builder, param_def)
             else:
                 # Simple string replacement
                 if isinstance(param_value, str):
@@ -160,7 +166,8 @@ class ParameterValidator:
                 return {
                     'type': 'relative',
                     'amount': amount,
-                    'unit': unit
+                    'unit': unit,
+                    'days': amount if unit == 'day' else amount * (7 if unit == 'week' else 30 if unit == 'month' else 365)
                 }
                 
         # Use default if available
@@ -171,14 +178,21 @@ class ParameterValidator:
         self.errors.append(f"Invalid date range format for '{name}'")
         return {'type': 'relative', 'days': 30}
         
-    def _build_sql_value(self, value: Any, sql_builder: Dict[str, Any]) -> str:
+    def _build_sql_value(self, value: Any, sql_builder: Dict[str, Any], param_def: Dict[str, Any] = None) -> str:
         """Build SQL value based on builder configuration"""
         builder_type = sql_builder.get('type', 'string')
         
-        if builder_type == 'date_range':
+        if builder_type in ['date_range', 'period']:
             return self._build_date_range_sql(value, sql_builder)
         elif builder_type == 'in_list':
             return self._build_in_list_sql(value)
+        elif builder_type == 'keywords':
+            return self._build_keywords_sql(value, sql_builder)
+        elif builder_type == 'string':
+            # For simple string replacement, don't add quotes if it's a column name
+            if sql_builder.get('as_column', False):
+                return value
+            return f"'{value}'" if isinstance(value, str) else str(value)
         else:
             return f"'{value}'" if isinstance(value, str) else str(value)
             
@@ -209,16 +223,54 @@ class ParameterValidator:
         quoted = [f"'{v}'" for v in values]
         return f"({', '.join(quoted)})"
         
+    def _build_keywords_sql(self, keywords: List[str], sql_builder: Dict[str, Any]) -> str:
+        """Build SQL for keywords search"""
+        fields = sql_builder.get('fields', ['keywords'])
+        if not keywords:
+            return "1=0"
+        
+        conditions = []
+        for keyword in keywords:
+            field_conditions = []
+            for field in fields:
+                field_conditions.append(f"{field} LIKE '%{keyword}%'")
+            conditions.append(f"({' OR '.join(field_conditions)})")
+        
+        return f"({' OR '.join(conditions)})"
+    
     def _handle_special_placeholders(self, sql: str, parameters: Dict[str, Any]) -> str:
         """Handle special placeholders like {date_condition}"""
         # Handle {date_condition}
         if '{date_condition}' in sql:
-            date_param = parameters.get('date_range', parameters.get('date_info'))
+            date_param = parameters.get('date_range', parameters.get('date_info', parameters.get('period')))
             if date_param:
                 date_sql = self._build_date_range_sql(date_param, {'field': 'sent_time'})
                 sql = sql.replace('{date_condition}', date_sql)
             else:
                 sql = sql.replace('{date_condition}', '1=1')
+        
+        # Handle {period_condition}
+        if '{period_condition}' in sql:
+            period_param = parameters.get('period', parameters.get('date_range'))
+            if period_param:
+                # Find the field from SQL context
+                field = 'sent_time'
+                if 'c.sent_time' in sql:
+                    field = 'c.sent_time'
+                period_sql = self._build_date_range_sql(period_param, {'field': field})
+                sql = sql.replace('{period_condition}', period_sql)
+            else:
+                sql = sql.replace('{period_condition}', '1=1')
+        
+        # Handle {keywords_condition}
+        if '{keywords_condition}' in sql:
+            keywords = parameters.get('keywords', [])
+            if keywords:
+                # Default fields for keyword search
+                keyword_sql = self._build_keywords_sql(keywords, {'fields': ['keywords', 'subject']})
+                sql = sql.replace('{keywords_condition}', keyword_sql)
+            else:
+                sql = sql.replace('{keywords_condition}', '1=0')
                 
         # Handle other special placeholders
         special_placeholders = {

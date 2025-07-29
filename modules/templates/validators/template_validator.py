@@ -15,9 +15,16 @@ class TemplateValidator:
     # Required fields for each template
     REQUIRED_FIELDS = [
         'template_id',
+        'template_version',
         'template_category',
         'query_info',
-        'sql_template'
+        'target_scope',
+        'sql_template',
+        'parameters',
+        'related_db',
+        'related_tables',
+        'routing_type',
+        'to_agent'
     ]
     
     # Required fields in query_info
@@ -35,7 +42,7 @@ class TemplateValidator:
         'panel_specific', 'keyword_search', 'chair_communication',
         'panel_statistics', 'llm_direct_response', 'vectordb_search',
         'response_analysis', 'deadline_analysis', 'organization_info',
-        'mail_content', 'statistics'
+        'mail_content', 'statistics', 'response_tracking', 'mail_type'
     ]
     
     def __init__(self):
@@ -76,6 +83,14 @@ class TemplateValidator:
             template.get('parameters', []),
             template.get('sql_template', {}).get('query', '')
         )
+        
+        # Validate additional required fields
+        self._validate_template_version(template.get('template_version'))
+        self._validate_target_scope(template.get('target_scope'))
+        self._validate_related_db(template.get('related_db'))
+        self._validate_related_tables(template.get('related_tables'))
+        self._validate_routing_type(template.get('routing_type'))
+        self._validate_to_agent(template.get('to_agent'))
         
         is_valid = len(self.errors) == 0
         return is_valid, self.errors, self.warnings
@@ -233,3 +248,76 @@ class TemplateValidator:
         for param_name in param_names:
             if param_name and f'{{{param_name}}}' not in sql_query:
                 self.warnings.append(f"Parameter '{param_name}' is defined but not used in SQL")
+    
+    def _validate_template_version(self, version: Optional[str]):
+        """Validate template version format"""
+        if not version:
+            self.errors.append("template_version is missing")
+            return
+        
+        # Check version format (e.g., "1.0.0")
+        if not re.match(r'^\d+\.\d+\.\d+$', version):
+            self.errors.append(f"Invalid version format '{version}'. Expected format: X.Y.Z")
+    
+    def _validate_target_scope(self, target_scope: Optional[Dict[str, Any]]):
+        """Validate target_scope structure"""
+        if not target_scope:
+            self.errors.append("target_scope is missing")
+            return
+        
+        # Check required fields in target_scope
+        required_scope_fields = ['scope_type', 'target_organizations', 'target_panels']
+        for field in required_scope_fields:
+            if field not in target_scope:
+                self.errors.append(f"Missing required field in target_scope: {field}")
+        
+        # Validate scope_type
+        scope_type = target_scope.get('scope_type')
+        if scope_type and scope_type not in ['all', 'organization', 'panel']:
+            self.errors.append(f"Invalid scope_type '{scope_type}'. Valid values: all, organization, panel")
+        
+        # Validate target_organizations is a list
+        target_orgs = target_scope.get('target_organizations')
+        if target_orgs is not None and not isinstance(target_orgs, list):
+            self.errors.append("target_organizations must be a list")
+        
+        # Validate target_panels
+        target_panels = target_scope.get('target_panels')
+        if target_panels is not None:
+            if not isinstance(target_panels, (str, list)):
+                self.errors.append("target_panels must be a string or list")
+    
+    def _validate_related_db(self, related_db: Optional[str]):
+        """Validate related_db field"""
+        if not related_db:
+            self.errors.append("related_db is missing")
+        elif related_db != "iacsgraph.db":
+            self.warnings.append(f"Unexpected database name: {related_db}")
+    
+    def _validate_related_tables(self, related_tables: Optional[List[str]]):
+        """Validate related_tables field"""
+        if related_tables is None:
+            self.errors.append("related_tables is missing")
+        elif not isinstance(related_tables, list):
+            self.errors.append("related_tables must be a list")
+        elif len(related_tables) == 0:
+            self.warnings.append("related_tables is empty")
+    
+    def _validate_routing_type(self, routing_type: Optional[str]):
+        """Validate routing_type field"""
+        if not routing_type:
+            self.errors.append("routing_type is missing")
+            return
+        
+        valid_routing_types = ['sql', 'llm_direct', 'llm_direct_response', 'vectordb', 'vectordb_search']
+        if routing_type not in valid_routing_types:
+            self.errors.append(f"Invalid routing_type '{routing_type}'. Valid values: {', '.join(valid_routing_types)}")
+    
+    def _validate_to_agent(self, to_agent: Optional[str]):
+        """Validate to_agent field"""
+        if not to_agent:
+            self.errors.append("to_agent is missing")
+        elif not isinstance(to_agent, str):
+            self.errors.append("to_agent must be a string")
+        elif len(to_agent.strip()) == 0:
+            self.warnings.append("to_agent is empty")

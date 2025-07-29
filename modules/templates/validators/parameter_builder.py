@@ -74,12 +74,14 @@ class ParameterBuilder:
             date_type = date_param.get('type', 'relative')
             
             if date_type == 'relative':
-                days = date_param.get('days', 30)
+                # Support both 'days' and 'amount' for period type
+                days = date_param.get('days', date_param.get('amount', 30))
                 return f"{field} >= DATE('now', '-{days} days')"
                 
-            elif date_type == 'range':
-                date_from = date_param.get('from')
-                date_to = date_param.get('to')
+            elif date_type in ['range', 'absolute']:
+                # Support both 'from/to' and 'start/end' for consistency
+                date_from = date_param.get('from', date_param.get('start'))
+                date_to = date_param.get('to', date_param.get('end'))
                 if date_from and date_to:
                     return ParameterBuilder.build_between_dates(date_from, date_to, field)
                 elif date_from:
@@ -143,12 +145,30 @@ class ParameterBuilder:
                     condition = ParameterBuilder.build_in_condition(value, field)
                     final_sql = final_sql.replace(placeholder, condition)
                     
-                elif builder_type == 'date_range':
-                    # Handle date range parameter
+                elif builder_type in ['date_range', 'period']:
+                    # Handle date range/period parameter
                     field = sql_builder.get('field', 'sent_time')
                     placeholder = sql_builder['placeholder']
                     condition = ParameterBuilder.build_date_condition(value, field)
                     final_sql = final_sql.replace(placeholder, condition)
+                    
+                elif builder_type == 'keywords':
+                    # Handle keywords parameter (similar to or_like)
+                    if not isinstance(value, list):
+                        value = [value]
+                    fields = sql_builder.get('fields', ['keywords', 'subject'])
+                    placeholder = sql_builder['placeholder']
+                    condition = ParameterBuilder.build_or_like_condition(value, fields)
+                    final_sql = final_sql.replace(placeholder, condition)
+                    
+                elif builder_type == 'string':
+                    # Handle simple string replacement
+                    placeholder = sql_builder['placeholder']
+                    # Check if it's a column name replacement (no quotes)
+                    if sql_builder.get('as_column', False) or f"r.{placeholder}" in final_sql or f"c.{placeholder}" in final_sql:
+                        final_sql = final_sql.replace(placeholder, value)
+                    else:
+                        final_sql = final_sql.replace(placeholder, f"'{value}'")
                     
             else:
                 # Simple parameter replacement
