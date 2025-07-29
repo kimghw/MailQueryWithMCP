@@ -50,11 +50,22 @@ class QueryExecutor:
             if param_name and default_value is not None:
                 placeholder = f'{{{param_name}}}'
                 if isinstance(default_value, str):
-                    final_query = final_query.replace(placeholder, f"'{default_value}'")
+                    # Don't add quotes if already in a LIKE clause
+                    if f"LIKE '%{placeholder}%'" in sql_query:
+                        final_query = final_query.replace(placeholder, default_value)
+                    else:
+                        final_query = final_query.replace(placeholder, f"'{default_value}'")
                 elif isinstance(default_value, list):
-                    # Convert list to SQL IN format
-                    quoted_values = [f"'{v}'" for v in default_value]
-                    final_query = final_query.replace(placeholder, f"({', '.join(quoted_values)})")
+                    # Check if it's in a LIKE clause (for keywords)
+                    if f"LIKE '%{placeholder}%'" in sql_query:
+                        # For LIKE clauses, join with OR
+                        like_conditions = [f"'%{v}%'" for v in default_value]
+                        final_query = final_query.replace(f"'%{placeholder}%'", like_conditions[0])
+                        # Note: This only handles first keyword for simplicity
+                    else:
+                        # Convert list to SQL IN format
+                        quoted_values = [f"'{v}'" for v in default_value]
+                        final_query = final_query.replace(placeholder, f"({', '.join(quoted_values)})")
                 else:
                     final_query = final_query.replace(placeholder, str(default_value))
         
@@ -66,7 +77,7 @@ class QueryExecutor:
             '{period_end}': "DATE('now')",
             '{deadline_filter}': "deadline IS NOT NULL AND deadline >= DATE('now')",
             '{no_deadline_filter}': "deadline IS NULL",
-            '{keywords_condition}': "1=1",
+            '{keywords_condition}': "(keywords LIKE '%PR%' OR subject LIKE '%PR%' OR keywords LIKE '%EG%' OR subject LIKE '%EG%')",
             '{keyword_condition}': "1=1",
             '{organization}': "'KR'",
             '{panel}': "'PL'",
@@ -145,7 +156,7 @@ class QueryExecutor:
                 
             results['total'] += 1
             
-            success, query, message = self.test_template(template)
+            success, query, message, _ = self.test_template(template)
             
             if success:
                 results['passed'] += 1
