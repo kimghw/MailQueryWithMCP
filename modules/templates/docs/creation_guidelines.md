@@ -2,7 +2,7 @@
 
 ## 0. 데이터베이스 스키마 참조
 
-템플릿 작성 시 `query_templates_unified.json`의 metadata.database_schema를 참조하세요:
+템플릿 작성 시 `metadata.json`을 참조하세요:
 - **table_schemas**: 각 테이블의 구조와 컬럼 정보
 - **organization_codes**: 사용 가능한 조직 코드 목록
 - **query_guidelines**: 쿼리 작성 시 주의사항
@@ -11,12 +11,12 @@
 
 ## 1. 핵심 원칙
 
-1. **필수 파라미터는 명확히 구분** - 사용자가 반드시 제공해야 하는 값
+1. **필수 파라미터는 명확히 구분** - 사용자가 반드시 제공해야 하는 값이며, 제공하지 않을 시 default 값 사용
 2. **모든 파라미터는 플레이스홀더로** - 필수/선택 모두 `{param_name}` 형식 사용
 3. **선택 파라미터는 반드시 기본값 제공** - default에 합리적인 기본값 설정
-4. **MCP 통합 지원** - 모든 파라미터에 `mcp_format` 필드 필수
-5. **관련 테이블 명시** - `related_tables` 필드에 사용하는 테이블 목록 제공
-6. **자연어 질문 개수**:
+5. **관련 데이터베이스 명시** - 'related_database' 필드에 참고하는 데이터베이스 목록 제공
+6. **관련 테이블 명시** - `related_tables` 필드에 사용하는 테이블 목록 제공
+7. **자연어 질문 개수**:
    - 단순 쿼리: 3개
    - 복잡한 쿼리: 5개 이상
 
@@ -27,15 +27,13 @@
 1. **agenda_chair 테이블의 메일**
 2. **mail_type = 'request'** (요청 메일)
 3. **has_deadline = 1 AND deadline > datetime('now')** (마감일이 있고 아직 지나지 않음)
-4. **decision_status != 'completed'** (아직 완료되지 않음)
 
 ```sql
--- 응답 필요 의제 조회 예시
+--기관의 응답여부 상관없이 현재 상태를 파악하기 위해 응답 필요 의제 조회 예시
 SELECT * FROM agenda_chair 
 WHERE mail_type = 'request' 
   AND has_deadline = 1 
   AND deadline > datetime('now')
-  AND decision_status != 'completed'
   AND (response_org LIKE '%{organization_code}%' OR response_org = 'ALL')
 ORDER BY deadline ASC
 
@@ -47,7 +45,6 @@ LEFT JOIN agenda_responses_content r
 WHERE a.mail_type = 'request' 
   AND a.has_deadline = 1 
   AND a.deadline > datetime('now')
-  AND a.decision_status != 'completed'
   AND r.id IS NULL  -- 응답이 없는 경우
   AND (a.response_org LIKE '%{organization_code}%' OR a.response_org = 'ALL')
 ```
@@ -56,7 +53,6 @@ WHERE a.mail_type = 'request'
 - agenda_all이 아닌 **agenda_chair** 테이블 사용
 - mail_type = 'request' 조건 필수
 - 마감일이 있고(has_deadline = 1) 아직 지나지 않은(deadline > datetime('now')) 의제만 해당
-- decision_status != 'completed' 확인
 
 ### 조직 코드 사용
 IACSGRAPH에서 사용하는 조직 코드 (Classification Society):
@@ -113,22 +109,21 @@ IACSGRAPH에서 사용하는 조직 코드 (Classification Society):
 
 ## 2. 파라미터 처리 규칙
 
-### 2.1 표준 파라미터 목록
+### 2.1 필수 파라미터 목록
 다음 파라미터들이 추출되면 반드시 플레이스홀더로 처리:
 - `period` - 기간 (date range)
 - `organization` - 조직 코드 (string)
 - `organization_code` - 조직 코드 (string) 
+- `panel` - 패널코드 (string)
 - `agenda_base` - 의제 기본 정보 (string)
 - `agenda_base_version` - 의제 기본 버전 (string)
 - `keywords` - 검색 키워드 (array)
-- `status` - 상태 (string)
-- `limit` - 결과 제한 (integer)
+필수 파라미턴느 반드시 default 값을 사용 :
 
 ### 2.2 플레이스홀더 사용 원칙
 ```sql
 -- 올바른 예시
 WHERE organization_code = '{organization_code}' 
-  AND status = '{status}' 
   AND sent_time >= DATE('now', '-{dates} days')
   AND keywords LIKE '%{keywords}%'
 
@@ -251,7 +246,7 @@ WHERE {organization_response_condition}
 ### 3.1 필수 필드
 ```json
 {
-  "template_id": "example_template_v2",
+  "template_id": "example_template",
   "template_version": "1.0.0",
   "template_category": "agenda_status",
   "query_info": {
@@ -270,17 +265,19 @@ WHERE {organization_response_condition}
   "sql_template": {
     "query": "SELECT * FROM agenda_all WHERE ...",
     "system": "쿼리 목적 설명",
-    "user": "사용자 요구사항"
+    "sql_prompt": "사용자 요구사항"
   },
   "parameters": [
     // MCP 통합 파라미터들
   ],
+  "related_db": "iacsgraph.db",
   "related_tables": ["agenda_all"],
   "embedding_config": {
     "model": "text-embedding-3-large",
     "dimension": 1536
   },
-  "routing_type": "sql"
+  "routing_type": "sql",
+  "to_agent": "의제와 키워드 정보를 정리해 주세요."
 }
 ```
 
@@ -377,71 +374,17 @@ WHERE {organization_response_condition}
       "mcp_format": "extracted_period"
     }
   ],
+  "related_db": "iacsgraph.db",
   "related_tables": ["agenda_all"],
   "embedding_config": {
     "model": "text-embedding-3-large",
     "dimension": 1536
   },
-  "routing_type": "sql"
+  "routing_type": "sql",
+  "to_agent": "의제와 키워드 정보를 정리해 주세요."
 }
 ```
 
-### 5.2 복잡한 쿼리 템플릿 (응답 분석)
-```json
-{
-  "template_id": "org_response_analysis_v2",
-  "template_version": "1.0.0",
-  "template_category": "response_analysis",
-  "query_info": {
-    "natural_questions": [
-      "KR의 응답이 필요한 의제와 타기관 의견",
-      "한국선급이 답변해야 할 안건의 각국 입장",
-      "KR 응답 대상 의제에 대한 다른 나라 코멘트",
-      "우리나라가 회신할 아젠다의 타국 피드백",
-      "KR이 응답해야 하는 의제별 각국 의견 분석"
-    ],
-    "keywords": ["응답", "의견", "타기관", "분석", "KR"]
-  },
-  "target_scope": {
-    "scope_type": "specific_organization",
-    "target_organizations": ["KR"],
-    "target_panels": "all"
-  },
-  "sql_template": {
-    "query": "SELECT a.*, r.sender_organization, r.body FROM agenda_chair a LEFT JOIN agenda_responses_content r ON a.agenda_code = r.agenda_code WHERE a.mail_type = 'request' AND a.has_deadline = 1 AND a.deadline > datetime('now') AND {org_response_condition} AND a.decision_status != '{status}'",
-    "system": "KR이 응답해야 하는 의제와 다른 기관들의 응답을 함께 조회합니다. 의제별 주요 이슈와 각국의 입장을 종합적으로 파악하기 위한 쿼리입니다.",
-    "user": "KR이 응답해야 하는 의제들에 대해 다른 나라들은 어떤 의견을 제시했는지 종합적으로 분석해서 보고 싶습니다. 주요 쟁점과 각국 입장차이를 명확히 정리해주세요."
-  },
-  "parameters": [
-    {
-      "name": "organization_code",
-      "type": "array",
-      "required": false,
-      "default": ["KR"],
-      "sql_builder": {
-        "type": "custom",
-        "template": "(a.response_org LIKE '%{value}%' OR a.response_org = 'ALL')",
-        "placeholder": "{org_response_condition}"
-      }
-    },
-    {
-      "name": "status",
-      "type": "string",
-      "required": false,
-      "default": "completed"
-    }
-  ],
-  "embedding_config": {
-    "model": "text-embedding-3-large",
-    "dimension": 3072
-  },
-  "expected_response": {
-    "description": "KR 응답 필요 의제의 주요 이슈와 타기관 의견을 종합 분석하여 제공",
-    "format": "analysis",
-    "example": "KR 응답 필요 의제 분석:\n\n[IMO-MEPC-82-04] GHG 감축 목표\n📌 주요 이슈:\n- 2050 넷제로 달성 방안\n- 중간 목표 설정\n\n🌍 타기관 의견:\n- EU: 2040년까지 70% 감축 제안\n- JP: 단계적 접근 선호\n- US: 시장 기반 조치 우선\n\n💡 권장 대응:\n- 기술적 실현가능성 강조\n- 개도국 지원 방안 포함"
-  }
-}
-```
 
 ## 5. SQL 쿼리 작성 규칙
 
@@ -450,18 +393,9 @@ SQL 템플릿은 다음 세 가지 필드를 포함해야 합니다:
 
 ```json
 "sql_template": {
-  "query": "실제 SQL 쿼리문",
+  "query": "실제 SQL 쿼리문, 필수 파라미터는 플레이스홀도로 처리",
   "system": "이 쿼리가 무엇을 검색하는지에 대한 시스템 설명 (검색 의도)",
-  "user": "사용자가 원하는 결과가 무엇인지에 대한 설명 (예상 결과)"
-}
-```
-
-#### 예시:
-```json
-"sql_template": {
-  "query": "SELECT * FROM agenda_chair WHERE mail_type = 'request' AND has_deadline = 1 AND deadline > datetime('now') ORDER BY deadline ASC",
-  "system": "의장(Chair)이 발송한 요청 메일 중 마감일이 유효한 미완료 의제를 검색합니다. 우선순위가 높은 응답 필요 항목을 찾기 위한 쿼리입니다.",
-  "user": "우리가 응답해야 하는 의제들을 마감일 순으로 정리해서 보고 싶습니다. 각 의제의 요청사항과 마감일까지 남은 기간을 명확히 파악할 수 있도록 해주세요."
+  "sql_prompt": "natural_questions 에 대해 데이터베이스 스키마를 바탕으로 비즈니스 요구사항 분석 및 복잡한 퀄리 단계별 생성 절차   "
 }
 ```
 
@@ -548,40 +482,6 @@ WHERE (response_org LIKE '%{organization_code}%' OR response_org = 'ALL')
 
 ### 6.2 응답 형식별 예시
 
-#### 목록 형식 (list)
-```json
-"expected_response": {
-  "description": "현재 진행중인 모든 패널의 의제 목록을 시간순으로 정렬하여 제공",
-  "format": "list",
-  "example": "최근 30일간 진행중인 의제 목록입니다:\n\n1. [IMO-MEPC-82] 선박 탄소집약도 지표(CII) 개정안 논의 (2024-03-15)\n   - 패널: MEPC\n   - 상태: ongoing\n   - 주요내용: CII 등급 기준 강화 제안\n\n총 15건의 진행중인 의제가 있습니다."
-}
-```
-
-#### 우선순위 목록 (priority_list)
-```json
-"expected_response": {
-  "description": "KR이 응답해야 하는 의제 목록을 마감일 순으로 정렬하여 제공",
-  "format": "priority_list",
-  "example": "KR 응답 필요 의제 (마감일순):\n\n🚨 긴급 (7일 이내):\n1. [IMO-MEPC-82-04] GHG 감축 목표 의견 요청\n   - 마감일: 2024-03-25 (D-3)\n   - 요청사항: 2050 넷제로 목표 달성 방안\n\n⚠️ 중요 (30일 이내):\n2. [IOPCF-APR24-01] 기금 분담금 조정안\n   - 마감일: 2024-04-10 (D-18)"
-}
-```
-
-#### 분석 형식 (analysis)
-```json
-"expected_response": {
-  "description": "KR 응답 필요 의제의 주요 이슈와 타기관 의견을 종합 분석하여 제공",
-  "format": "analysis",
-  "example": "KR 응답 필요 의제 분석 (3건):\n\n[IMO-MEPC-82-04] GHG 감축 목표\n📌 주요 이슈:\n- 2050 넷제로 달성 방안\n- 중간 목표(2030, 2040) 설정\n\n🌍 타기관 의견:\n- EU: 2040년까지 70% 감축 제안\n- JP: 기술개발 시간 고려, 단계적 접근"
-}
-```
-
-#### 통계 형식 (statistics)
-```json
-"expected_response": {
-  "description": "시스템에서 자동 분류되지 못한 메일 수를 제공",
-  "format": "statistics",
-  "example": "분류 보류 중인 메일: 7건\n\n주요 보류 사유:\n- 의제 코드 누락: 3건\n- 발신자 불명: 2건\n- 형식 오류: 2건"
-}
 ```
 
 ## 7. 체크리스트
@@ -618,14 +518,3 @@ WHERE (response_org LIKE '%{organization_code}%' OR response_org = 'ALL')
 - 서브쿼리
 - 케이스별 처리 로직
 - 다양한 표현이 가능한 비즈니스 요구사항
-
-## 10. 버전 정보
-
-- **v3.1** (2025-01-26): 데이터베이스 스키마 참조 방법 추가
-  - metadata.database_schema 참조 방법 추가
-  - 체크리스트 업데이트
-- **v3.0** (2025-01-26): MCP 통합 구조 반영
-  - `mcp_format` 필드 추가
-  - `related_tables` 필드 추가
-  - 동적 컬럼 참조 해결 방안 추가
-  - 실제 조직 코드 목록 반영

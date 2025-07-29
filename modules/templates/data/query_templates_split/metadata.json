@@ -4,48 +4,9 @@
   "last_updated": "2025-01-26",
   "total_templates": 175,
   "metadata": {
-    "last_updated": "2025-07-26",
     "mcp_integration": true,
     "parameter_format": "mcp_enhanced",
     "includes_related_tables": true,
-    "categories": {
-      "agenda_status": 7,
-      "time_based_query": 3,
-      "organization_response": 14,
-      "agenda_statistics": 13,
-      "agenda_analysis": 26,
-      "keyword_analysis": 15,
-      "agenda_search": 29,
-      "system_config": 5,
-      "data_quality": 3,
-      "organization_analysis": 2,
-      "meeting_info": 5,
-      "project_team": 6,
-      "panel_specific": 17,
-      "keyword_search": 2,
-      "chair_communication": 1,
-      "panel_statistics": 2,
-      "llm_direct_response": 3,
-      "vectordb_search": 15,
-      "response_analysis": 1,
-      "deadline_analysis": 1,
-      "organization_info": 1,
-      "mail_content": 1,
-      "statistics": 3
-    },
-    "routing_types": {
-      "sql": 156,
-      "llm_direct": 3,
-      "vectordb": 15
-    },
-    "total_sql_templates": 174,
-    "total_vectordb_templates": 0,
-    "total_llm_direct_templates": 0,
-    "dynamic_column_fix": {
-      "date": "2025-01-26",
-      "fixed_count": 16,
-      "description": "Fixed dynamic column references to use CASE statements"
-    },
     "database_schema": {
       "table_schemas": {
         "agenda_all": {

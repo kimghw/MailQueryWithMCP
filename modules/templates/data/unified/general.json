@@ -1,0 +1,72 @@
+{
+    "template_id": "org_agenda_keywords_v2",
+    "template_version": "1.0.0",
+    "template_category": "keyword_analysis",
+    "query_info": {
+        "natural_questions": [
+            "지정한 조직이 응답해야하는 의제들의 주요 키워드",
+            "지정한 조직이 응답 필요 의제의 핵심어",
+            "지정한 조직이 대응 의제 키워드 분석"
+        ],
+        "keywords": [
+            "organization",
+            "조직",
+            "KR",
+            "키워드",
+            "주요",
+            "핵심어",
+            "기관"
+        ]
+    },
+    "target_scope": {
+        "scope_type": "specific_organization",
+        "target_organizations": [],
+        "target_panels": "all"
+    },
+    "sql_template": {
+        "query": "SELECT ac.keywords,\n                    COUNT(*) as count\nFROM agenda_chair ac\nLEFT JOIN agenda_responses_content arc ON ac.agenda_base_version = arc.agenda_base_version\nLEFT JOIN agenda_responses_receivedtime art ON ac.agenda_base_version = art.agenda_base_version\nWHERE ac.mail_type = 'REQUEST'\n                AND (ac.response_org = {organization} OR ac.response_org = 'ALL')\n                AND CASE {organization} WHEN 'ABS' THEN arc.ABS WHEN 'BV' THEN arc.BV WHEN 'CCS' THEN arc.CCS WHEN 'CRS' THEN arc.CRS WHEN 'DNV' THEN arc.DNV WHEN 'IRS' THEN arc.IRS WHEN 'KR' THEN arc.KR WHEN 'NK' THEN arc.NK WHEN 'PRS' THEN arc.PRS WHEN 'RINA' THEN arc.RINA WHEN 'IL' THEN arc.IL WHEN 'TL' THEN arc.TL WHEN 'LR' THEN arc.LR END IS NULL\n                AND ac.keywords IS NOT NULL\n                AND {period_condition} AND ac.has_deadline = 1\nORDER BY count DESC",
+        "system": "사용자는 특정 조직이 아직 응답하지 않은 의제들의 키워드를 분석하려고 합니다.\n1. agenda_chair 테이블에서 REQUEST 타입의 의제를 찾습니다\n2. response_org가 특정 조직이거나 ALL인 의제를 필터링합니다\n3. agenda_responses_content에서 해당 조직이 응답하지 않은 의제만 선택합니다\n4. 키워드 빈도 분석을 통해 미응답 의제의 주요 토픽을 파악합니다\n5. 이를 통해 해당 조직이 처리해야 할 주요 이슈를 식별합니다",
+        "sql_prompt": "우리 조직이 아직 응답하지 않은 의제들의 주요 키워드를 분석해 주세요. 어떤 주제들이 많이 다뤄지고 있는지 키워드별 빈도를 집계해서 보여주세요. 1. 현재 진행 중인 의제 식별, 2. 우리가 응답하지 않은 의제 식별, 우리가 응답하지 않은 agenda_chair의 의제에서 키워드를 조회"
+    },
+    "parameters": [
+        {
+            "name": "organization",
+            "type": "string",
+            "required": true,
+            "default": "KR",
+            "description": "Organization code (e.g., KR, NK, CCS, ABS)",
+            "sql_builder": {
+                "type": "string",
+                "placeholder": "{organization}"
+            },
+            "mcp_format": "extracted_organization"
+        },
+        {
+            "name": "period",
+            "type": "period",
+            "required": false,
+            "default": {
+                "type": "relative",
+                "days": 30
+            },
+            "sql_builder": {
+                "type": "period",
+                "field": "ac.sent_time",
+                "placeholder": "{period_condition}"
+            },
+            "mcp_format": "extracted_period"
+        }
+    ],
+    "embedding_config": {
+        "model": "text-embedding-3-large",
+        "dimension": 3072
+    },
+    "routing_type": "sql",
+    "related_tables": [
+        "agenda_chair",
+        "agenda_responses_content",
+        "agenda_responses_receivedtime"
+    ],
+    "related_db": "iacsgraph.db",
+    "to_agent": "의제와 키워드 정보를 정리해 주세요."
+}
