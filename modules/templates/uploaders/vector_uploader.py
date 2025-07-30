@@ -23,13 +23,13 @@ class VectorUploader:
         self,
         qdrant_url: str = None,
         qdrant_port: int = None,
-        collection_name: str = "query_templates_unified",
+        collection_name: str = None,
         embedding_model: str = "text-embedding-3-large",
         vector_size: int = 3072
     ):
         self.qdrant_url = qdrant_url or os.getenv('QDRANT_URL', 'localhost')
         self.qdrant_port = qdrant_port or int(os.getenv('QDRANT_PORT', 6333))
-        self.collection_name = collection_name
+        self.collection_name = collection_name or os.getenv('QDRANT_COLLECTION_NAME', 'query_templates_unified')
         self.embedding_model = embedding_model
         self.vector_size = vector_size
         self.api_key = os.getenv('OPENAI_API_KEY')

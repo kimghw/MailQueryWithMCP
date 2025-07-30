@@ -76,19 +76,19 @@ Additionally, respond in JSON format:
             "X-Title": "IACSGRAPH Query Test"
         }
         
+        # Get current date for relative date parsing
+        from datetime import datetime
+        today = datetime.now().strftime('%Y-%m-%d')
+        
         payload = {
             "model": self.model,
             "messages": [
                 {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": f"""다음 쿼리를 분석하여 키워드를 추출하세요: "{query}"
+                {"role": "user", "content": f"""사용자 질의: "{query}"
 
-반드시 다음을 포함하세요:
-1. 원본 한국어 키워드
-2. 관련 동의어/유사어
-3. 영문 번역
-4. 도메인 특화 용어
+오늘 날짜: {today}
 
-예시: "최근 진행중인 아젠다" → ["최근", "recent", "진행중", "ongoing", "진행", "active", "아젠다", "agenda", "의제", "안건"]"""}
+위 질의를 분석하여 JSON 형식으로 응답하세요."""}
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0.3,
@@ -145,6 +145,7 @@ Additionally, respond in JSON format:
         analysis = await self.analyze_query(query)
         print(f"[LLM] Extracted keywords: {analysis['keywords']}")
         print(f"[LLM] Extracted parameters: {analysis['parameters']}")
+        print(f"[LLM] Extracted period: {analysis.get('extracted_period', 'None')}")
         
         # Convert LLM parameters to MCP format
         extracted_period = None
@@ -313,11 +314,10 @@ Additionally, respond in JSON format:
             }
 
 
-async def test_with_mock_claude():
-    """Test queries using Mock Claude Desktop"""
-    mock = MockClaudeDesktop()
+async def test_sample_queries(mock: MockClaudeDesktop, num_queries: int = 7):
+    """Test sample queries using Mock Claude Desktop"""
     
-    test_queries = [
+    sample_queries = [
         "최근 아젠다 목록 보여줘",
         "한국선급 응답 현황",
         "어제 받은 이메일들",
@@ -327,13 +327,16 @@ async def test_with_mock_claude():
         "PL25016a 아젠다 상세 정보"
     ]
     
+    # Use only requested number of queries
+    test_queries = sample_queries[:min(num_queries, len(sample_queries))]
+    
     print("="*80)
-    print("Testing with Mock Claude Desktop (OpenRouter)")
+    print(f"Testing {len(test_queries)} sample queries with Mock Claude Desktop")
     print("="*80)
     
-    for query in test_queries:
+    for i, query in enumerate(test_queries, 1):
         print(f"\n{'='*60}")
-        print(f"Query: {query}")
+        print(f"[{i}/{len(test_queries)}] Query: {query}")
         print("="*60)
         
         try:
@@ -385,14 +388,173 @@ async def test_with_mock_claude():
             print(f"\n✗ Error: {e}")
         
         # Rate limiting
-        await asyncio.sleep(1)
+        await asyncio.sleep(0.5)
 
 
-if __name__ == "__main__":
-    # Test if API key exists
+async def test_100_queries(mock: MockClaudeDesktop, detail: bool = False):
+    """Test 100 queries from test_100_queries.py"""
+    from modules.query_assistant.scripts.test_100_queries import generate_test_queries
+    import time
+    from datetime import datetime
+    
+    # Get 100 test queries
+    test_queries = generate_test_queries()
+    
+    print("="*80)
+    print(f"Testing {len(test_queries)} queries with Mock Claude Desktop")
+    print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*80)
+    
+    # Results tracking
+    results = []
+    success_count = 0
+    error_count = 0
+    
+    for i, test_case in enumerate(test_queries, 1):
+        query = test_case['query']
+        expected_category = test_case['expected_category']
+        
+        try:
+            start_time = time.time()
+            
+            # Process query
+            result = await mock.process_query_with_mcp(
+                query=query,
+                category=None,
+                execute=True,
+                limit=10
+            )
+            
+            elapsed_time = time.time() - start_time
+            
+            # Analyze result
+            query_result = result.get('result', {})
+            success = query_result.get('query_id') and not query_result.get('error')
+            
+            test_result = {
+                'index': i,
+                'query': query,
+                'expected_category': expected_category,
+                'success': success,
+                'elapsed_time': elapsed_time,
+                'template_id': query_result.get('query_id', ''),
+                'result_count': len(query_result.get('results', [])),
+                'error': query_result.get('error'),
+                'llm_keywords': result.get('llm_analysis', {}).get('keywords', []),
+                'llm_confidence': result.get('llm_analysis', {}).get('confidence', 0)
+            }
+            
+            results.append(test_result)
+            
+            if success:
+                success_count += 1
+                status = "✅"
+            else:
+                error_count += 1
+                status = "❌"
+            
+            # Progress indicator
+            if i % 10 == 0:
+                print(f"Progress: {i}/{len(test_queries)} - Success: {success_count}, Errors: {error_count}")
+            
+            # Show details only for failures or if detail mode
+            if detail or not success:
+                print(f"{status} [{i}] {query[:50]}... - {query_result.get('error', 'Template: ' + query_result.get('query_id', 'None'))}")
+                
+        except Exception as e:
+            error_count += 1
+            results.append({
+                'index': i,
+                'query': query,
+                'expected_category': expected_category,
+                'success': False,
+                'error': str(e),
+                'elapsed_time': 0
+            })
+            print(f"❌ [{i}] {query[:50]}... - Exception: {e}")
+        
+        # Rate limiting
+        await asyncio.sleep(0.5)
+    
+    # Summary
+    print("\n" + "="*80)
+    print("TEST SUMMARY")
+    print("="*80)
+    print(f"Total queries: {len(test_queries)}")
+    print(f"Successful: {success_count} ({success_count/len(test_queries)*100:.1f}%)")
+    print(f"Failed: {error_count} ({error_count/len(test_queries)*100:.1f}%)")
+    
+    # Category statistics
+    category_stats = {}
+    for result in results:
+        cat = result['expected_category']
+        if cat not in category_stats:
+            category_stats[cat] = {'total': 0, 'success': 0}
+        category_stats[cat]['total'] += 1
+        if result['success']:
+            category_stats[cat]['success'] += 1
+    
+    print("\nCategory Performance:")
+    for cat, stats in category_stats.items():
+        success_rate = stats['success'] / stats['total'] * 100 if stats['total'] > 0 else 0
+        print(f"  {cat}: {stats['success']}/{stats['total']} ({success_rate:.1f}%)")
+    
+    # Save results
+    output_file = 'mock_claude_test_results.json'
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump({
+            'test_date': datetime.now().isoformat(),
+            'summary': {
+                'total': len(test_queries),
+                'success': success_count,
+                'failed': error_count,
+                'success_rate': success_count/len(test_queries)*100,
+                'category_stats': category_stats
+            },
+            'detailed_results': results
+        }, f, ensure_ascii=False, indent=2)
+    
+    print(f"\nDetailed results saved to: {output_file}")
+    print(f"Completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+
+async def main():
+    """Main function with command line options"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Mock Claude Desktop Test')
+    parser.add_argument('-n', '--num-queries', type=int, default=100,
+                       help='Number of queries to test (default: 100)')
+    parser.add_argument('--sample', action='store_true',
+                       help='Use sample queries instead of 100 test queries')
+    parser.add_argument('--detail', action='store_true',
+                       help='Show detailed output for all queries')
+    
+    args = parser.parse_args()
+    
+    # Check API key
     if not os.getenv("OPENROUTER_API_KEY"):
         print("Please set OPENROUTER_API_KEY in .env file")
         print("Get your API key from: https://openrouter.ai/keys")
         exit(1)
     
-    asyncio.run(test_with_mock_claude())
+    try:
+        # Initialize Mock Claude Desktop
+        mock = MockClaudeDesktop()
+        
+        if args.sample:
+            # Use sample queries
+            await test_sample_queries(mock, args.num_queries)
+        else:
+            # Use 100 test queries
+            if args.num_queries != 100:
+                print(f"Note: Using all 100 test queries (--num-queries ignored for non-sample mode)")
+            await test_100_queries(mock, detail=args.detail)
+            
+    except Exception as e:
+        print(f"Error: {e}")
+        exit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,0 +1,73 @@
+{
+  "summary": {
+    "total_queries": 100,
+    "matched_queries": 82,
+    "match_rate": 82.0,
+    "high_confidence": 5,
+    "medium_confidence": 65,
+    "low_confidence": 12,
+    "unmatched": 18,
+    "category_stats": {
+      "agenda": {
+        "total": 15,
+        "matched": 15,
+        "correct": 0
+      },
+      "mail": {
+        "total": 15,
+        "matched": 15,
+        "correct": 0
+      },
+      "document": {
+        "total": 15,
+        "matched": 9,
+        "correct": 0
+      },
+      "response": {
+        "total": 10,
+        "matched": 10,
+        "correct": 0
+      },
+      "committee": {
+        "total": 10,
+        "matched": 8,
+        "correct": 0
+      },
+      "schedule": {
+        "total": 10,
+        "matched": 9,
+        "correct": 0
+      },
+      "statistics": {
+        "total": 10,
+        "matched": 5,
+        "correct": 0
+      },
+      "search": {
+        "total": 10,
+        "matched": 8,
+        "correct": 0
+      },
+      "notification": {
+        "total": 5,
+        "matched": 3,
+        "correct": 0
+      }
+    }
+  },
+  "detailed_results": [
+    {
+      "query": "최근 아젠다 목록 보여줘",
+      "expected_category": "agenda",
+      "matched": true,
+      "confidence": 0.69042194,
+      "best_match": {
+        "template_id": "recent_5_agendas",
+        "similarity": 0.69042194,
+        "base_similarity": 0.69042194,
+        "keyword_boost": 0.0,
+        "template_name": "recent_5_agendas",
+        "matched_question": "최신 아젠다 5건 리스트 보여줘 (similar2)",
+        "description": "Template for recent_5_agendas",
+        "parameters": [],
+        "template": 
