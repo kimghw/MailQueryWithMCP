@@ -24,6 +24,14 @@ class MockClaudeDesktop:
         self.api_base = "https://openrouter.ai/api/v1"
         self.model = "anthropic/claude-3.5-haiku-20241022"  # Fast and cheap for testing
         
+        # Load keyword extraction prompt
+        keyword_prompt_file = Path(__file__).parent / "modules" / "query_assistant" / "prompts" / "keyword_extraction_prompt.txt"
+        try:
+            with open(keyword_prompt_file, 'r', encoding='utf-8') as f:
+                keyword_prompt = f.read()
+        except FileNotFoundError:
+            keyword_prompt = ""
+        
         # Load system prompt from file
         prompt_file = Path(__file__).parent / "modules" / "query_assistant" / "prompts" / "mcp_system_prompt.txt"
         try:
@@ -33,8 +41,10 @@ class MockClaudeDesktop:
             # Fallback to default prompt if file not found
             mcp_prompt = "Extract parameters from the query."
         
-        # Convert MCP prompt format to JSON response format for OpenRouter
-        self.system_prompt = f"""{mcp_prompt}
+        # Combine prompts for better keyword extraction
+        self.system_prompt = f"""{keyword_prompt}
+
+{mcp_prompt}
 
 Additionally, respond in JSON format:
 {{
@@ -70,7 +80,15 @@ Additionally, respond in JSON format:
             "model": self.model,
             "messages": [
                 {"role": "system", "content": self.system_prompt},
-                {"role": "user", "content": f"Analyze this query: {query}"}
+                {"role": "user", "content": f"""다음 쿼리를 분석하여 키워드를 추출하세요: "{query}"
+
+반드시 다음을 포함하세요:
+1. 원본 한국어 키워드
+2. 관련 동의어/유사어
+3. 영문 번역
+4. 도메인 특화 용어
+
+예시: "최근 진행중인 아젠다" → ["최근", "recent", "진행중", "ongoing", "진행", "active", "아젠다", "agenda", "의제", "안건"]"""}
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0.3,

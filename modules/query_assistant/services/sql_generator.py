@@ -47,14 +47,37 @@ class SQLGenerator:
             template_params
         )
         
-        # 2. Build SQL conditions based on sql_builder configurations
+        # 2. Pre-process SQL for multi-keyword support
+        processed_sql = sql_template
+        if 'keywords' in merged_params and merged_params['keywords'] and '{keyword}' in sql_template:
+            # Replace single {keyword} placeholder with OR conditions for all keywords
+            keywords = merged_params['keywords']
+            
+            # Handle pattern: "keywords LIKE '%' || {keyword} || '%'"
+            if "LIKE '%' || {keyword} || '%'" in processed_sql:
+                pattern_match = re.search(r"(\w+)\s+LIKE\s+'%'\s*\|\|\s*{keyword}\s*\|\|\s*'%'", processed_sql)
+                if pattern_match:
+                    field = pattern_match.group(1)
+                    conditions = [f"{field} LIKE '%' || '{kw}' || '%'" for kw in keywords]
+                    or_condition = f"({' OR '.join(conditions)})"
+                    processed_sql = processed_sql.replace(pattern_match.group(0), or_condition)
+            # Handle pattern: "keywords LIKE '%{keyword}%'"
+            elif "LIKE '%{keyword}%'" in processed_sql:
+                pattern_match = re.search(r"(\w+)\s+LIKE\s+'%{keyword}%'", processed_sql)
+                if pattern_match:
+                    field = pattern_match.group(1)
+                    conditions = [f"{field} LIKE '%{kw}%'" for kw in keywords]
+                    or_condition = f"({' OR '.join(conditions)})"
+                    processed_sql = processed_sql.replace(pattern_match.group(0), or_condition)
+        
+        # 3. Build SQL conditions based on sql_builder configurations
         sql_with_conditions = self._build_sql_conditions(
-            sql_template,
+            processed_sql,
             template_params,
             merged_params
         )
         
-        # 3. Replace remaining placeholders
+        # 4. Replace remaining placeholders
         final_sql = self._replace_placeholders(sql_with_conditions, merged_params)
         
         logger.info(f"Generated SQL with parameters: {merged_params}")
@@ -284,7 +307,7 @@ class SQLGenerator:
         
         # Check context - common patterns that need quotes
         before = sql[max(0, pos-10):pos].strip().lower()
-        if any(op in before for op in ['=', '!=', '<>', 'like', 'in', 'between']):
+        if any(op in before for op in ['=', '!=', '<>', 'like', 'in', 'between', '||']):
             return True
         
         # Check for BETWEEN ... AND pattern
@@ -292,10 +315,36 @@ class SQLGenerator:
         if 'and' in after or 'and' in before:
             return True
         
+        # Check for concatenation operator ||
+        if '||' in before or '||' in after[:3]:
+            return True
+        
         return False
     
     def _replace_placeholders(self, sql: str, params: Dict[str, Any]) -> str:
         """Replace remaining placeholders in SQL"""
+        # Special handling for {keyword} placeholder when keywords list exists
+        if '{keyword}' in sql and 'keywords' in params and params['keywords']:
+            keywords = params['keywords']
+            # Find the pattern around {keyword} to build OR conditions
+            # Handle patterns like: "keywords LIKE '%' || {keyword} || '%'"
+            if "|| {keyword} ||" in sql:
+                # Extract the pattern
+                pattern = re.search(r"(\w+)\s+LIKE\s+'%'\s*\|\|\s*{keyword}\s*\|\|\s*'%'", sql)
+                if pattern:
+                    field = pattern.group(1)
+                    conditions = [f"{field} LIKE '%' || '{kw}' || '%'" for kw in keywords]
+                    or_condition = f"({' OR '.join(conditions)})"
+                    sql = sql.replace(pattern.group(0), or_condition)
+            # Handle patterns like: "keywords LIKE '%{keyword}%'"
+            elif "LIKE '%{keyword}%'" in sql:
+                pattern = re.search(r"(\w+)\s+LIKE\s+'%{keyword}%'", sql)
+                if pattern:
+                    field = pattern.group(1)
+                    conditions = [f"{field} LIKE '%{kw}%'" for kw in keywords]
+                    or_condition = f"({' OR '.join(conditions)})"
+                    sql = sql.replace(pattern.group(0), or_condition)
+        
         # Replace {param} style placeholders
         for param_name, value in params.items():
             placeholder = f"{{{param_name}}}"

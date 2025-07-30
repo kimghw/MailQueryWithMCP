@@ -431,9 +431,21 @@ class QueryAssistant:
             if quoted:
                 parameters["keyword"] = quoted[0]
             else:
-                # Use the most relevant expanded keyword
-                if expansion.expanded_keywords:
-                    parameters["keyword"] = expansion.expanded_keywords[0]
+                # Try to find domain-specific terms first
+                domain_terms = ['IMO', 'MEPC', 'MSC', 'KR', 'ISO', 'IEC', 'ITU']
+                found_domain_term = None
+                for term in domain_terms:
+                    if term in expansion.expanded_keywords or term.lower() in [k.lower() for k in expansion.expanded_keywords]:
+                        found_domain_term = term
+                        break
+                
+                if found_domain_term:
+                    parameters["keyword"] = found_domain_term
+                elif expansion.expanded_keywords:
+                    # Filter out common words and use the most specific keyword
+                    common_words = ['최근', '관련', '문서', '목록', '조회', '보여줘', '찾아줘']
+                    specific_keywords = [k for k in expansion.expanded_keywords if k not in common_words]
+                    parameters["keyword"] = specific_keywords[0] if specific_keywords else expansion.expanded_keywords[0]
         
         # Extract limit if mentioned
         limit_match = re.search(r'(\d+)\s*개', query)
