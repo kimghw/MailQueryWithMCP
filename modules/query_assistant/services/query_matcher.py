@@ -7,7 +7,7 @@ import os
 from typing import List, Dict, Optional, Tuple, Union
 from pathlib import Path
 
-from .vector_store_unified import VectorStoreUnified
+from .vector_store import VectorStore
 from ...common.services.synonym_service import SynonymService
 from ...common.parsers import QueryParameterExtractor
 
@@ -17,13 +17,12 @@ class QueryMatcher:
         self.parameter_extractor = QueryParameterExtractor()
         
         # Initialize VectorStore with configuration
-        self.vector_store = VectorStoreUnified(
+        self.vector_store = VectorStore(
             qdrant_url=os.getenv("QDRANT_URL", "localhost"),
             qdrant_port=int(os.getenv("QDRANT_PORT", 6333)),
             api_key=os.getenv("OPENAI_API_KEY"),
-            api_base_url=os.getenv("OPENAI_API_BASE", "https://api.openai.com/v1"),
-            model_name=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
-            collection_name="query_templates"  # Use new unified collection with 174 templates
+            embedding_model=os.getenv("EMBEDDING_MODEL", "text-embedding-3-large"),
+            collection_name="query_templates_unified"  # Use new unified collection with 185 templates
         )
         
         self.similarity_threshold = 0.4  # Lowered threshold for better matching

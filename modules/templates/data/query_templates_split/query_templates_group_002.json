@@ -27,7 +27,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE {period_condition} AND ({keywords_condition}) ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE {period_condition} AND ({keywords_condition}) ORDER BY sent_time DESC",
         "system": "EG(Expert Group) 관련 의제를 검색합니다",
         "sql_prompt": "제목, 본문, 키워드에서 EG 관련 키워드를 포함하는 의제를 검색합니다"
       },
@@ -50,10 +50,9 @@
         {
           "name": "keywords",
           "type": "array",
-          "required": false,
+          "required": true,
           "default": [
-            "EG",
-            "Expert Group"
+            "EG"
           ],
           "sql_builder": {
             "type": "keywords",
@@ -72,7 +71,7 @@
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "EG 관련 의제들을 분석하여 주요 논의 사항과 결정사항을 정리해 주세요."
+      "to_agent": "EG 관련 의제의 body를 받아서 EG 주제별로 정리해 주세요."
     },
     {
       "template_id": "yearly_monthly_agenda_response_status",
@@ -100,11 +99,27 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT strftime('%Y-%m', sent_time) as month, COUNT(DISTINCT c.agenda_base_version) as sent_count, COUNT(DISTINCT CASE WHEN r.agenda_base_version IS NOT NULL THEN c.agenda_base_version END) as responded_count FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE strftime('%Y', c.sent_time) = strftime('%Y', 'now') GROUP BY month ORDER BY month",
-        "system": "올해 월별 의제 발송 및 응답 현황을 집계합니다",
+        "query": "SELECT strftime('%Y-%m', sent_time) as month, COUNT(DISTINCT c.agenda_base_version) as sent_count, COUNT(DISTINCT CASE WHEN r.agenda_base_version IS NOT NULL THEN c.agenda_base_version END) as responded_count FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE {period_condition} GROUP BY month ORDER BY month",
+        "system": "지정된 기간의 월별 의제 발송 및 응답 현황을 집계합니다",
         "sql_prompt": "월별로 발송된 의제 수와 응답받은 의제 수를 집계합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": true,
+          "default": {
+            "type": "year",
+            "value": "current"
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "c.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair",
@@ -138,54 +153,33 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE sent_time >= datetime('now', '-1 day') ORDER BY sent_time DESC",
-        "system": "최근 24시간 이내에 발송된 의제를 조회합니다",
-        "sql_prompt": "sent_time이 최근 24시간 이내인 의제들을 조회합니다"
+        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE {period_condition} ORDER BY sent_time DESC",
+        "system": "지정된 기간 이내에 발송된 의제를 조회합니다",
+        "sql_prompt": "sent_time이 지정된 기간 이내인 의제들을 조회합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": true,
+          "default": {
+            "type": "relative",
+            "days": 1
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair"
       ],
       "routing_type": "sql",
       "to_agent": "24시간 이내 발송된 의제들의 긴급도와 주요 내용을 분석해 주세요."
-    },
-    {
-      "template_id": "recent_24hours_received_mails",
-      "template_version": "1.0.0",
-      "template_category": "mail_type",
-      "query_info": {
-        "natural_questions": [
-          "최근 24시간 이내에 수신한 메일이 있나요? (original)",
-          "지난 24시간 동안 받은 메일이 있는지 확인해주세요 (similar1)",
-          "어제부터 오늘까지 수신한 이메일이 있나요? (similar2)",
-          "하루 이내에 도착한 메일 목록을 보여주세요 (similar3)",
-          "최근 24시간 이내에 수신된 모든 메일(의제, 통지, 응답 포함)을 시간순으로 정렬하여 발신자, 제목, 메일 유형과 함께 보여주세요 (ext)"
-        ],
-        "keywords": [
-          "24시간",
-          "수신",
-          "메일",
-          "최근"
-        ]
-      },
-      "target_scope": {
-        "scope_type": "all",
-        "target_organizations": [],
-        "target_panels": "all"
-      },
-      "sql_template": {
-        "query": "SELECT agenda_code, subject, sender_organization, sent_time, mail_type, agenda_panel FROM agenda_chair WHERE sent_time >= datetime('now', '-1 day') ORDER BY sent_time DESC",
-        "system": "최근 24시간 이내에 수신한 메일을 조회합니다",
-        "sql_prompt": "sent_time이 최근 24시간 이내인 모든 메일을 조회합니다"
-      },
-      "parameters": [],
-      "related_db": "iacsgraph.db",
-      "related_tables": [
-        "agenda_chair"
-      ],
-      "routing_type": "sql",
-      "to_agent": "24시간 이내 수신된 메일들을 유형별로 분류하고 중요도를 평가해 주세요."
     },
     {
       "template_id": "pending_agenda_error_reasons",
@@ -212,17 +206,33 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT error_reason, COUNT(*) as count FROM agenda_pending WHERE error_reason IS NOT NULL AND error_reason != '' GROUP BY error_reason ORDER BY count DESC",
-        "system": "pending 상태 의제들의 오류 이유를 집계합니다",
-        "sql_prompt": "agenda_pending 테이블에서 오류 이유별 건수를 집계합니다"
+        "query": "SELECT p.*, c.subject, c.sent_time, c.agenda_panel FROM agenda_pending p LEFT JOIN agenda_chair c ON p.agenda_code = c.agenda_code WHERE {period_condition} ORDER BY p.received_time DESC",
+        "system": "pending 상태의 전체 의제를 조회합니다",
+        "sql_prompt": "agenda_pending 테이블의 전체 내용을 agenda_chair와 조인하여 조회합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": true,
+          "default": {
+            "type": "relative",
+            "days": 90
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "c.sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_pending"
       ],
       "routing_type": "sql",
-      "to_agent": "오류 이유별로 발생 빈도를 분석하고 각 오류 유형에 대한 해결 방안을 제시해 주세요."
+      "to_agent": "pending 상태의 의제들을 잘 정리해서 출력해 주세요."
     },
     {
       "template_id": "vessel_asset_inventory_agendas",
@@ -249,7 +259,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
         "system": "Vessel Asset Inventory 관련 의제를 검색합니다",
         "sql_prompt": "선박 자산 목록 관련 키워드를 포함하는 의제를 검색합니다"
       },
@@ -279,7 +289,7 @@
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "Vessel Asset Inventory 관련 의제들의 주요 논의 사항과 진행 상황을 정리해 주세요."
+      "to_agent": "keyword에 대해서 body에서 어떤 이슈를 갖는지 분석해 주세요."
     },
     {
       "template_id": "keyword_related_agendas",
@@ -304,7 +314,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
         "system": "특정 키워드와 관련된 의제를 검색합니다",
         "sql_prompt": "지정된 키워드를 포함하는 의제를 검색합니다"
       },
@@ -330,7 +340,7 @@
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "검색된 의제들을 주제별로 분류하고 주요 논의 사항을 정리해 주세요."
+      "to_agent": "keyword에 대해서 body에서 어떤 이슈를 갖는지 분석해 주세요."
     },
     {
       "template_id": "recent_consolidated_status_agendas",
@@ -357,7 +367,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE decision_status = 'consolidated' AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE decision_status = 'consolidated' AND {period_condition} ORDER BY sent_time DESC",
         "system": "consolidated 상태의 의제를 조회합니다",
         "sql_prompt": "통합 완료된 의제들을 조회합니다"
       },
@@ -383,7 +393,7 @@
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "통합된 의제들의 패턴을 분석하여 어떤 유형의 의제들이 주로 통합되는지 설명해 주세요."
+      "to_agent": "주요 내용을 정리해 주세요."
     },
     {
       "template_id": "multilateral_recent_agendas",
@@ -463,17 +473,29 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, deadline, JULIANDAY(deadline) - JULIANDAY('now') as days_remaining, agenda_panel FROM agenda_chair WHERE has_deadline = 1 AND deadline BETWEEN datetime('now') AND datetime('now', '+7 days') ORDER BY deadline ASC",
-        "system": "일주일 이내 마감인 의제를 조회합니다",
-        "sql_prompt": "마감일이 7일 이내인 의제들을 조회합니다"
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, deadline, JULIANDAY(deadline) - JULIANDAY('now') as days_remaining, agenda_panel FROM agenda_chair WHERE has_deadline = 1 AND deadline BETWEEN datetime('now') AND datetime('now', {days_period}) ORDER BY deadline ASC",
+        "system": "지정된 기간 이내 마감인 의제를 조회합니다",
+        "sql_prompt": "마감일이 지정된 기간 이내인 의제들을 조회합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "days_period",
+          "type": "string",
+          "required": true,
+          "default": "+7 days",
+          "sql_builder": {
+            "type": "string",
+            "placeholder": "{days_period}"
+          },
+          "mcp_format": "extracted_days_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "마감이 임박한 의제들을 우선순위별로 정리하고 대응 전략을 제시해 주세요."
+      "to_agent": "어떤 내용인지 요약하고 대응방안도 함께 제시해 주세요."
     },
     {
       "template_id": "deadline_within_three_days_agendas",
@@ -500,17 +522,29 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, deadline, ROUND((JULIANDAY(deadline) - JULIANDAY('now')) * 24) as hours_remaining, agenda_panel FROM agenda_chair WHERE has_deadline = 1 AND deadline BETWEEN datetime('now') AND datetime('now', '+3 days') ORDER BY deadline ASC",
-        "system": "3일 이내 마감인 긴급 의제를 조회합니다",
-        "sql_prompt": "마감일이 72시간 이내인 의제들을 조회합니다"
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, deadline, ROUND((JULIANDAY(deadline) - JULIANDAY('now')) * 24) as hours_remaining, agenda_panel FROM agenda_chair WHERE has_deadline = 1 AND deadline BETWEEN datetime('now') AND datetime('now', {days_period}) ORDER BY deadline ASC",
+        "system": "지정된 기간 이내 마감인 긴급 의제를 조회합니다",
+        "sql_prompt": "마감일이 지정된 기간 이내인 의제들을 조회합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "days_period",
+          "type": "string",
+          "required": true,
+          "default": "+3 days",
+          "sql_builder": {
+            "type": "string",
+            "placeholder": "{days_period}"
+          },
+          "mcp_format": "extracted_days_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "긴급 대응이 필요한 의제들을 식별하고 즉시 처리해야 할 사항을 강조해 주세요."
+      "to_agent": "어떤 내용인지 요약하고 대응방안도 함께 제시해 주세요."
     },
     {
       "template_id": "today_response_required_agendas",
@@ -537,17 +571,29 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, deadline, agenda_panel FROM agenda_chair WHERE has_deadline = 1 AND DATE(deadline) = DATE('now') ORDER BY deadline ASC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, deadline, body, agenda_panel FROM agenda_chair WHERE has_deadline = 1 AND deadline BETWEEN datetime('now') AND datetime('now', {days_period}) ORDER BY deadline ASC",
         "system": "오늘 마감인 의제를 조회합니다",
         "sql_prompt": "마감일이 오늘인 의제들을 조회합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "days_period",
+          "type": "string",
+          "required": true,
+          "default": "+1 days",
+          "sql_builder": {
+            "type": "direct",
+            "placeholder": "{days_period}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "오늘 마감인 의제들의 긴급도를 평가하고 즉시 대응해야 할 우선순위를 제시해 주세요."
+      "to_agent": "어떤 내용인지 요약하고 대응방안도 함께 제시해 주세요."
     },
     {
       "template_id": "cyber_keyword_agendas",
@@ -573,7 +619,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
         "system": "cyber 관련 의제를 검색합니다",
         "sql_prompt": "사이버 관련 키워드를 포함하는 의제를 검색합니다"
       },
@@ -581,7 +627,7 @@
         {
           "name": "keywords",
           "type": "array",
-          "required": false,
+          "required": true,
           "default": [
             "cyber",
             "cybersecurity"
@@ -603,7 +649,7 @@
         "agenda_chair"
       ],
       "routing_type": "sql",
-      "to_agent": "사이버 관련 의제들의 주요 주제와 보안 이슈를 분석해 주세요."
+      "to_agent": "IMO나 다른 기관에서 사이버 관련 주제가 어떻게 논의되고 있는지 분석해 주세요."
     },
     {
       "template_id": "recent_month_created_chair_agendas",
@@ -630,11 +676,27 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE sender_type = 'CHAIR' AND sent_time >= datetime('now', '-30 days') ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE sender_type = 'CHAIR' AND {period_condition} ORDER BY sent_time DESC",
         "system": "최근 한 달간 의장이 생성한 의제를 조회합니다",
         "sql_prompt": "sender_type이 CHAIR인 최근 30일 의제를 조회합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "period",
+          "required": true,
+          "default": {
+            "type": "relative",
+            "days": 30
+          },
+          "sql_builder": {
+            "type": "period",
+            "field": "sent_time",
+            "placeholder": "{period_condition}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair"
@@ -666,7 +728,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.sent_time, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND r.agenda_base_version IS NULL ORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.sent_time, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND r.agenda_base_version IS NULL AND (c.deadline IS NULL OR c.deadline > datetime('now')) ORDER BY c.deadline ASC",
         "system": "아무도 응답하지 않은 의제를 조회합니다",
         "sql_prompt": "응답 테이블에 레코드가 없는 의제를 찾습니다"
       },
@@ -677,7 +739,7 @@
         "agenda_responses_content"
       ],
       "routing_type": "sql",
-      "to_agent": "무응답 의제들의 특징을 분석하고 응답률을 높일 수 있는 방안을 제시해 주세요."
+      "to_agent": null
     },
     {
       "template_id": "recent_attachment_agendas",
@@ -764,7 +826,7 @@
         {
           "name": "keywords",
           "type": "array",
-          "required": false,
+          "required": true,
           "default": [
             "Digital Transformation",
             "digitalization"
@@ -813,15 +875,27 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT c.agenda_code, c.subject, c.sent_time as agenda_sent,\n                       CASE \n                           WHEN r.ABS IS NOT NULL THEN 'ABS'\n                           WHEN r.BV IS NOT NULL THEN 'BV'\n                           WHEN r.CCS IS NOT NULL THEN 'CCS'\n                           WHEN r.CRS IS NOT NULL THEN 'CRS'\n                           WHEN r.DNV IS NOT NULL THEN 'DNV'\n                           WHEN r.IRS IS NOT NULL THEN 'IRS'\n                           WHEN r.KR IS NOT NULL THEN 'KR'\n                           WHEN r.NK IS NOT NULL THEN 'NK'\n                           WHEN r.PRS IS NOT NULL THEN 'PRS'\n                           WHEN r.RINA IS NOT NULL THEN 'RINA'\n                           WHEN r.LR IS NOT NULL THEN 'LR'\n                       END as responding_org\n                FROM agenda_chair c\n                JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version\n                WHERE c.sent_time >= datetime('now', '-1 day')\n                ORDER BY c.sent_time DESC",
-        "system": "최근 24시간 이내에 응답한 기관이 있나요?를 조회합니다",
-        "sql_prompt": "대체 쿼리로 동일한 기능을 구현합니다"
+        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.sent_time,\n                       CASE \n                           WHEN rt.ABS >= datetime('now', {period}) THEN 'ABS'\n                           WHEN rt.BV >= datetime('now', {period}) THEN 'BV'\n                           WHEN rt.CCS >= datetime('now', {period}) THEN 'CCS'\n                           WHEN rt.CRS >= datetime('now', {period}) THEN 'CRS'\n                           WHEN rt.DNV >= datetime('now', {period}) THEN 'DNV'\n                           WHEN rt.IRS >= datetime('now', {period}) THEN 'IRS'\n                           WHEN rt.KR >= datetime('now', {period}) THEN 'KR'\n                           WHEN rt.NK >= datetime('now', {period}) THEN 'NK'\n                           WHEN rt.PRS >= datetime('now', {period}) THEN 'PRS'\n                           WHEN rt.RINA >= datetime('now', {period}) THEN 'RINA'\n                           WHEN rt.LR >= datetime('now', {period}) THEN 'LR'\n                       END as responding_org,\n                       CASE \n                           WHEN rt.ABS >= datetime('now', {period}) THEN rt.ABS\n                           WHEN rt.BV >= datetime('now', {period}) THEN rt.BV\n                           WHEN rt.CCS >= datetime('now', {period}) THEN rt.CCS\n                           WHEN rt.CRS >= datetime('now', {period}) THEN rt.CRS\n                           WHEN rt.DNV >= datetime('now', {period}) THEN rt.DNV\n                           WHEN rt.IRS >= datetime('now', {period}) THEN rt.IRS\n                           WHEN rt.KR >= datetime('now', {period}) THEN rt.KR\n                           WHEN rt.NK >= datetime('now', {period}) THEN rt.NK\n                           WHEN rt.PRS >= datetime('now', {period}) THEN rt.PRS\n                           WHEN rt.RINA >= datetime('now', {period}) THEN rt.RINA\n                           WHEN rt.LR >= datetime('now', {period}) THEN rt.LR\n                       END as response_time\n                FROM agenda_chair c\n                JOIN agenda_responses_receivedtime rt ON c.agenda_base_version = rt.agenda_base_version\n                WHERE (rt.ABS >= datetime('now', {period}) OR rt.BV >= datetime('now', {period}) OR rt.CCS >= datetime('now', {period}) OR rt.CRS >= datetime('now', {period}) OR rt.DNV >= datetime('now', {period}) OR rt.IRS >= datetime('now', {period}) OR rt.KR >= datetime('now', {period}) OR rt.NK >= datetime('now', {period}) OR rt.PRS >= datetime('now', {period}) OR rt.RINA >= datetime('now', {period}) OR rt.LR >= datetime('now', {period}))\n                ORDER BY response_time DESC",
+        "system": "최근 24시간 이내에 응답한 기관을 조회합니다",
+        "sql_prompt": "agenda_responses_receivedtime에서 최근 응답한 기관을 찾습니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "period",
+          "type": "string",
+          "required": true,
+          "default": "-1 days",
+          "sql_builder": {
+            "type": "direct",
+            "placeholder": "{period}"
+          },
+          "mcp_format": "extracted_period"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair",
-        "agenda_responses_content"
+        "agenda_responses_receivedtime"
       ],
       "routing_type": "sql",
       "to_agent": "조회 결과를 분석하여 요청사항에 맞게 정리해 주세요."

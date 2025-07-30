@@ -7,7 +7,7 @@
   "metadata_file": "metadata.json",
   "files": [
     {
-      "filename": "query_templates_group_001.json",
+      "filename": "query_templates_part_001.json",
       "part_number": 1,
       "template_count": 20,
       "template_range": "1-20",
@@ -44,7 +44,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_002.json",
+      "filename": "query_templates_part_002.json",
       "part_number": 2,
       "template_count": 20,
       "template_range": "21-40",
@@ -79,7 +79,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_003.json",
+      "filename": "query_templates_part_003.json",
       "part_number": 3,
       "template_count": 20,
       "template_range": "41-60",
@@ -118,7 +118,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_004.json",
+      "filename": "query_templates_part_004.json",
       "part_number": 4,
       "template_count": 20,
       "template_range": "61-80",
@@ -154,7 +154,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_005.json",
+      "filename": "query_templates_part_005.json",
       "part_number": 5,
       "template_count": 20,
       "template_range": "81-100",
@@ -192,7 +192,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_006.json",
+      "filename": "query_templates_part_006.json",
       "part_number": 6,
       "template_count": 20,
       "template_range": "101-120",
@@ -227,7 +227,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_007.json",
+      "filename": "query_templates_part_007.json",
       "part_number": 7,
       "template_count": 20,
       "template_range": "121-140",
@@ -263,7 +263,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_008.json",
+      "filename": "query_templates_part_008.json",
       "part_number": 8,
       "template_count": 20,
       "template_range": "141-160",
@@ -301,7 +301,7 @@
       ]
     },
     {
-      "filename": "query_templates_group_009.json",
+      "filename": "query_templates_part_009.json",
       "part_number": 9,
       "template_count": 15,
       "template_range": "161-175",

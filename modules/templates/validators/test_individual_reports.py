@@ -5,9 +5,10 @@ Test templates and generate individual markdown reports for each file
 
 import json
 import sqlite3
+import re
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Set
 
 from .query_executor import QueryExecutor
 
@@ -17,6 +18,13 @@ class IndividualTemplateTest:
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
         self.executor = QueryExecutor(db_path)
+    
+    def extract_placeholders(self, sql_query: str) -> Set[str]:
+        """Extract placeholders from SQL query"""
+        # Find all placeholders in the format {placeholder_name}
+        placeholders = re.findall(r'\{([^}]+)\}', sql_query)
+        # Remove duplicates and return as set
+        return set(placeholders)
         
     def test_single_file(self, file_path: Path):
         """Test a single template file and generate markdown report"""
@@ -44,6 +52,15 @@ class IndividualTemplateTest:
             # Test template
             success, query, message, query_results = self.executor.test_template(template)
             
+            # Extract parameter information
+            parameters = template.get('parameters', [])
+            required_params = [p for p in parameters if p.get('required', False)]
+            optional_params = [p for p in parameters if not p.get('required', False)]
+            
+            # Extract placeholders from SQL query
+            sql_query = template.get('sql_template', {}).get('query', '')
+            placeholders = self.extract_placeholders(sql_query)
+            
             result = {
                 'template_id': template_id,
                 'category': template.get('template_category'),
@@ -51,9 +68,15 @@ class IndividualTemplateTest:
                 'success': success,
                 'message': message,
                 'query': query,
-                'sql_query': template.get('sql_template', {}).get('query', ''),
+                'sql_query': sql_query,
                 'result_count': len(query_results) if success else 0,
-                'sample_results': query_results[:3] if success else []
+                'sample_results': query_results[:3] if success else [],
+                'parameters': parameters,
+                'required_params': required_params,
+                'optional_params': optional_params,
+                'placeholders': sorted(list(placeholders)),
+                'routing_type': template.get('routing_type', 'sql'),
+                'to_agent': template.get('to_agent', '')
             }
             
             results.append(result)
@@ -88,47 +111,91 @@ class IndividualTemplateTest:
         
         with open(md_path, 'w', encoding='utf-8') as f:
             # Header
-            f.write(f"# {summary['file_name']} Test Report\n\n")
-            f.write(f"**Test Date**: {summary['test_date']}\n")
-            f.write(f"**Database**: {self.db_path}\n\n")
+            f.write(f"# {summary['file_name']} 테스트 보고서\n\n")
+            f.write(f"**테스트 일시**: {summary['test_date']}\n")
+            f.write(f"**데이터베이스**: {self.db_path}\n\n")
             
             # Summary
-            f.write("## Summary\n\n")
-            f.write(f"- **Total Templates**: {summary['total_templates']}\n")
-            f.write(f"- **Passed**: {summary['passed']} ({summary['passed']/max(summary['total_templates'],1)*100:.1f}%)\n")
-            f.write(f"- **Failed**: {summary['failed']}\n\n")
+            f.write("## 요약\n\n")
+            f.write(f"- **전체 템플릿 수**: {summary['total_templates']}\n")
+            f.write(f"- **성공**: {summary['passed']} ({summary['passed']/max(summary['total_templates'],1)*100:.1f}%)\n")
+            f.write(f"- **실패**: {summary['failed']}\n\n")
             
             # Category breakdown
             if summary['results_by_category']:
-                f.write("### Results by Category\n\n")
-                f.write("| Category | Total | Passed | Failed | Success Rate |\n")
-                f.write("|----------|-------|---------|---------|-------------|\n")
+                f.write("### 카테고리별 결과\n\n")
+                f.write("| 카테고리 | 전체 | 성공 | 실패 | 성공률 |\n")
+                f.write("|----------|------|------|------|--------|\n")
                 for category, stats in summary['results_by_category'].items():
                     success_rate = stats['passed'] / stats['total'] * 100
                     f.write(f"| {category} | {stats['total']} | {stats['passed']} | {stats['failed']} | {success_rate:.1f}% |\n")
                 f.write("\n")
             
             # Detailed results
-            f.write("## Detailed Results\n\n")
+            f.write("## 상세 결과\n\n")
             
-            # Successful queries
-            successful = [r for r in results if r['success']]
-            if successful:
-                f.write("### ✓ Successful Queries\n\n")
-                for result in successful:
-                    f.write(f"#### {result['template_id']} ({result['category']})\n\n")
-                    f.write(f"**Results**: {result['result_count']} rows\n\n")
-                    
-                    if result['natural_questions']:
-                        f.write("**Natural Questions**:\n")
-                        for q in result['natural_questions'][:3]:  # Show first 3
-                            f.write(f"- {q}\n")
-                        if len(result['natural_questions']) > 3:
-                            f.write(f"- ... and {len(result['natural_questions']) - 3} more\n")
+            # Write all templates (both successful and failed)
+            for idx, result in enumerate(results, 1):
+                status_icon = "✅" if result['success'] else "❌"
+                f.write(f"### {idx}. {status_icon} {result['template_id']}\n\n")
+                
+                # Basic information
+                f.write(f"**카테고리**: {result['category']}\n")
+                f.write(f"**상태**: {'성공' if result['success'] else '실패'}\n")
+                f.write(f"**Note**: \n")
+                f.write(f"**라우팅 타입**: {result['routing_type']}\n")
+                if result.get('to_agent'):
+                    f.write(f"**에이전트 처리**: {result['to_agent'][:150]}{'...' if len(result['to_agent']) > 150 else ''}\n")
+                
+                # Natural questions
+                if result['natural_questions']:
+                    f.write("\n**자연어 질의**:\n")
+                    for i, q in enumerate(result['natural_questions'][:3], 1):
+                        f.write(f"{i}. {q}\n")
+                    if len(result['natural_questions']) > 3:
+                        f.write(f"   ... 외 {len(result['natural_questions']) - 3}개\n")
+                
+                # Parameters
+                f.write("\n**파라미터 정보**:\n")
+                if result['required_params']:
+                    f.write("- 필수 파라미터:\n")
+                    for param in result['required_params']:
+                        f.write(f"  - `{param['name']}` ({param.get('type', 'string')})")
+                        if param.get('default'):
+                            f.write(f" - 기본값: {param['default']}")
                         f.write("\n")
+                else:
+                    f.write("- 필수 파라미터: 없음\n")
+                
+                if result['optional_params']:
+                    f.write("- 선택 파라미터:\n")
+                    for param in result['optional_params']:
+                        f.write(f"  - `{param['name']}` ({param.get('type', 'string')})")
+                        if param.get('default'):
+                            f.write(f" - 기본값: {param['default']}")
+                        f.write("\n")
+                
+                # Placeholders
+                if result['placeholders']:
+                    f.write(f"\n**플레이스홀더**: `{', '.join(result['placeholders'])}`\n")
+                else:
+                    f.write("\n**플레이스홀더**: 없음\n")
+                
+                # SQL Query
+                f.write("\n**SQL 쿼리**:\n```sql\n")
+                # Show first 300 chars of query
+                query_preview = result['sql_query'][:300]
+                if len(result['sql_query']) > 300:
+                    query_preview += "..."
+                f.write(query_preview + "\n")
+                f.write("```\n")
+                
+                # Test results
+                if result['success']:
+                    f.write(f"\n**실행 결과**: {result['result_count']}개 행 반환\n")
                     
                     if result['sample_results'] and result['result_count'] > 0:
-                        f.write("**Sample Results**:\n\n")
+                        f.write("\n**샘플 데이터** (최대 3행):\n\n")
                         first_result = result['sample_results'][0]
                         if isinstance(first_result, dict):
                             # Table header
@@ -141,47 +208,32 @@ class IndividualTemplateTest:
                                 values = []
                                 for col in columns:
                                     val = str(row.get(col, ''))
-                                    if len(val) > 50:
-                                        val = val[:47] + "..."
+                                    if len(val) > 30:
+                                        val = val[:27] + "..."
                                     values.append(val)
                                 f.write("| " + " | ".join(values) + " |\n")
-                        f.write("\n")
+                            
+                            if len(columns) < len(first_result.keys()):
+                                f.write(f"\n*참고: 전체 {len(first_result.keys())}개 컬럼 중 {len(columns)}개만 표시*\n")
+                else:
+                    f.write(f"\n**오류 내용**: {result['message']}\n")
                     
-                    f.write("---\n\n")
-            
-            # Failed queries
-            failed = [r for r in results if not r['success']]
-            if failed:
-                f.write("### ✗ Failed Queries\n\n")
-                for result in failed:
-                    f.write(f"#### {result['template_id']} ({result['category']})\n\n")
-                    f.write(f"**Error**: {result['message']}\n\n")
-                    
-                    if result['natural_questions']:
-                        f.write("**Natural Questions**:\n")
-                        for q in result['natural_questions'][:3]:
-                            f.write(f"- {q}\n")
-                        if len(result['natural_questions']) > 3:
-                            f.write(f"- ... and {len(result['natural_questions']) - 3} more\n")
-                        f.write("\n")
-                    
-                    # Show SQL query for debugging
-                    if result['sql_query']:
-                        f.write("**SQL Query**:\n```sql\n")
-                        # Truncate very long queries
-                        if len(result['sql_query']) > 500:
-                            f.write(result['sql_query'][:500] + "...\n")
-                        else:
-                            f.write(result['sql_query'] + "\n")
-                        f.write("```\n\n")
-                    
-                    f.write("---\n\n")
+                    # Show the attempted query for debugging
+                    if result['query']:
+                        f.write("\n**실행 시도한 쿼리**:\n```sql\n")
+                        query_preview = result['query'][:500]
+                        if len(result['query']) > 500:
+                            query_preview += "..."
+                        f.write(query_preview + "\n")
+                        f.write("```\n")
+                
+                f.write("\n---\n\n")
             
             # Footer
-            f.write("\n## Test Configuration\n\n")
-            f.write(f"- **File**: {summary['file_name']}\n")
-            f.write(f"- **Test Date**: {summary['test_date']}\n")
-            f.write(f"- **Database Path**: {self.db_path}\n")
+            f.write("\n## 테스트 설정\n\n")
+            f.write(f"- **파일**: {summary['file_name']}\n")
+            f.write(f"- **테스트 일시**: {summary['test_date']}\n")
+            f.write(f"- **데이터베이스 경로**: {self.db_path}\n")
     
     def test_all_files(self, template_dir: str):
         """Test all template files and generate individual reports"""
@@ -215,27 +267,27 @@ class IndividualTemplateTest:
         md_path = self.output_dir / "test_results_summary_report.md"
         
         with open(md_path, 'w', encoding='utf-8') as f:
-            f.write("# IACSGRAPH Query Templates - Overall Test Summary\n\n")
-            f.write(f"**Test Date**: {datetime.now().isoformat()}\n\n")
+            f.write("# IACSGRAPH 쿼리 템플릿 - 전체 테스트 요약\n\n")
+            f.write(f"**테스트 일시**: {datetime.now().isoformat()}\n\n")
             
-            f.write("## Overall Statistics\n\n")
-            f.write(f"- **Total Files Tested**: {len(summaries)}\n")
-            f.write(f"- **Total Templates**: {total_templates}\n")
-            f.write(f"- **Total Passed**: {total_passed} ({total_passed/max(total_templates,1)*100:.1f}%)\n")
-            f.write(f"- **Total Failed**: {total_failed}\n\n")
+            f.write("## 전체 통계\n\n")
+            f.write(f"- **테스트한 파일 수**: {len(summaries)}\n")
+            f.write(f"- **전체 템플릿 수**: {total_templates}\n")
+            f.write(f"- **성공**: {total_passed} ({total_passed/max(total_templates,1)*100:.1f}%)\n")
+            f.write(f"- **실패**: {total_failed}\n\n")
             
-            f.write("## File-by-File Summary\n\n")
-            f.write("| File | Total | Passed | Failed | Success Rate | Report |\n")
-            f.write("|------|-------|---------|---------|-------------|--------|\n")
+            f.write("## 파일별 요약\n\n")
+            f.write("| 파일 | 전체 | 성공 | 실패 | 성공률 | 보고서 |\n")
+            f.write("|------|------|------|------|--------|--------|\n")
             
             for summary in summaries:
                 success_rate = summary['passed'] / max(summary['total_templates'], 1) * 100
-                report_link = f"[View](./{Path(summary['file_name']).stem}_test_report.md)"
+                report_link = f"[보기](./{Path(summary['file_name']).stem}_test_report.md)"
                 f.write(f"| {summary['file_name']} | {summary['total_templates']} | ")
                 f.write(f"{summary['passed']} | {summary['failed']} | {success_rate:.1f}% | {report_link} |\n")
             
-            f.write("\n## Individual Reports\n\n")
-            f.write("Detailed test reports for each file:\n\n")
+            f.write("\n## 개별 보고서\n\n")
+            f.write("각 파일의 상세 테스트 보고서:\n\n")
             for summary in summaries:
                 f.write(f"- [{summary['file_name']}](./{Path(summary['file_name']).stem}_test_report.md)\n")
 

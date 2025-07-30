@@ -196,12 +196,18 @@ def main():
         expected_category = test_case['expected_category']
         
         try:
+            # Suppress debug output to avoid validation errors
+            os.environ['SUPPRESS_DEBUG'] = '1'
+            
             # Process query
             matches = query_matcher.find_best_matches(
                 query=query,
                 top_k=3,
                 return_similar=False
             )
+            
+            # Restore debug output
+            os.environ.pop('SUPPRESS_DEBUG', None)
             
             if matches and len(matches) > 0:
                 best_match = matches[0]
