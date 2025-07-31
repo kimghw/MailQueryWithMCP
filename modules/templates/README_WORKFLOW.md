@@ -52,14 +52,30 @@ python -m modules.templates.upload_templates \
 ```
 
 ### 2. 템플릿 검증
+
+#### creation_guidelines.md 기반 검증 (v2.0.0)
+```bash
+# 템플릿 구조 검증
+cd /home/kimghw/IACSGRAPH
+python modules/templates/validators/template_validator_v2.py
+
+# 파라미터 검증
+python modules/templates/validators/parameter_validator_v2.py
+
+# 종합 검증 리포트
+python modules/templates/validators/validate_all.py
+```
+
+#### 쿼리 실행 테스트
 ```bash
 # 100개 쿼리 테스트 실행
-cd /home/kimghw/IACSGRAPH
 PYTHONPATH=/home/kimghw/IACSGRAPH python modules/query_assistant/scripts/test_100_queries.py
 
-# 개별 템플릿 그룹 검증
-cd modules/templates/validators
-python test_individual_reports.py
+# 개별 템플릿 그룹 검증 및 리포트 생성
+python -m modules.templates.validators.test_individual_reports data/iacsgraph.db modules/templates/test_results
+
+# 특정 템플릿 파일만 테스트
+python -m modules.templates.validators.query_executor modules/templates/data/query_templates_split/query_templates_group_001.json data/iacsgraph.db
 ```
 
 ## 📁 디렉토리 구조 및 파일 설명

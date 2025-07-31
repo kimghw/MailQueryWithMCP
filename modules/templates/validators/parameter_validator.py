@@ -1,285 +1,329 @@
-"""Parameter validator for template SQL queries"""
+"""Parameter validator for v2.0.0 templates based on creation_guidelines.md"""
 
 import re
 import json
-import logging
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Tuple, Optional
 from datetime import datetime, timedelta
-
-logger = logging.getLogger(__name__)
+from pathlib import Path
 
 
 class ParameterValidator:
-    """Validate and process template parameters"""
+    """Validate template parameters based on creation_guidelines.md"""
+    
+    # Valid parameter types (simplified in v2.0.0)
+    VALID_TYPES = ['string', 'datetime', 'array']
+    
+    # Known MCP formats
+    MCP_FORMATS = {
+        'period': 'extracted_period',
+        'organization': 'extracted_organization',
+        'keyword': 'extracted_keywords',
+        'keywords': 'extracted_keywords',
+        'panel': 'extracted_panel',
+        'agenda': 'extracted_agenda'
+    }
+    
+    # Valid organizations
+    VALID_ORGANIZATIONS = [
+        'ABS', 'BV', 'CCS', 'CRS', 'DNV', 'IRS', 
+        'KR', 'NK', 'PRS', 'RINA', 'IL', 'TL', 'LR'
+    ]
     
     def __init__(self):
         self.errors = []
+        self.warnings = []
+    
+    def validate_parameters(self, parameters: List[Dict[str, Any]], sql_query: str) -> Tuple[bool, List[str], List[str]]:
+        """Validate parameters list and their usage in SQL
         
-    def validate_parameters(
-        self,
-        parameters: List[Dict[str, Any]],
-        provided_values: Dict[str, Any]
-    ) -> Tuple[bool, Dict[str, Any], List[str]]:
-        """Validate provided parameters against template requirements
-        
-        Args:
-            parameters: Template parameter definitions
-            provided_values: Values provided by user/system
-            
         Returns:
-            Tuple of (is_valid, processed_values, errors)
+            Tuple of (is_valid, errors, warnings)
         """
         self.errors = []
-        processed = {}
+        self.warnings = []
         
-        for param_def in parameters:
-            param_name = param_def.get('name', '')
-            param_type = param_def.get('type', 'string')
-            is_required = param_def.get('required', True)
-            default_value = param_def.get('default')
+        if not isinstance(parameters, list):
+            self.errors.append("Parameters must be a list")
+            return False, self.errors, self.warnings
+        
+        # Extract parameters from SQL (v2.0.0 uses :param_name format)
+        sql_params = self._extract_sql_parameters(sql_query)
+        defined_params = []
+        
+        for i, param in enumerate(parameters):
+            param_name = param.get('name', f'param_{i}')
+            defined_params.append(param_name)
             
-            # Get provided value
-            value = provided_values.get(param_name)
-            
-            # Check required parameter
-            if is_required and value is None:
-                if default_value is not None:
-                    value = default_value
-                else:
-                    self.errors.append(f"Required parameter '{param_name}' is missing")
-                    continue
-                    
-            # Skip optional parameters without value
-            if not is_required and value is None:
-                if default_value is not None:
-                    value = default_value
-                else:
-                    continue
-                    
-            # Validate and process by type
-            if param_type == 'string':
-                processed[param_name] = self._validate_string(param_name, value)
-            elif param_type in ['date_range', 'period']:
-                processed[param_name] = self._validate_date_range(param_name, value, param_def)
-            elif param_type == 'integer':
-                processed[param_name] = self._validate_integer(param_name, value)
-            elif param_type == 'array':
-                processed[param_name] = self._validate_array(param_name, value)
-            else:
-                self.errors.append(f"Unknown parameter type '{param_type}' for '{param_name}'")
-                
+            # Validate individual parameter
+            self._validate_parameter(param, i)
+        
+        # Check SQL parameter usage
+        self._check_parameter_usage(sql_params, defined_params)
+        
         is_valid = len(self.errors) == 0
-        return is_valid, processed, self.errors
-        
-    def build_sql_with_parameters(
-        self,
-        sql_template: str,
-        parameters: Dict[str, Any],
-        param_definitions: List[Dict[str, Any]]
-    ) -> str:
-        """Build SQL query with parameter values
-        
-        Args:
-            sql_template: SQL template with placeholders
-            parameters: Parameter values
-            param_definitions: Parameter definitions from template
-            
-        Returns:
-            SQL query with parameters replaced
-        """
-        sql = sql_template
-        
-        # Process each parameter
-        for param_name, param_value in parameters.items():
-            placeholder = f'{{{param_name}}}'
-            
-            # Find parameter definition
-            param_def = next((p for p in param_definitions if p['name'] == param_name), None)
-            if not param_def:
-                continue
-                
-            # Build SQL based on parameter type
-            sql_builder = param_def.get('sql_builder', {})
-            
-            # Check if placeholder is defined in sql_builder
-            if sql_builder.get('placeholder'):
-                placeholder = sql_builder['placeholder']
-            
-            if sql_builder:
-                sql_value = self._build_sql_value(param_value, sql_builder, param_def)
-            else:
-                # Simple string replacement
-                if isinstance(param_value, str):
-                    sql_value = f"'{param_value}'"
-                else:
-                    sql_value = str(param_value)
-                    
-            sql = sql.replace(placeholder, sql_value)
-            
-        # Handle special placeholders
-        sql = self._handle_special_placeholders(sql, parameters)
-        
-        return sql
-        
-    def _validate_string(self, name: str, value: Any) -> str:
-        """Validate string parameter"""
-        if not isinstance(value, str):
-            self.errors.append(f"Parameter '{name}' should be a string, got {type(value).__name__}")
-            return str(value)
-        return value
-        
-    def _validate_integer(self, name: str, value: Any) -> int:
-        """Validate integer parameter"""
-        try:
-            return int(value)
-        except (TypeError, ValueError):
-            self.errors.append(f"Parameter '{name}' should be an integer, got {type(value).__name__}")
-            return 0
-            
-    def _validate_array(self, name: str, value: Any) -> List[Any]:
-        """Validate array parameter"""
-        if isinstance(value, list):
-            return value
-        elif isinstance(value, str):
-            # Try to parse JSON array
-            try:
-                parsed = json.loads(value)
-                if isinstance(parsed, list):
-                    return parsed
-            except:
-                pass
-        self.errors.append(f"Parameter '{name}' should be an array")
-        return []
-        
-    def _validate_date_range(self, name: str, value: Any, param_def: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate date range parameter"""
-        if isinstance(value, dict):
-            return value
-            
-        # Parse string representations
-        if isinstance(value, str):
-            # Handle relative dates like "30 days", "3 months"
-            match = re.match(r'(\d+)\s*(day|week|month|year)s?', value.lower())
-            if match:
-                amount = int(match.group(1))
-                unit = match.group(2)
-                return {
-                    'type': 'relative',
-                    'amount': amount,
-                    'unit': unit,
-                    'days': amount if unit == 'day' else amount * (7 if unit == 'week' else 30 if unit == 'month' else 365)
-                }
-                
-        # Use default if available
-        default = param_def.get('default', {})
-        if default:
-            return default
-            
-        self.errors.append(f"Invalid date range format for '{name}'")
-        return {'type': 'relative', 'days': 30}
-        
-    def _build_sql_value(self, value: Any, sql_builder: Dict[str, Any], param_def: Dict[str, Any] = None) -> str:
-        """Build SQL value based on builder configuration"""
-        builder_type = sql_builder.get('type', 'string')
-        
-        if builder_type in ['date_range', 'period']:
-            return self._build_date_range_sql(value, sql_builder)
-        elif builder_type == 'in_list':
-            return self._build_in_list_sql(value)
-        elif builder_type == 'keywords':
-            return self._build_keywords_sql(value, sql_builder)
-        elif builder_type == 'string':
-            # For simple string replacement, don't add quotes if it's a column name
-            if sql_builder.get('as_column', False):
-                return value
-            return f"'{value}'" if isinstance(value, str) else str(value)
-        else:
-            return f"'{value}'" if isinstance(value, str) else str(value)
-            
-    def _build_date_range_sql(self, date_value: Dict[str, Any], sql_builder: Dict[str, Any]) -> str:
-        """Build SQL for date range"""
-        field = sql_builder.get('field', 'sent_time')
-        
-        if date_value.get('type') == 'relative':
-            days = date_value.get('days', date_value.get('amount', 30))
-            return f"{field} >= DATE('now', '-{days} days')"
-        elif date_value.get('type') == 'absolute':
-            start = date_value.get('start')
-            end = date_value.get('end')
-            if start and end:
-                return f"{field} BETWEEN '{start}' AND '{end}'"
-            elif start:
-                return f"{field} >= '{start}'"
-            elif end:
-                return f"{field} <= '{end}'"
-                
-        return "1=1"  # No date filter
-        
-    def _build_in_list_sql(self, values: List[str]) -> str:
-        """Build SQL for IN clause"""
-        if not values:
-            return "1=0"  # No matches
-            
-        quoted = [f"'{v}'" for v in values]
-        return f"({', '.join(quoted)})"
-        
-    def _build_keywords_sql(self, keywords: List[str], sql_builder: Dict[str, Any]) -> str:
-        """Build SQL for keywords search"""
-        fields = sql_builder.get('fields', ['keywords'])
-        if not keywords:
-            return "1=0"
-        
-        conditions = []
-        for keyword in keywords:
-            field_conditions = []
-            for field in fields:
-                field_conditions.append(f"{field} LIKE '%{keyword}%'")
-            conditions.append(f"({' OR '.join(field_conditions)})")
-        
-        return f"({' OR '.join(conditions)})"
+        return is_valid, self.errors, self.warnings
     
-    def _handle_special_placeholders(self, sql: str, parameters: Dict[str, Any]) -> str:
-        """Handle special placeholders like {date_condition}"""
-        # Handle {date_condition}
-        if '{date_condition}' in sql:
-            date_param = parameters.get('date_range', parameters.get('date_info', parameters.get('period')))
-            if date_param:
-                date_sql = self._build_date_range_sql(date_param, {'field': 'sent_time'})
-                sql = sql.replace('{date_condition}', date_sql)
-            else:
-                sql = sql.replace('{date_condition}', '1=1')
+    def _extract_sql_parameters(self, sql_query: str) -> List[str]:
+        """Extract :param_name style parameters from SQL"""
+        if not sql_query:
+            return []
+            
+        # Find all :param_name patterns
+        params = re.findall(r':(\w+)', sql_query)
+        # Remove SQLite datetime function parameters
+        params = [p for p in params if p not in ['period_start', 'period_end', 'organization', 'keyword', 'agenda', 'panel']
+                  or p in params]  # Keep if actually used as parameter
+        return list(set(params))
+    
+    def _validate_parameter(self, param: Dict[str, Any], index: int):
+        """Validate individual parameter structure"""
+        # Check required fields
+        if 'name' not in param:
+            self.errors.append(f"Parameter {index}: missing 'name' field")
+            return
         
-        # Handle {period_condition}
-        if '{period_condition}' in sql:
-            period_param = parameters.get('period', parameters.get('date_range'))
-            if period_param:
-                # Find the field from SQL context
-                field = 'sent_time'
-                if 'c.sent_time' in sql:
-                    field = 'c.sent_time'
-                period_sql = self._build_date_range_sql(period_param, {'field': field})
-                sql = sql.replace('{period_condition}', period_sql)
-            else:
-                sql = sql.replace('{period_condition}', '1=1')
+        name = param['name']
         
-        # Handle {keywords_condition}
-        if '{keywords_condition}' in sql:
-            keywords = parameters.get('keywords', [])
-            if keywords:
-                # Default fields for keyword search
-                keyword_sql = self._build_keywords_sql(keywords, {'fields': ['keywords', 'subject']})
-                sql = sql.replace('{keywords_condition}', keyword_sql)
+        # Check type
+        if 'type' not in param:
+            self.errors.append(f"Parameter '{name}': missing 'type' field")
+        else:
+            param_type = param['type']
+            if param_type not in self.VALID_TYPES:
+                self.errors.append(f"Parameter '{name}': invalid type '{param_type}'. Valid types: {', '.join(self.VALID_TYPES)}")
+        
+        # Check required field
+        if 'required' not in param:
+            self.warnings.append(f"Parameter '{name}': missing 'required' field (should be true/false)")
+        
+        # Validate based on type
+        param_type = param.get('type')
+        if param_type == 'datetime':
+            self._validate_datetime_parameter(param)
+        elif param_type == 'string':
+            self._validate_string_parameter(param)
+        elif param_type == 'array':
+            self._validate_array_parameter(param)
+        
+        # Check mcp_format
+        if 'mcp_format' not in param:
+            # Suggest mcp_format based on name
+            suggested_format = self._suggest_mcp_format(name)
+            if suggested_format:
+                self.warnings.append(f"Parameter '{name}': missing 'mcp_format'. Suggested: '{suggested_format}'")
             else:
-                sql = sql.replace('{keywords_condition}', '1=0')
-                
-        # Handle other special placeholders
-        special_placeholders = {
-            '{deadline_filter}': 'deadline IS NOT NULL AND deadline >= DATE("now")',
-            '{no_deadline_filter}': 'deadline IS NULL'
+                self.warnings.append(f"Parameter '{name}': missing 'mcp_format'")
+        else:
+            # Validate mcp_format matches expected pattern
+            mcp_format = param['mcp_format']
+            expected_format = self._suggest_mcp_format(name)
+            if expected_format and mcp_format != expected_format:
+                self.warnings.append(f"Parameter '{name}': mcp_format '{mcp_format}' might be incorrect. Expected: '{expected_format}'")
+        
+        # Check description
+        if 'description' not in param:
+            self.warnings.append(f"Parameter '{name}': missing 'description'")
+    
+    def _validate_datetime_parameter(self, param: Dict[str, Any]):
+        """Validate datetime parameter"""
+        name = param['name']
+        
+        # Check default value format
+        if 'default' in param:
+            default = param['default']
+            if not isinstance(default, str):
+                self.errors.append(f"Parameter '{name}': datetime default must be a string")
+            elif not default.startswith('datetime('):
+                self.errors.append(f"Parameter '{name}': datetime default should use datetime() function, e.g., \"datetime('now', '-30 days')\"")
+            else:
+                # Validate datetime expression
+                valid_patterns = [
+                    r"datetime\('now'\)",
+                    r"datetime\('now', '[+-]\d+ days?'\)",
+                    r"datetime\('now', '[+-]\d+ months?'\)",
+                    r"datetime\('now', '[+-]\d+ years?'\)"
+                ]
+                if not any(re.match(pattern + r'$', default) for pattern in valid_patterns):
+                    self.warnings.append(f"Parameter '{name}': unusual datetime default format: {default}")
+    
+    def _validate_array_parameter(self, param: Dict[str, Any]):
+        """Validate array parameter"""
+        name = param['name']
+        
+        # Check default value
+        if 'default' in param:
+            default = param['default']
+            # Currently, default is stored as string, not array
+            if isinstance(default, list):
+                self.warnings.append(f"Parameter '{name}': default should be a string, not an array (current implementation)")
+        
+        # Check common array parameter names
+        if name == 'keyword':
+            if 'mcp_format' in param and param['mcp_format'] != 'extracted_keywords':
+                self.warnings.append(f"Parameter '{name}': array type 'keyword' should use mcp_format='extracted_keywords'")
+        elif name == 'organization':
+            if 'mcp_format' in param and param['mcp_format'] != 'extracted_organizations':
+                self.warnings.append(f"Parameter '{name}': array type 'organization' should use mcp_format='extracted_organizations'")
+    
+    def _validate_string_parameter(self, param: Dict[str, Any]):
+        """Validate string parameter"""
+        name = param['name']
+        
+        # Check for organization parameter
+        if name == 'organization' and 'default' in param:
+            default = param['default']
+            if default not in self.VALID_ORGANIZATIONS:
+                self.warnings.append(f"Parameter '{name}': unknown organization code '{default}'")
+        
+        # Check for old multi_query flag (deprecated)
+        if 'multi_query' in param:
+            self.errors.append(f"Parameter '{name}': multi_query is deprecated. Use type='array' instead")
+    
+    def _suggest_mcp_format(self, param_name: str) -> Optional[str]:
+        """Suggest mcp_format based on parameter name"""
+        # Direct matches
+        if param_name in self.MCP_FORMATS:
+            return self.MCP_FORMATS[param_name]
+        
+        # Pattern matches
+        if 'period' in param_name or param_name.endswith('_start') or param_name.endswith('_end'):
+            return 'extracted_period'
+        elif 'org' in param_name or param_name == 'organization':
+            return 'extracted_organization'
+        elif 'keyword' in param_name:
+            return 'extracted_keywords'
+        elif 'panel' in param_name:
+            return 'extracted_panel'
+        elif 'agenda' in param_name:
+            return 'extracted_agenda'
+        
+        return None
+    
+    def _check_parameter_usage(self, sql_params: List[str], defined_params: List[str]):
+        """Check if SQL parameters match defined parameters"""
+        # Check for undefined parameters in SQL
+        for sql_param in sql_params:
+            if sql_param not in defined_params:
+                self.errors.append(f"SQL uses parameter :{sql_param} which is not defined")
+        
+        # Check for unused defined parameters
+        for defined_param in defined_params:
+            if defined_param and f':{defined_param}' not in str(sql_params):
+                # Check if it's actually in the SQL (might be missed by regex)
+                # This is a warning, not an error, as some parameters might be optional
+                self.warnings.append(f"Parameter '{defined_param}' is defined but might not be used in SQL")
+    
+    def validate_file(self, file_path: Path) -> Tuple[bool, Dict[str, Any]]:
+        """Validate parameters in all templates in a file"""
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        except Exception as e:
+            return False, {'error': f"Failed to load file: {e}"}
+        
+        templates = data.get('templates', [])
+        results = {
+            'file': file_path.name,
+            'total': len(templates),
+            'valid': 0,
+            'invalid': 0,
+            'errors': [],
+            'warnings': []
         }
         
-        for placeholder, replacement in special_placeholders.items():
-            if placeholder in sql:
-                sql = sql.replace(placeholder, replacement)
-                
-        return sql
+        for template in templates:
+            template_id = template.get('template_id', 'unknown')
+            parameters = template.get('parameters', [])
+            sql_query = template.get('sql_template', {}).get('query', '')
+            
+            is_valid, errors, warnings = self.validate_parameters(parameters, sql_query)
+            
+            if is_valid:
+                results['valid'] += 1
+            else:
+                results['invalid'] += 1
+                results['errors'].append({
+                    'template_id': template_id,
+                    'errors': errors
+                })
+            
+            if warnings:
+                results['warnings'].append({
+                    'template_id': template_id,
+                    'warnings': warnings
+                })
+        
+        return results['invalid'] == 0, results
+
+
+def main():
+    """Validate parameters in all template files"""
+    import sys
+    
+    if len(sys.argv) < 2:
+        template_dir = Path('/home/kimghw/IACSGRAPH/modules/templates/data/query_templates_split')
+    else:
+        template_dir = Path(sys.argv[1])
+    
+    validator = ParameterValidator()
+    
+    print("=" * 80)
+    print("Parameter Validation Report (v2.0.0)")
+    print("=" * 80)
+    
+    all_valid = True
+    total_errors = 0
+    total_warnings = 0
+    
+    for file_path in sorted(template_dir.glob('query_templates_group_*.json')):
+        print(f"\nValidating {file_path.name}...")
+        is_valid, results = validator.validate_file(file_path)
+        
+        if not is_valid:
+            all_valid = False
+        
+        error_count = len(results.get('errors', []))
+        warning_count = len(results.get('warnings', []))
+        total_errors += error_count
+        total_warnings += warning_count
+        
+        print(f"  Templates: {results['total']}")
+        print(f"  Errors: {error_count}")
+        print(f"  Warnings: {warning_count}")
+        
+        if results.get('errors'):
+            print("\n  Errors:")
+            for error_info in results['errors'][:3]:  # Show first 3
+                print(f"    [{error_info['template_id']}]")
+                for error in error_info['errors'][:2]:  # Show first 2 errors
+                    print(f"      - {error}")
+            if len(results['errors']) > 3:
+                print(f"    ... and {len(results['errors']) - 3} more templates with errors")
+        
+        if results.get('warnings'):
+            print("\n  Sample Warnings:")
+            shown = 0
+            for warning_info in results['warnings']:
+                if shown >= 2:  # Show only 2 templates with warnings
+                    remaining = len(results['warnings']) - shown
+                    if remaining > 0:
+                        print(f"    ... and {remaining} more templates with warnings")
+                    break
+                print(f"    [{warning_info['template_id']}]")
+                for warning in warning_info['warnings'][:1]:  # Show first warning only
+                    print(f"      - {warning}")
+                shown += 1
+    
+    print("\n" + "=" * 80)
+    print(f"Summary:")
+    print(f"  Total Errors: {total_errors}")
+    print(f"  Total Warnings: {total_warnings}")
+    if all_valid:
+        print("\n✓ All parameters are structurally valid!")
+    else:
+        print("\n✗ Some parameters have validation errors")
+    print("=" * 80)
+
+
+if __name__ == "__main__":
+    main()

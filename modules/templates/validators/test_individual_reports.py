@@ -21,10 +21,11 @@ class IndividualTemplateTest:
     
     def extract_placeholders(self, sql_query: str) -> Set[str]:
         """Extract placeholders from SQL query"""
-        # Find all placeholders in the format {placeholder_name}
-        placeholders = re.findall(r'\{([^}]+)\}', sql_query)
-        # Remove duplicates and return as set
-        return set(placeholders)
+        # Find placeholders in both old format {placeholder_name} and new format :param_name
+        old_format = re.findall(r'\{([^}]+)\}', sql_query)
+        new_format = re.findall(r':(\w+)', sql_query)
+        # Combine both formats and remove duplicates
+        return set(old_format + new_format)
         
     def test_single_file(self, file_path: Path):
         """Test a single template file and generate markdown report"""
@@ -177,9 +178,9 @@ class IndividualTemplateTest:
                 
                 # Placeholders
                 if result['placeholders']:
-                    f.write(f"\n**플레이스홀더**: `{', '.join(result['placeholders'])}`\n")
+                    f.write(f"\n**SQL 파라미터**: `{', '.join([':' + p for p in result['placeholders']])}`\n")
                 else:
-                    f.write("\n**플레이스홀더**: 없음\n")
+                    f.write("\n**SQL 파라미터**: 없음\n")
                 
                 # SQL Query
                 f.write("\n**SQL 쿼리**:\n```sql\n")

@@ -1,18 +1,18 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Query Templates Group 009 - Queries 161-177",
   "templates": [
     {
       "template_id": "sdtp_eg_participating_orgs",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "expert_group",
       "query_info": {
         "natural_questions": [
-          "SDPT 에서 {EG_organization} 에 참여한 기관은? (original)",
-          "SDTP의 {EG_organization} Expert Group에 참여한 조직들을 보여주세요 (similar1)",
-          "{EG_organization} EG에 어떤 기관들이 참가했나요? (similar2)",
-          "SDTP {EG_organization} 전문가 그룹 멤버 기관 확인해줘 (similar3)",
-          "SDTP 패널의 {EG_organization} Expert Group에 참여한 모든 기관들과 각 기관의 역할을 상세히 보여주세요 (ext)"
+          "(original) SDPT 에서 {EG_organization} 에 참여한 기관은?",
+          "(similar1) SDTP의 {EG_organization} Expert Group에 참여한 조직들을 보여주세요",
+          "(similar2) {EG_organization} EG에 어떤 기관들이 참가했나요?",
+          "(similar3) SDTP {EG_organization} 전문가 그룹 멤버 기관 확인해줘",
+          "(ext) SDTP 패널의 {EG_organization} Expert Group에 참여한 모든 기관들과 각 기관의 역할을 상세히 보여주세요"
         ],
         "keywords": [
           "SDTP",
@@ -38,10 +38,6 @@
           "name": "eg_organization",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{eg_organization}"
-          },
           "mcp_format": "extracted_eg_name"
         }
       ],
@@ -55,15 +51,15 @@
     },
     {
       "template_id": "agenda_meeting_attendance_by_date",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "meeting",
       "query_info": {
         "natural_questions": [
-          "{agenda} 에서 날짜별 회의에 참석할 수 있는 기관과 참석할 수 있는 기관을 정리해줘 (original)",
-          "{agenda} 의제의 회의 일정별로 참석 가능한 기관들을 정리해주세요 (similar1)",
-          "{agenda} 회의 날짜별 참석 가능/불가능 기관 리스트를 보여줘 (similar2)",
-          "{agenda}의 미팅 일정별 참가 가능 조직 확인해줘 (similar3)",
-          "{agenda} 의제와 관련된 회의 일정에 대해 각 날짜별로 참석 가능한 기관과 불가능한 기관을 체계적으로 정리해 주세요 (ext)"
+          "(original) {agenda} 에서 날짜별 회의에 참석할 수 있는 기관과 참석할 수 있는 기관을 정리해줘",
+          "(similar1) {agenda} 의제의 회의 일정별로 참석 가능한 기관들을 정리해주세요",
+          "(similar2) {agenda} 회의 날짜별 참석 가능/불가능 기관 리스트를 보여줘",
+          "(similar3) {agenda}의 미팅 일정별 참가 가능 조직 확인해줘",
+          "(ext) {agenda} 의제와 관련된 회의 일정에 대해 각 날짜별로 참석 가능한 기관과 불가능한 기관을 체계적으로 정리해 주세요"
         ],
         "keywords": [
           "회의",
@@ -78,7 +74,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, c.body, r.* FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = '{agenda}' AND (LOWER(c.subject) LIKE '%meeting%' OR LOWER(c.body) LIKE '%attendance%' OR LOWER(c.body) LIKE '%participate%') ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, c.body, r.* FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' AND (LOWER(c.subject) LIKE '%meeting%' OR LOWER(c.body) LIKE '%attendance%' OR LOWER(c.body) LIKE '%participate%') ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 회의 참석 정보를 조회합니다",
         "sql_prompt": "의제의 회의 관련 응답을 조회합니다"
       },
@@ -87,10 +83,6 @@
           "name": "agenda",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{agenda}"
-          },
           "mcp_format": "extracted_agenda"
         }
       ],
@@ -104,15 +96,15 @@
     },
     {
       "template_id": "agenda_org_attendance_summary",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "meeting",
       "query_info": {
         "natural_questions": [
-          "{agenda} 에서 기관별 회의 참석 가능여부 정리해줘 (original)",
-          "{agenda} 의제 회의에 각 기관이 참석 가능한지 정리해주세요 (similar1)",
-          "{agenda} 미팅에 어떤 조직이 참가할 수 있는지 확인해줘 (similar2)",
-          "{agenda} 회의 참석 가능 기관 리스트 보여줘 (similar3)",
-          "{agenda} 의제 관련 회의에 대해 모든 기관의 참석 가능 여부를 일목요연하게 정리해서 보여주세요 (ext)"
+          "(original) {agenda} 에서 기관별 회의 참석 가능여부 정리해줘",
+          "(similar1) {agenda} 의제 회의에 각 기관이 참석 가능한지 정리해주세요",
+          "(similar2) {agenda} 미팅에 어떤 조직이 참가할 수 있는지 확인해줘",
+          "(similar3) {agenda} 회의 참석 가능 기관 리스트 보여줘",
+          "(ext) {agenda} 의제 관련 회의에 대해 모든 기관의 참석 가능 여부를 일목요연하게 정리해서 보여주세요"
         ],
         "keywords": [
           "기관별",
@@ -127,7 +119,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = '{agenda}' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 기관별 응답을 조회합니다",
         "sql_prompt": "의제에 대한 모든 기관의 응답을 조회합니다"
       },
@@ -136,10 +128,6 @@
           "name": "agenda",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{agenda}"
-          },
           "mcp_format": "extracted_agenda"
         }
       ],
@@ -153,15 +141,15 @@
     },
     {
       "template_id": "current_pt_list_panel",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT 리스트 (original)",
-          "현재 활동 중인 프로젝트 팀 목록을 보여주세요 (similar1)",
-          "진행 중인 PT들이 어떤 것들이 있나요? (similar2)",
-          "활성화된 프로젝트 팀 리스트 확인해줘 (similar3)",
-          "현재 활동 중인 모든 Project Team의 이름, 목적, 진행 상황을 패널별로 정리해서 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT 리스트",
+          "(similar1) 현재 활동 중인 프로젝트 팀 목록을 보여주세요",
+          "(similar2) 진행 중인 PT들이 어떤 것들이 있나요?",
+          "(similar3) 활성화된 프로젝트 팀 리스트 확인해줘",
+          "(ext) 현재 활동 중인 모든 Project Team의 이름, 목적, 진행 상황을 패널별로 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -190,15 +178,15 @@
     },
     {
       "template_id": "current_pt_participating_orgs_detail",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT의 참여기관 (original)",
-          "활동 중인 프로젝트 팀에 참여하는 기관들을 보여주세요 (similar1)",
-          "진행 중인 PT별 참가 조직이 어디어디인가요? (similar2)",
-          "각 PT의 멤버 기관들 확인해줘 (similar3)",
-          "현재 활동 중인 각 Project Team별로 참여하고 있는 모든 기관들의 명단과 참여 수준을 정리해서 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT의 참여기관",
+          "(similar1) 활동 중인 프로젝트 팀에 참여하는 기관들을 보여주세요",
+          "(similar2) 진행 중인 PT별 참가 조직이 어디어디인가요?",
+          "(similar3) 각 PT의 멤버 기관들 확인해줘",
+          "(ext) 현재 활동 중인 각 Project Team별로 참여하고 있는 모든 기관들의 명단과 참여 수준을 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -228,15 +216,15 @@
     },
     {
       "template_id": "current_pt_participants_info",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT의 참여자 정보 알려줘 (original)",
-          "활동 중인 프로젝트 팀 참가자들의 정보를 보여주세요 (similar1)",
-          "진행 중인 PT별 참여 인원이 누구누구인가요? (similar2)",
-          "각 PT의 멤버 명단과 정보 확인해줘 (similar3)",
-          "현재 활동 중인 각 Project Team에 참여하는 전문가들의 이름, 소속, 전문 분야를 상세히 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT의 참여자 정보 알려줘",
+          "(similar1) 활동 중인 프로젝트 팀 참가자들의 정보를 보여주세요",
+          "(similar2) 진행 중인 PT별 참여 인원이 누구누구인가요?",
+          "(similar3) 각 PT의 멤버 명단과 정보 확인해줘",
+          "(ext) 현재 활동 중인 각 Project Team에 참여하는 전문가들의 이름, 소속, 전문 분야를 상세히 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -265,15 +253,15 @@
     },
     {
       "template_id": "current_pt_key_content",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT의 중요 내용은 (original)",
-          "활동 중인 프로젝트 팀의 핵심 업무 내용을 보여주세요 (similar1)",
-          "진행 중인 PT들의 주요 과제가 뭐인가요? (similar2)",
-          "각 PT가 다루는 중요 이슈들 확인해줘 (similar3)",
-          "현재 활동 중인 각 Project Team이 수행하고 있는 주요 업무, 목표, 예상 결과물을 상세히 분석해서 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT의 중요 내용은",
+          "(similar1) 활동 중인 프로젝트 팀의 핵심 업무 내용을 보여주세요",
+          "(similar2) 진행 중인 PT들의 주요 과제가 뭐인가요?",
+          "(similar3) 각 PT가 다루는 중요 이슈들 확인해줘",
+          "(ext) 현재 활동 중인 각 Project Team이 수행하고 있는 주요 업무, 목표, 예상 결과물을 상세히 분석해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -302,15 +290,15 @@
     },
     {
       "template_id": "recent_completed_pt_list_panel",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT 리스트 알려줘 (original)",
-          "최근에 종료된 프로젝트 팀 목록을 보여주세요 (similar1)",
-          "완료된 PT들이 어떤 것들이 있나요? (similar2)",
-          "최근 마무리된 프로젝트 팀 리스트 확인해줘 (similar3)",
-          "최근 90일 이내에 완료된 모든 Project Team의 이름, 완료일, 패널별 분포를 정리해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT 리스트 알려줘",
+          "(similar1) 최근에 종료된 프로젝트 팀 목록을 보여주세요",
+          "(similar2) 완료된 PT들이 어떤 것들이 있나요?",
+          "(similar3) 최근 마무리된 프로젝트 팀 리스트 확인해줘",
+          "(ext) 최근 90일 이내에 완료된 모든 Project Team의 이름, 완료일, 패널별 분포를 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -339,15 +327,15 @@
     },
     {
       "template_id": "recent_completed_pt_achievements",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT의 주요 내용 알려줘 (original)",
-          "최근 종료된 프로젝트 팀의 핵심 성과를 보여주세요 (similar1)",
-          "완료된 PT들이 달성한 주요 결과가 뭐인가요? (similar2)",
-          "마무리된 프로젝트 팀의 주요 산출물 확인해줘 (similar3)",
-          "최근 완료된 각 Project Team이 달성한 구체적인 성과, 산출물, 권고사항을 상세히 분석해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT의 주요 내용 알려줘",
+          "(similar1) 최근 종료된 프로젝트 팀의 핵심 성과를 보여주세요",
+          "(similar2) 완료된 PT들이 달성한 주요 결과가 뭐인가요?",
+          "(similar3) 마무리된 프로젝트 팀의 주요 산출물 확인해줘",
+          "(ext) 최근 완료된 각 Project Team이 달성한 구체적인 성과, 산출물, 권고사항을 상세히 분석해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -376,15 +364,15 @@
     },
     {
       "template_id": "recent_completed_pt_orgs",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT의 참여 기관 알려줘 (original)",
-          "최근 종료된 프로젝트 팀에 참여했던 기관들을 보여주세요 (similar1)",
-          "완료된 PT에 어떤 조직들이 참가했나요? (similar2)",
-          "마무리된 프로젝트 팀의 멤버 기관 확인해줘 (similar3)",
-          "최근 완료된 각 Project Team에 참여했던 모든 기관들과 각 기관의 기여 내용을 정리해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT의 참여 기관 알려줘",
+          "(similar1) 최근 종료된 프로젝트 팀에 참여했던 기관들을 보여주세요",
+          "(similar2) 완료된 PT에 어떤 조직들이 참가했나요?",
+          "(similar3) 마무리된 프로젝트 팀의 멤버 기관 확인해줘",
+          "(ext) 최근 완료된 각 Project Team에 참여했던 모든 기관들과 각 기관의 기여 내용을 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -414,15 +402,15 @@
     },
     {
       "template_id": "recent_completed_pt_participants",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT의 참여자 정보 알려줘 (original)",
-          "최근 종료된 프로젝트 팀 참가자들의 정보를 보여주세요 (similar1)",
-          "완료된 PT에 누가 참여했었나요? (similar2)",
-          "마무리된 프로젝트 팀의 멤버 명단 확인해줘 (similar3)",
-          "최근 완료된 각 Project Team에 참여했던 전문가들의 이름, 소속, 역할, 주요 기여 사항을 정리해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT의 참여자 정보 알려줘",
+          "(similar1) 최근 종료된 프로젝트 팀 참가자들의 정보를 보여주세요",
+          "(similar2) 완료된 PT에 누가 참여했었나요?",
+          "(similar3) 마무리된 프로젝트 팀의 멤버 명단 확인해줘",
+          "(ext) 최근 완료된 각 Project Team에 참여했던 전문가들의 이름, 소속, 역할, 주요 기여 사항을 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -451,15 +439,15 @@
     },
     {
       "template_id": "agenda_asking_response_orgs",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "{agenda} 에서 다른 기관에 답변을 요구한 기관이 있는가? (original)",
-          "{agenda} 의제에서 타 기관에 응답을 요청한 조직이 있나요? (similar1)",
-          "{agenda}에서 다른 기관에게 회신을 요구한 곳이 있는지 확인해줘 (similar2)",
-          "{agenda} 안건에서 특정 기관 답변 요청이 있었나요? (similar3)",
-          "{agenda} 의제의 응답에서 다른 기관에게 추가 답변이나 명확화를 요구한 모든 사례를 찾아 정리해 주세요 (ext)"
+          "(original) {agenda} 에서 다른 기관에 답변을 요구한 기관이 있는가?",
+          "(similar1) {agenda} 의제에서 타 기관에 응답을 요청한 조직이 있나요?",
+          "(similar2) {agenda}에서 다른 기관에게 회신을 요구한 곳이 있는지 확인해줘",
+          "(similar3) {agenda} 안건에서 특정 기관 답변 요청이 있었나요?",
+          "(ext) {agenda} 의제의 응답에서 다른 기관에게 추가 답변이나 명확화를 요구한 모든 사례를 찾아 정리해 주세요"
         ],
         "keywords": [
           "답변요구",
@@ -474,7 +462,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = '{agenda}' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 모든 응답을 조회합니다",
         "sql_prompt": "의제에 대한 모든 기관의 응답을 조회합니다"
       },
@@ -483,10 +471,6 @@
           "name": "agenda",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{agenda}"
-          },
           "mcp_format": "extracted_agenda"
         }
       ],
@@ -500,15 +484,15 @@
     },
     {
       "template_id": "agenda_clarification_requests",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "{agenda} 에서 다른 기관에 답변 또는 명확화를 요구하는 내용이 있나? (original)",
-          "{agenda} 의제에서 타 기관에 설명을 요청한 내용이 있나요? (similar1)",
-          "{agenda}에서 다른 조직에게 명확한 답변을 요구한 부분이 있는지 확인해줘 (similar2)",
-          "{agenda} 안건에서 추가 설명 요청이 있었나요? (similar3)",
-          "{agenda} 의제의 모든 응답에서 다른 기관에게 명확화, 추가 설명, 구체적 답변을 요구한 내용을 상세히 분석해 주세요 (ext)"
+          "(original) {agenda} 에서 다른 기관에 답변 또는 명확화를 요구하는 내용이 있나?",
+          "(similar1) {agenda} 의제에서 타 기관에 설명을 요청한 내용이 있나요?",
+          "(similar2) {agenda}에서 다른 조직에게 명확한 답변을 요구한 부분이 있는지 확인해줘",
+          "(similar3) {agenda} 안건에서 추가 설명 요청이 있었나요?",
+          "(ext) {agenda} 의제의 모든 응답에서 다른 기관에게 명확화, 추가 설명, 구체적 답변을 요구한 내용을 상세히 분석해 주세요"
         ],
         "keywords": [
           "답변요구",
@@ -523,7 +507,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.body as chair_body, c.sent_time, c.sender_organization, c.decision_status, c.agenda_panel, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.NK, r.PRS, r.RINA, r.IL, r.TL, r.LR FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = '{agenda}'",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.body as chair_body, c.sent_time, c.sender_organization, c.decision_status, c.agenda_panel, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.NK, r.PRS, r.RINA, r.IL, r.TL, r.LR FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda'",
         "system": "특정 의제의 의장 메일 내용과 모든 기관의 응답을 조회합니다",
         "sql_prompt": "의제의 원본 메일과 각 기관별 응답 내용을 모두 조회합니다"
       },
@@ -532,10 +516,6 @@
           "name": "agenda",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{agenda}"
-          },
           "mcp_format": "extracted_agenda"
         }
       ],
@@ -549,15 +529,15 @@
     },
     {
       "template_id": "3months_keyword_analysis_panel",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "3개월 내 주요 키워드 분석해줘 (original)",
-          "최근 3개월간 자주 언급된 키워드를 분석해주세요 (similar1)",
-          "지난 90일 동안의 주요 단어들이 뭐가 있나요? (similar2)",
-          "3개월 이내 핵심 키워드 트렌드 확인해줘 (similar3)",
-          "최근 3개월 동안 모든 패널의 의제에서 가장 많이 언급된 키워드들을 패널별, 빈도순으로 분석해 주세요 (ext)"
+          "(original) 3개월 내 주요 키워드 분석해줘",
+          "(similar1) 최근 3개월간 자주 언급된 키워드를 분석해주세요",
+          "(similar2) 지난 90일 동안의 주요 단어들이 뭐가 있나요?",
+          "(similar3) 3개월 이내 핵심 키워드 트렌드 확인해줘",
+          "(ext) 최근 3개월 동안 모든 패널의 의제에서 가장 많이 언급된 키워드들을 패널별, 빈도순으로 분석해 주세요"
         ],
         "keywords": [
           "3개월",
@@ -586,15 +566,15 @@
     },
     {
       "template_id": "last_year_keyword_analysis_detail",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "작년 주요 키워드 분석해줘 (original)",
-          "지난해 자주 언급된 키워드를 분석해주세요 (similar1)",
-          "작년도 핵심 단어들이 뭐가 있었나요? (similar2)",
-          "전년도 주요 키워드 트렌드 확인해줘 (similar3)",
-          "작년 한 해 동안 의제에서 가장 많이 언급된 키워드들을 월별, 패널별로 분석하여 연간 트렌드를 보여주세요 (ext)"
+          "(original) 작년 주요 키워드 분석해줘",
+          "(similar1) 지난해 자주 언급된 키워드를 분석해주세요",
+          "(similar2) 작년도 핵심 단어들이 뭐가 있었나요?",
+          "(similar3) 전년도 주요 키워드 트렌드 확인해줘",
+          "(ext) 작년 한 해 동안 의제에서 가장 많이 언급된 키워드들을 월별, 패널별로 분석하여 연간 트렌드를 보여주세요"
         ],
         "keywords": [
           "작년",
@@ -623,15 +603,15 @@
     },
     {
       "template_id": "2025_keyword_analysis_current",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "2025년 주요 키워드 분석해줘 (original)",
-          "2025년에 자주 언급된 키워드를 분석해주세요 (similar1)",
-          "올해 들어 핵심 단어들이 뭐가 있나요? (similar2)",
-          "2025년도 주요 키워드 트렌드 확인해줘 (similar3)",
-          "2025년 현재까지 의제에서 가장 많이 언급된 키워드들을 월별, 패널별로 분석하여 올해의 주요 관심사를 파악해 주세요 (ext)"
+          "(original) 2025년 주요 키워드 분석해줘",
+          "(similar1) 2025년에 자주 언급된 키워드를 분석해주세요",
+          "(similar2) 올해 들어 핵심 단어들이 뭐가 있나요?",
+          "(similar3) 2025년도 주요 키워드 트렌드 확인해줘",
+          "(ext) 2025년 현재까지 의제에서 가장 많이 언급된 키워드들을 월별, 패널별로 분석하여 올해의 주요 관심사를 파악해 주세요"
         ],
         "keywords": [
           "2025년",

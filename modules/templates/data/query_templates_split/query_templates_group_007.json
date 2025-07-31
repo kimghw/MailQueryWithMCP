@@ -1,18 +1,18 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Query Templates Group 007 - Queries 121-140",
   "templates": [
     {
       "template_id": "recent_eg_related_content",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
-          "최근 아젠다나 응답 중에서 EG 와 관련된 내용이 있나 (original)",
-          "최근 의제나 회신에서 Expert Group 관련 내용이 있었나요? (similar1)",
-          "EG(전문가 그룹) 언급한 최근 안건이나 응답이 있는지 확인해줘 (similar2)",
-          "최근에 EG 관련해서 논의된 내용이 있나요? (similar3)",
-          "최근 90일 이내의 모든 의제와 응답에서 EG(Expert Group) 관련 내용을 찾아 어떤 맥락에서 언급되었는지 분석해 주세요 (ext)"
+          "(original) 최근 아젠다나 응답 중에서 EG 와 관련된 내용이 있나",
+          "(similar1) 최근 의제나 회신에서 Expert Group 관련 내용이 있었나요?",
+          "(similar2) EG(전문가 그룹) 언급한 최근 안건이나 응답이 있는지 확인해줘",
+          "(similar3) 최근에 EG 관련해서 논의된 내용이 있나요?",
+          "(ext) 최근 90일 이내의 모든 의제와 응답에서 EG(Expert Group) 관련 내용을 찾아 어떤 맥락에서 언급되었는지 분석해 주세요"
         ],
         "keywords": [
           "EG",
@@ -27,24 +27,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, c.sent_time, c.agenda_panel, CASE WHEN c.body LIKE '%EG%' OR c.body LIKE '%Expert Group%' THEN 'Agenda' ELSE 'Response' END as source FROM agenda_chair c WHERE (c.body LIKE '%EG%' OR c.body LIKE '%Expert Group%' OR c.keywords LIKE '%EG%') AND {period_condition} UNION SELECT c.agenda_code, c.subject, c.sent_time, c.agenda_panel, 'Response' as source FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE (r.ABS LIKE '%EG%' OR r.DNV LIKE '%EG%' OR r.KR LIKE '%EG%' OR r.NK LIKE '%EG%' OR r.CCS LIKE '%EG%') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT c.agenda_code, c.subject, c.sent_time, c.agenda_panel, CASE WHEN c.body LIKE '%EG%' OR c.body LIKE '%Expert Group%' THEN 'Agenda' ELSE 'Response' END as source FROM agenda_chair c WHERE (c.body LIKE '%EG%' OR c.body LIKE '%Expert Group%' OR c.keywords LIKE '%EG%') AND sent_time >= :period_start UNION SELECT c.agenda_code, c.subject, c.sent_time, c.agenda_panel, 'Response' as source FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE (r.ABS LIKE '%EG%' OR r.DNV LIKE '%EG%' OR r.KR LIKE '%EG%' OR r.NK LIKE '%EG%' OR r.CCS LIKE '%EG%') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "최근 EG 관련 내용을 의제와 응답에서 검색합니다",
         "sql_prompt": "의제 본문과 각 기관 응답에서 EG 키워드를 검색합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -58,15 +51,15 @@
     },
     {
       "template_id": "pl26034_issue_related_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "related_analysis",
       "query_info": {
         "natural_questions": [
-          "PL26034 의 아젠다에서 주요 이슈와 관련된 아젠다 리스트를 제공해줘 (original)",
-          "PL26034 의제의 핵심 이슈와 연관된 다른 의제들을 찾아주세요 (similar1)",
-          "PL26034 안건의 주요 쟁점과 관련 있는 아젠다 목록을 보여줘 (similar2)",
-          "PL26034와 유사한 이슈를 다루는 다른 의제들 확인해줘 (similar3)",
-          "PL26034 의제의 주요 이슈를 파악하고 동일하거나 유사한 이슈를 다루는 다른 의제들을 찾아 연관성을 분석해 주세요 (ext)"
+          "(original) PL26034 의 아젠다에서 주요 이슈와 관련된 아젠다 리스트를 제공해줘",
+          "(similar1) PL26034 의제의 핵심 이슈와 연관된 다른 의제들을 찾아주세요",
+          "(similar2) PL26034 안건의 주요 쟁점과 관련 있는 아젠다 목록을 보여줘",
+          "(similar3) PL26034와 유사한 이슈를 다루는 다른 의제들 확인해줘",
+          "(ext) PL26034 의제의 주요 이슈를 파악하고 동일하거나 유사한 이슈를 다루는 다른 의제들을 찾아 연관성을 분석해 주세요"
         ],
         "keywords": [
           "PL26034",
@@ -95,15 +88,15 @@
     },
     {
       "template_id": "pl25934_ur_content",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "specific_agenda",
       "query_info": {
         "natural_questions": [
-          "PL25934 에서 UR과 관련된 내용이 있냐? (original)",
-          "PL25934 의제에 통일규칙(UR) 관련 내용이 포함되어 있나요? (similar1)",
-          "PL25934 안건에서 UR 언급된 부분이 있는지 확인해줘 (similar2)",
-          "PL25934에 Unified Requirements 관련 논의가 있나요? (similar3)",
-          "PL25934 의제의 본문과 모든 응답에서 UR(Unified Requirements) 관련 내용을 찾아 어떤 통일규칙이 논의되고 있는지 상세히 분석해 주세요 (ext)"
+          "(original) PL25934 에서 UR과 관련된 내용이 있냐?",
+          "(similar1) PL25934 의제에 통일규칙(UR) 관련 내용이 포함되어 있나요?",
+          "(similar2) PL25934 안건에서 UR 언급된 부분이 있는지 확인해줘",
+          "(similar3) PL25934에 Unified Requirements 관련 논의가 있나요?",
+          "(ext) PL25934 의제의 본문과 모든 응답에서 UR(Unified Requirements) 관련 내용을 찾아 어떤 통일규칙이 논의되고 있는지 상세히 분석해 주세요"
         ],
         "keywords": [
           "PL25934",
@@ -132,15 +125,15 @@
     },
     {
       "template_id": "pl25302_imo_content",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "specific_agenda",
       "query_info": {
         "natural_questions": [
-          "PL25302 에서 IMO관련된 내용이 있나? (original)",
-          "PL25302 의제에 국제해사기구(IMO) 관련 내용이 포함되어 있나요? (similar1)",
-          "PL25302 안건에서 IMO 언급된 부분이 있는지 확인해줘 (similar2)",
-          "PL25302에 IMO 규정 관련 논의가 있나요? (similar3)",
-          "PL25302 의제의 본문과 모든 응답에서 IMO(International Maritime Organization) 관련 내용을 찾아 어떤 IMO 규정이나 지침이 논의되고 있는지 상세히 분석해 주세요 (ext)"
+          "(original) PL25302 에서 IMO관련된 내용이 있나?",
+          "(similar1) PL25302 의제에 국제해사기구(IMO) 관련 내용이 포함되어 있나요?",
+          "(similar2) PL25302 안건에서 IMO 언급된 부분이 있는지 확인해줘",
+          "(similar3) PL25302에 IMO 규정 관련 논의가 있나요?",
+          "(ext) PL25302 의제의 본문과 모든 응답에서 IMO(International Maritime Organization) 관련 내용을 찾아 어떤 IMO 규정이나 지침이 논의되고 있는지 상세히 분석해 주세요"
         ],
         "keywords": [
           "PL25302",
@@ -169,15 +162,15 @@
     },
     {
       "template_id": "pl25016_completed_status",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "specific_agenda",
       "query_info": {
         "natural_questions": [
-          "PL25016 의제는 현재 종료되었는가? (original)",
-          "PL25016 안건이 완료되었나요? (similar1)",
-          "PL25016이 이미 마무리되었는지 확인해줘 (similar2)",
-          "PL25016 아젠다가 종결되었나요? (similar3)",
-          "PL25016 의제의 마감일이 지났는지 확인하고 완료 시점과 최종 결정사항을 상세히 보여주세요 (ext)"
+          "(original) PL25016 의제는 현재 종료되었는가?",
+          "(similar1) PL25016 안건이 완료되었나요?",
+          "(similar2) PL25016이 이미 마무리되었는지 확인해줘",
+          "(similar3) PL25016 아젠다가 종결되었나요?",
+          "(ext) PL25016 의제의 마감일이 지났는지 확인하고 완료 시점과 최종 결정사항을 상세히 보여주세요"
         ],
         "keywords": [
           "PL25016",
@@ -206,15 +199,15 @@
     },
     {
       "template_id": "pl25034_issue_summary",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "specific_agenda",
       "query_info": {
         "natural_questions": [
-          "PL25034 아젠다의 중요 이슈는 뭐지? (original)",
-          "PL25034 의제의 핵심 쟁점이 무엇인가요? (similar1)",
-          "PL25034 안건에서 다루는 주요 이슈를 알려줘 (similar2)",
-          "PL25034의 중요한 논의 사항이 뭐야? (similar3)",
-          "PL25034 의제의 제목, 본문, 키워드를 분석하여 가장 중요한 이슈와 기술적 쟁점을 상세히 설명해 주세요 (ext)"
+          "(original) PL25034 아젠다의 중요 이슈는 뭐지?",
+          "(similar1) PL25034 의제의 핵심 쟁점이 무엇인가요?",
+          "(similar2) PL25034 안건에서 다루는 주요 이슈를 알려줘",
+          "(similar3) PL25034의 중요한 논의 사항이 뭐야?",
+          "(ext) PL25034 의제의 제목, 본문, 키워드를 분석하여 가장 중요한 이슈와 기술적 쟁점을 상세히 설명해 주세요"
         ],
         "keywords": [
           "PL25034",
@@ -243,15 +236,15 @@
     },
     {
       "template_id": "pl25034_previous_discussion",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "related_analysis",
       "query_info": {
         "natural_questions": [
-          "PL25034와 관련해서 이전에 논의된 적이 있나? (original)",
-          "PL25034 주제가 과거에 다뤄진 적이 있나요? (similar1)",
-          "PL25034와 유사한 내용이 이전에 논의되었는지 확인해줘 (similar2)",
-          "PL25034 관련 이슈가 예전에 나온 적 있나요? (similar3)",
-          "PL25034 의제의 주제나 키워드와 관련하여 이전에 논의된 의제들을 찾아 시간순으로 정리하고 논의 흐름을 분석해 주세요 (ext)"
+          "(original) PL25034와 관련해서 이전에 논의된 적이 있나?",
+          "(similar1) PL25034 주제가 과거에 다뤄진 적이 있나요?",
+          "(similar2) PL25034와 유사한 내용이 이전에 논의되었는지 확인해줘",
+          "(similar3) PL25034 관련 이슈가 예전에 나온 적 있나요?",
+          "(ext) PL25034 의제의 주제나 키워드와 관련하여 이전에 논의된 의제들을 찾아 시간순으로 정리하고 논의 흐름을 분석해 주세요"
         ],
         "keywords": [
           "PL25034",
@@ -280,15 +273,15 @@
     },
     {
       "template_id": "pl25034_other_panel_discussion",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "related_analysis",
       "query_info": {
         "natural_questions": [
-          "PL25034와 관련해서 다른 패널에서 논의되고 있는 패널이 있나? (original)",
-          "PL25034 주제가 다른 패널에서도 다뤄지고 있나요? (similar1)",
-          "PL25034와 유사한 내용을 논의하는 다른 위원회가 있는지 확인해줘 (similar2)",
-          "PL25034 관련 이슈가 타 패널에서도 진행 중인가요? (similar3)",
-          "PL25034 의제의 주제나 키워드와 관련하여 다른 패널에서 논의되고 있는 의제들을 찾아 패널별로 정리해 주세요 (ext)"
+          "(original) PL25034와 관련해서 다른 패널에서 논의되고 있는 패널이 있나?",
+          "(similar1) PL25034 주제가 다른 패널에서도 다뤄지고 있나요?",
+          "(similar2) PL25034와 유사한 내용을 논의하는 다른 위원회가 있는지 확인해줘",
+          "(similar3) PL25034 관련 이슈가 타 패널에서도 진행 중인가요?",
+          "(ext) PL25034 의제의 주제나 키워드와 관련하여 다른 패널에서 논의되고 있는 의제들을 찾아 패널별로 정리해 주세요"
         ],
         "keywords": [
           "PL25034",
@@ -317,15 +310,15 @@
     },
     {
       "template_id": "pl25034_other_panel_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "related_analysis",
       "query_info": {
         "natural_questions": [
-          "PL25034와 관련해서 다른 패널에서 논의되고 있는 아젠다가 있나? (original)",
-          "PL25034 주제와 연관된 다른 패널의 의제들을 찾아주세요 (similar1)",
-          "PL25034와 유사한 내용의 타 패널 안건이 있는지 확인해줘 (similar2)",
-          "PL25034 관련 이슈가 다른 위원회 아젠다에도 있나요? (similar3)",
-          "PL25034 의제와 주제나 키워드가 관련된 다른 패널의 구체적인 의제들을 찾아 상세 정보와 함께 보여주세요 (ext)"
+          "(original) PL25034와 관련해서 다른 패널에서 논의되고 있는 아젠다가 있나?",
+          "(similar1) PL25034 주제와 연관된 다른 패널의 의제들을 찾아주세요",
+          "(similar2) PL25034와 유사한 내용의 타 패널 안건이 있는지 확인해줘",
+          "(similar3) PL25034 관련 이슈가 다른 위원회 아젠다에도 있나요?",
+          "(ext) PL25034 의제와 주제나 키워드가 관련된 다른 패널의 구체적인 의제들을 찾아 상세 정보와 함께 보여주세요"
         ],
         "keywords": [
           "PL25034",
@@ -354,15 +347,15 @@
     },
     {
       "template_id": "recent_meeting_list_panel",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "meeting",
       "query_info": {
         "natural_questions": [
-          "최근 진행된 회의 리스트 (original)",
-          "최근에 개최된 회의 목록을 보여주세요 (similar1)",
-          "지난 기간 동안 진행된 미팅들이 뭐가 있나요? (similar2)",
-          "최근 회의 일정과 내용 확인해줘 (similar3)",
-          "최근 90일 이내에 진행된 모든 패널 회의의 날짜, 패널명, 주요 안건을 시간순으로 정리해서 보여주세요 (ext)"
+          "(original) 최근 진행된 회의 리스트",
+          "(similar1) 최근에 개최된 회의 목록을 보여주세요",
+          "(similar2) 지난 기간 동안 진행된 미팅들이 뭐가 있나요?",
+          "(similar3) 최근 회의 일정과 내용 확인해줘",
+          "(ext) 최근 90일 이내에 진행된 모든 패널 회의의 날짜, 패널명, 주요 안건을 시간순으로 정리해서 보여주세요"
         ],
         "keywords": [
           "회의",
@@ -377,24 +370,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT subject, sent_time, agenda_panel, body FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (LOWER(subject) LIKE '%meeting%' OR LOWER(subject) LIKE '%회의%' OR LOWER(body) LIKE '%minutes%') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT subject, sent_time, agenda_panel, body FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (LOWER(subject) LIKE '%meeting%' OR LOWER(subject) LIKE '%회의%' OR LOWER(body) LIKE '%minutes%') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "최근 회의 관련 정보를 조회합니다",
         "sql_prompt": "회의 관련 NOTIFICATION을 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -407,15 +393,15 @@
     },
     {
       "template_id": "recent_meeting_key_issues",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "meeting",
       "query_info": {
         "natural_questions": [
-          "최근 진행된 회의의 주요 이슈 및 결정사항은? (original)",
-          "최근 회의에서 다뤄진 핵심 안건과 결정사항을 보여주세요 (similar1)",
-          "지난 미팅의 중요 이슈와 결과가 뭐였나요? (similar2)",
-          "최근 회의 주요 논의사항과 결론 확인해줘 (similar3)",
-          "최근 진행된 회의들의 회의록에서 주요 이슈, 논의 내용, 최종 결정사항을 추출하여 체계적으로 정리해 주세요 (ext)"
+          "(original) 최근 진행된 회의의 주요 이슈 및 결정사항은?",
+          "(similar1) 최근 회의에서 다뤄진 핵심 안건과 결정사항을 보여주세요",
+          "(similar2) 지난 미팅의 중요 이슈와 결과가 뭐였나요?",
+          "(similar3) 최근 회의 주요 논의사항과 결론 확인해줘",
+          "(ext) 최근 진행된 회의들의 회의록에서 주요 이슈, 논의 내용, 최종 결정사항을 추출하여 체계적으로 정리해 주세요"
         ],
         "keywords": [
           "회의",
@@ -430,24 +416,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT subject, body, sent_time, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (LOWER(subject) LIKE '%minutes%' OR LOWER(subject) LIKE '%decision%' OR LOWER(subject) LIKE '%outcome%' OR LOWER(body) LIKE '%decision%') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT subject, body, sent_time, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (LOWER(subject) LIKE '%minutes%' OR LOWER(subject) LIKE '%decision%' OR LOWER(subject) LIKE '%outcome%' OR LOWER(body) LIKE '%decision%') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "회의 결과 및 결정사항을 조회합니다",
         "sql_prompt": "회의록과 결정사항이 포함된 메일을 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -460,15 +439,15 @@
     },
     {
       "template_id": "agenda_meeting_alignment_check",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "meeting",
       "query_info": {
         "natural_questions": [
-          "{agenda} 가 최근 회의 결과와 부합하는가? (original)",
-          "{agenda} 의제가 최근 회의 결정사항과 일치하나요? (similar1)",
-          "{agenda} 안건이 지난 미팅 결과와 맞는지 확인해줘 (similar2)",
-          "{agenda}가 회의에서 합의된 방향과 부합하나요? (similar3)",
-          "{agenda} 의제의 내용이 최근 회의록의 결정사항 및 권고사항과 일치하는지 비교 분석해 주세요 (ext)"
+          "(original) {agenda} 가 최근 회의 결과와 부합하는가?",
+          "(similar1) {agenda} 의제가 최근 회의 결정사항과 일치하나요?",
+          "(similar2) {agenda} 안건이 지난 미팅 결과와 맞는지 확인해줘",
+          "(similar3) {agenda}가 회의에서 합의된 방향과 부합하나요?",
+          "(ext) {agenda} 의제의 내용이 최근 회의록의 결정사항 및 권고사항과 일치하는지 비교 분석해 주세요"
         ],
         "keywords": [
           "의제",
@@ -483,7 +462,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "WITH target_agenda AS (SELECT agenda_panel, sent_time, keywords, subject FROM agenda_chair WHERE agenda_base_version = '{agenda}' LIMIT 1) SELECT c.subject, c.body, c.sent_time FROM agenda_chair c, target_agenda t WHERE c.agenda_panel = t.agenda_panel AND c.mail_type = 'NOTIFICATION' AND (LOWER(c.subject) LIKE '%minutes%' OR LOWER(c.subject) LIKE '%decision%') AND c.sent_time < t.sent_time ORDER BY c.sent_time DESC LIMIT 5",
+        "query": "WITH target_agenda AS (SELECT agenda_panel, sent_time, keywords, subject FROM agenda_chair WHERE agenda_base_version = ':agenda' LIMIT 1) SELECT c.subject, c.body, c.sent_time FROM agenda_chair c, target_agenda t WHERE c.agenda_panel = t.agenda_panel AND c.mail_type = 'NOTIFICATION' AND (LOWER(c.subject) LIKE '%minutes%' OR LOWER(c.subject) LIKE '%decision%') AND c.sent_time < t.sent_time ORDER BY c.sent_time DESC LIMIT 5",
         "system": "특정 의제와 관련 회의 결과를 비교합니다",
         "sql_prompt": "의제 이전의 회의 결정사항을 조회합니다"
       },
@@ -492,10 +471,6 @@
           "name": "agenda",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{agenda}"
-          },
           "mcp_format": "extracted_agenda"
         }
       ],
@@ -508,15 +483,15 @@
     },
     {
       "template_id": "agenda_opinion_analysis",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "opinion_analysis",
       "query_info": {
         "natural_questions": [
-          "{agenda} 지금 까지 응답한 의견을 분석해줘 (original)",
-          "{agenda} 의제에 대한 모든 기관의 응답을 분석해주세요 (similar1)",
-          "{agenda} 안건의 각 조직별 의견을 종합 분석해줘 (similar2)",
-          "{agenda}에 대한 전체 응답 내용 분석해줘 (similar3)",
-          "{agenda} 의제에 대한 모든 기관들의 응답을 종합적으로 분석하여 주요 입장, 공통점, 차이점을 체계적으로 정리해 주세요 (ext)"
+          "(original) {agenda} 지금 까지 응답한 의견을 분석해줘",
+          "(similar1) {agenda} 의제에 대한 모든 기관의 응답을 분석해주세요",
+          "(similar2) {agenda} 안건의 각 조직별 의견을 종합 분석해줘",
+          "(similar3) {agenda}에 대한 전체 응답 내용 분석해줘",
+          "(ext) {agenda} 의제에 대한 모든 기관들의 응답을 종합적으로 분석하여 주요 입장, 공통점, 차이점을 체계적으로 정리해 주세요"
         ],
         "keywords": [
           "의견분석",
@@ -531,7 +506,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = '{agenda}' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 모든 응답을 조회합니다",
         "sql_prompt": "의제에 대한 모든 기관의 의견을 조회합니다"
       },
@@ -540,10 +515,6 @@
           "name": "agenda",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{agenda}"
-          },
           "mcp_format": "extracted_agenda"
         }
       ],
@@ -557,15 +528,15 @@
     },
     {
       "template_id": "mail_content_agenda_opinion_comparison",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "opinion_analysis",
       "query_info": {
         "natural_questions": [
-          "{mail_content} 가 {agenda}에서 지금 까지 응답한 의견과 동일한 부분 상반되는 부분 검토해줘 (original)",
-          "{mail_content}의 내용이 {agenda} 의제의 기존 응답들과 어떻게 다른지 비교해주세요 (similar1)",
-          "{mail_content}와 {agenda} 안건의 타 기관 의견 비교 분석해줘 (similar2)",
-          "{mail_content}가 {agenda}의 기존 응답과 일치하는지 확인해줘 (similar3)",
-          "제공된 메일 내용과 {agenda} 의제에 대한 기존 모든 응답을 비교하여 일치점과 차이점을 상세히 분석해 주세요 (ext)"
+          "(original) {mail_content} 가 {agenda}에서 지금 까지 응답한 의견과 동일한 부분 상반되는 부분 검토해줘",
+          "(similar1) {mail_content}의 내용이 {agenda} 의제의 기존 응답들과 어떻게 다른지 비교해주세요",
+          "(similar2) {mail_content}와 {agenda} 안건의 타 기관 의견 비교 분석해줘",
+          "(similar3) {mail_content}가 {agenda}의 기존 응답과 일치하는지 확인해줘",
+          "(ext) 제공된 메일 내용과 {agenda} 의제에 대한 기존 모든 응답을 비교하여 일치점과 차이점을 상세히 분석해 주세요"
         ],
         "keywords": [
           "메일내용",
@@ -580,7 +551,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = '{agenda}' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 모든 응답을 조회합니다",
         "sql_prompt": "의제에 대한 기존 응답들을 조회합니다"
       },
@@ -589,20 +560,12 @@
           "name": "agenda",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{agenda}"
-          },
           "mcp_format": "extracted_agenda"
         },
         {
           "name": "mail_content",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{mail_content}"
-          },
           "mcp_format": "extracted_mail_content"
         }
       ],
@@ -616,15 +579,15 @@
     },
     {
       "template_id": "recent_org_keyword_perspective",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "최근 {organization}에서 {keywords} 관련해서 어떤 관점을 갖고 있는가? (original)",
-          "{organization}이 최근 {keywords}에 대해 어떤 입장을 보이고 있나요? (similar1)",
-          "{organization}의 {keywords} 관련 최근 견해가 뭐인가요? (similar2)",
-          "최근에 {organization}이 {keywords}를 어떻게 보고 있는지 확인해줘 (similar3)",
-          "최근 90일 이내에 {organization}이 {keywords} 관련 의제들에서 보인 입장과 관점을 종합적으로 분석해 주세요 (ext)"
+          "(original) 최근 {organization}에서 {keywords} 관련해서 어떤 관점을 갖고 있는가?",
+          "(similar1) {organization}이 최근 {keywords}에 대해 어떤 입장을 보이고 있나요?",
+          "(similar2) {organization}의 {keywords} 관련 최근 견해가 뭐인가요?",
+          "(similar3) 최근에 {organization}이 {keywords}를 어떻게 보고 있는지 확인해줘",
+          "(ext) 최근 90일 이내에 {organization}이 {keywords} 관련 의제들에서 보인 입장과 관점을 종합적으로 분석해 주세요"
         ],
         "keywords": [
           "최근",
@@ -639,7 +602,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, c.sent_time, r.{organization} as opinion FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE r.{organization} IS NOT NULL AND ({keywords_condition}) AND {period_condition} ORDER BY c.sent_time DESC",
+        "query": "SELECT c.agenda_code, c.subject, c.sent_time, CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END as opinion FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL AND ((subject LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%')) AND sent_time >= :period_start ORDER BY c.sent_time DESC",
         "system": "특정 조직의 키워드 관련 응답을 조회합니다",
         "sql_prompt": "조직이 특정 키워드 관련 의제에서 보인 의견을 조회합니다"
       },
@@ -648,41 +611,23 @@
           "name": "organization",
           "type": "string",
           "required": true,
-          "sql_builder": {
-            "type": "column",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization",
           "description": "조직 코드"
         },
         {
-          "name": "keywords",
+          "name": "keyword",
           "type": "array",
           "required": true,
-          "sql_builder": {
-            "type": "keywords",
-            "fields": [
-              "c.subject",
-              "c.body",
-              "c.keywords"
-            ],
-            "placeholder": "{keywords_condition}"
-          },
+          "default": "keyword",
+          "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -696,15 +641,15 @@
     },
     {
       "template_id": "sdtp_ongoing_responded_organizations",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "진행 중인 의제에서 SDTP 에서 현재 응답을 한 기관은? (original)",
-          "SDTP 패널의 진행중인 안건에 이미 회신한 조직들을 보여주세요 (similar1)",
-          "선박설계기술패널에서 현재 진행 중인 의제에 답변한 기관 리스트가 필요해요 (similar2)",
-          "SDTP 진행 의제 중 응답 완료한 기관들 확인해줘 (similar3)",
-          "SDTP 패널에서 현재 진행 중인 모든 의제에 대해 응답을 제출한 조직들을 의제별로 정리해서 보여주세요 (ext)"
+          "(original) 진행 중인 의제에서 SDTP 에서 현재 응답을 한 기관은?",
+          "(similar1) SDTP 패널의 진행중인 안건에 이미 회신한 조직들을 보여주세요",
+          "(similar2) 선박설계기술패널에서 현재 진행 중인 의제에 답변한 기관 리스트가 필요해요",
+          "(similar3) SDTP 진행 의제 중 응답 완료한 기관들 확인해줘",
+          "(ext) SDTP 패널에서 현재 진행 중인 모든 의제에 대해 응답을 제출한 조직들을 의제별로 정리해서 보여주세요"
         ],
         "keywords": [
           "SDTP",
@@ -736,15 +681,15 @@
     },
     {
       "template_id": "sdtp_ongoing_not_responded_organizations",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "SDTP 에서 현재 응답을 아직 하지 않은 기관은? (original)",
-          "SDTP 패널에서 미응답 상태인 조직들을 보여주세요 (similar1)",
-          "선박설계기술패널의 진행 의제에 아직 답변 안 한 기관이 어디인가요? (similar2)",
-          "SDTP에서 응답 대기중인 기관 리스트 확인해줘 (similar3)",
-          "SDTP 패널의 각 진행중인 의제별로 아직 응답하지 않은 모든 조직들을 마감일과 함께 정리해서 보여주세요 (ext)"
+          "(original) SDTP 에서 현재 응답을 아직 하지 않은 기관은?",
+          "(similar1) SDTP 패널에서 미응답 상태인 조직들을 보여주세요",
+          "(similar2) 선박설계기술패널의 진행 의제에 아직 답변 안 한 기관이 어디인가요?",
+          "(similar3) SDTP에서 응답 대기중인 기관 리스트 확인해줘",
+          "(ext) SDTP 패널의 각 진행중인 의제별로 아직 응답하지 않은 모든 조직들을 마감일과 함께 정리해서 보여주세요"
         ],
         "keywords": [
           "SDTP",

@@ -14,9 +14,9 @@
 IACSGRAPH 쿼리 템플릿은 자연어 질문을 SQL 쿼리로 변환하는 시스템입니다. 각 템플릿은 특정 비즈니스 요구사항에 대한 SQL 쿼리와 메타데이터를 포함합니다.
 
 ### 핵심 원칙
+- **단순성**: 복잡한 SQL builder 대신 단순한 파라미터 바인딩 사용
+- **명확성**: SQL 템플릿에서 직접 로직 확인 가능
 - **일관성**: 모든 템플릿은 동일한 구조와 명명 규칙을 따름
-- **재사용성**: 파라미터를 통한 쿼리 재사용
-- **검증 가능성**: 실제 데이터베이스에서 테스트 가능
 - **확장성**: 새로운 요구사항에 쉽게 대응
 
 ## 2. 템플릿 구조
@@ -126,89 +126,94 @@ WHERE c.mail_type = 'REQUEST'
 
 ## 4. 파라미터 처리
 
-### 4.1 파라미터 타입
+### 4.1 파라미터 타입 (단순화됨)
 
-#### period (기간)
-```json
-{
-  "name": "period",
-  "type": "period",
-  "required": false,
-  "default": {
-    "type": "relative",
-    "days": 30
-  },
-  "sql_builder": {
-    "type": "period",
-    "field": "sent_time",
-    "placeholder": "{period_condition}"
-  },
-  "mcp_format": "extracted_period"
-}
-```
-
-#### organization (조직)
+#### string (문자열)
 ```json
 {
   "name": "organization",
   "type": "string",
   "required": true,
   "default": "KR",
-  "sql_builder": {
-    "type": "string",
-    "placeholder": "{organization}"
-  },
+  "description": "조직 코드",
   "mcp_format": "extracted_organization"
 }
 ```
 
-#### keywords (키워드)
+#### array (다중 값 파라미터)
 ```json
 {
-  "name": "keywords",
+  "name": "keyword",
   "type": "array",
   "required": true,
-  "default": ["keyword1", "keyword2"],
-  "sql_builder": {
-    "type": "keywords",
-    "fields": ["keywords", "subject"],
-    "placeholder": "{keywords_condition}"
-  },
+  "default": "keyword",  // 주의: 현재 구현상 문자열로 설정
+  "description": "검색 키워드 목록",
   "mcp_format": "extracted_keywords"
 }
 ```
 
-### 4.2 플레이스홀더 사용
+#### period (기간)
+```json
+{
+  "name": "period_start",
+  "type": "datetime",
+  "required": false,
+  "default": "datetime('now', '-30 days')",
+  "description": "시작 날짜",
+  "mcp_format": "extracted_period"
+}
+```
+
+### 4.2 플레이스홀더 사용 (단순화됨)
 
 #### 기본 원칙
-- **모든 필수 파라미터는 SQL 쿼리에서 플레이스홀더를 사용해야 함**
-- 파라미터를 정의했다면 반드시 쿼리에서 해당 플레이스홀더를 사용
-- 하드코딩된 값 대신 플레이스홀더를 통해 동적 치환 구현
+- **SQL builder 없이 단순 파라미터 바인딩 사용**
+- 표준 SQL 파라미터 플레이스홀더 사용 (`:param_name`)
+- 복잡한 조건은 SQL 템플릿에서 직접 작성
 
 #### 플레이스홀더 예시
 ```sql
--- 파라미터 플레이스홀더
-WHERE {period_condition}
-WHERE organization = '{organization}'
-WHERE {keywords_condition}
+-- 단순 파라미터 바인딩
+WHERE organization = :organization
+WHERE sent_time >= :period_start AND sent_time <= :period_end
+WHERE subject LIKE '%' || :keyword || '%'
 
--- 조직별 응답 확인 (동적)
-WHERE r.{organization} IS NULL  -- 올바른 예: 플레이스홀더 사용
-WHERE r.KR IS NULL              -- 잘못된 예: 하드코딩
+-- 동적 컬럼 참조 (특별한 경우)
+-- 방법 1: CASE문 사용
+SELECT CASE :organization
+  WHEN 'KR' THEN r.KR
+  WHEN 'NK' THEN r.NK
+  WHEN 'DNV' THEN r.DNV
+END as response
 
--- CTE 이름도 일반화
-WITH org_pending AS (...)       -- 올바른 예: 일반적인 이름
-WITH kr_pending AS (...)        -- 피해야 할 예: 특정 조직명 사용
-
--- 특수 플레이스홀더 (query_executor.py에서 자동 처리)
-{date_condition} → sent_time >= DATE('now', '-30 days')
-{deadline_filter} → deadline IS NOT NULL AND deadline >= DATE('now')
+-- 방법 2: 다중 쿼리로 처리 (권장)
+-- organization별로 별도 쿼리 실행
 ```
 
-### 4.3 MCP Format 매핑
-- `period`, `date_range` → `"mcp_format": "extracted_period"`
+### 4.3 다중 값 처리 (array 타입)
+
+#### 키워드 검색 예시
+```json
+// 템플릿 파라미터
+{
+  "name": "keyword",
+  "type": "array",
+  "default": "keyword",  // 현재 구현상 문자열로 설정
+  "mcp_format": "extracted_keywords"
+}
+
+// SQL 쿼리
+"SELECT * FROM agenda_chair WHERE keywords LIKE '%' || :keyword || '%'"
+
+// 실행 방식
+// keyword = ["AI", "ML", "automation"]일 때
+// 각 키워드별로 쿼리 실행 후 결과 병합 (중복 제거)
+```
+
+### 4.4 MCP Format 매핑
+- `period` → `"mcp_format": "extracted_period"`
 - `organization` → `"mcp_format": "extracted_organization"`
-- `keywords` → `"mcp_format": "extracted_keywords"`
+- `keyword/keywords` → `"mcp_format": "extracted_keywords"`
 
 ## 5. 데이터베이스 스키마 참조
 
@@ -359,36 +364,33 @@ VALUES (..., datetime('now', '+30 days'), ...)
 
 ## 부록: 템플릿 예시
 
-### 간단한 통계 쿼리
+### 간단한 통계 쿼리 (단순화된 버전)
 ```json
 {
   "template_id": "pending_agendas_count",
-  "template_version": "1.0.0",
+  "template_version": "2.0.0",
   "template_category": "statistics",
   "query_info": {
     "natural_questions": [
-      "처리 대기 중인 agenda의 수는?",
-      "대기중인 의제가 몇 개야?",
-      "미처리 안건 개수 알려줘"
+      "(original) 처리 대기 중인 agenda의 수는?",
+      "(similar1) 대기중인 의제가 몇 개야?",
+      "(similar2) 미처리 안건 개수 알려줘",
+      "(ext) 마감일이 남아있고 아직 응답이 완료되지 않은 대기 중인 의제들의 개수를 패널별로 집계해 주세요"
     ],
     "keywords": ["대기중", "개수", "수량"]
   },
   "sql_template": {
-    "query": "SELECT COUNT(*) as pending_count FROM agenda_chair WHERE mail_type = 'REQUEST' AND has_deadline = 1 AND deadline > datetime('now') AND {period_condition}",
+    "query": "SELECT COUNT(*) as pending_count FROM agenda_chair WHERE mail_type = 'REQUEST' AND has_deadline = 1 AND deadline > datetime('now') AND sent_time >= :period_start",
     "system": "응답이 필요한 대기중인 의제의 수를 조회합니다.",
     "sql_prompt": "마감일이 지나지 않은 REQUEST 타입 의제의 개수를 카운트합니다."
   },
   "parameters": [
     {
-      "name": "period",
-      "type": "period",
+      "name": "period_start",
+      "type": "datetime",
       "required": false,
-      "default": {"type": "relative", "days": 30},
-      "sql_builder": {
-        "type": "period",
-        "field": "sent_time",
-        "placeholder": "{period_condition}"
-      },
+      "default": "datetime('now', '-30 days')",
+      "description": "조회 시작 날짜",
       "mcp_format": "extracted_period"
     }
   ],
@@ -399,24 +401,25 @@ VALUES (..., datetime('now', '+30 days'), ...)
 }
 ```
 
-### 동적 조직 파라미터를 사용한 템플릿 예시
+### 조직별 응답 조회 템플릿 예시 (단순화된 버전)
 ```json
 {
-  "template_id": "kr_pending_response_agendas",
-  "template_version": "1.0.0",
+  "template_id": "org_pending_response_agendas",
+  "template_version": "2.0.0",
   "template_category": "response_tracking",
   "query_info": {
     "natural_questions": [
-      "진행되고 있는 의제들 중에서 KR이 아직 응답하지 않는 의제",
-      "KR이 응답을 해야 하는 의제",
-      "한국선급이 회신해야 할 대기중인 안건"
+      "(original) 진행되고 있는 의제들 중에서 {organization}이 아직 응답하지 않는 의제",
+      "(similar1) {organization}이 응답을 해야 하는 의제",
+      "(similar2) {organization} 기관이 회신해야 할 대기중인 안건",
+      "(ext) {organization}이 아직 응답하지 않은 모든 진행 중인 의제들을 마감일 순으로 정렬하여 긴급도와 함께 보여주세요"
     ],
-    "keywords": ["KR", "미응답", "응답필요"]
+    "keywords": ["미응답", "응답필요"]
   },
   "sql_template": {
-    "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.agenda_panel, c.sent_time, c.deadline FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND c.decision_status != 'completed' AND r.{organization} IS NULL AND {period_condition} ORDER BY c.deadline ASC",
+    "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.agenda_panel, c.sent_time, c.deadline, CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR END as org_response FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND c.decision_status != 'completed' AND c.sent_time >= :period_start HAVING org_response IS NULL ORDER BY c.deadline ASC",
     "system": "지정된 조직이 아직 응답하지 않은 진행중인 의제들을 조회합니다.",
-    "sql_prompt": "지정된 조직이 응답해야 하는 의제를 찾으려면 agenda_chair에서 mail_type이 'request'이고 has_deadline이 1이며 deadline이 현재보다 미래인 의제 중, agenda_responses_content에 해당 조직의 응답이 없는 것을 찾아야 합니다."
+    "sql_prompt": "특정 조직의 미응답 의제를 찾습니다."
   },
   "parameters": [
     {
@@ -425,22 +428,14 @@ VALUES (..., datetime('now', '+30 days'), ...)
       "required": true,
       "default": "KR",
       "description": "조직 코드",
-      "sql_builder": {
-        "type": "string",
-        "placeholder": "{organization}"
-      },
       "mcp_format": "extracted_organization"
     },
     {
-      "name": "period",
-      "type": "period",
+      "name": "period_start",
+      "type": "datetime",
       "required": false,
-      "default": {"type": "relative", "days": 90},
-      "sql_builder": {
-        "type": "period",
-        "field": "c.sent_time",
-        "placeholder": "{period_condition}"
-      },
+      "default": "datetime('now', '-90 days')",
+      "description": "조회 시작 날짜",
       "mcp_format": "extracted_period"
     }
   ],
@@ -451,67 +446,134 @@ VALUES (..., datetime('now', '+30 days'), ...)
 }
 ```
 
-## 8. 최근 수정사항 (2025년 1월)
+### 키워드 검색 템플릿 예시 (array 타입)
+```json
+{
+  "template_id": "keyword_search_agendas",
+  "template_version": "2.0.0",
+  "template_category": "keyword_search",
+  "query_info": {
+    "natural_questions": [
+      "(original) 최근 논의된 의제들 중에 {keyword} 에 대해서 논의되고 있는 의제",
+      "(similar1) {keyword} 관련해서 최근에 다뤄진 의제들을 보여주세요",
+      "(similar2) {keyword}에 대한 논의가 있었던 안건들을 찾아주세요",
+      "(similar3) {keyword} 키워드가 포함된 의제 리스트 확인해줘",
+      "(ext) 제목, 본문, 키워드 필드에서 {keyword} 관련 내용이 포함된 모든 의제를 찾아서 시간순으로 정렬하고 주요 논의 사항을 요약해 주세요"
+    ],
+    "keywords": ["키워드", "검색"]
+  },
+  "sql_template": {
+    "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time FROM agenda_chair WHERE (subject LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%') ORDER BY sent_time DESC",
+    "system": "키워드를 포함하는 의제를 검색합니다.",
+    "sql_prompt": "제목, 키워드, 본문에서 해당 키워드를 검색합니다."
+  },
+  "parameters": [
+    {
+      "name": "keyword",
+      "type": "array",
+      "required": true,
+      "default": "keyword",
+      "description": "검색할 키워드 목록",
+      "mcp_format": "extracted_keywords"
+    }
+  ],
+  "related_db": "iacsgraph.db",
+  "related_tables": ["agenda_chair"],
+  "routing_type": "sql",
+  "to_agent": "키워드별로 검색된 의제를 정리해 주세요."
+}
+```
 
-### 8.1 필수 파라미터 플레이스홀더 처리 개선
-**변경 사항**:
-- 모든 필수 파라미터는 SQL 쿼리에서 플레이스홀더를 사용하도록 수정
-- 하드코딩된 조직명(KR) 대신 `{organization}` 플레이스홀더 사용
-- CTE 이름을 특정 조직명에서 일반적인 이름으로 변경 (kr_pending → org_pending)
+## 8. 최근 수정사항 (2025년 7월)
 
-**수정된 템플릿 목록**:
-1. `kr_pending_response_agendas`
-2. `kr_response_required_simple`
-3. `kr_required_agendas_other_org_opinions`
-4. `kr_required_agendas_keywords`
-5. `kr_required_agendas_other_org_keywords`
+### 8.1 SQL Builder 시스템 단순화
+**주요 변경사항**:
+- 복잡한 SQL builder 타입 시스템 제거
+- 단순한 파라미터 바인딩 방식으로 전환
+- 표준 SQL 파라미터 플레이스홀더 사용 (`:param_name`)
 
-**수정 예시**:
+**변경 예시**:
+```json
+// 변경 전 (v1.0.0)
+{
+  "name": "keywords",
+  "type": "array",
+  "sql_builder": {
+    "type": "keywords",
+    "fields": ["subject", "keywords"],
+    "placeholder": "{keywords_condition}"
+  }
+}
+
+// 변경 후 (v2.0.0)
+{
+  "name": "keyword",
+  "type": "string",
+  "multi_query": true,
+  "description": "검색 키워드"
+}
+```
+
+### 8.2 array 타입을 통한 다중 값 처리
+**array 타입 사용**:
+- 키워드 검색 시 array 타입으로 여러 값 전달
+- 시스템이 각 값에 대해 쿼리 실행 후 결과 병합
+- 중복 제거 자동 처리
+
+**구현 예시**:
+```json
+// 파라미터 정의
+{
+  "name": "keyword",
+  "type": "array",
+  "default": "keyword",  // 현재 구현상 문자열
+  "description": "검색할 키워드 목록"
+}
+
+// 실행 방식
+// keyword = ["AI", "ML"] → 각각 실행 후 결과 병합
+```
+
+### 8.3 동적 컬럼 참조 처리
+**문제점**:
+- `r.{organization}` 같은 동적 컬럼 참조는 SQL에서 직접 지원 안 됨
+
+**해결 방법**:
+1. **CASE문 사용** (권장):
 ```sql
--- 변경 전
-WHERE r.KR IS NULL
-WITH kr_pending AS (...)
-
--- 변경 후
-WHERE r.{organization} IS NULL
-WITH org_pending AS (...)
+CASE :organization
+  WHEN 'KR' THEN r.KR
+  WHEN 'NK' THEN r.NK
+  -- ...
+END as org_response
 ```
 
-### 8.2 query_executor.py 개선
-**컬럼명 플레이스홀더 처리**:
-```python
-# 컬럼명으로 사용되는 플레이스홀더는 따옴표 없이 치환
-elif f"r.{placeholder}" in sql_query or f"c.{placeholder}" in sql_query:
-    final_query = final_query.replace(placeholder, default_value)
+2. **array 타입으로 처리**:
+- organization 파라미터를 array 타입으로 정의
+- 각 조직별로 별도 쿼리 실행
+
+### 8.4 기간(period) 처리 단순화
+**변경 전**: 복잡한 period builder
+```json
+{
+  "name": "period",
+  "type": "period",
+  "sql_builder": {
+    "type": "period",
+    "field": "sent_time",
+    "placeholder": "{period_condition}"
+  }
+}
 ```
 
-**하드코딩 제거**:
-- special_replacements에서 `'{organization}': "'KR'"` 제거
-- 동적 파라미터 치환을 통해 모든 조직에 대해 쿼리 실행 가능
-
-### 8.3 대량 템플릿 생성 및 검증
-**생성된 템플릿**:
-- 총 165개 템플릿을 9개 파일에 분산 생성 (part_001 ~ part_009)
-- 각 파일당 약 20개 템플릿 포함 (마지막 파일은 5개)
-- 모든 템플릿 100% 검증 통과
-
-**템플릿 카테고리 분포**:
-- agenda_status: 의제 상태 조회
-- response_tracking: 응답 추적 및 모니터링
-- statistics: 통계 및 집계 분석
-- keyword_analysis: 키워드 기반 분석
-- keyword_search: 특정 키워드 검색
-- mail_type: 메일 유형별 분류
-
-### 8.4 to_agent 필드 개선 사항
-**목적**: 단순 조회 결과를 분석이 필요한 형태로 에이전트에게 전달하기 위한 상세 지침 제공
-
-**개선된 템플릿 수**: 32개 (전체 템플릿 중 분석이 필요한 모든 템플릿)
-
-**주요 개선 사항**:
-1. 단순 "정리해 주세요" → 구체적인 분석 지침으로 변경
-2. 분석 관점과 주요 포인트 명시
-3. 비교, 트렌드, 패턴 분석 요청 포함
+**변경 후**: 단순 datetime 파라미터
+```json
+{
+  "name": "period_start",
+  "type": "datetime",
+  "default": "datetime('now', '-30 days')"
+}
+```
 
 **to_agent 필드 작성 가이드라인**:
 
@@ -552,62 +614,40 @@ elif f"r.{placeholder}" in sql_query or f"c.{placeholder}" in sql_query:
 "to_agent": "키워드 출현 빈도를 시간순으로 분석하여 트렌드 변화를 설명해 주세요. 새롭게 부상한 키워드나 사라진 키워드가 있는지 확인해 주세요."
 ```
 
-### 8.5 개선된 템플릿 목록
-다음 32개 템플릿의 to_agent 필드가 구체적인 분석 지침으로 업데이트됨:
+### 8.5 마이그레이션 가이드
+**기존 템플릿 변환 방법**:
 
-**part_002.json**: 5개
-- yearly_monthly_agenda_response_status
-- kr_recent_responses_summary
-- kr_organization_response_analysis
-- kr_response_patterns
-- panel_statistics
+1. **sql_builder 제거**:
+```json
+// 제거할 부분
+"sql_builder": {
+  "type": "string",
+  "placeholder": "{organization}"
+}
+```
 
-**part_003.json**: 4개
-- agenda_statistics_by_panel
-- keyword_count_panel
-- keyword_trend_analysis
-- meeting_related_agendas
+2. **플레이스홀더 변경**:
+```sql
+-- 변경 전
+WHERE {period_condition}
+WHERE {keywords_condition}
+WHERE r.{organization} IS NULL
 
-**part_004.json**: 6개
-- iacs_member_count
-- iacs_member_composition
-- iacs_panel_structure
-- agenda_response_statistics
-- organization_participation_ranking
-- panel_activity_analysis
+-- 변경 후
+WHERE sent_time >= :period_start
+WHERE keywords LIKE '%' || :keyword || '%'
+WHERE CASE :organization WHEN 'KR' THEN r.KR ... END IS NULL
+```
 
-**part_005.json**: 5개
-- panel_last_agenda_info
-- agenda_history_analysis
-- response_pattern_summary
-- quarterly_statistics
-- panel_response_performance
+3. **array 타입 사용**:
+- 여러 값으로 검색이 필요한 파라미터는 array 타입 사용
+- multi_query 플래그는 제거됨
 
-**part_006.json**: 1개
-- request_mail_type_weekly
-
-**part_007.json**: 5개
-- weekly_agenda_volume_trend
-- panel_collaboration_network
-- response_speed_ranking
-- keyword_evolution
-- panel_workload_distribution
-
-**part_008.json**: 4개
-- panel_efficiency_metrics
-- organization_alignment_analysis
-- keyword_co_occurrence
-- deadline_compliance_rate
-
-**part_009.json**: 2개
-- ai_ml_discussion_tracking
-- agenda_complexity_index
-
-### 8.6 검증 결과
-- 모든 165개 템플릿 100% 통과
-- 플레이스홀더 사용 검증 완료 (46개 템플릿에서 미사용 period 파라미터 확인)
-- 다양한 조직에 대한 동적 쿼리 실행 확인
-- to_agent 필드 개선으로 분석 품질 향상 기대
+### 8.6 주의사항
+- **동적 컬럼 참조**: CASE문이나 다중 쿼리로 해결
+- **복잡한 조건**: SQL 템플릿에서 직접 작성
+- **성능 고려**: 다중 쿼리 실행 시 병렬 처리 권장
+- **버전 관리**: 변경 시 template_version을 2.0.0으로 업데이트
 
 ### 8.7 템플릿 생성 원칙 (2025년 7월 업데이트)
 

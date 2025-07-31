@@ -1,18 +1,18 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Query Templates Group 004 - Queries 61-80",
   "templates": [
     {
       "template_id": "iacs_panel_structure",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "organization_info",
       "query_info": {
         "natural_questions": [
-          "IACS의 내부의 패널 구성은 어떻게 되나? (original)",
-          "IACS 패널들이 어떻게 구성되어 있나요? (similar1)",
-          "국제선급연합회의 위원회 구조를 보여주세요 (similar2)",
-          "IACS 내부 패널 조직도를 확인해줘 (similar3)",
-          "IACS 내부의 모든 패널(위원회)의 이름, 역할, 주요 업무 영역을 체계적으로 정리해서 보여주세요 (ext)"
+          "(original) IACS의 내부의 패널 구성은 어떻게 되나?",
+          "(similar1) IACS 패널들이 어떻게 구성되어 있나요?",
+          "(similar2) 국제선급연합회의 위원회 구조를 보여주세요",
+          "(similar3) IACS 내부 패널 조직도를 확인해줘",
+          "(ext) IACS 내부의 모든 패널(위원회)의 이름, 역할, 주요 업무 영역을 체계적으로 정리해서 보여주세요"
         ],
         "keywords": [
           "IACS",
@@ -41,15 +41,15 @@
     },
     {
       "template_id": "kr_participating_panels",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "organization_info",
       "query_info": {
         "natural_questions": [
-          "KR이 참여하는 패널은 (original)",
-          "한국선급이 참여하고 있는 패널들을 보여주세요 (similar1)",
-          "KR이 활동하는 위원회가 어디어디인가요? (similar2)",
-          "우리 선급이 참여 중인 패널 리스트 확인해줘 (similar3)",
-          "KR이 의제 응답이나 생성을 통해 활동하고 있는 모든 패널을 활동 빈도와 함께 보여주세요 (ext)"
+          "(original) KR이 참여하는 패널은",
+          "(similar1) 한국선급이 참여하고 있는 패널들을 보여주세요",
+          "(similar2) KR이 활동하는 위원회가 어디어디인가요?",
+          "(similar3) 우리 선급이 참여 중인 패널 리스트 확인해줘",
+          "(ext) KR이 의제 응답이나 생성을 통해 활동하고 있는 모든 패널을 활동 빈도와 함께 보여주세요"
         ],
         "keywords": [
           "KR",
@@ -66,7 +66,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT c.agenda_panel, COUNT(DISTINCT c.agenda_base_version) as activity_count FROM (SELECT agenda_panel, agenda_base_version FROM agenda_chair WHERE sender_organization = '{organization}' UNION SELECT c.agenda_panel, r.agenda_base_version FROM agenda_responses_content r JOIN agenda_chair c ON r.agenda_base_version = c.agenda_base_version WHERE r.{organization} IS NOT NULL) c GROUP BY c.agenda_panel ORDER BY activity_count DESC",
+        "query": "SELECT DISTINCT c.agenda_panel, COUNT(DISTINCT c.agenda_base_version) as activity_count FROM (SELECT agenda_panel, agenda_base_version FROM agenda_chair WHERE sender_organization = :organization UNION SELECT c.agenda_panel, r.agenda_base_version FROM agenda_responses_content r JOIN agenda_chair c ON r.agenda_base_version = c.agenda_base_version WHERE CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL) c GROUP BY c.agenda_panel ORDER BY activity_count DESC",
         "system": "특정 조직이 참여하는 패널을 조회합니다",
         "sql_prompt": "의제 생성과 응답을 통해 활동하는 패널을 파악합니다"
       },
@@ -77,10 +77,6 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         }
       ],
@@ -94,15 +90,15 @@
     },
     {
       "template_id": "kr_chair_panels",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "organization_info",
       "query_info": {
         "natural_questions": [
-          "KR이 의장으로 있는 패널은? (original)",
-          "한국선급이 의장직을 맡고 있는 패널을 보여주세요 (similar1)",
-          "KR이 chair로 활동하는 위원회가 어디인가요? (similar2)",
-          "우리가 의장인 패널 리스트 확인해줘 (similar3)",
-          "KR이 의장(Chair)으로 활동하고 있는 모든 패널과 해당 패널에서의 주요 활동 내역을 보여주세요 (ext)"
+          "(original) KR이 의장으로 있는 패널은?",
+          "(similar1) 한국선급이 의장직을 맡고 있는 패널을 보여주세요",
+          "(similar2) KR이 chair로 활동하는 위원회가 어디인가요?",
+          "(similar3) 우리가 의장인 패널 리스트 확인해줘",
+          "(ext) KR이 의장(Chair)으로 활동하고 있는 모든 패널과 해당 패널에서의 주요 활동 내역을 보여주세요"
         ],
         "keywords": [
           "KR",
@@ -130,10 +126,6 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         }
       ],
@@ -146,15 +138,15 @@
     },
     {
       "template_id": "recent_meeting_list",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "meeting",
       "query_info": {
         "natural_questions": [
-          "최근 진행된 회의 리스트 (original)",
-          "최근에 개최된 회의 목록을 보여주세요 (similar1)",
-          "지난 기간 동안 진행된 미팅들이 뭐가 있나요? (similar2)",
-          "최근 회의 일정과 내용 확인해줘 (similar3)",
-          "최근 90일 이내에 진행된 모든 회의의 날짜, 패널, 주요 안건을 시간순으로 정리해서 보여주세요 (ext)"
+          "(original) 최근 진행된 회의 리스트",
+          "(similar1) 최근에 개최된 회의 목록을 보여주세요",
+          "(similar2) 지난 기간 동안 진행된 미팅들이 뭐가 있나요?",
+          "(similar3) 최근 회의 일정과 내용 확인해줘",
+          "(ext) 최근 90일 이내에 진행된 모든 회의의 날짜, 패널, 주요 안건을 시간순으로 정리해서 보여주세요"
         ],
         "keywords": [
           "회의",
@@ -169,24 +161,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT subject, sent_time, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (LOWER(subject) LIKE '%meeting%' OR LOWER(subject) LIKE '%회의%') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT DISTINCT subject, sent_time, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (LOWER(subject) LIKE '%meeting%' OR LOWER(subject) LIKE '%회의%') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "최근 회의 관련 통지를 조회합니다",
         "sql_prompt": "회의 관련 NOTIFICATION 메일을 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -199,15 +184,15 @@
     },
     {
       "template_id": "recent_meeting_issues_decisions",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "meeting",
       "query_info": {
         "natural_questions": [
-          "최근 진행된 회의의 주요 이슈 및 결정사항은? (original)",
-          "최근 회의에서 다뤄진 주요 안건과 결정사항을 보여주세요 (similar1)",
-          "지난 미팅의 핵심 이슈와 결과가 뭐였나요? (similar2)",
-          "최근 회의 주요 논의사항과 결론 확인해줘 (similar3)",
-          "최근 진행된 회의들에서 논의된 주요 이슈, 각 기관의 입장, 최종 결정사항을 체계적으로 정리해서 보여주세요 (ext)"
+          "(original) 최근 진행된 회의의 주요 이슈 및 결정사항은?",
+          "(similar1) 최근 회의에서 다뤄진 주요 안건과 결정사항을 보여주세요",
+          "(similar2) 지난 미팅의 핵심 이슈와 결과가 뭐였나요?",
+          "(similar3) 최근 회의 주요 논의사항과 결론 확인해줘",
+          "(ext) 최근 진행된 회의들에서 논의된 주요 이슈, 각 기관의 입장, 최종 결정사항을 체계적으로 정리해서 보여주세요"
         ],
         "keywords": [
           "회의",
@@ -222,24 +207,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.subject, c.body, c.sent_time, c.agenda_panel FROM agenda_chair c WHERE c.mail_type = 'NOTIFICATION' AND (LOWER(c.subject) LIKE '%meeting minutes%' OR LOWER(c.subject) LIKE '%회의록%' OR LOWER(c.subject) LIKE '%decision%') AND {period_condition} ORDER BY c.sent_time DESC",
+        "query": "SELECT c.subject, c.body, c.sent_time, c.agenda_panel FROM agenda_chair c WHERE c.mail_type = 'NOTIFICATION' AND (LOWER(c.subject) LIKE '%meeting minutes%' OR LOWER(c.subject) LIKE '%회의록%' OR LOWER(c.subject) LIKE '%decision%') AND sent_time >= :period_start ORDER BY c.sent_time DESC",
         "system": "회의 결과 및 결정사항을 조회합니다",
         "sql_prompt": "회의록이나 결정사항이 포함된 메일을 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -252,15 +230,15 @@
     },
     {
       "template_id": "current_ongoing_pt_list",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT 리스트 (original)",
-          "현재 활동 중인 프로젝트 팀 목록을 보여주세요 (similar1)",
-          "진행 중인 PT들이 어떤 것들이 있나요? (similar2)",
-          "활성화된 프로젝트 팀 리스트 확인해줘 (similar3)",
-          "현재 활동 중인 모든 Project Team의 이름, 목적, 시작일, 참여 기관을 상세히 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT 리스트",
+          "(similar1) 현재 활동 중인 프로젝트 팀 목록을 보여주세요",
+          "(similar2) 진행 중인 PT들이 어떤 것들이 있나요?",
+          "(similar3) 활성화된 프로젝트 팀 리스트 확인해줘",
+          "(ext) 현재 활동 중인 모든 Project Team의 이름, 목적, 시작일, 참여 기관을 상세히 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -289,15 +267,15 @@
     },
     {
       "template_id": "current_pt_participating_organizations",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT의 참여기관 (original)",
-          "활동 중인 프로젝트 팀에 참여하는 기관들을 보여주세요 (similar1)",
-          "진행 중인 PT별 참가 조직이 어디어디인가요? (similar2)",
-          "각 PT의 멤버 기관들 확인해줘 (similar3)",
-          "현재 활동 중인 각 Project Team별로 참여하고 있는 모든 기관들의 명단과 역할을 정리해서 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT의 참여기관",
+          "(similar1) 활동 중인 프로젝트 팀에 참여하는 기관들을 보여주세요",
+          "(similar2) 진행 중인 PT별 참가 조직이 어디어디인가요?",
+          "(similar3) 각 PT의 멤버 기관들 확인해줘",
+          "(ext) 현재 활동 중인 각 Project Team별로 참여하고 있는 모든 기관들의 명단과 역할을 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -327,15 +305,15 @@
     },
     {
       "template_id": "current_pt_participant_info",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT의 참여자 정보 알려줘 (original)",
-          "활동 중인 프로젝트 팀 참가자들의 정보를 보여주세요 (similar1)",
-          "진행 중인 PT별 참여 인원이 누구누구인가요? (similar2)",
-          "각 PT의 멤버 명단 확인해줘 (similar3)",
-          "현재 활동 중인 각 Project Team에 참여하는 개인 참가자들의 이름, 소속, 역할을 상세히 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT의 참여자 정보 알려줘",
+          "(similar1) 활동 중인 프로젝트 팀 참가자들의 정보를 보여주세요",
+          "(similar2) 진행 중인 PT별 참여 인원이 누구누구인가요?",
+          "(similar3) 각 PT의 멤버 명단 확인해줘",
+          "(ext) 현재 활동 중인 각 Project Team에 참여하는 개인 참가자들의 이름, 소속, 역할을 상세히 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -364,15 +342,15 @@
     },
     {
       "template_id": "current_pt_important_content",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "현재 진행 중인 PT의 중요 내용은 (original)",
-          "활동 중인 프로젝트 팀의 핵심 업무 내용을 보여주세요 (similar1)",
-          "진행 중인 PT들의 주요 과제가 뭐인가요? (similar2)",
-          "각 PT가 다루는 중요 이슈들 확인해줘 (similar3)",
-          "현재 활동 중인 각 Project Team이 수행하고 있는 주요 업무, 목표, 진행 상황을 상세히 분석해서 보여주세요 (ext)"
+          "(original) 현재 진행 중인 PT의 중요 내용은",
+          "(similar1) 활동 중인 프로젝트 팀의 핵심 업무 내용을 보여주세요",
+          "(similar2) 진행 중인 PT들의 주요 과제가 뭐인가요?",
+          "(similar3) 각 PT가 다루는 중요 이슈들 확인해줘",
+          "(ext) 현재 활동 중인 각 Project Team이 수행하고 있는 주요 업무, 목표, 진행 상황을 상세히 분석해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -401,15 +379,15 @@
     },
     {
       "template_id": "recent_completed_pt_list",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT 리스트 알려줘 (original)",
-          "최근에 종료된 프로젝트 팀 목록을 보여주세요 (similar1)",
-          "완료된 PT들이 어떤 것들이 있나요? (similar2)",
-          "최근 마무리된 프로젝트 팀 리스트 확인해줘 (similar3)",
-          "최근 90일 이내에 완료된 모든 Project Team의 이름, 완료일, 주요 성과를 정리해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT 리스트 알려줘",
+          "(similar1) 최근에 종료된 프로젝트 팀 목록을 보여주세요",
+          "(similar2) 완료된 PT들이 어떤 것들이 있나요?",
+          "(similar3) 최근 마무리된 프로젝트 팀 리스트 확인해줘",
+          "(ext) 최근 90일 이내에 완료된 모든 Project Team의 이름, 완료일, 주요 성과를 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -430,18 +408,11 @@
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "update_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -454,15 +425,15 @@
     },
     {
       "template_id": "recent_completed_pt_main_content",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT의 주요 내용 알려줘 (original)",
-          "최근 종료된 프로젝트 팀의 핵심 성과를 보여주세요 (similar1)",
-          "완료된 PT들이 달성한 주요 결과가 뭐인가요? (similar2)",
-          "마무리된 프로젝트 팀의 주요 산출물 확인해줘 (similar3)",
-          "최근 완료된 각 Project Team이 달성한 목표, 주요 성과, 제안사항을 상세히 분석해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT의 주요 내용 알려줘",
+          "(similar1) 최근 종료된 프로젝트 팀의 핵심 성과를 보여주세요",
+          "(similar2) 완료된 PT들이 달성한 주요 결과가 뭐인가요?",
+          "(similar3) 마무리된 프로젝트 팀의 주요 산출물 확인해줘",
+          "(ext) 최근 완료된 각 Project Team이 달성한 목표, 주요 성과, 제안사항을 상세히 분석해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -483,18 +454,11 @@
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "update_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -507,15 +471,15 @@
     },
     {
       "template_id": "recent_completed_pt_organizations",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT의 참여 기관 알려줘 (original)",
-          "최근 종료된 프로젝트 팀에 참여했던 기관들을 보여주세요 (similar1)",
-          "완료된 PT에 어떤 조직들이 참가했나요? (similar2)",
-          "마무리된 프로젝트 팀의 멤버 기관 확인해줘 (similar3)",
-          "최근 완료된 각 Project Team에 참여했던 모든 기관들과 각 기관의 기여도를 정리해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT의 참여 기관 알려줘",
+          "(similar1) 최근 종료된 프로젝트 팀에 참여했던 기관들을 보여주세요",
+          "(similar2) 완료된 PT에 어떤 조직들이 참가했나요?",
+          "(similar3) 마무리된 프로젝트 팀의 멤버 기관 확인해줘",
+          "(ext) 최근 완료된 각 Project Team에 참여했던 모든 기관들과 각 기관의 기여도를 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -536,18 +500,11 @@
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.update_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -561,15 +518,15 @@
     },
     {
       "template_id": "recent_completed_pt_participants",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "project_team",
       "query_info": {
         "natural_questions": [
-          "최근 완료된 PT의 참여자 정보 알려줘 (original)",
-          "최근 종료된 프로젝트 팀 참가자들의 정보를 보여주세요 (similar1)",
-          "완료된 PT에 누가 참여했었나요? (similar2)",
-          "마무리된 프로젝트 팀의 멤버 명단 확인해줘 (similar3)",
-          "최근 완료된 각 Project Team에 참여했던 개인들의 이름, 소속, 역할, 주요 기여 사항을 정리해서 보여주세요 (ext)"
+          "(original) 최근 완료된 PT의 참여자 정보 알려줘",
+          "(similar1) 최근 종료된 프로젝트 팀 참가자들의 정보를 보여주세요",
+          "(similar2) 완료된 PT에 누가 참여했었나요?",
+          "(similar3) 마무리된 프로젝트 팀의 멤버 명단 확인해줘",
+          "(ext) 최근 완료된 각 Project Team에 참여했던 개인들의 이름, 소속, 역할, 주요 기여 사항을 정리해서 보여주세요"
         ],
         "keywords": [
           "PT",
@@ -590,18 +547,11 @@
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "update_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -614,15 +564,15 @@
     },
     {
       "template_id": "3months_keyword_analysis",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "3개월 내 주요 키워드 분석해줘 (original)",
-          "최근 3개월간 자주 언급된 키워드를 분석해주세요 (similar1)",
-          "지난 90일 동안의 주요 단어들이 뭐가 있나요? (similar2)",
-          "3개월 이내 핵심 키워드 트렌드 확인해줘 (similar3)",
-          "최근 3개월 동안 의제에서 가장 많이 언급된 키워드들을 빈도순으로 정렬하고 시간별 트렌드를 분석해 주세요 (ext)"
+          "(original) 3개월 내 주요 키워드 분석해줘",
+          "(similar1) 최근 3개월간 자주 언급된 키워드를 분석해주세요",
+          "(similar2) 지난 90일 동안의 주요 단어들이 뭐가 있나요?",
+          "(similar3) 3개월 이내 핵심 키워드 트렌드 확인해줘",
+          "(ext) 최근 3개월 동안 의제에서 가장 많이 언급된 키워드들을 빈도순으로 정렬하고 시간별 트렌드를 분석해 주세요"
         ],
         "keywords": [
           "3개월",
@@ -651,15 +601,15 @@
     },
     {
       "template_id": "last_year_keyword_analysis",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "작년 주요 키워드 분석해줘 (original)",
-          "지난해 자주 언급된 키워드를 분석해주세요 (similar1)",
-          "작년도 핵심 단어들이 뭐가 있었나요? (similar2)",
-          "전년도 주요 키워드 트렌드 확인해줘 (similar3)",
-          "작년 한 해 동안 의제에서 가장 많이 언급된 키워드들을 월별, 분기별로 분석하여 연간 트렌드를 보여주세요 (ext)"
+          "(original) 작년 주요 키워드 분석해줘",
+          "(similar1) 지난해 자주 언급된 키워드를 분석해주세요",
+          "(similar2) 작년도 핵심 단어들이 뭐가 있었나요?",
+          "(similar3) 전년도 주요 키워드 트렌드 확인해줘",
+          "(ext) 작년 한 해 동안 의제에서 가장 많이 언급된 키워드들을 월별, 분기별로 분석하여 연간 트렌드를 보여주세요"
         ],
         "keywords": [
           "작년",
@@ -688,15 +638,15 @@
     },
     {
       "template_id": "2025_keyword_analysis",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "2025년 주요 키워드 분석해줘 (original)",
-          "2025년에 자주 언급된 키워드를 분석해주세요 (similar1)",
-          "올해 들어 핵심 단어들이 뭐가 있나요? (similar2)",
-          "2025년도 주요 키워드 트렌드 확인해줘 (similar3)",
-          "2025년 현재까지 의제에서 가장 많이 언급된 키워드들을 분석하여 올해의 주요 관심사를 파악해 주세요 (ext)"
+          "(original) 2025년 주요 키워드 분석해줘",
+          "(similar1) 2025년에 자주 언급된 키워드를 분석해주세요",
+          "(similar2) 올해 들어 핵심 단어들이 뭐가 있나요?",
+          "(similar3) 2025년도 주요 키워드 트렌드 확인해줘",
+          "(ext) 2025년 현재까지 의제에서 가장 많이 언급된 키워드들을 분석하여 올해의 주요 관심사를 파악해 주세요"
         ],
         "keywords": [
           "2025년",
@@ -725,15 +675,15 @@
     },
     {
       "template_id": "sdtp_completed_agenda_results",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "SDTP 에서 발행된 의제 중 완료된 의제의 결과 (original)",
-          "SDTP 패널에서 완료 처리된 의제들의 결과를 보여주세요 (similar1)",
-          "선박설계기술패널 완료 안건의 최종 결과가 뭐인가요? (similar2)",
-          "SDTP에서 마무리된 의제들의 결론 확인해줘 (similar3)",
-          "SDTP 패널에서 발행되어 완료된 모든 의제들의 최종 결정사항, 주요 합의 내용, 후속 조치를 상세히 보여주세요 (ext)"
+          "(original) SDTP 에서 발행된 의제 중 완료된 의제의 결과",
+          "(similar1) SDTP 패널에서 완료 처리된 의제들의 결과를 보여주세요",
+          "(similar2) 선박설계기술패널 완료 안건의 최종 결과가 뭐인가요?",
+          "(similar3) SDTP에서 마무리된 의제들의 결론 확인해줘",
+          "(ext) SDTP 패널에서 발행되어 완료된 모든 의제들의 최종 결정사항, 주요 합의 내용, 후속 조치를 상세히 보여주세요"
         ],
         "keywords": [
           "SDTP",
@@ -750,24 +700,17 @@
         ]
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sent_time, deadline, keywords \nFROM agenda_chair \nWHERE agenda_panel = 'SDTP' \nAND decision_status = 'completed'\nAND {period_condition}\nORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, sent_time, deadline, keywords \nFROM agenda_chair \nWHERE agenda_panel = 'SDTP' \nAND decision_status = 'completed'\nAND sent_time >= :period_start\nORDER BY sent_time DESC",
         "system": "SDTP 패널에서 완료된 의제들을 조회합니다",
         "sql_prompt": "SDTP 패널에서 decision_status가 completed인 의제들을 찾습니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -780,15 +723,15 @@
     },
     {
       "template_id": "recent_sdtp_discussed_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "최근 SDTP 에서 논의 되었던 의제 목록 (original)",
-          "SDTP 패널에서 최근 다뤄진 의제들을 보여주세요 (similar1)",
-          "선박설계기술패널 최근 안건 리스트가 뭐인가요? (similar2)",
-          "SDTP에서 최근에 논의한 아젠다들 확인해줘 (similar3)",
-          "최근 90일 이내에 SDTP 패널에서 발행되거나 논의된 모든 의제들을 시간순으로 정렬하여 주요 내용과 함께 보여주세요 (ext)"
+          "(original) 최근 SDTP 에서 논의 되었던 의제 목록",
+          "(similar1) SDTP 패널에서 최근 다뤄진 의제들을 보여주세요",
+          "(similar2) 선박설계기술패널 최근 안건 리스트가 뭐인가요?",
+          "(similar3) SDTP에서 최근에 논의한 아젠다들 확인해줘",
+          "(ext) 최근 90일 이내에 SDTP 패널에서 발행되거나 논의된 모든 의제들을 시간순으로 정렬하여 주요 내용과 함께 보여주세요"
         ],
         "keywords": [
           "SDTP",
@@ -805,24 +748,17 @@
         ]
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sent_time, decision_status, keywords FROM agenda_chair WHERE agenda_panel = 'SDTP' AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, sent_time, decision_status, keywords FROM agenda_chair WHERE agenda_panel = 'SDTP' AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "SDTP 패널의 최근 의제를 조회합니다",
         "sql_prompt": "SDTP에서 최근 논의된 의제들을 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -835,15 +771,15 @@
     },
     {
       "template_id": "iacs_member_count",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "organization_info",
       "query_info": {
         "natural_questions": [
-          "IACS 멤버의 수는 ? (original)",
-          "IACS에 소속된 회원사가 몇 개인가요? (similar1)",
-          "국제선급연합회 멤버 수를 알려주세요 (similar2)",
-          "IACS 회원 선급 개수가 어떻게 되나요? (similar3)",
-          "현재 IACS(International Association of Classification Societies)에 가입되어 있는 정회원과 준회원의 총 수를 확인해 주세요 (ext)"
+          "(original) IACS 멤버의 수는 ?",
+          "(similar1) IACS에 소속된 회원사가 몇 개인가요?",
+          "(similar2) 국제선급연합회 멤버 수를 알려주세요",
+          "(similar3) IACS 회원 선급 개수가 어떻게 되나요?",
+          "(ext) 현재 IACS(International Association of Classification Societies)에 가입되어 있는 정회원과 준회원의 총 수를 확인해 주세요"
         ],
         "keywords": [
           "IACS",
@@ -873,15 +809,15 @@
     },
     {
       "template_id": "iacs_member_composition",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "organization_info",
       "query_info": {
         "natural_questions": [
-          "IACS 멤버 구성은 어떻게 되나? (original)",
-          "IACS 회원사들의 구성을 보여주세요 (similar1)",
-          "국제선급연합회 멤버들이 어떤 선급들인가요? (similar2)",
-          "IACS 회원 조직 리스트를 확인해줘 (similar3)",
-          "IACS에 가입된 모든 선급 기관들의 이름, 국가, 회원 유형(정회원/준회원)을 상세히 보여주세요 (ext)"
+          "(original) IACS 멤버 구성은 어떻게 되나?",
+          "(similar1) IACS 회원사들의 구성을 보여주세요",
+          "(similar2) 국제선급연합회 멤버들이 어떤 선급들인가요?",
+          "(similar3) IACS 회원 조직 리스트를 확인해줘",
+          "(ext) IACS에 가입된 모든 선급 기관들의 이름, 국가, 회원 유형(정회원/준회원)을 상세히 보여주세요"
         ],
         "keywords": [
           "IACS",

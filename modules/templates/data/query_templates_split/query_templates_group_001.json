@@ -1,18 +1,18 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Query Templates Group 001 - Queries 1-20",
   "templates": [
     {
       "template_id": "recent_ongoing_agendas_all_panels",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "최근 모든 패널에서 진행되고 있는 의제 목록 (original)",
-          "현재 모든 패널에서 진행 중인 의제들을 보여주세요 (similar1)",
-          "전체 패널의 진행중인 안건 리스트가 필요합니다 (similar2)",
-          "각 패널별로 현재 논의 중인 의제들을 확인하고 싶어요 (similar3)",
-          "IACS 전체 패널에서 현재 마감일이 지나지 않은 진행중인 모든 의제들을 패널별로 분류하여 최신 순으로 정렬해서 보여주세요 (ext)"
+          "(original) 최근 모든 패널에서 진행되고 있는 의제 목록",
+          "(similar1) 현재 모든 패널에서 진행 중인 의제들을 보여주세요",
+          "(similar2) 전체 패널의 진행중인 안건 리스트가 필요합니다",
+          "(similar3) 각 패널별로 현재 논의 중인 의제들을 확인하고 싶어요",
+          "(ext) IACS 전체 패널에서 현재 마감일이 지나지 않은 진행중인 모든 의제들을 패널별로 분류하여 최신 순으로 정렬해서 보여주세요"
         ],
         "keywords": [
           "진행중",
@@ -27,24 +27,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, decision_status, agenda_panel, deadline, body as content, keywords FROM agenda_chair WHERE deadline IS NOT NULL AND deadline > datetime('now') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, decision_status, agenda_panel, deadline, body as content, keywords FROM agenda_chair WHERE deadline IS NOT NULL AND deadline > datetime('now') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "모든 패널에서 현재 진행 중인 의제를 조회합니다",
         "sql_prompt": "진행 중인 의제를 찾기 위해 마감일이 현재 시점 이후인 레코드를 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -57,15 +50,15 @@
     },
     {
       "template_id": "recent_incomplete_agendas_all_panels",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "최근 모든 패널에서 완료되지 않은 의제 리스트 (original)",
-          "모든 패널의 미완료 의제 목록을 보여주세요 (similar1)",
-          "아직 완료 안 된 전체 안건들이 뭐가 있나요 (similar2)",
-          "각 패널별로 처리되지 않은 의제들 확인해줘 (similar3)",
-          "모든 패널에서 마감일이 지나지 않은 미완료 의제들을 상태별로 분류하여 처리 지연 사유와 함께 보여주세요 (ext)"
+          "(original) 최근 모든 패널에서 완료되지 않은 의제 리스트",
+          "(similar1) 모든 패널의 미완료 의제 목록을 보여주세요",
+          "(similar2) 아직 완료 안 된 전체 안건들이 뭐가 있나요",
+          "(similar3) 각 패널별로 처리되지 않은 의제들 확인해줘",
+          "(ext) 모든 패널에서 마감일이 지나지 않은 미완료 의제들을 상태별로 분류하여 처리 지연 사유와 함께 보여주세요"
         ],
         "keywords": [
           "미완료",
@@ -80,24 +73,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, decision_status, agenda_panel, deadline FROM agenda_chair WHERE deadline IS NOT NULL AND deadline > datetime('now') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, decision_status, agenda_panel, deadline FROM agenda_chair WHERE deadline IS NOT NULL AND deadline > datetime('now') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "완료되지 않은 모든 의제를 조회합니다",
         "sql_prompt": "마감일이 아직 지나지 않은 미완료 의제를 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -110,15 +96,15 @@
     },
     {
       "template_id": "recent_3months_discussed_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "최근 3개월 동안 논의 되었던 의제 목록 (original)",
-          "지난 3개월간 다뤄진 모든 의제들을 보여주세요 (similar1)",
-          "최근 90일 동안의 아젠다 리스트가 필요합니다 (similar2)",
-          "3개월 이내에 논의된 안건들을 확인하고 싶어요 (similar3)",
-          "최근 3개월(90일) 이내에 sent_time이 포함되는 모든 의제들을 패널별, 상태별로 분류하여 시간순으로 정렬해서 보여주세요 (ext)"
+          "(original) 최근 3개월 동안 논의 되었던 의제 목록",
+          "(similar1) 지난 3개월간 다뤄진 모든 의제들을 보여주세요",
+          "(similar2) 최근 90일 동안의 아젠다 리스트가 필요합니다",
+          "(similar3) 3개월 이내에 논의된 안건들을 확인하고 싶어요",
+          "(ext) 최근 3개월(90일) 이내에 sent_time이 포함되는 모든 의제들을 패널별, 상태별로 분류하여 시간순으로 정렬해서 보여주세요"
         ],
         "keywords": [
           "3개월",
@@ -133,24 +119,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "지정된 기간 동안 논의된 모든 의제를 조회합니다",
         "sql_prompt": "sent_time이 지정된 기간 이내인 의제들을 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -163,17 +142,17 @@
     },
     {
       "template_id": "kr_no_response_ongoing_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "진행되고 있는 의제들 중에서 KR 이 아직 응답하지 않는 의제 (original)",
-          "KR이 아직 회신하지 않은 진행중인 의제들을 보여주세요 (similar1)",
-          "한국선급이 응답 안 한 ongoing 상태의 안건이 뭐가 있나요 (similar2)",
-          "우리가 아직 답변 안 한 진행중인 의제 리스트 확인해줘 (similar3)",
-          "현재 KR이 미응답 상태인 활성 의제들을 찾아주세요 (similar4)",
-          "진행 중인 아젠다 중에서 KR이 회신을 보내지 않은 건들이 무엇인지 알려줘 (similar5)",
-          "현재 마감일이 지나지 않은 진행중인 의제들 중에서 agenda_responses_content 테이블의 KR 컬럼이 NULL이거나 비어있는 모든 의제들을 마감일 순으로 정렬하여 상세히 보여주세요 (ext)"
+          "(original) 진행되고 있는 의제들 중에서 KR 이 아직 응답하지 않는 의제",
+          "(similar1) KR이 아직 회신하지 않은 진행중인 의제들을 보여주세요",
+          "(similar2) 한국선급이 응답 안 한 ongoing 상태의 안건이 뭐가 있나요",
+          "(similar3) 우리가 아직 답변 안 한 진행중인 의제 리스트 확인해줘",
+          "(similar4) 현재 KR이 미응답 상태인 활성 의제들을 찾아주세요",
+          "(similar5) 진행 중인 아젠다 중에서 KR이 회신을 보내지 않은 건들이 무엇인지 알려줘",
+          "(ext) 현재 마감일이 지나지 않은 진행중인 의제들 중에서 agenda_responses_content 테이블의 KR 컬럼이 NULL이거나 비어있는 모든 의제들을 마감일 순으로 정렬하여 상세히 보여주세요"
         ],
         "keywords": [
           "KR",
@@ -191,7 +170,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.sent_time, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.deadline IS NOT NULL AND c.deadline > datetime('now') AND c.mail_type = 'REQUEST' AND (r.{organization} IS NULL OR r.{organization} = '') AND {period_condition} ORDER BY c.deadline ASC",
+        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.sent_time, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.deadline IS NOT NULL AND c.deadline > datetime('now') AND c.mail_type = 'REQUEST' AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') AND c.sent_time >= :period_start ORDER BY c.deadline ASC",
         "system": "지정된 조직이 아직 응답하지 않은 진행 중인 의제를 조회합니다",
         "sql_prompt": "진행 중인 의제 중 지정된 조직의 응답이 없는 건을 찾습니다"
       },
@@ -202,25 +181,14 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -234,15 +202,15 @@
     },
     {
       "template_id": "kr_response_required_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "KR이 응답을 해야 하는 의제 (original)",
-          "한국선급이 회신해야 할 의제들을 보여주세요 (similar1)",
-          "KR 답변이 필요한 안건 리스트 확인해줘 (similar2)",
-          "우리가 응답해야 하는 의제가 뭐가 있나요? (similar3)",
-          "response_org가 'ALL' 또는 'KR'로 지정되어 있고 아직 KR이 응답하지 않은 모든 의제들을 마감일 임박 순으로 정렬하여 보여주세요 (ext)"
+          "(original) KR이 응답을 해야 하는 의제",
+          "(similar1) 한국선급이 회신해야 할 의제들을 보여주세요",
+          "(similar2) KR 답변이 필요한 안건 리스트 확인해줘",
+          "(similar3) 우리가 응답해야 하는 의제가 뭐가 있나요?",
+          "(ext) response_org가 'ALL' 또는 'KR'로 지정되어 있고 아직 KR이 응답하지 않은 모든 의제들을 마감일 임박 순으로 정렬하여 보여주세요"
         ],
         "keywords": [
           "KR",
@@ -259,7 +227,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.deadline, c.sent_time, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.{organization} IS NULL OR r.{organization} = '') AND {period_condition} ORDER BY c.deadline ASC",
+        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.deadline, c.sent_time, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') AND c.sent_time >= :period_start ORDER BY c.deadline ASC",
         "system": "지정된 조직이 응답해야 하는 의제를 조회합니다",
         "sql_prompt": "마감일이 있고 아직 응답하지 않은 의제를 찾습니다"
       },
@@ -270,25 +238,14 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -302,15 +259,15 @@
     },
     {
       "template_id": "pending_agenda_count",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "처리 대기 중인 agenda의 수는? (original)",
-          "대기 중인 의제가 몇 개인가요? (similar1)",
-          "펜딩 상태의 아젠다 개수를 알려주세요 (similar2)",
-          "미처리 안건이 총 몇 건인지 확인해줘 (similar3)",
-          "마감일이 지나지 않았거나 mail_type이 'REQUEST'이면서 아직 응답이 없는 의제들의 총 개수와 함께 패널별 분포도 보여주세요 (ext)"
+          "(original) 처리 대기 중인 agenda의 수는?",
+          "(similar1) 대기 중인 의제가 몇 개인가요?",
+          "(similar2) 펜딩 상태의 아젠다 개수를 알려주세요",
+          "(similar3) 미처리 안건이 총 몇 건인지 확인해줘",
+          "(ext) 마감일이 지나지 않았거나 mail_type이 'REQUEST'이면서 아직 응답이 없는 의제들의 총 개수와 함께 패널별 분포도 보여주세요"
         ],
         "keywords": [
           "pending",
@@ -326,24 +283,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_panel, COUNT(*) as pending_count, GROUP_CONCAT(DISTINCT agenda_base_version) as agenda_list FROM agenda_chair WHERE mail_type = 'REQUEST' AND has_deadline = 1 AND deadline > datetime('now') AND {period_condition} GROUP BY agenda_panel ORDER BY pending_count DESC",
+        "query": "SELECT agenda_panel, COUNT(*) as pending_count, GROUP_CONCAT(DISTINCT agenda_base_version) as agenda_list FROM agenda_chair WHERE mail_type = 'REQUEST' AND has_deadline = 1 AND deadline > datetime('now') AND sent_time >= :period_start GROUP BY agenda_panel ORDER BY pending_count DESC",
         "system": "패널별로 응답이 필요한 대기중인 의제의 수와 목록을 조회합니다",
         "sql_prompt": "마감일이 지나지 않은 REQUEST 타입 의제를 패널별로 그룹화하여 개수와 agenda_base_version 목록을 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 30
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-30 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -356,17 +306,17 @@
     },
     {
       "template_id": "kr_required_issues_and_opinions",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "KR이 응답해야하는 의제에서 의제들의 주요 이슈 및 다른 기관의 의견 정리 (original)",
-          "한국선급이 회신해야 할 안건의 핵심 내용과 타 기관 입장 요약해줘 (similar1)",
-          "KR이 답변 필요한 의제들의 주요 쟁점과 다른 기관들의 견해를 보여주세요 (similar2)",
-          "우리가 응답해야 하는 안건별로 주요 이슈와 타사 의견을 정리해주세요 (similar3)",
-          "KR 응답 대기 중인 의제의 핵심 사항과 각 기관별 입장을 알려주세요 (similar4)",
-          "한국선급이 피드백 줘야 하는 아젠다의 주요 논점과 타 선급 의견 분석해줘 (similar5)",
-          "KR이 응답이 필요한 의제들에 대해 각 의제별 핵심 이슈, 다른 기관들(ABS, DNV, NK, CCS, BV 등)의 상세 의견, 찬반 입장, 주요 우려사항 등을 체계적으로 분석하고 정리해 주세요 (ext)"
+          "(original) KR이 응답해야하는 의제에서 의제들의 주요 이슈 및 다른 기관의 의견 정리",
+          "(similar1) 한국선급이 회신해야 할 안건의 핵심 내용과 타 기관 입장 요약해줘",
+          "(similar2) KR이 답변 필요한 의제들의 주요 쟁점과 다른 기관들의 견해를 보여주세요",
+          "(similar3) 우리가 응답해야 하는 안건별로 주요 이슈와 타사 의견을 정리해주세요",
+          "(similar4) KR 응답 대기 중인 의제의 핵심 사항과 각 기관별 입장을 알려주세요",
+          "(similar5) 한국선급이 피드백 줘야 하는 아젠다의 주요 논점과 타 선급 의견 분석해줘",
+          "(ext) KR이 응답이 필요한 의제들에 대해 각 의제별 핵심 이슈, 다른 기관들(ABS, DNV, NK, CCS, BV 등)의 상세 의견, 찬반 입장, 주요 우려사항 등을 체계적으로 분석하고 정리해 주세요"
         ],
         "keywords": [
           "KR",
@@ -384,7 +334,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.subject, c.keywords, c.body as agenda_content, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.{organization} IS NULL OR r.{organization} = '') AND {period_condition}) SELECT p.*, r.ABS, r.BV, r.CCS, r.DNV, r.NK, r.LR, r.IRS, r.CRS, r.PRS, r.RINA FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version ORDER BY p.deadline ASC",
+        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.subject, c.keywords, c.body as agenda_content, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') AND c.sent_time >= :period_start) SELECT p.*, r.ABS, r.BV, r.CCS, r.DNV, r.NK, r.LR, r.IRS, r.CRS, r.PRS, r.RINA FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version ORDER BY p.deadline ASC",
         "system": "지정된 조직이 응답해야 하는 의제의 내용과 다른 기관들의 의견을 조회합니다",
         "sql_prompt": "응답이 필요한 의제들과 각 기관의 응답 내용을 함께 조회합니다"
       },
@@ -395,25 +345,14 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -427,15 +366,15 @@
     },
     {
       "template_id": "kr_required_agendas_keywords",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "KR이 응답해야하는 의제들의 주요 키워드 (original)",
-          "한국선급이 회신 필요한 안건들의 핵심 키워드를 보여주세요 (similar1)",
-          "KR 응답 대기 중인 의제들의 주요 단어들이 뭐가 있나요 (similar2)",
-          "우리가 답변해야 할 아젠다의 키워드 분석해줘 (similar3)",
-          "KR이 응답해야 하는 모든 의제들의 키워드를 추출하여 빈도순으로 정렬하고 주요 주제를 파악할 수 있도록 워드클라우드 형태로 정리해 주세요 (ext)"
+          "(original) KR이 응답해야하는 의제들의 주요 키워드",
+          "(similar1) 한국선급이 회신 필요한 안건들의 핵심 키워드를 보여주세요",
+          "(similar2) KR 응답 대기 중인 의제들의 주요 단어들이 뭐가 있나요",
+          "(similar3) 우리가 답변해야 할 아젠다의 키워드 분석해줘",
+          "(ext) KR이 응답해야 하는 모든 의제들의 키워드를 추출하여 빈도순으로 정렬하고 주요 주제를 파악할 수 있도록 워드클라우드 형태로 정리해 주세요"
         ],
         "keywords": [
           "KR",
@@ -452,7 +391,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_base_version, c.subject, c.keywords FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.{organization} IS NULL OR r.{organization} = '') AND {period_condition} ORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_base_version, c.subject, c.keywords FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') AND c.sent_time >= :period_start ORDER BY c.deadline ASC",
         "system": "지정된 조직이 응답해야 하는 의제들의 정보와 키워드를 조회합니다",
         "sql_prompt": "응답이 필요한 의제들의 agenda_base_version, subject, keywords를 조회합니다"
       },
@@ -463,25 +402,14 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -495,15 +423,15 @@
     },
     {
       "template_id": "kr_required_other_org_keywords",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "KR이 응답해야 하는 의제들 중에서 다른 기관의 회신 중 중요 키워드 (original)",
-          "KR 응답 필요 의제에서 타 기관들이 언급한 주요 키워드를 보여주세요 (similar1)",
-          "우리가 답변해야 할 안건의 타사 응답에서 핵심 단어들 분석해줘 (similar2)",
-          "한국선급 응답 대기 중인 의제에 대한 다른 선급들의 키워드가 뭐가 있나요 (similar3)",
-          "KR이 미응답한 의제들에 대해 다른 모든 기관(ABS, DNV, NK, CCS 등)이 응답한 내용에서 자주 언급된 키워드를 추출하여 기관별, 빈도별로 분석해 주세요 (ext)"
+          "(original) KR이 응답해야 하는 의제들 중에서 다른 기관의 회신 중 중요 키워드",
+          "(similar1) KR 응답 필요 의제에서 타 기관들이 언급한 주요 키워드를 보여주세요",
+          "(similar2) 우리가 답변해야 할 안건의 타사 응답에서 핵심 단어들 분석해줘",
+          "(similar3) 한국선급 응답 대기 중인 의제에 대한 다른 선급들의 키워드가 뭐가 있나요",
+          "(ext) KR이 미응답한 의제들에 대해 다른 모든 기관(ABS, DNV, NK, CCS 등)이 응답한 내용에서 자주 언급된 키워드를 추출하여 기관별, 빈도별로 분석해 주세요"
         ],
         "keywords": [
           "KR",
@@ -521,7 +449,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "WITH org_pending AS (SELECT c.agenda_base_version FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.{organization} IS NULL OR r.{organization} = '') AND {period_condition}) SELECT 'ABS' as org, r.ABS as response FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.ABS IS NOT NULL UNION ALL SELECT 'DNV' as org, r.DNV FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.DNV IS NOT NULL UNION ALL SELECT 'NK' as org, r.NK FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.NK IS NOT NULL UNION ALL SELECT 'CCS' as org, r.CCS FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.CCS IS NOT NULL UNION ALL SELECT 'BV' as org, r.BV FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.BV IS NOT NULL",
+        "query": "WITH org_pending AS (SELECT c.agenda_base_version FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') AND c.sent_time >= :period_start) SELECT 'ABS' as org, r.ABS as response FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.ABS IS NOT NULL UNION ALL SELECT 'DNV' as org, r.DNV FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.DNV IS NOT NULL UNION ALL SELECT 'NK' as org, r.NK FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.NK IS NOT NULL UNION ALL SELECT 'CCS' as org, r.CCS FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.CCS IS NOT NULL UNION ALL SELECT 'BV' as org, r.BV FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version WHERE r.BV IS NOT NULL",
         "system": "지정된 조직이 응답해야 하는 의제들에 대한 다른 기관들의 응답 내용을 조회합니다",
         "sql_prompt": "응답이 필요한 의제들에 대한 각 기관의 응답 내용을 추출합니다"
       },
@@ -532,25 +460,14 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -564,15 +481,15 @@
     },
     {
       "template_id": "keyword_search_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
-          "최근 논의된 의제들 중에 {keywords} 에 대해서 논의되고 있는 의제 (original)",
-          "{keywords} 관련해서 최근에 다뤄진 의제들을 보여주세요 (similar1)",
-          "{keywords}에 대한 논의가 있었던 안건들을 찾아주세요 (similar2)",
-          "{keywords} 키워드가 포함된 최근 아젠다 리스트가 필요해요 (similar3)",
-          "제목, 본문, 키워드 필드 중 하나라도 {keywords}가 포함된 최근 90일 이내의 모든 의제들을 관련도 순으로 정렬하여 보여주세요 (ext)"
+          "(original) 최근 논의된 의제들 중에 {keywords} 에 대해서 논의되고 있는 의제",
+          "(similar1) {keywords} 관련해서 최근에 다뤄진 의제들을 보여주세요",
+          "(similar2) {keywords}에 대한 논의가 있었던 안건들을 찾아주세요",
+          "(similar3) {keywords} 키워드가 포함된 최근 아젠다 리스트가 필요해요",
+          "(ext) 제목, 본문, 키워드 필드 중 하나라도 {keywords}가 포함된 최근 90일 이내의 모든 의제들을 관련도 순으로 정렬하여 보여주세요"
         ],
         "keywords": [
           "키워드검색",
@@ -586,31 +503,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE sent_time >= datetime('now', '-90 days') AND ({keywords_condition}) ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE sent_time >= datetime('now', '-90 days') AND (subject LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%') ORDER BY sent_time DESC",
         "system": "특정 키워드와 관련된 의제를 검색합니다",
         "sql_prompt": "제목, 본문, 키워드에서 지정된 키워드를 포함하는 의제를 검색합니다"
       },
       "parameters": [
         {
-          "name": "keywords",
+          "name": "keyword",
           "type": "array",
           "required": true,
-          "default": [
-            "UR",
-            "PR",
-            "EG",
-            "IMO",
-            "GPG"
-          ],
-          "sql_builder": {
-            "type": "keywords",
-            "fields": [
-              "subject",
-              "body",
-              "keywords"
-            ],
-            "placeholder": "{keywords_condition}"
-          },
+          "default": "keyword",
+          "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
       ],
@@ -623,15 +526,15 @@
     },
     {
       "template_id": "recent_meeting_notification_mails",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "mail_type",
       "query_info": {
         "natural_questions": [
-          "최근 회의 개최관련 해서 알림을 준 메일 (original)",
-          "최근 회의 공지 메일들을 보여주세요 (similar1)",
-          "회의 개최 안내 메일 리스트가 필요합니다 (similar2)",
-          "미팅 관련 notification 메일들을 확인하고 싶어요 (similar3)",
-          "mail_type이 'NOTIFICATION'이고 제목이나 본문에 'meeting', 'conference', '회의' 등의 키워드가 포함된 최근 메일들을 시간순으로 보여주세요 (ext)"
+          "(original) 최근 회의 개최관련 해서 알림을 준 메일",
+          "(similar1) 최근 회의 공지 메일들을 보여주세요",
+          "(similar2) 회의 개최 안내 메일 리스트가 필요합니다",
+          "(similar3) 미팅 관련 notification 메일들을 확인하고 싶어요",
+          "(ext) mail_type이 'NOTIFICATION'이고 제목이나 본문에 'meeting', 'conference', '회의' 등의 키워드가 포함된 최근 메일들을 시간순으로 보여주세요"
         ],
         "keywords": [
           "회의",
@@ -647,24 +550,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_base_version, subject, sent_time, sender_organization, body, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (subject LIKE '%meeting%' OR subject LIKE '%conference%' OR subject LIKE '%회의%' OR body LIKE '%meeting%' OR body LIKE '%conference%') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_base_version, subject, sent_time, sender_organization, body, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND (subject LIKE '%meeting%' OR subject LIKE '%conference%' OR subject LIKE '%회의%' OR body LIKE '%meeting%' OR body LIKE '%conference%') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "회의 관련 알림 메일을 조회합니다",
         "sql_prompt": "NOTIFICATION 타입 중 회의 관련 키워드가 포함된 메일을 검색합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -677,15 +573,15 @@
     },
     {
       "template_id": "yearly_agenda_count_all_panels",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "올해 모든 패널의 아젠다 갯수 (original)",
-          "올해 발행된 전체 의제 수를 알려주세요 (similar1)",
-          "2025년 총 아젠다 개수가 궁금합니다 (similar2)",
-          "연간 의제 발행 건수 통계 보여줘 (similar3)",
-          "올해(현재 연도) 발행된 모든 패널의 의제 총 개수와 함께 패널별, 월별 분포도 함께 보여주세요 (ext)"
+          "(original) 올해 모든 패널의 아젠다 갯수",
+          "(similar1) 올해 발행된 전체 의제 수를 알려주세요",
+          "(similar2) 2025년 총 아젠다 개수가 궁금합니다",
+          "(similar3) 연간 의제 발행 건수 통계 보여줘",
+          "(ext) 올해(현재 연도) 발행된 모든 패널의 의제 총 개수와 함께 패널별, 월별 분포도 함께 보여주세요"
         ],
         "keywords": [
           "올해",
@@ -715,15 +611,15 @@
     },
     {
       "template_id": "yearly_created_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "올해 생성된 아젠다가 무엇인가요? (original)",
-          "올해 새로 만들어진 의제들을 보여주세요 (similar1)",
-          "2025년에 발행된 안건 목록이 필요합니다 (similar2)",
-          "연간 신규 아젠다 리스트 확인해줘 (similar3)",
-          "올해 생성된 모든 의제들을 월별, 패널별로 분류하여 제목, 발신자, 상태와 함께 상세히 보여주세요 (ext)"
+          "(original) 올해 생성된 아젠다가 무엇인가요?",
+          "(similar1) 올해 새로 만들어진 의제들을 보여주세요",
+          "(similar2) 2025년에 발행된 안건 목록이 필요합니다",
+          "(similar3) 연간 신규 아젠다 리스트 확인해줘",
+          "(ext) 올해 생성된 모든 의제들을 월별, 패널별로 분류하여 제목, 발신자, 상태와 함께 상세히 보여주세요"
         ],
         "keywords": [
           "올해",
@@ -752,15 +648,15 @@
     },
     {
       "template_id": "organization_mail_count",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "각 조직별로 보낸 메일 수를 집게해 주세요 (original)",
-          "기관별 메일 발송 건수를 보여주세요 (similar1)",
-          "각 선급별로 보낸 이메일 통계가 필요합니다 (similar2)",
-          "조직별 메일 송신 현황을 집계해줘 (similar3)",
-          "모든 조직(KR, DNV, ABS, NK 등)별로 발송한 메일 총 개수를 내림차순으로 정렬하여 상위 발송 조직을 파악할 수 있도록 보여주세요 (ext)"
+          "(original) 각 조직별로 보낸 메일 수를 집게해 주세요",
+          "(similar1) 기관별 메일 발송 건수를 보여주세요",
+          "(similar2) 각 선급별로 보낸 이메일 통계가 필요합니다",
+          "(similar3) 조직별 메일 송신 현황을 집계해줘",
+          "(ext) 모든 조직(KR, DNV, ABS, NK 등)별로 발송한 메일 총 개수를 내림차순으로 정렬하여 상위 발송 조직을 파악할 수 있도록 보여주세요"
         ],
         "keywords": [
           "조직별",
@@ -789,15 +685,15 @@
     },
     {
       "template_id": "recent_5_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "최근에 생성된 agenda 5개를 보여주세요 (original)",
-          "가장 최근 의제 5개를 확인하고 싶어요 (similar1)",
-          "최신 아젠다 5건 리스트 보여줘 (similar2)",
-          "방금 만들어진 안건 5개만 간단히 보여주세요 (similar3)",
-          "가장 최근에 생성된(sent_time 기준) 5개의 의제를 상세 정보(제목, 발신자, 패널, 상태, 마감일 등)와 함께 보여주세요 (ext)"
+          "(original) 최근에 생성된 agenda 5개를 보여주세요",
+          "(similar1) 가장 최근 의제 5개를 확인하고 싶어요",
+          "(similar2) 최신 아젠다 5건 리스트 보여줘",
+          "(similar3) 방금 만들어진 안건 5개만 간단히 보여주세요",
+          "(ext) 가장 최근에 생성된(sent_time 기준) 5개의 의제를 상세 정보(제목, 발신자, 패널, 상태, 마감일 등)와 함께 보여주세요"
         ],
         "keywords": [
           "최근",
@@ -827,15 +723,15 @@
     },
     {
       "template_id": "recent_notification_mails",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "mail_type",
       "query_info": {
         "natural_questions": [
-          "최근 notification 타입의 메일만 조회해 주세요 (original)",
-          "최근 공지사항 메일들을 보여주세요 (similar1)",
-          "NOTIFICATION 유형의 최신 메일 리스트가 필요해요 (similar2)",
-          "알림 메일들만 따로 확인하고 싶습니다 (similar3)",
-          "mail_type이 'NOTIFICATION'인 최근 30일 이내의 모든 메일을 발신 조직별로 분류하여 시간순으로 보여주세요 (ext)"
+          "(original) 최근 notification 타입의 메일만 조회해 주세요",
+          "(similar1) 최근 공지사항 메일들을 보여주세요",
+          "(similar2) NOTIFICATION 유형의 최신 메일 리스트가 필요해요",
+          "(similar3) 알림 메일들만 따로 확인하고 싶습니다",
+          "(ext) mail_type이 'NOTIFICATION'인 최근 30일 이내의 모든 메일을 발신 조직별로 분류하여 시간순으로 보여주세요"
         ],
         "keywords": [
           "notification",
@@ -850,24 +746,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_base_version, subject, sender_organization, sent_time, body, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_base_version, subject, sender_organization, sent_time, body, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "지정된 기간의 NOTIFICATION 타입 메일을 조회합니다",
         "sql_prompt": "mail_type이 NOTIFICATION인 메일을 기간 조건으로 조회합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -880,15 +769,15 @@
     },
     {
       "template_id": "panel_agenda_count",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "최근 패널 별 agenda 수를 집게해주세요 (original)",
-          "패널별 의제 개수 통계를 보여주세요 (similar1)",
-          "각 패널에서 발행한 아젠다 수를 알려줘 (similar2)",
-          "패널별 안건 발행 현황 집계해주세요 (similar3)",
-          "최근 90일간 각 패널(SDTP, MEP, HEP 등)별로 발행된 의제 총 개수와 비율을 차트로 표현할 수 있도록 정리해 주세요 (ext)"
+          "(original) 최근 패널 별 agenda 수를 집게해주세요",
+          "(similar1) 패널별 의제 개수 통계를 보여주세요",
+          "(similar2) 각 패널에서 발행한 아젠다 수를 알려줘",
+          "(similar3) 패널별 안건 발행 현황 집계해주세요",
+          "(ext) 최근 90일간 각 패널(SDTP, MEP, HEP 등)별로 발행된 의제 총 개수와 비율을 차트로 표현할 수 있도록 정리해 주세요"
         ],
         "keywords": [
           "패널별",
@@ -903,24 +792,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_panel, COUNT(CASE WHEN mail_type = 'REQUEST' THEN 1 END) as request_count, COUNT(CASE WHEN mail_type = 'NOTIFICATION' THEN 1 END) as notification_count, COUNT(*) as total_count FROM agenda_chair WHERE {period_condition} GROUP BY agenda_panel ORDER BY total_count DESC",
+        "query": "SELECT agenda_panel, COUNT(CASE WHEN mail_type = 'REQUEST' THEN 1 END) as request_count, COUNT(CASE WHEN mail_type = 'NOTIFICATION' THEN 1 END) as notification_count, COUNT(*) as total_count FROM agenda_chair WHERE sent_time >= :period_start GROUP BY agenda_panel ORDER BY total_count DESC",
         "system": "패널별 메일 타입별 의제 통계를 조회합니다",
         "sql_prompt": "각 패널별로 REQUEST와 NOTIFICATION 메일 수를 집계합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -933,15 +815,15 @@
     },
     {
       "template_id": "imo_related_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
-          "최근 IMO와 관련된 agenda를 모두 찾아주세요 (original)",
-          "IMO 관련 의제들을 검색해주세요 (similar1)",
-          "국제해사기구 관련 안건 리스트가 필요합니다 (similar2)",
-          "IMO 규정과 연관된 아젠다들을 보여줘 (similar3)",
-          "제목, 본문, 키워드에 'IMO', 'International Maritime Organization', '국제해사기구' 등이 포함된 모든 의제를 최신순으로 정렬하여 보여주세요 (ext)"
+          "(original) 최근 IMO와 관련된 agenda를 모두 찾아주세요",
+          "(similar1) IMO 관련 의제들을 검색해주세요",
+          "(similar2) 국제해사기구 관련 안건 리스트가 필요합니다",
+          "(similar3) IMO 규정과 연관된 아젠다들을 보여줘",
+          "(ext) 제목, 본문, 키워드에 'IMO', 'International Maritime Organization', '국제해사기구' 등이 포함된 모든 의제를 최신순으로 정렬하여 보여주세요"
         ],
         "keywords": [
           "IMO",
@@ -956,7 +838,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, body, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE keywords LIKE '%' || {keyword} || '%' AND sent_time >= datetime('now', '-180 days') ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, body, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE keywords LIKE '%' || :keyword || '%' AND sent_time >= datetime('now', '-180 days') ORDER BY sent_time DESC",
         "system": "키워드를 기반으로 의제를 검색합니다",
         "sql_prompt": "agenda_chair의 keywords 필드에서 지정된 키워드가 포함된 의제를 검색합니다"
       },
@@ -967,10 +849,6 @@
           "required": true,
           "default": "IMO",
           "description": "검색할 키워드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{keyword}"
-          },
           "mcp_format": "extracted_keyword"
         }
       ],
@@ -983,15 +861,15 @@
     },
     {
       "template_id": "agenda_search_by_keywords",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
-          "{keywords} 관련 agenda (original)",
-          "{keywords}와 연관된 의제를 찾아주세요 (similar1)",
-          "{keywords}에 대한 아젠다 목록을 보여주세요 (similar2)",
-          "{keywords} 관련 안건들을 검색해줘 (similar3)",
-          "제목, 본문, 키워드 필드에서 {keywords}와 관련된 모든 의제를 찾아서 최신순으로 정렬하여 보여주세요 (ext)"
+          "(original) {keywords} 관련 agenda",
+          "(similar1) {keywords}와 연관된 의제를 찾아주세요",
+          "(similar2) {keywords}에 대한 아젠다 목록을 보여주세요",
+          "(similar3) {keywords} 관련 안건들을 검색해줘",
+          "(ext) 제목, 본문, 키워드 필드에서 {keywords}와 관련된 모든 의제를 찾아서 최신순으로 정렬하여 보여주세요"
         ],
         "keywords": [
           "keywords",
@@ -1006,43 +884,25 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, body, keywords, agenda_panel, sent_time FROM agenda_chair WHERE {keywords_condition} AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, keywords, agenda_panel, sent_time FROM agenda_chair WHERE (subject LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "사용자가 제공한 키워드와 관련된 모든 의제를 검색합니다.",
         "sql_prompt": "지정된 키워드가 제목, 본문, 또는 키워드 필드에 포함된 의제를 찾습니다."
       },
       "parameters": [
         {
-          "name": "keywords",
+          "name": "keyword",
           "type": "array",
           "required": true,
-          "default": [
-            "keyword1",
-            "keyword2"
-          ],
-          "sql_builder": {
-            "type": "keywords",
-            "fields": [
-              "subject",
-              "body",
-              "keywords"
-            ],
-            "placeholder": "{keywords_condition}"
-          },
+          "default": "keyword",
+          "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1059,15 +919,15 @@
     },
     {
       "template_id": "kr_pending_response_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "진행되고 있는 의제들 중에서 KR이 아직 응답하지 않는 의제 (original)",
-          "KR이 아직 회신하지 않은 진행중인 안건을 보여주세요 (similar1)",
-          "한국선급이 응답 대기중인 의제 목록을 알려주세요 (similar2)",
-          "KR 미응답 상태인 진행 의제들을 찾아주세요 (similar3)",
-          "현재 진행 중(decision_status != 'completed')이면서 마감일이 남아있고 KR이 아직 응답하지 않은 모든 의제를 마감일 순으로 정렬하여 보여주세요 (ext)"
+          "(original) 진행되고 있는 의제들 중에서 KR이 아직 응답하지 않는 의제",
+          "(similar1) KR이 아직 회신하지 않은 진행중인 안건을 보여주세요",
+          "(similar2) 한국선급이 응답 대기중인 의제 목록을 알려주세요",
+          "(similar3) KR 미응답 상태인 진행 의제들을 찾아주세요",
+          "(ext) 현재 진행 중(decision_status != 'completed')이면서 마감일이 남아있고 KR이 아직 응답하지 않은 모든 의제를 마감일 순으로 정렬하여 보여주세요"
         ],
         "keywords": [
           "KR",
@@ -1082,7 +942,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.agenda_panel, c.sent_time, c.deadline, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.LR, r.NK, r.PRS, r.RINA, r.IL, r.TL \nFROM agenda_chair c \nLEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version \nWHERE c.mail_type = 'REQUEST' \nAND c.has_deadline = 1 \nAND c.deadline > datetime('now') \nAND c.decision_status != 'completed' \nAND r.{organization} IS NULL \nAND {period_condition} \nORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.agenda_panel, c.sent_time, c.deadline, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.LR, r.NK, r.PRS, r.RINA, r.IL, r.TL \nFROM agenda_chair c \nLEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version \nWHERE c.mail_type = 'REQUEST' \nAND c.has_deadline = 1 \nAND c.deadline > datetime('now') \nAND c.decision_status != 'completed' \nAND CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL \nAND c.sent_time >= :period_start \nORDER BY c.deadline ASC",
         "system": "지정된 조직이 아직 응답하지 않은 진행중인 의제들을 조회합니다.",
         "sql_prompt": "진행 중이면서 마감일이 남아있고 해당 조직이 응답하지 않은 의제를 찾습니다."
       },
@@ -1092,25 +952,14 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1128,17 +977,17 @@
     },
     {
       "template_id": "kr_required_agendas_other_org_keywords",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_analysis",
       "query_info": {
         "natural_questions": [
-          "KR이 응답해야 하는 의제들 중에서 다른 기관의 회신 중 중요 키워드 (original)",
-          "KR 응답 필요 의제에서 타 기관들이 언급한 주요 키워드를 보여주세요 (similar1)",
-          "한국선급이 답변해야 할 안건의 다른 조직 응답 키워드를 분석해줘 (similar2)",
-          "KR 대응 필요 의제에 대한 타사 회신의 핵심어를 추출해줘 (similar3)",
-          "우리가 응답 대기중인 의제들의 타 기관 응답을 키워드별로 정리해주세요 (similar4)",
-          "KR이 미응답한 의제에 대해 다른 기관들의 회신 키워드를 찾아주세요 (similar5)",
-          "KR이 응답해야 하는 의제들에 대해 다른 모든 기관(ABS, BV, CCS, DNV, NK 등)의 응답 내용에서 자주 언급되는 중요 키워드와 핵심 용어들을 추출하고 빈도수와 함께 분석해 주세요 (ext)"
+          "(original) KR이 응답해야 하는 의제들 중에서 다른 기관의 회신 중 중요 키워드",
+          "(similar1) KR 응답 필요 의제에서 타 기관들이 언급한 주요 키워드를 보여주세요",
+          "(similar2) 한국선급이 답변해야 할 안건의 다른 조직 응답 키워드를 분석해줘",
+          "(similar3) KR 대응 필요 의제에 대한 타사 회신의 핵심어를 추출해줘",
+          "(similar4) 우리가 응답 대기중인 의제들의 타 기관 응답을 키워드별로 정리해주세요",
+          "(similar5) KR이 미응답한 의제에 대해 다른 기관들의 회신 키워드를 찾아주세요",
+          "(ext) KR이 응답해야 하는 의제들에 대해 다른 모든 기관(ABS, BV, CCS, DNV, NK 등)의 응답 내용에서 자주 언급되는 중요 키워드와 핵심 용어들을 추출하고 빈도수와 함께 분석해 주세요"
         ],
         "keywords": [
           "KR",
@@ -1154,7 +1003,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.agenda_code, c.subject FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND r.{organization} IS NULL AND {period_condition}) SELECT p.agenda_base_version, p.agenda_code, p.subject, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.LR, r.NK, r.PRS, r.RINA, r.IL, r.TL FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version",
+        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.agenda_code, c.subject FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL AND c.sent_time >= :period_start) SELECT p.agenda_base_version, p.agenda_code, p.subject, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.LR, r.NK, r.PRS, r.RINA, r.IL, r.TL FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version",
         "system": "지정된 조직이 응답해야 하는 의제들에 대한 다른 기관들의 응답 키워드를 분석합니다.",
         "sql_prompt": "해당 조직이 미응답한 의제들에 대해 다른 기관들의 응답 내용에서 키워드를 추출합니다."
       },
@@ -1164,25 +1013,14 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1200,17 +1038,17 @@
     },
     {
       "template_id": "kr_required_agendas_other_org_opinions",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "KR이 응답해야하는 의제에서 의제들의 주요 이슈 및 다른 기관의 의견 정리 (original)",
-          "한국선급이 회신해야 할 안건의 핵심 내용과 타 기관 입장 요약해줘 (similar1)",
-          "KR이 답변 필요한 의제들의 주요 쟁점과 다른 기관들의 견해를 보여주세요 (similar2)",
-          "우리가 응답해야 하는 안건별로 주요 이슈와 타사 의견을 정리해주세요 (similar3)",
-          "KR 응답 대기 중인 의제의 핵심 사항과 각 기관별 입장을 알려주세요 (similar4)",
-          "한국선급이 피드백 줘야 하는 아젠다의 주요 논점과 타 선급 의견 분석해줘 (similar5)",
-          "KR이 응답이 필요한 의제들에 대해 각 의제별 핵심 이슈, 다른 기관들(ABS, DNV, NK 등)의 상세 의견, 찬반 입장, 주요 우려사항 등을 체계적으로 분석하고 정리해 주세요 (ext)"
+          "(original) KR이 응답해야하는 의제에서 의제들의 주요 이슈 및 다른 기관의 의견 정리",
+          "(similar1) 한국선급이 회신해야 할 안건의 핵심 내용과 타 기관 입장 요약해줘",
+          "(similar2) KR이 답변 필요한 의제들의 주요 쟁점과 다른 기관들의 견해를 보여주세요",
+          "(similar3) 우리가 응답해야 하는 안건별로 주요 이슈와 타사 의견을 정리해주세요",
+          "(similar4) KR 응답 대기 중인 의제의 핵심 사항과 각 기관별 입장을 알려주세요",
+          "(similar5) 한국선급이 피드백 줘야 하는 아젠다의 주요 논점과 타 선급 의견 분석해줘",
+          "(ext) KR이 응답이 필요한 의제들에 대해 각 의제별 핵심 이슈, 다른 기관들(ABS, DNV, NK 등)의 상세 의견, 찬반 입장, 주요 우려사항 등을 체계적으로 분석하고 정리해 주세요"
         ],
         "keywords": [
           "KR",
@@ -1226,7 +1064,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.agenda_code, c.subject, c.body, c.keywords, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND r.{organization} IS NULL AND {period_condition}) SELECT p.agenda_base_version, p.agenda_code, p.subject, p.body, p.keywords, p.agenda_panel, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.LR, r.NK, r.PRS, r.RINA, r.IL, r.TL FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version ORDER BY p.agenda_code",
+        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.agenda_code, c.subject, c.body, c.keywords, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL AND c.sent_time >= :period_start) SELECT p.agenda_base_version, p.agenda_code, p.subject, p.body, p.keywords, p.agenda_panel, r.ABS, r.BV, r.CCS, r.CRS, r.DNV, r.IRS, r.KR, r.LR, r.NK, r.PRS, r.RINA, r.IL, r.TL FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version ORDER BY p.agenda_code",
         "system": "지정된 조직이 응답해야 하는 의제들의 주요 이슈와 다른 기관들의 의견을 종합 분석합니다.",
         "sql_prompt": "해당 조직이 미응답한 의제들에 대해 주요 이슈를 파악하고 각 기관의 의견을 정리합니다."
       },
@@ -1236,25 +1074,14 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1272,15 +1099,15 @@
     },
     {
       "template_id": "kr_response_required_simple",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "KR이 응답을 해야 하는 의제 (original)",
-          "한국선급이 회신해야 할 안건 목록을 보여주세요 (similar1)",
-          "KR이 답변 필요한 의제들을 알려주세요 (similar2)",
-          "우리가 응답해야 하는 아젠다 리스트 주세요 (similar3)",
-          "한국선급(KR)이 아직 응답하지 않은 모든 REQUEST 타입 의제 중 마감일이 남아있는 것들을 마감일 순으로 정렬하여 보여주세요 (ext)"
+          "(original) KR이 응답을 해야 하는 의제",
+          "(similar1) 한국선급이 회신해야 할 안건 목록을 보여주세요",
+          "(similar2) KR이 답변 필요한 의제들을 알려주세요",
+          "(similar3) 우리가 응답해야 하는 아젠다 리스트 주세요",
+          "(ext) 한국선급(KR)이 아직 응답하지 않은 모든 REQUEST 타입 의제 중 마감일이 남아있는 것들을 마감일 순으로 정렬하여 보여주세요"
         ],
         "keywords": [
           "KR",
@@ -1294,7 +1121,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.agenda_panel, c.deadline \nFROM agenda_chair c \nLEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version \nWHERE c.mail_type = 'REQUEST' \nAND c.has_deadline = 1 \nAND c.deadline > datetime('now') \nAND r.{organization} IS NULL \nAND {period_condition} \nORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.agenda_panel, c.deadline \nFROM agenda_chair c \nLEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version \nWHERE c.mail_type = 'REQUEST' \nAND c.has_deadline = 1 \nAND c.deadline > datetime('now') \nAND CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL \nAND c.sent_time >= :period_start \nORDER BY c.deadline ASC",
         "system": "지정된 조직이 아직 응답하지 않은 의제를 조회합니다.",
         "sql_prompt": "agenda_responses_content 테이블에서 해당 조직의 응답이 NULL인 경우를 찾아 응답이 필요한 의제를 조회합니다."
       },
@@ -1304,25 +1131,14 @@
           "type": "string",
           "required": true,
           "default": "KR",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1340,15 +1156,15 @@
     },
     {
       "template_id": "notification_mails_recent",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "mail_type",
       "query_info": {
         "natural_questions": [
-          "최근 notification 타입의 메일만 조회해 주세요 (original)",
-          "최근 알림 메일들을 보여주세요 (similar1)",
-          "NOTIFICATION 유형의 최신 메일 목록을 확인하고 싶습니다 (similar2)",
-          "공지사항 메일들을 최근 것부터 조회해줘 (similar3)",
-          "mail_type이 'NOTIFICATION'인 최근 메일들을 발송일 기준 최신순으로 정렬하여 제목과 발신 기관 정보와 함께 보여주세요 (ext)"
+          "(original) 최근 notification 타입의 메일만 조회해 주세요",
+          "(similar1) 최근 알림 메일들을 보여주세요",
+          "(similar2) NOTIFICATION 유형의 최신 메일 목록을 확인하고 싶습니다",
+          "(similar3) 공지사항 메일들을 최근 것부터 조회해줘",
+          "(ext) mail_type이 'NOTIFICATION'인 최근 메일들을 발송일 기준 최신순으로 정렬하여 제목과 발신 기관 정보와 함께 보여주세요"
         ],
         "keywords": [
           "notification",
@@ -1363,24 +1179,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, sender_organization, sent_time, agenda_panel FROM agenda_chair WHERE mail_type = 'NOTIFICATION' AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "NOTIFICATION 타입의 메일들을 조회합니다.",
         "sql_prompt": "mail_type이 'NOTIFICATION'인 메일들을 최신순으로 조회합니다."
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1397,15 +1206,15 @@
     },
     {
       "template_id": "organization_mail_statistics",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "각 조직별로 보낸 메일 수를 집계해 주세요 (original)",
-          "기관별 메일 발송 통계를 보여주세요 (similar1)",
-          "각 조직이 발송한 메일 개수를 집계해줘 (similar2)",
-          "조직별 메일 송신 현황을 알려주세요 (similar3)",
-          "sender_organization별로 발송한 메일 수를 집계하여 많이 보낸 순서대로 정렬하고, 전체 대비 비율도 함께 계산해 주세요 (ext)"
+          "(original) 각 조직별로 보낸 메일 수를 집계해 주세요",
+          "(similar1) 기관별 메일 발송 통계를 보여주세요",
+          "(similar2) 각 조직이 발송한 메일 개수를 집계해줘",
+          "(similar3) 조직별 메일 송신 현황을 알려주세요",
+          "(ext) sender_organization별로 발송한 메일 수를 집계하여 많이 보낸 순서대로 정렬하고, 전체 대비 비율도 함께 계산해 주세요"
         ],
         "keywords": [
           "조직별",
@@ -1438,15 +1247,15 @@
     },
     {
       "template_id": "pending_agendas_count",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "처리 대기 중인 agenda의 수는? (original)",
-          "대기중인 의제가 몇 개야? (similar1)",
-          "미처리 안건 개수 알려줘 (similar2)",
-          "처리 대기 상태인 아젠다 수를 확인해줘 (similar3)",
-          "현재 처리되지 않고 대기 중인 의제(decision_status != 'completed'이고 마감일이 남은)의 총 개수를 계산해 주세요 (ext)"
+          "(original) 처리 대기 중인 agenda의 수는?",
+          "(similar1) 대기중인 의제가 몇 개야?",
+          "(similar2) 미처리 안건 개수 알려줘",
+          "(similar3) 처리 대기 상태인 아젠다 수를 확인해줘",
+          "(ext) 현재 처리되지 않고 대기 중인 의제(decision_status != 'completed'이고 마감일이 남은)의 총 개수를 계산해 주세요"
         ],
         "keywords": [
           "대기중",
@@ -1461,24 +1270,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_base_version, subject, deadline, CAST((julianday(deadline) - julianday('now')) AS INTEGER) as days_remaining FROM agenda_chair WHERE mail_type = 'REQUEST' AND has_deadline = 1 AND deadline > datetime('now') AND decision_status != 'completed' AND {period_condition} ORDER BY deadline ASC",
+        "query": "SELECT agenda_base_version, subject, deadline, CAST((julianday(deadline) - julianday('now')) AS INTEGER) as days_remaining FROM agenda_chair WHERE mail_type = 'REQUEST' AND has_deadline = 1 AND deadline > datetime('now') AND decision_status != 'completed' AND sent_time >= :period_start ORDER BY deadline ASC",
         "system": "처리 대기 중인 의제의 상세 정보를 조회합니다.",
         "sql_prompt": "마감일이 지나지 않은 미완료 REQUEST 타입 의제들의 상세 정보를 마감일 순으로 조회합니다."
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 30
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-30 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1495,17 +1297,17 @@
     },
     {
       "template_id": "pr_eg_related_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
-          "최근 PR 관련해서 재개정 요구사항과 관련된 아젠다를 찾아줘 (original)",
-          "PR 재개정 관련 의제들을 보여주세요 (similar1)",
-          "절차요건 개정과 관련된 최근 안건을 찾아주세요 (similar2)",
-          "PR 요구사항 변경에 대한 아젠다 목록을 알려줘 (similar3)",
-          "최근에 EG 관련해서 논의된 아젠다 찾아줘 (similar4)",
-          "Expert Group 관련 의제들을 검색해주세요 (similar5)",
-          "제목, 본문, 키워드에 'PR', 'Procedural Requirements', 'EG', 'Expert Group', '재개정', 'revision' 등이 포함된 의제들을 찾아서 최신순으로 정리해 주세요 (ext)"
+          "(original) 최근 PR 관련해서 재개정 요구사항과 관련된 아젠다를 찾아줘",
+          "(similar1) PR 재개정 관련 의제들을 보여주세요",
+          "(similar2) 절차요건 개정과 관련된 최근 안건을 찾아주세요",
+          "(similar3) PR 요구사항 변경에 대한 아젠다 목록을 알려줘",
+          "(similar4) 최근에 EG 관련해서 논의된 아젠다 찾아줘",
+          "(similar5) Expert Group 관련 의제들을 검색해주세요",
+          "(ext) 제목, 본문, 키워드에 'PR', 'Procedural Requirements', 'EG', 'Expert Group', '재개정', 'revision' 등이 포함된 의제들을 찾아서 최신순으로 정리해 주세요"
         ],
         "keywords": [
           "PR",
@@ -1521,7 +1323,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, body, agenda_panel, sent_time, keywords FROM agenda_chair WHERE keywords LIKE '%' || {keyword} || '%' AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, agenda_panel, sent_time, keywords FROM agenda_chair WHERE keywords LIKE '%' || :keyword || '%' AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "키워드 기반으로 의제를 검색합니다.",
         "sql_prompt": "agenda_chair의 keywords 필드에서 지정된 키워드가 포함된 의제를 검색합니다."
       },
@@ -1532,25 +1334,14 @@
           "required": true,
           "default": "PR",
           "description": "검색할 키워드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{keyword}"
-          },
           "mcp_format": "extracted_keyword"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1567,15 +1358,15 @@
     },
     {
       "template_id": "recent_created_top5_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "최근에 생성된 agenda 5개를 보여주세요 (original)",
-          "가장 최근 발행된 의제 5개를 알려주세요 (similar1)",
-          "최신 아젠다 상위 5개를 확인하고 싶습니다 (similar2)",
-          "방금 생성된 안건 5개를 보여줘 (similar3)",
-          "sent_time 기준으로 가장 최근에 생성된 의제 5개를 제목, 발신 기관, 패널 정보와 함께 보여주세요 (ext)"
+          "(original) 최근에 생성된 agenda 5개를 보여주세요",
+          "(similar1) 가장 최근 발행된 의제 5개를 알려주세요",
+          "(similar2) 최신 아젠다 상위 5개를 확인하고 싶습니다",
+          "(similar3) 방금 생성된 안건 5개를 보여줘",
+          "(ext) sent_time 기준으로 가장 최근에 생성된 의제 5개를 제목, 발신 기관, 패널 정보와 함께 보여주세요"
         ],
         "keywords": [
           "최근",
@@ -1590,7 +1381,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, body, agenda_panel, sent_time FROM agenda_chair WHERE agenda_panel = {panel} AND {period_condition} ORDER BY sent_time DESC LIMIT 5",
+        "query": "SELECT agenda_code, agenda_base_version, subject, body, agenda_panel, sent_time FROM agenda_chair WHERE agenda_panel = :panel AND sent_time >= :period_start ORDER BY sent_time DESC LIMIT 5",
         "system": "지정된 패널의 최근 의제 5개를 조회합니다.",
         "sql_prompt": "특정 패널의 최신 의제 5개와 body 내용을 조회합니다."
       },
@@ -1601,25 +1392,14 @@
           "required": true,
           "default": "PL",
           "description": "조회할 패널 이름",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{panel}"
-          },
           "mcp_format": "extracted_panel"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -1636,15 +1416,15 @@
     },
     {
       "template_id": "ur_revision_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
-          "최근 UR 관련해서 재개정 요구사항과 관련된 아젠다를 찾아줘 (original)",
-          "UR 재개정 관련 의제들을 보여주세요 (similar1)",
-          "통일규칙 개정과 관련된 최근 안건을 찾아주세요 (similar2)",
-          "UR 요구사항 변경에 대한 아젠다 목록을 알려줘 (similar3)",
-          "제목, 본문, 키워드에 'UR', 'Unified Requirement', '재개정', 'revision', 'amendment' 등이 포함된 의제들을 찾아서 최신순으로 정리해 주세요 (ext)"
+          "(original) 최근 UR 관련해서 재개정 요구사항과 관련된 아젠다를 찾아줘",
+          "(similar1) UR 재개정 관련 의제들을 보여주세요",
+          "(similar2) 통일규칙 개정과 관련된 최근 안건을 찾아주세요",
+          "(similar3) UR 요구사항 변경에 대한 아젠다 목록을 알려줘",
+          "(ext) 제목, 본문, 키워드에 'UR', 'Unified Requirement', '재개정', 'revision', 'amendment' 등이 포함된 의제들을 찾아서 최신순으로 정리해 주세요"
         ],
         "keywords": [
           "UR",
@@ -1659,24 +1439,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, agenda_panel, sent_time, keywords FROM agenda_chair WHERE (subject LIKE '%UR%' OR subject LIKE '%Unified Requirement%' OR body LIKE '%UR%' OR body LIKE '%Unified Requirement%' OR keywords LIKE '%UR%' OR keywords LIKE '%revision%' OR keywords LIKE '%amendment%') AND {period_condition} ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, agenda_panel, sent_time, keywords FROM agenda_chair WHERE (subject LIKE '%UR%' OR subject LIKE '%Unified Requirement%' OR body LIKE '%UR%' OR body LIKE '%Unified Requirement%' OR keywords LIKE '%UR%' OR keywords LIKE '%revision%' OR keywords LIKE '%amendment%') AND sent_time >= :period_start ORDER BY sent_time DESC",
         "system": "UR(Unified Requirements) 재개정 관련 의제들을 검색합니다.",
         "sql_prompt": "UR 재개정 요구사항이나 통일규칙 변경 관련 논의가 포함된 의제들을 찾습니다."
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],

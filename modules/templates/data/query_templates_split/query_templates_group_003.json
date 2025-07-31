@@ -1,18 +1,18 @@
 {
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "Query Templates Group 003 - Queries 41-60",
   "templates": [
     {
       "template_id": "kr_average_response_time_mail",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "응답매일 중 KR 평균 응듭 시간 (original)",
-          "한국선급의 메일 응답 평균 시간을 보여주세요 (similar1)",
-          "KR이 메일 회신하는데 평균 얼마나 걸리나요? (similar2)",
-          "우리 선급의 평균 응답 소요 시간 확인해줘 (similar3)",
-          "KR이 의제 메일을 받은 후 응답하기까지 걸리는 평균 시간과 다른 조직과의 비교 분석을 보여주세요 (ext)"
+          "(original) 응답매일 중 KR 평균 응듭 시간",
+          "(similar1) 한국선급의 메일 응답 평균 시간을 보여주세요",
+          "(similar2) KR이 메일 회신하는데 평균 얼마나 걸리나요?",
+          "(similar3) 우리 선급의 평균 응답 소요 시간 확인해줘",
+          "(ext) KR이 의제 메일을 받은 후 응답하기까지 걸리는 평균 시간과 다른 조직과의 비교 분석을 보여주세요"
         ],
         "keywords": [
           "KR",
@@ -29,7 +29,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT 'KR' as organization, \nCOUNT(*) as response_count, \nAVG(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as avg_response_days, \nMIN(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as min_days, \nMAX(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as max_days \nFROM agenda_chair c \nJOIN agenda_responses_receivedtime rt ON c.agenda_base_version = rt.agenda_base_version \nWHERE rt.KR IS NOT NULL \nAND c.sent_time IS NOT NULL\nAND {period_condition}",
+        "query": "SELECT 'KR' as organization, \nCOUNT(*) as response_count, \nAVG(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as avg_response_days, \nMIN(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as min_days, \nMAX(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as max_days \nFROM agenda_chair c \nJOIN agenda_responses_receivedtime rt ON c.agenda_base_version = rt.agenda_base_version \nWHERE rt.KR IS NOT NULL \nAND c.sent_time IS NOT NULL\nAND sent_time >= :period_start",
         "system": "특정 조직의 평균 응답 시간을 계산합니다",
         "sql_prompt": "지정된 조직의 응답 시간 통계를 계산합니다"
       },
@@ -40,25 +40,14 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -72,15 +61,15 @@
     },
     {
       "template_id": "kr_average_response_time_excluding_creation",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "아젠다 생성을 제외하고 KR 평균 응답시간 (original)",
-          "의제 생성 건을 빼고 한국선급의 평균 응답 시간을 보여주세요 (similar1)",
-          "KR이 직접 만든 의제 제외하고 응답 시간이 얼마나 되나요? (similar2)",
-          "우리가 생성한 안건 빼고 평균 회신 시간 확인해줘 (similar3)",
-          "KR이 생성하지 않은 의제들에 대한 평균 응답 시간을 계산하여 순수 응답 성과를 분석해 주세요 (ext)"
+          "(original) 아젠다 생성을 제외하고 KR 평균 응답시간",
+          "(similar1) 의제 생성 건을 빼고 한국선급의 평균 응답 시간을 보여주세요",
+          "(similar2) KR이 직접 만든 의제 제외하고 응답 시간이 얼마나 되나요?",
+          "(similar3) 우리가 생성한 안건 빼고 평균 회신 시간 확인해줘",
+          "(ext) KR이 생성하지 않은 의제들에 대한 평균 응답 시간을 계산하여 순수 응답 성과를 분석해 주세요"
         ],
         "keywords": [
           "KR",
@@ -98,7 +87,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT 'KR' as organization, \nCOUNT(*) as response_count, \nAVG(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as avg_response_days \nFROM agenda_chair c \nJOIN agenda_responses_receivedtime rt ON c.agenda_base_version = rt.agenda_base_version \nWHERE rt.KR IS NOT NULL \nAND c.sender_organization != 'KR' \nAND c.sent_time IS NOT NULL\nAND {period_condition}",
+        "query": "SELECT 'KR' as organization, \nCOUNT(*) as response_count, \nAVG(JULIANDAY(rt.KR) - JULIANDAY(c.sent_time)) as avg_response_days \nFROM agenda_chair c \nJOIN agenda_responses_receivedtime rt ON c.agenda_base_version = rt.agenda_base_version \nWHERE rt.KR IS NOT NULL \nAND c.sender_organization != 'KR' \nAND c.sent_time IS NOT NULL\nAND sent_time >= :period_start",
         "system": "조직이 생성한 의제를 제외한 평균 응답 시간을 계산합니다",
         "sql_prompt": "다른 조직이 생성한 의제에 대한 응답 시간만 계산합니다"
       },
@@ -109,25 +98,14 @@
           "required": true,
           "default": "KR",
           "description": "조직 코드",
-          "sql_builder": {
-            "type": "string",
-            "placeholder": "{organization}"
-          },
           "mcp_format": "extracted_organization"
         },
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "c.sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -141,15 +119,15 @@
     },
     {
       "template_id": "other_type_sender_list",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "sender_analysis",
       "query_info": {
         "natural_questions": [
-          "other 타입의 발신자 목록 (original)",
-          "기타(other) 유형의 발신자들을 보여주세요 (similar1)",
-          "other 타입으로 분류된 발신 기관이 뭐가 있나요? (similar2)",
-          "기타 발신자 리스트 확인해줘 (similar3)",
-          "sender_type이 'OTHER'인 모든 발신자들을 빈도순으로 정렬하여 어떤 기관들인지 상세히 보여주세요 (ext)"
+          "(original) other 타입의 발신자 목록",
+          "(similar1) 기타(other) 유형의 발신자들을 보여주세요",
+          "(similar2) other 타입으로 분류된 발신 기관이 뭐가 있나요?",
+          "(similar3) 기타 발신자 리스트 확인해줘",
+          "(ext) sender_type이 'OTHER'인 모든 발신자들을 빈도순으로 정렬하여 어떤 기관들인지 상세히 보여주세요"
         ],
         "keywords": [
           "other",
@@ -178,15 +156,15 @@
     },
     {
       "template_id": "recent_updated_chair_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "최근 업데이트된 chair agenda 10개 (original)",
-          "최근에 수정된 의장 의제 10개를 보여주세요 (similar1)",
-          "가장 최근 업데이트된 의장 안건 10건 확인해줘 (similar2)",
-          "최신 수정된 chair 아젠다 탑10 리스트가 필요해요 (similar3)",
-          "update_time 기준으로 가장 최근에 업데이트된 의장 의제 10개를 변경 내용과 함께 상세히 보여주세요 (ext)"
+          "(original) 최근 업데이트된 chair agenda 10개",
+          "(similar1) 최근에 수정된 의장 의제 10개를 보여주세요",
+          "(similar2) 가장 최근 업데이트된 의장 안건 10건 확인해줘",
+          "(similar3) 최신 수정된 chair 아젠다 탑10 리스트가 필요해요",
+          "(ext) update_time 기준으로 가장 최근에 업데이트된 의장 의제 10개를 변경 내용과 함께 상세히 보여주세요"
         ],
         "keywords": [
           "업데이트",
@@ -216,15 +194,15 @@
     },
     {
       "template_id": "no_deadline_chair_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "deadline_tracking",
       "query_info": {
         "natural_questions": [
-          "마감일이 없는 chair agenda (original)",
-          "마감 기한이 설정되지 않은 의장 의제들을 보여주세요 (similar1)",
-          "데드라인 없는 의장 안건들이 뭐가 있나요? (similar2)",
-          "마감일 미설정된 chair 아젠다 확인해줘 (similar3)",
-          "has_deadline이 0이거나 deadline이 NULL인 의장 의제들을 패널별로 분류하여 마감일이 없는 이유와 함께 보여주세요 (ext)"
+          "(original) 마감일이 없는 chair agenda",
+          "(similar1) 마감 기한이 설정되지 않은 의장 의제들을 보여주세요",
+          "(similar2) 데드라인 없는 의장 안건들이 뭐가 있나요?",
+          "(similar3) 마감일 미설정된 chair 아젠다 확인해줘",
+          "(ext) has_deadline이 0이거나 deadline이 NULL인 의장 의제들을 패널별로 분류하여 마감일이 없는 이유와 함께 보여주세요"
         ],
         "keywords": [
           "마감일없음",
@@ -253,15 +231,15 @@
     },
     {
       "template_id": "active_time_agenda_statistics",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "가장 활발한 시간대의 agenda 발송 통계 (original)",
-          "의제가 가장 많이 발송되는 시간대를 보여주세요 (similar1)",
-          "어느 시간대에 아젠다 발송이 가장 활발한가요? (similar2)",
-          "시간대별 안건 발송 통계를 확인해줘 (similar3)",
-          "하루 24시간을 시간대별로 구분하여 각 시간대의 의제 발송 건수를 집계하고 가장 활발한 시간대를 분석해 주세요 (ext)"
+          "(original) 가장 활발한 시간대의 agenda 발송 통계",
+          "(similar1) 의제가 가장 많이 발송되는 시간대를 보여주세요",
+          "(similar2) 어느 시간대에 아젠다 발송이 가장 활발한가요?",
+          "(similar3) 시간대별 안건 발송 통계를 확인해줘",
+          "(ext) 하루 24시간을 시간대별로 구분하여 각 시간대의 의제 발송 건수를 집계하고 가장 활발한 시간대를 분석해 주세요"
         ],
         "keywords": [
           "시간대",
@@ -276,24 +254,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT strftime('%H', sent_time) as hour, COUNT(*) as count FROM agenda_chair WHERE {period_condition} GROUP BY hour ORDER BY count DESC",
+        "query": "SELECT strftime('%H', sent_time) as hour, COUNT(*) as count FROM agenda_chair WHERE sent_time >= :period_start GROUP BY hour ORDER BY count DESC",
         "system": "시간대별 의제 발송 통계를 집계합니다",
         "sql_prompt": "24시간 기준으로 시간대별 발송 건수를 집계합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -306,15 +277,15 @@
     },
     {
       "template_id": "unknown_type_sender_info",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "sender_analysis",
       "query_info": {
         "natural_questions": [
-          "UNKNOWN 타입의 발신자 정보 (original)",
-          "미확인(UNKNOWN) 발신자들의 정보를 보여주세요 (similar1)",
-          "UNKNOWN으로 분류된 발신 기관이 뭐가 있나요? (similar2)",
-          "발신자 불명인 메일들 확인해줘 (similar3)",
-          "sender_type이 'UNKNOWN'인 모든 발신자들의 상세 정보와 메일 내용을 분석하여 실제 발신자를 파악할 수 있도록 보여주세요 (ext)"
+          "(original) UNKNOWN 타입의 발신자 정보",
+          "(similar1) 미확인(UNKNOWN) 발신자들의 정보를 보여주세요",
+          "(similar2) UNKNOWN으로 분류된 발신 기관이 뭐가 있나요?",
+          "(similar3) 발신자 불명인 메일들 확인해줘",
+          "(ext) sender_type이 'UNKNOWN'인 모든 발신자들의 상세 정보와 메일 내용을 분석하여 실제 발신자를 파악할 수 있도록 보여주세요"
         ],
         "keywords": [
           "UNKNOWN",
@@ -343,15 +314,15 @@
     },
     {
       "template_id": "msc_110_related_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "keyword_search",
       "query_info": {
         "natural_questions": [
-          "MSC 110 관련 agenda 찾기 (original)",
-          "MSC 110과 관련된 의제들을 보여주세요 (similar1)",
-          "해사안전위원회 110차 회의 관련 안건이 뭐가 있나요? (similar2)",
-          "MSC 110 관련 아젠다 리스트 확인해줘 (similar3)",
-          "제목, 본문, 키워드에 'MSC 110', 'MSC110', 'Maritime Safety Committee 110' 등이 포함된 모든 의제들을 시간순으로 보여주세요 (ext)"
+          "(original) MSC 110 관련 agenda 찾기",
+          "(similar1) MSC 110과 관련된 의제들을 보여주세요",
+          "(similar2) 해사안전위원회 110차 회의 관련 안건이 뭐가 있나요?",
+          "(similar3) MSC 110 관련 아젠다 리스트 확인해줘",
+          "(ext) 제목, 본문, 키워드에 'MSC 110', 'MSC110', 'Maritime Safety Committee 110' 등이 포함된 모든 의제들을 시간순으로 보여주세요"
         ],
         "keywords": [
           "MSC 110",
@@ -365,28 +336,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ((subject LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%')) ORDER BY sent_time DESC",
         "system": "MSC 110 관련 의제를 검색합니다",
         "sql_prompt": "MSC 110차 회의 관련 키워드를 포함하는 의제를 검색합니다"
       },
       "parameters": [
         {
-          "name": "keywords",
+          "name": "keyword",
           "type": "array",
           "required": false,
-          "default": [
-            "MSC 110",
-            "MSC110"
-          ],
-          "sql_builder": {
-            "type": "keywords",
-            "fields": [
-              "subject",
-              "body",
-              "keywords"
-            ],
-            "placeholder": "{keywords_condition}"
-          },
+          "default": "MSC 110",
+          "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
       ],
@@ -399,15 +359,15 @@
     },
     {
       "template_id": "monthly_response_rate_statistics",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "각 월별 응답률 통계 (original)",
-          "월별 응답률 통계를 보여주세요 (similar1)",
-          "매월 응답률이 어떻게 되나요? (similar2)",
-          "월별 회신율 추이를 확인해줘 (similar3)",
-          "각 월별로 발송된 의제 수 대비 응답받은 의제 수의 비율을 계산하여 응답률 추이를 분석해 주세요 (ext)"
+          "(original) 각 월별 응답률 통계",
+          "(similar1) 월별 응답률 통계를 보여주세요",
+          "(similar2) 매월 응답률이 어떻게 되나요?",
+          "(similar3) 월별 회신율 추이를 확인해줘",
+          "(ext) 각 월별로 발송된 의제 수 대비 응답받은 의제 수의 비율을 계산하여 응답률 추이를 분석해 주세요"
         ],
         "keywords": [
           "월별",
@@ -437,15 +397,15 @@
     },
     {
       "template_id": "sender_address_mismatch_cases",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "sender_analysis",
       "query_info": {
         "natural_questions": [
-          "sender와 sender_address가 다른 경우 (original)",
-          "발신자명과 발신 주소가 일치하지 않는 경우를 보여주세요 (similar1)",
-          "sender와 이메일 주소가 다른 케이스가 뭐가 있나요? (similar2)",
-          "발신 기관과 메일 주소가 불일치하는 건 확인해줘 (similar3)",
-          "sender_organization과 sender_address 도메인이 일치하지 않는 모든 경우를 찾아서 불일치 원인을 분석할 수 있도록 보여주세요 (ext)"
+          "(original) sender와 sender_address가 다른 경우",
+          "(similar1) 발신자명과 발신 주소가 일치하지 않는 경우를 보여주세요",
+          "(similar2) sender와 이메일 주소가 다른 케이스가 뭐가 있나요?",
+          "(similar3) 발신 기관과 메일 주소가 불일치하는 건 확인해줘",
+          "(ext) sender_organization과 sender_address 도메인이 일치하지 않는 모든 경우를 찾아서 불일치 원인을 분석할 수 있도록 보여주세요"
         ],
         "keywords": [
           "sender",
@@ -474,15 +434,15 @@
     },
     {
       "template_id": "agenda_base_version_mismatch",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "data_quality",
       "query_info": {
         "natural_questions": [
-          "agenda_base와 agenda_version이 다른 경우 (original)",
-          "기본 버전과 현재 버전이 다른 의제들을 보여주세요 (similar1)",
-          "agenda_base와 version이 일치하지 않는 케이스가 뭐가 있나요? (similar2)",
-          "버전 불일치 아젠다들 확인해줘 (similar3)",
-          "agenda_base_version과 agenda_version이 다른 모든 의제들을 찾아서 버전 변경 이력과 사유를 분석할 수 있도록 보여주세요 (ext)"
+          "(original) agenda_base와 agenda_version이 다른 경우",
+          "(similar1) 기본 버전과 현재 버전이 다른 의제들을 보여주세요",
+          "(similar2) agenda_base와 version이 일치하지 않는 케이스가 뭐가 있나요?",
+          "(similar3) 버전 불일치 아젠다들 확인해줘",
+          "(ext) agenda_base_version과 agenda_version이 다른 모든 의제들을 찾아서 버전 변경 이력과 사유를 분석할 수 있도록 보여주세요"
         ],
         "keywords": [
           "agenda_base",
@@ -511,15 +471,15 @@
     },
     {
       "template_id": "error_reason_pending_count",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "error_reason별 pending 건수 (original)",
-          "오류 사유별로 대기 중인 건수를 보여주세요 (similar1)",
-          "에러 이유별 펜딩 통계가 어떻게 되나요? (similar2)",
-          "오류 원인별 미처리 건수 확인해줘 (similar3)",
-          "agenda_pending 테이블에서 error_reason별로 집계한 건수와 비율을 높은 순으로 정렬하여 주요 오류 원인을 분석해 주세요 (ext)"
+          "(original) error_reason별 pending 건수",
+          "(similar1) 오류 사유별로 대기 중인 건수를 보여주세요",
+          "(similar2) 에러 이유별 펜딩 통계가 어떻게 되나요?",
+          "(similar3) 오류 원인별 미처리 건수 확인해줘",
+          "(ext) agenda_pending 테이블에서 error_reason별로 집계한 건수와 비율을 높은 순으로 정렬하여 주요 오류 원인을 분석해 주세요"
         ],
         "keywords": [
           "error_reason",
@@ -548,15 +508,15 @@
     },
     {
       "template_id": "agenda_code_latest_status",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "agenda_status",
       "query_info": {
         "natural_questions": [
-          "agenda_code별 최신 상태 (original)",
-          "각 의제 코드별로 현재 상태를 보여주세요 (similar1)",
-          "아젠다 코드별 최신 상태가 어떻게 되나요? (similar2)",
-          "각 안건 번호의 현재 상태 확인해줘 (similar3)",
-          "모든 agenda_code의 최신 버전과 현재 decision_status를 조회하여 의제별 진행 상황을 한눈에 볼 수 있도록 정리해 주세요 (ext)"
+          "(original) agenda_code별 최신 상태",
+          "(similar1) 각 의제 코드별로 현재 상태를 보여주세요",
+          "(similar2) 아젠다 코드별 최신 상태가 어떻게 되나요?",
+          "(similar3) 각 안건 번호의 현재 상태 확인해줘",
+          "(ext) 모든 agenda_code의 최신 버전과 현재 decision_status를 조회하여 의제별 진행 상황을 한눈에 볼 수 있도록 정리해 주세요"
         ],
         "keywords": [
           "agenda_code",
@@ -585,15 +545,15 @@
     },
     {
       "template_id": "weekday_agenda_statistics",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "요일별 agenda 발송 통계 (original)",
-          "각 요일별로 의제 발송 통계를 보여주세요 (similar1)",
-          "무슨 요일에 아젠다가 가장 많이 발송되나요? (similar2)",
-          "요일별 안건 발송 현황 확인해줘 (similar3)",
-          "월요일부터 일요일까지 각 요일별 의제 발송 건수를 집계하여 업무 패턴을 분석할 수 있도록 보여주세요 (ext)"
+          "(original) 요일별 agenda 발송 통계",
+          "(similar1) 각 요일별로 의제 발송 통계를 보여주세요",
+          "(similar2) 무슨 요일에 아젠다가 가장 많이 발송되나요?",
+          "(similar3) 요일별 안건 발송 현황 확인해줘",
+          "(ext) 월요일부터 일요일까지 각 요일별 의제 발송 건수를 집계하여 업무 패턴을 분석할 수 있도록 보여주세요"
         ],
         "keywords": [
           "요일별",
@@ -608,24 +568,17 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT CASE strftime('%w', sent_time) WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday' WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday' WHEN '6' THEN 'Saturday' END as weekday, COUNT(*) as count FROM agenda_chair WHERE {period_condition} GROUP BY strftime('%w', sent_time) ORDER BY strftime('%w', sent_time)",
+        "query": "SELECT CASE strftime('%w', sent_time) WHEN '0' THEN 'Sunday' WHEN '1' THEN 'Monday' WHEN '2' THEN 'Tuesday' WHEN '3' THEN 'Wednesday' WHEN '4' THEN 'Thursday' WHEN '5' THEN 'Friday' WHEN '6' THEN 'Saturday' END as weekday, COUNT(*) as count FROM agenda_chair WHERE sent_time >= :period_start GROUP BY strftime('%w', sent_time) ORDER BY strftime('%w', sent_time)",
         "system": "요일별 의제 발송 통계를 집계합니다",
         "sql_prompt": "각 요일별로 발송 건수를 집계합니다"
       },
       "parameters": [
         {
-          "name": "period",
-          "type": "period",
+          "name": "period_start",
+          "type": "datetime",
           "required": true,
-          "default": {
-            "type": "relative",
-            "days": 90
-          },
-          "sql_builder": {
-            "type": "period",
-            "field": "sent_time",
-            "placeholder": "{period_condition}"
-          },
+          "default": "datetime('now', '-90 days')",
+          "description": "조회 시작 날짜",
           "mcp_format": "extracted_period"
         }
       ],
@@ -638,15 +591,15 @@
     },
     {
       "template_id": "quarterly_agenda_statistics",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "statistics",
       "query_info": {
         "natural_questions": [
-          "각 분기별 agenda 발송 현황 (original)",
-          "분기별 의제 발송 통계를 보여주세요 (similar1)",
-          "각 분기마다 아젠다 발송량이 어떻게 되나요? (similar2)",
-          "분기별 안건 발송 추이 확인해줘 (similar3)",
-          "연도별 각 분기(Q1~Q4)의 의제 발송 건수와 전분기 대비 증감률을 계산하여 트렌드를 분석해 주세요 (ext)"
+          "(original) 각 분기별 agenda 발송 현황",
+          "(similar1) 분기별 의제 발송 통계를 보여주세요",
+          "(similar2) 각 분기마다 아젠다 발송량이 어떻게 되나요?",
+          "(similar3) 분기별 안건 발송 추이 확인해줘",
+          "(ext) 연도별 각 분기(Q1~Q4)의 의제 발송 건수와 전분기 대비 증감률을 계산하여 트렌드를 분석해 주세요"
         ],
         "keywords": [
           "분기별",
@@ -675,15 +628,15 @@
     },
     {
       "template_id": "deadline_urgency_created_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "deadline_tracking",
       "query_info": {
         "natural_questions": [
-          "마감일 대비 가장 촉박하게 생성된 agenda (original)",
-          "생성일과 마감일이 가장 가까운 의제들을 보여주세요 (similar1)",
-          "급하게 만들어진 촉박한 마감 안건들이 뭐가 있나요? (similar2)",
-          "마감까지 시간이 별로 없었던 아젠다 확인해줘 (similar3)",
-          "의제 생성일(sent_time)과 마감일(deadline) 사이의 기간이 가장 짧았던 의제들을 긴급도 순으로 정렬하여 보여주세요 (ext)"
+          "(original) 마감일 대비 가장 촉박하게 생성된 agenda",
+          "(similar1) 생성일과 마감일이 가장 가까운 의제들을 보여주세요",
+          "(similar2) 급하게 만들어진 촉박한 마감 안건들이 뭐가 있나요?",
+          "(similar3) 마감까지 시간이 별로 없었던 아젠다 확인해줘",
+          "(ext) 의제 생성일(sent_time)과 마감일(deadline) 사이의 기간이 가장 짧았던 의제들을 긴급도 순으로 정렬하여 보여주세요"
         ],
         "keywords": [
           "촉박",
@@ -712,15 +665,15 @@
     },
     {
       "template_id": "response_org_designated_agendas",
-      "template_version": "1.0.0",
+      "template_version": "2.0.0",
       "template_category": "response_tracking",
       "query_info": {
         "natural_questions": [
-          "response_org가 지정된 agenda (original)",
-          "응답 기관이 특별히 지정된 의제들을 보여주세요 (similar1)",
-          "특정 기관에게 답변 요청한 안건이 뭐가 있나요? (similar2)",
-          "response_org 지정된 아젠다 리스트 확인해줘 (similar3)",
-          "특정 기관이나 일부 기관에게만 응답을 요청한 의제들을 지정된 기관과 함께 보여주세요 (ext)"
+          "(original) response_org가 지정된 agenda",
+          "(similar1) 응답 기관이 특별히 지정된 의제들을 보여주세요",
+          "(similar2) 특정 기관에게 답변 요청한 안건이 뭐가 있나요?",
+          "(similar3) response_org 지정된 아젠다 리스트 확인해줘",
+          "(ext) 특정 기관이나 일부 기관에게만 응답을 요청한 의제들을 지정된 기관과 함께 보여주세요"
         ],
         "keywords": [
           "response_org",

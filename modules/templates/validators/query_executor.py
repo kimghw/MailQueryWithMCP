@@ -10,7 +10,7 @@ import re
 import csv
 from pathlib import Path
 from typing import Dict, Any, List, Tuple
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class QueryExecutor:
     """Simple query executor for testing templates"""
@@ -41,36 +41,103 @@ class QueryExecutor:
         # Get parameters
         parameters = template.get('parameters', [])
         
-        # Simple placeholder substitution
-        final_query = sql_query
-        for param in parameters:
-            param_name = param.get('name')
-            default_value = param.get('default')
+        # Check for multi_query parameters
+        multi_query_params = [p for p in parameters if p.get('multi_query', False)]
+        
+        if multi_query_params:
+            # Handle multi-query execution
+            return self._test_multi_query_template(template, multi_query_params, save_results)
+        
+        # Check if query uses named parameters (SQLite style with :param_name)
+        uses_named_params = ':' in sql_query and any(':' + p.get('name', '') in sql_query for p in parameters)
+        
+        param_dict = None
+        if uses_named_params:
+            # Build parameter dictionary for SQLite parameter binding
+            param_dict = {}
+            for param in parameters:
+                param_name = param.get('name')
+                param_type = param.get('type')
+                default_value = param.get('default')
+                
+                # Provide intelligent defaults for common parameters without default values
+                if param_name and default_value is None:
+                    if param_name == 'organization':
+                        # Default organization to KR
+                        param_dict[param_name] = 'KR'
+                    elif param_name == 'agenda':
+                        # Default agenda code
+                        param_dict[param_name] = 'PL25001'
+                    elif param_name == 'keyword':
+                        # Default keyword
+                        param_dict[param_name] = 'IMO'
+                    elif param_name == 'organization1':
+                        param_dict[param_name] = 'KR'
+                    elif param_name == 'organization2':
+                        param_dict[param_name] = 'DNV'
+                    elif param_name == 'organization3':
+                        param_dict[param_name] = 'ABS'
+                elif param_name and default_value is not None:
+                    # Handle datetime parameters
+                    if param_type == 'datetime':
+                        # Convert SQL datetime functions to actual datetime values
+                        if default_value == "datetime('now', '-90 days')":
+                            param_dict[param_name] = (datetime.now() - timedelta(days=90)).strftime('%Y-%m-%d %H:%M:%S')
+                        elif default_value == "datetime('now', '-30 days')":
+                            param_dict[param_name] = (datetime.now() - timedelta(days=30)).strftime('%Y-%m-%d %H:%M:%S')
+                        elif default_value == "datetime('now', '-1 days')":
+                            param_dict[param_name] = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d %H:%M:%S')
+                        elif default_value == "datetime('now', '-7 days')":
+                            param_dict[param_name] = (datetime.now() - timedelta(days=7)).strftime('%Y-%m-%d %H:%M:%S')
+                        elif default_value == "datetime('now', '-365 days')":
+                            param_dict[param_name] = (datetime.now() - timedelta(days=365)).strftime('%Y-%m-%d %H:%M:%S')
+                        elif default_value == "datetime('now', '-60 days')":
+                            param_dict[param_name] = (datetime.now() - timedelta(days=60)).strftime('%Y-%m-%d %H:%M:%S')
+                        else:
+                            param_dict[param_name] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                    elif param_type == 'array':
+                        # For array types, use the first value or default string
+                        if isinstance(default_value, list):
+                            param_dict[param_name] = default_value[0] if default_value else 'default'
+                        else:
+                            # Current implementation: default is stored as string
+                            param_dict[param_name] = default_value
+                    else:
+                        # For other types, use the default value as-is
+                        param_dict[param_name] = default_value
             
-            if param_name and default_value is not None:
-                placeholder = f'{{{param_name}}}'
-                if isinstance(default_value, str):
-                    # Don't add quotes if already in a LIKE clause
-                    if f"LIKE '%{placeholder}%'" in sql_query:
-                        final_query = final_query.replace(placeholder, default_value)
-                    # Check if placeholder is used as a column name (e.g., r.{organization})
-                    elif f"r.{placeholder}" in sql_query or f"c.{placeholder}" in sql_query:
-                        final_query = final_query.replace(placeholder, default_value)
+            final_query = sql_query
+        else:
+            # Legacy placeholder substitution for old-style templates
+            final_query = sql_query
+            for param in parameters:
+                param_name = param.get('name')
+                default_value = param.get('default')
+                
+                if param_name and default_value is not None:
+                    placeholder = f'{{{param_name}}}'
+                    if isinstance(default_value, str):
+                        # Don't add quotes if already in a LIKE clause
+                        if f"LIKE '%{placeholder}%'" in sql_query:
+                            final_query = final_query.replace(placeholder, default_value)
+                        # Check if placeholder is used as a column name (e.g., r.{organization})
+                        elif f"r.{placeholder}" in sql_query or f"c.{placeholder}" in sql_query:
+                            final_query = final_query.replace(placeholder, default_value)
+                        else:
+                            final_query = final_query.replace(placeholder, f"'{default_value}'")
+                    elif isinstance(default_value, list):
+                        # Check if it's in a LIKE clause (for keywords)
+                        if f"LIKE '%{placeholder}%'" in sql_query:
+                            # For LIKE clauses, join with OR
+                            like_conditions = [f"'%{v}%'" for v in default_value]
+                            final_query = final_query.replace(f"'%{placeholder}%'", like_conditions[0])
+                            # Note: This only handles first keyword for simplicity
+                        else:
+                            # Convert list to SQL IN format
+                            quoted_values = [f"'{v}'" for v in default_value]
+                            final_query = final_query.replace(placeholder, f"({', '.join(quoted_values)})")
                     else:
-                        final_query = final_query.replace(placeholder, f"'{default_value}'")
-                elif isinstance(default_value, list):
-                    # Check if it's in a LIKE clause (for keywords)
-                    if f"LIKE '%{placeholder}%'" in sql_query:
-                        # For LIKE clauses, join with OR
-                        like_conditions = [f"'%{v}%'" for v in default_value]
-                        final_query = final_query.replace(f"'%{placeholder}%'", like_conditions[0])
-                        # Note: This only handles first keyword for simplicity
-                    else:
-                        # Convert list to SQL IN format
-                        quoted_values = [f"'{v}'" for v in default_value]
-                        final_query = final_query.replace(placeholder, f"({', '.join(quoted_values)})")
-                else:
-                    final_query = final_query.replace(placeholder, str(default_value))
+                        final_query = final_query.replace(placeholder, str(default_value))
         
         # Handle common special placeholders
         special_replacements = {
@@ -109,7 +176,12 @@ class QueryExecutor:
             if 'LIMIT' not in test_query.upper():
                 test_query = f"{test_query} LIMIT 5"
             
-            cursor.execute(test_query)
+            if param_dict is not None:
+                # Use parameter binding for new-style queries
+                cursor.execute(test_query, param_dict)
+            else:
+                # Execute directly for old-style queries
+                cursor.execute(test_query)
             results = cursor.fetchall()
             
             # Get column names
