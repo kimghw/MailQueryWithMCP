@@ -61,7 +61,8 @@ class AgendaParser:
                     'panel': groups[0].upper(),
                     'year': groups[1],
                     'number': groups[2],
-                    'agenda_base_version': groups[3].lower(),
+                    'agenda_version': groups[3].lower(),  # 버전 문자만
+                    'agenda_base_version': f"{groups[0]}{groups[1]}{groups[2]}{groups[3]}",  # 전체 의장 코드
                     'response_org': groups[4].upper(),
                     'response_version': groups[5].lower()
                 }
@@ -86,7 +87,8 @@ class AgendaParser:
                     'panel': groups[0].upper(),
                     'year': groups[1],
                     'number': groups[2],
-                    'agenda_base_version': groups[3].lower() if groups[3] else None,
+                    'agenda_version': groups[3].lower() if groups[3] else None,  # 버전 문자만
+                    'agenda_base_version': agenda_code,  # 전체 코드 (DB 컬럼과 일치)
                     'response_org': None,
                     'response_version': None
                 }

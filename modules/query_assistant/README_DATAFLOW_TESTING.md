@@ -134,12 +134,30 @@ cd /home/kimghw/IACSGRAPH
 PYTHONPATH=/home/kimghw/IACSGRAPH python modules/query_assistant/scripts/test_100_queries.py
 ```
 
-#### 2.2 간단한 쿼리 테스트
+#### 2.2 SQL Generator 테스트
+```python
+# test_sql_generator.py
+from modules.query_assistant.services.sql_generator_v2 import SimplifiedSQLGenerator
+
+# Array 파라미터 테스트
+generator = SimplifiedSQLGenerator()
+sql_template = "SELECT * FROM agenda WHERE keyword LIKE '%' || :keyword || '%'"
+params = [{"name": "keyword", "type": "array"}]
+mcp_params = {"extracted_keywords": ["IMO", "MEPC", "Safety"]}
+
+primary_sql, merged_params, additional_queries = generator.generate_sql(
+    sql_template, params, mcp_params, {}, {}
+)
+print(f"생성된 쿼리 수: {1 + len(additional_queries)}")
+# 결과: 3개 쿼리 (각 키워드별로 하나씩)
+```
+
+#### 2.3 간단한 쿼리 테스트
 ```bash
 python modules/query_assistant/scripts/test_simple_queries.py
 ```
 
-#### 2.3 디버그 모드 실행
+#### 2.4 디버그 모드 실행
 ```bash
 python modules/query_assistant/scripts/debug_vector_search.py
 ```
@@ -277,6 +295,104 @@ for query in queries:
     result = qa.process_query(query, execute=False)
     elapsed = time.time() - start
     print(f"Query: {query}, Time: {elapsed:.3f}s")
+```
+
+#### 4.2 다중 쿼리 성능 테스트
+```python
+# 단일 쿼리 vs 다중 쿼리 성능 비교
+from modules.query_assistant.services.multi_query_executor import MultiQueryExecutor
+
+# 단일 복잡한 쿼리 (OR 조건)
+single_query = """
+SELECT * FROM agenda 
+WHERE keywords LIKE '%IMO%' 
+   OR keywords LIKE '%MEPC%' 
+   OR keywords LIKE '%Safety%'
+"""
+
+# 다중 단순 쿼리
+multi_queries = [
+    "SELECT * FROM agenda WHERE keywords LIKE '%IMO%'",
+    "SELECT * FROM agenda WHERE keywords LIKE '%MEPC%'",
+    "SELECT * FROM agenda WHERE keywords LIKE '%Safety%'"
+]
+
+# 성능 비교
+executor = MultiQueryExecutor(db_connector, max_workers=3)
+results, metadata = executor.execute_queries(multi_queries, parallel=True)
+print(f"병렬 실행: {metadata['execution_method']}")
+print(f"중복 제거: {metadata['total_results_before_dedup']} → {metadata['total_results_after_dedup']}")
+```
+
+## 🆕 새로운 SQL 생성 시스템
+
+### SimplifiedSQLGenerator (v2/v3)
+
+#### 주요 변경사항:
+1. **복잡한 SQL Builder 제거**
+   - 기존: builder type별 복잡한 조건 생성 (period, keywords, column 등)
+   - 신규: 단순한 :param 스타일 파라미터 치환
+
+2. **Array 파라미터 지원**
+   ```python
+   # 템플릿 정의
+   "parameters": [{
+       "name": "keyword",
+       "type": "array",  # array 타입으로 정의
+       "default": "keyword"
+   }]
+   
+   # 실행 시
+   keyword = ["IMO", "MEPC", "Safety"]
+   → 3개의 개별 쿼리 생성 및 병렬 실행
+   ```
+
+3. **MultiQueryExecutor**
+   - 병렬 쿼리 실행 (ThreadPoolExecutor)
+   - 자동 중복 제거
+   - 실행 통계 제공
+
+#### 사용 예시:
+```python
+# v3 사용 (깨끗한 인터페이스)
+from modules.query_assistant.services.sql_generator_v3 import SQLGeneratorV3
+
+generator = SQLGeneratorV3()
+
+# 단일 쿼리
+queries, params = generator.generate_sql(...)
+# queries = ["SELECT ... WHERE org = 'KR'"]
+
+# 다중 쿼리 (array 파라미터)
+queries, params = generator.generate_sql(...)
+# queries = [
+#     "SELECT ... WHERE keyword = 'IMO'",
+#     "SELECT ... WHERE keyword = 'MEPC'",
+#     "SELECT ... WHERE keyword = 'Safety'"
+# ]
+
+# 실행
+if len(queries) > 1:
+    results, metadata = multi_executor.execute_queries(queries)
+    print(f"총 {metadata['query_count']}개 쿼리 실행")
+    print(f"중복 제거 전: {metadata['total_results_before_dedup']}건")
+    print(f"중복 제거 후: {metadata['total_results_after_dedup']}건")
+else:
+    results = db_connector.execute_query(queries[0])
+```
+
+#### 호환성 유지:
+```python
+# 기존 코드와의 호환성을 위한 wrapper
+from modules.query_assistant.services.sql_generator_compatible import SQLGenerator
+
+# 기존 코드 그대로 사용 가능
+sql, params = generator.generate_sql(...)  # 2개만 반환 (호환 모드)
+
+# 필요시 multi-query 정보 확인
+info = generator.get_multi_query_info()
+if info['has_multi_query']:
+    all_queries = generator.get_multi_queries()
 ```
 
 ## 🗑️ 미사용/삭제 대상 파일

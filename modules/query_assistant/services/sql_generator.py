@@ -1,21 +1,20 @@
 """
-SQL Generator for Query Assistant
-Handles parameter merging and SQL placeholder replacement
+Simplified SQL Generator v3 - Cleaner interface with query list
 """
 
 import logging
-from typing import Dict, Any, Optional, List
-from datetime import datetime, date
+from typing import Dict, Any, List, Tuple, Optional
+from datetime import datetime, timedelta
 import re
 
 logger = logging.getLogger(__name__)
 
 
-class SQLGenerator:
-    """Generates SQL queries from templates with proper parameter handling"""
+class SQLGeneratorV3:
+    """SQL generator that returns list of queries for array parameters"""
     
     def __init__(self):
-        """Initialize SQL Generator"""
+        """Initialize SQL Generator V3"""
         pass
     
     def generate_sql(
@@ -25,21 +24,23 @@ class SQLGenerator:
         mcp_params: Dict[str, Any],
         synonym_params: Dict[str, Any],
         template_defaults: Dict[str, Any] = None
-    ) -> tuple[str, Dict[str, Any]]:
+    ) -> Tuple[List[str], Dict[str, Any]]:
         """
-        Generate SQL query with merged parameters
+        Generate SQL queries with simplified parameter handling
         
         Args:
-            sql_template: SQL template with placeholders
+            sql_template: SQL template with :param_name placeholders
             template_params: Parameter definitions from template
-            mcp_params: Parameters from MCP call (extracted_period, etc.)
+            mcp_params: Parameters from MCP call
             synonym_params: Parameters from synonym processing
             template_defaults: Default parameters from template
             
         Returns:
-            tuple: (generated_sql, merged_parameters)
+            tuple: (queries, merged_parameters)
+                - queries: List of SQL queries (1 or more)
+                - merged_parameters: All parameters merged
         """
-        # 1. Merge parameters with priority: MCP > Synonym > Template defaults
+        # 1. Merge parameters
         merged_params = self._merge_parameters(
             template_defaults or {},
             synonym_params,
@@ -47,42 +48,25 @@ class SQLGenerator:
             template_params
         )
         
-        # 2. Pre-process SQL for multi-keyword support
-        processed_sql = sql_template
-        if 'keywords' in merged_params and merged_params['keywords'] and '{keyword}' in sql_template:
-            # Replace single {keyword} placeholder with OR conditions for all keywords
-            keywords = merged_params['keywords']
-            
-            # Handle pattern: "keywords LIKE '%' || {keyword} || '%'"
-            if "LIKE '%' || {keyword} || '%'" in processed_sql:
-                pattern_match = re.search(r"(\w+)\s+LIKE\s+'%'\s*\|\|\s*{keyword}\s*\|\|\s*'%'", processed_sql)
-                if pattern_match:
-                    field = pattern_match.group(1)
-                    conditions = [f"{field} LIKE '%' || '{kw}' || '%'" for kw in keywords]
-                    or_condition = f"({' OR '.join(conditions)})"
-                    processed_sql = processed_sql.replace(pattern_match.group(0), or_condition)
-            # Handle pattern: "keywords LIKE '%{keyword}%'"
-            elif "LIKE '%{keyword}%'" in processed_sql:
-                pattern_match = re.search(r"(\w+)\s+LIKE\s+'%{keyword}%'", processed_sql)
-                if pattern_match:
-                    field = pattern_match.group(1)
-                    conditions = [f"{field} LIKE '%{kw}%'" for kw in keywords]
-                    or_condition = f"({' OR '.join(conditions)})"
-                    processed_sql = processed_sql.replace(pattern_match.group(0), or_condition)
+        # 2. Identify array parameters that need multi-query
+        array_params = self._get_array_params(template_params, merged_params)
         
-        # 3. Build SQL conditions based on sql_builder configurations
-        sql_with_conditions = self._build_sql_conditions(
-            processed_sql,
-            template_params,
-            merged_params
-        )
+        # 3. Generate queries
+        if array_params:
+            # Generate multiple queries for array parameters
+            queries = self._generate_queries_for_arrays(
+                sql_template, 
+                merged_params, 
+                array_params
+            )
+        else:
+            # Single query
+            query = self._substitute_parameters(sql_template, merged_params)
+            queries = [query]
         
-        # 4. Replace remaining placeholders
-        final_sql = self._replace_placeholders(sql_with_conditions, merged_params)
+        logger.info(f"Generated {len(queries)} queries")
         
-        logger.info(f"Generated SQL with parameters: {merged_params}")
-        
-        return final_sql, merged_params
+        return queries, merged_params
     
     def _merge_parameters(
         self,
@@ -91,10 +75,7 @@ class SQLGenerator:
         mcp_params: Dict[str, Any],
         template_param_defs: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """
-        Merge parameters from different sources with priority
-        Priority: MCP > Synonym > Template defaults
-        """
+        """Merge parameters from different sources"""
         merged = {}
         
         # Start with template defaults
@@ -106,292 +87,147 @@ class SQLGenerator:
             if param_name and 'default' in param_def:
                 default_value = param_def['default']
                 
-                # Handle different default types
-                if isinstance(default_value, dict):
-                    if default_value.get('type') == 'relative' and 'days' in default_value:
-                        # For relative date defaults, calculate period_start and period_end
-                        from datetime import datetime, timedelta
-                        days = default_value['days']
-                        end_date = datetime.now()
-                        start_date = end_date - timedelta(days=days)
-                        
-                        merged[param_name] = days
-                        
-                        # Set extracted_period if mcp_format is extracted_period
-                        if param_def.get('mcp_format') == 'extracted_period':
-                            merged['extracted_period'] = {
-                                'start': start_date.strftime('%Y-%m-%d'),
-                                'end': end_date.strftime('%Y-%m-%d')
-                            }
-                        
-                        # Also set period_start and period_end for compatibility
-                        merged['period_start'] = start_date.strftime('%Y-%m-%d')
-                        merged['period_end'] = end_date.strftime('%Y-%m-%d')
-                        merged['date_range'] = {
-                            'type': 'range',
-                            'from': start_date.strftime('%Y-%m-%d'),
-                            'to': end_date.strftime('%Y-%m-%d')
-                        }
+                # Handle datetime defaults
+                if param_def.get('type') == 'datetime' and isinstance(default_value, str):
+                    if default_value.startswith("datetime("):
+                        calculated_value = self._calculate_datetime(default_value)
+                        if calculated_value:
+                            merged[param_name] = calculated_value
                     else:
                         merged[param_name] = default_value
                 else:
                     merged[param_name] = default_value
         
         # Override with synonym parameters
-        for key, value in synonym_params.items():
-            if value is not None:
-                merged[key] = value
+        merged.update({k: v for k, v in synonym_params.items() if v is not None})
         
         # Override with MCP parameters (highest priority)
-        # Map MCP format to internal format
         if 'extracted_period' in mcp_params and mcp_params['extracted_period']:
             period_data = mcp_params['extracted_period']
-            if isinstance(period_data, dict) and 'start' in period_data and 'end' in period_data:
-                merged['period_start'] = period_data['start']
-                merged['period_end'] = period_data['end']
-                merged['date_range'] = {
-                    'type': 'range',
-                    'from': period_data['start'],
-                    'to': period_data['end']
-                }
+            if isinstance(period_data, dict):
+                merged['period_start'] = period_data.get('start')
+                merged['period_end'] = period_data.get('end')
         
         if 'extracted_keywords' in mcp_params and mcp_params['extracted_keywords']:
-            merged['keywords'] = mcp_params['extracted_keywords']
-            # Also set as keyword for single keyword templates
-            if len(mcp_params['extracted_keywords']) > 0:
-                merged['keyword'] = mcp_params['extracted_keywords'][0]
+            merged['keyword'] = mcp_params['extracted_keywords']
+            merged['keywords'] = mcp_params['extracted_keywords']  # Legacy
         
-        if 'extracted_organization' in mcp_params and mcp_params['extracted_organization']:
+        if 'extracted_organization' in mcp_params:
             merged['organization'] = mcp_params['extracted_organization']
-            merged['organization_code'] = mcp_params['extracted_organization']
         
-        # Copy other direct parameters
-        direct_params = ['limit', 'status', 'agenda_code', 'agenda_base', 'agenda_base_version']
-        for param in direct_params:
-            if param in mcp_params and mcp_params[param] is not None:
+        # Copy other parameters
+        for param in ['limit', 'status', 'agenda', 'panel']:
+            if param in mcp_params:
                 merged[param] = mcp_params[param]
-            elif param in synonym_params and synonym_params[param] is not None:
-                merged[param] = synonym_params[param]
         
         return merged
     
-    def _build_sql_conditions(
+    def _get_array_params(
         self,
-        sql_template: str,
         template_params: List[Dict[str, Any]],
         merged_params: Dict[str, Any]
-    ) -> str:
-        """Build SQL conditions based on sql_builder configurations"""
-        sql = sql_template
+    ) -> Dict[str, List[Any]]:
+        """Get array parameters that have multiple values"""
+        array_params = {}
         
         for param_def in template_params:
-            sql_builder = param_def.get('sql_builder', {})
-            builder_type = sql_builder.get('type')
-            placeholder = sql_builder.get('placeholder')
+            param_name = param_def.get('name')
+            param_type = param_def.get('type')
             
-            if not placeholder:
-                continue
+            if param_type == 'array' and param_name in merged_params:
+                value = merged_params[param_name]
+                if isinstance(value, list) and len(value) > 1:
+                    array_params[param_name] = value
+        
+        return array_params
+    
+    def _generate_queries_for_arrays(
+        self,
+        sql_template: str,
+        params: Dict[str, Any],
+        array_params: Dict[str, List[Any]]
+    ) -> List[str]:
+        """Generate queries for each combination of array values"""
+        queries = []
+        
+        # For now, handle single array parameter
+        if len(array_params) == 1:
+            param_name, values = list(array_params.items())[0]
             
-            if (builder_type in ['period', 'date_range']) and placeholder in sql:
-                # Build period/date_range condition
-                field = sql_builder.get('field', 'sent_time')
+            for value in values:
+                # Create params with single value
+                query_params = params.copy()
+                query_params[param_name] = value
                 
-                # Check if placeholder already has table alias prefix
-                # e.g., "r.{date_condition}" should not add another "r." to field
-                placeholder_pattern = rf'(\w+\.)?{re.escape(placeholder)}'
-                match = re.search(placeholder_pattern, sql)
-                if match and match.group(1):  # Has table alias before placeholder
-                    # Remove table alias from field if it matches
-                    table_alias = match.group(1).rstrip('.')
-                    if field.startswith(f'{table_alias}.'):
-                        field = field[len(table_alias)+1:]  # Remove redundant alias
-                
-                condition = self._build_period_condition(field, merged_params)
-                sql = sql.replace(placeholder, condition)
-                
-            elif builder_type == 'keywords' and placeholder in sql:
-                # Build keywords condition
-                field = sql_builder.get('field', 'title')
-                operator = sql_builder.get('operator', 'LIKE')
-                condition = self._build_keywords_condition(field, operator, merged_params)
-                sql = sql.replace(placeholder, condition)
-                
-            elif builder_type == 'direct_replace' and 'placeholders' in sql_builder:
-                # Direct replacement for multiple placeholders from single parameter
-                if param_def.get('name') == 'period' and 'period_start' in merged_params:
-                    sql = sql.replace('{period_start}', f"'{merged_params['period_start']}'")
-                    sql = sql.replace('{period_end}', f"'{merged_params['period_end']}'")
-                
-            elif builder_type == 'string' and placeholder in sql:
-                # Direct string replacement
-                param_name = param_def.get('name')
-                if param_name in merged_params:
-                    value = merged_params[param_name]
-                    # Check if the value needs quotes
-                    if self._needs_quotes(sql, placeholder):
-                        sql = sql.replace(placeholder, f"'{value}'")
-                    else:
-                        sql = sql.replace(placeholder, str(value))
-                        
-            elif builder_type == 'number' and placeholder in sql:
-                # Direct number replacement
-                param_name = param_def.get('name')
-                if param_name in merged_params:
-                    value = merged_params[param_name]
-                    sql = sql.replace(placeholder, str(value))
-        
-        return sql
-    
-    def _build_period_condition(self, field: str, params: Dict[str, Any]) -> str:
-        """Build SQL period condition"""
-        # Check for date range
-        if 'date_range' in params and params['date_range']:
-            date_range = params['date_range']
-            if isinstance(date_range, dict):
-                start = date_range.get('from') or date_range.get('start')
-                end = date_range.get('to') or date_range.get('end')
-                if start and end:
-                    return f"{field} BETWEEN '{start}' AND '{end}'"
-        
-        # Check for period_start and period_end
-        if 'period_start' in params and 'period_end' in params:
-            return f"{field} BETWEEN '{params['period_start']}' AND '{params['period_end']}'"
-        
-        # Check for days parameter
-        if 'days' in params and params['days']:
-            days = params['days']
-            return f"{field} >= DATE('now', '-{days} days')"
-        
-        # Default to last 30 days
-        return f"{field} >= DATE('now', '-30 days')"
-    
-    def _build_keywords_condition(self, field: str, operator: str, params: Dict[str, Any]) -> str:
-        """Build SQL keywords condition"""
-        keywords = params.get('keywords', [])
-        
-        if not keywords:
-            # Check for single keyword
-            if 'keyword' in params and params['keyword']:
-                keywords = [params['keyword']]
-            else:
-                return "1=1"  # Always true condition
-        
-        if operator.upper() == 'LIKE':
-            conditions = [f"{field} LIKE '%{keyword}%'" for keyword in keywords]
-        elif operator.upper() == 'CONTAINS':
-            conditions = [f"CONTAINS({field}, '{keyword}')" for keyword in keywords]
+                query = self._substitute_parameters(sql_template, query_params)
+                queries.append(query)
         else:
-            conditions = [f"{field} = '{keyword}'" for keyword in keywords]
+            # Multiple arrays - for now just use first value of each
+            # TODO: Implement cartesian product if needed
+            query_params = params.copy()
+            for param_name, values in array_params.items():
+                query_params[param_name] = values[0] if values else None
+            
+            query = self._substitute_parameters(sql_template, query_params)
+            queries.append(query)
         
-        return f"({' OR '.join(conditions)})"
+        return queries
     
-    def _needs_quotes(self, sql: str, placeholder: str) -> bool:
-        """Check if a placeholder needs quotes based on SQL context"""
-        # Find the placeholder position
-        pos = sql.find(placeholder)
-        if pos == -1:
-            return False
+    def _substitute_parameters(self, sql_template: str, params: Dict[str, Any]) -> str:
+        """Simple parameter substitution using :param_name syntax"""
+        sql = sql_template
         
-        # Check if placeholder is inside a string literal (e.g., '%{keyword}%')
-        # Count quotes before the placeholder
-        before_sql = sql[:pos]
-        single_quotes_before = before_sql.count("'") - before_sql.count("\\'")
+        # Handle CASE statements for dynamic columns
+        case_pattern = r'CASE\s+:(\w+)\s+(.+?)\s+END'
+        sql = re.sub(
+            case_pattern,
+            lambda m: f"CASE '{params.get(m.group(1), '')}' {m.group(2)} END",
+            sql,
+            flags=re.IGNORECASE | re.DOTALL
+        )
         
-        # If odd number of quotes before, we're inside a string literal
-        if single_quotes_before % 2 == 1:
-            return False
-        
-        # Check if already quoted
-        if pos > 0 and sql[pos-1] in ["'", '"']:
-            return False
-        
-        # Check context - common patterns that need quotes
-        before = sql[max(0, pos-10):pos].strip().lower()
-        if any(op in before for op in ['=', '!=', '<>', 'like', 'in', 'between', '||']):
-            return True
-        
-        # Check for BETWEEN ... AND pattern
-        after = sql[pos+len(placeholder):pos+len(placeholder)+10].strip().lower()
-        if 'and' in after or 'and' in before:
-            return True
-        
-        # Check for concatenation operator ||
-        if '||' in before or '||' in after[:3]:
-            return True
-        
-        return False
-    
-    def _replace_placeholders(self, sql: str, params: Dict[str, Any]) -> str:
-        """Replace remaining placeholders in SQL"""
-        # Special handling for {keyword} placeholder when keywords list exists
-        if '{keyword}' in sql and 'keywords' in params and params['keywords']:
-            keywords = params['keywords']
-            # Find the pattern around {keyword} to build OR conditions
-            # Handle patterns like: "keywords LIKE '%' || {keyword} || '%'"
-            if "|| {keyword} ||" in sql:
-                # Extract the pattern
-                pattern = re.search(r"(\w+)\s+LIKE\s+'%'\s*\|\|\s*{keyword}\s*\|\|\s*'%'", sql)
-                if pattern:
-                    field = pattern.group(1)
-                    conditions = [f"{field} LIKE '%' || '{kw}' || '%'" for kw in keywords]
-                    or_condition = f"({' OR '.join(conditions)})"
-                    sql = sql.replace(pattern.group(0), or_condition)
-            # Handle patterns like: "keywords LIKE '%{keyword}%'"
-            elif "LIKE '%{keyword}%'" in sql:
-                pattern = re.search(r"(\w+)\s+LIKE\s+'%{keyword}%'", sql)
-                if pattern:
-                    field = pattern.group(1)
-                    conditions = [f"{field} LIKE '%{kw}%'" for kw in keywords]
-                    or_condition = f"({' OR '.join(conditions)})"
-                    sql = sql.replace(pattern.group(0), or_condition)
-        
-        # Replace {param} style placeholders
-        for param_name, value in params.items():
-            placeholder = f"{{{param_name}}}"
-            if placeholder in sql:
-                if isinstance(value, str):
-                    # Check if already quoted
-                    if not self._needs_quotes(sql, placeholder):
-                        sql = sql.replace(placeholder, value)
-                    else:
-                        sql = sql.replace(placeholder, f"'{value}'")
-                elif isinstance(value, (int, float)):
-                    sql = sql.replace(placeholder, str(value))
-                elif isinstance(value, (datetime, date)):
-                    if self._needs_quotes(sql, placeholder):
-                        sql = sql.replace(placeholder, f"'{value.strftime('%Y-%m-%d')}'")
-                    else:
-                        sql = sql.replace(placeholder, value.strftime('%Y-%m-%d'))
-                elif value is None:
-                    sql = sql.replace(placeholder, "NULL")
-                else:
-                    sql = sql.replace(placeholder, str(value))
-        
-        # Replace :param style placeholders
+        # Replace :param_name placeholders
         for param_name, value in params.items():
             placeholder = f":{param_name}"
-            if placeholder in sql:
-                if isinstance(value, str):
-                    sql = sql.replace(placeholder, f"'{value}'")
-                elif isinstance(value, (int, float)):
-                    sql = sql.replace(placeholder, str(value))
-                elif isinstance(value, (datetime, date)):
-                    if self._needs_quotes(sql, placeholder):
-                        sql = sql.replace(placeholder, f"'{value.strftime('%Y-%m-%d')}'")
-                    else:
-                        sql = sql.replace(placeholder, value.strftime('%Y-%m-%d'))
-                elif value is None:
-                    sql = sql.replace(placeholder, "NULL")
+            
+            if placeholder not in sql:
+                continue
+                
+            if value is None:
+                sql = sql.replace(placeholder, "NULL")
+            elif isinstance(value, str):
+                # Handle LIKE patterns
+                if re.search(rf"LIKE\s*'%'\s*\|\|\s*{re.escape(placeholder)}\s*\|\|\s*'%'", sql):
+                    sql = re.sub(
+                        rf"LIKE\s*'%'\s*\|\|\s*{re.escape(placeholder)}\s*\|\|\s*'%'",
+                        f"LIKE '%' || '{value}' || '%'",
+                        sql
+                    )
                 else:
-                    sql = sql.replace(placeholder, str(value))
-        
-        # Clean up any remaining empty conditions
-        sql = re.sub(r'AND\s+\(\s*\)', '', sql)
-        sql = re.sub(r'WHERE\s+\(\s*\)', 'WHERE 1=1', sql)
-        sql = re.sub(r'AND\s+AND', 'AND', sql)
-        sql = re.sub(r'WHERE\s+AND', 'WHERE', sql)
-        
-        # Clean up excessive whitespace and newlines
-        sql = ' '.join(sql.split())
+                    sql = sql.replace(placeholder, f"'{value}'")
+            elif isinstance(value, (int, float)):
+                sql = sql.replace(placeholder, str(value))
+            elif isinstance(value, datetime):
+                sql = sql.replace(placeholder, f"'{value.strftime('%Y-%m-%d %H:%M:%S')}'")
+            elif isinstance(value, list):
+                # Use first value for non-array context
+                first_val = value[0] if value else None
+                if isinstance(first_val, str):
+                    sql = sql.replace(placeholder, f"'{first_val}'")
+                else:
+                    sql = sql.replace(placeholder, str(first_val))
         
         return sql.strip()
+    
+    def _calculate_datetime(self, datetime_expr: str) -> Optional[str]:
+        """Calculate datetime from SQLite expression"""
+        match = re.match(r"datetime\('now',\s*'([+-]\d+)\s+days?'\)", datetime_expr)
+        if match:
+            days = int(match.group(1))
+            calculated = datetime.now() + timedelta(days=days)
+            return calculated.strftime('%Y-%m-%d %H:%M:%S')
+        
+        if datetime_expr == "datetime('now')":
+            return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        
+        return None

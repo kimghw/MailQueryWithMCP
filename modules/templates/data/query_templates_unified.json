@@ -2,7 +2,7 @@
   "version": "10.0.0",
   "description": "IACSGRAPH Query Templates Metadata",
   "last_updated": "2025-01-26",
-  "total_templates": 185,
+  "total_templates": 184,
   "metadata": {
     "mcp_integration": true,
     "parameter_format": "mcp_enhanced",
@@ -810,9 +810,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
-          "multi_query": true,
+          "default": "keyword",
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -1191,9 +1191,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
-          "multi_query": true,
+          "default": "keyword",
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         },
@@ -1804,10 +1804,9 @@
         },
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "EG",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -1929,9 +1928,9 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT p.*, c.subject, c.sent_time, c.agenda_panel FROM agenda_pending p LEFT JOIN agenda_chair c ON p.agenda_code = c.agenda_code WHERE c.sent_time >= :period_start ORDER BY p.received_time DESC",
+        "query": "SELECT p.event_id, p.error_reason, p.sender_type, p.sender_organization, p.sent_time, p.subject, p.received_at, p.retry_count FROM agenda_pending p WHERE p.processed = 0 AND p.received_at >= :period_start ORDER BY p.received_at DESC",
         "system": "pending 상태의 전체 의제를 조회합니다",
-        "sql_prompt": "agenda_pending 테이블의 전체 내용을 agenda_chair와 조인하여 조회합니다"
+        "sql_prompt": "처리되지 않은 pending 상태의 의제들과 오류 이유를 조회합니다"
       },
       "parameters": [
         {
@@ -1982,10 +1981,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "Vessel Asset Inventory",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -2027,9 +2025,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
-          "multi_query": true,
+          "default": "keyword",
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -2299,10 +2297,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "cyber",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -2395,7 +2392,7 @@
         "agenda_responses_content"
       ],
       "routing_type": "sql",
-      "to_agent": null
+      "to_agent": "아직 아무도 응답하지 않은 의제들을 분석하여 응답이 필요한 긴급도와 중요도를 평가하고, 응답이 없는 이유를 파악해 주세요."
     },
     {
       "template_id": "recent_attachment_agendas",
@@ -2467,17 +2464,16 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE ({keywords_condition}) ORDER BY sent_time DESC",
+        "query": "SELECT agenda_code, agenda_base_version, subject, keywords, sent_time, decision_status, agenda_panel FROM agenda_chair WHERE (subject LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%') ORDER BY sent_time DESC",
         "system": "Digital Transformation 관련 의제를 검색합니다",
         "sql_prompt": "디지털 전환 관련 키워드를 포함하는 의제를 검색합니다"
       },
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "Digital Transformation",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -3135,10 +3131,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": false,
           "default": "MSC 110",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -3558,7 +3553,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT c.agenda_panel, COUNT(DISTINCT c.agenda_base_version) as activity_count FROM (SELECT agenda_panel, agenda_base_version FROM agenda_chair WHERE sender_organization = ':organization' UNION SELECT c.agenda_panel, r.agenda_base_version FROM agenda_responses_content r JOIN agenda_chair c ON r.agenda_base_version = c.agenda_base_version WHERE r.:organization IS NOT NULL) c GROUP BY c.agenda_panel ORDER BY activity_count DESC",
+        "query": "SELECT DISTINCT c.agenda_panel, COUNT(DISTINCT c.agenda_base_version) as activity_count FROM (SELECT agenda_panel, agenda_base_version FROM agenda_chair WHERE sender_organization = :organization UNION SELECT c.agenda_panel, r.agenda_base_version FROM agenda_responses_content r JOIN agenda_chair c ON r.agenda_base_version = c.agenda_base_version WHERE CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL) c GROUP BY c.agenda_panel ORDER BY activity_count DESC",
         "system": "특정 조직이 참여하는 패널을 조회합니다",
         "sql_prompt": "의제 생성과 응답을 통해 활동하는 패널을 파악합니다"
       },
@@ -4368,7 +4363,7 @@
         ]
       },
       "sql_template": {
-        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.subject, c.keywords, c.body as agenda_content, c.deadline FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.:organization IS NULL OR r.:organization = '')) SELECT p.*, r.ABS, r.BV, r.CCS, r.DNV, r.NK, r.LR FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version ORDER BY p.deadline ASC",
+        "query": "WITH org_pending AS (SELECT c.agenda_base_version, c.subject, c.keywords, c.body as agenda_content, c.deadline FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '')) SELECT p.*, r.ABS, r.BV, r.CCS, r.DNV, r.NK, r.LR FROM org_pending p LEFT JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version ORDER BY p.deadline ASC",
         "system": "SDTP에서 특정 조직이 응답해야 하는 의제와 타 기관 의견을 조회합니다",
         "sql_prompt": "SDTP 패널에서 응답이 필요한 의제들과 각 기관의 응답을 조회합니다"
       },
@@ -4420,7 +4415,7 @@
         ]
       },
       "sql_template": {
-        "query": "WITH org_pending AS (SELECT c.keywords FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.:organization IS NULL OR r.:organization = '')) SELECT keywords, COUNT(*) as frequency FROM org_pending WHERE keywords IS NOT NULL AND keywords != '' GROUP BY keywords ORDER BY frequency DESC",
+        "query": "WITH org_pending AS (SELECT c.keywords FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '')) SELECT keywords, COUNT(*) as frequency FROM org_pending WHERE keywords IS NOT NULL AND keywords != '' GROUP BY keywords ORDER BY frequency DESC",
         "system": "SDTP에서 특정 조직이 응답해야 하는 의제들의 키워드를 분석합니다",
         "sql_prompt": "SDTP 패널에서 응답이 필요한 의제들의 키워드를 빈도순으로 집계합니다"
       },
@@ -4472,7 +4467,7 @@
         ]
       },
       "sql_template": {
-        "query": "WITH org_pending AS (SELECT c.agenda_base_version FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.:organization IS NULL OR r.:organization = '')) SELECT 'Multiple Organizations' as source, GROUP_CONCAT(DISTINCT CASE WHEN r.ABS IS NOT NULL THEN 'ABS' WHEN r.DNV IS NOT NULL THEN 'DNV' WHEN r.NK IS NOT NULL THEN 'NK' WHEN r.CCS IS NOT NULL THEN 'CCS' WHEN r.BV IS NOT NULL THEN 'BV' END) as responding_orgs FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version",
+        "query": "WITH org_pending AS (SELECT c.agenda_base_version FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '')) SELECT 'Multiple Organizations' as source, GROUP_CONCAT(DISTINCT CASE WHEN r.ABS IS NOT NULL THEN 'ABS' WHEN r.DNV IS NOT NULL THEN 'DNV' WHEN r.NK IS NOT NULL THEN 'NK' WHEN r.CCS IS NOT NULL THEN 'CCS' WHEN r.BV IS NOT NULL THEN 'BV' END) as responding_orgs FROM org_pending p JOIN agenda_responses_content r ON p.agenda_base_version = r.agenda_base_version",
         "system": "SDTP에서 특정 조직이 응답해야 하는 의제들에 대한 타 기관 응답을 분석합니다",
         "sql_prompt": "SDTP 패널에서 응답이 필요한 의제들에 대한 타 기관의 응답을 추출합니다"
       },
@@ -4528,10 +4523,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "keyword",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         },
@@ -4578,7 +4572,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, CASE WHEN c.deadline < datetime('now') THEN 'OVERDUE' ELSE 'URGENT' END as status, JULIANDAY(c.deadline) - JULIANDAY('now') as days_remaining, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND (c.deadline <= datetime('now', '+3 days')) AND (r.:organization IS NULL OR r.:organization = '') ORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, CASE WHEN c.deadline < datetime('now') THEN 'OVERDUE' ELSE 'URGENT' END as status, JULIANDAY(c.deadline) - JULIANDAY('now') as days_remaining, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND (c.deadline <= datetime('now', '+3 days')) AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') ORDER BY c.deadline ASC",
         "system": "특정 조직이 긴급히 응답해야 하는 의제를 조회합니다",
         "sql_prompt": "마감일이 3일 이내이거나 지난 미응답 의제를 찾습니다"
       },
@@ -4629,7 +4623,7 @@
         ]
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.sent_time FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.:organization IS NULL OR r.:organization = '') ORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.sent_time FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') ORDER BY c.deadline ASC",
         "system": "SDTP에서 특정 조직이 응답해야 하는 의제를 조회합니다",
         "sql_prompt": "SDTP 패널에서 응답이 필요한 의제를 찾습니다"
       },
@@ -4890,7 +4884,7 @@
         ]
       },
       "sql_template": {
-        "query": "SELECT COUNT(DISTINCT c.agenda_base_version) as total_agendas, COUNT(DISTINCT CASE WHEN r.:organization IS NOT NULL THEN c.agenda_base_version END) as responded_agendas, ROUND(COUNT(DISTINCT CASE WHEN r.:organization IS NOT NULL THEN c.agenda_base_version END) * 100.0 / COUNT(DISTINCT c.agenda_base_version), 2) as response_rate FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND sent_time >= :period_start",
+        "query": "SELECT COUNT(DISTINCT c.agenda_base_version) as total_agendas, COUNT(DISTINCT CASE WHEN CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL THEN c.agenda_base_version END) as responded_agendas, ROUND(COUNT(DISTINCT CASE WHEN CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL THEN c.agenda_base_version END) * 100.0 / COUNT(DISTINCT c.agenda_base_version), 2) as response_rate FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND sent_time >= :period_start",
         "system": "SDTP에서 특정 조직의 응답률을 계산합니다",
         "sql_prompt": "SDTP 패널에서 발행된 의제 대비 응답 비율을 계산합니다"
       },
@@ -4949,7 +4943,7 @@
         ]
       },
       "sql_template": {
-        "query": "SELECT COUNT(DISTINCT c.agenda_base_version) as total_agendas, COUNT(DISTINCT CASE WHEN r.:organization IS NOT NULL THEN c.agenda_base_version END) as responded_agendas, ROUND(COUNT(DISTINCT CASE WHEN r.:organization IS NOT NULL THEN c.agenda_base_version END) * 100.0 / COUNT(DISTINCT c.agenda_base_version), 2) as response_rate FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND sent_time >= :period_start",
+        "query": "SELECT COUNT(DISTINCT c.agenda_base_version) as total_agendas, COUNT(DISTINCT CASE WHEN CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL THEN c.agenda_base_version END) as responded_agendas, ROUND(COUNT(DISTINCT CASE WHEN CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL THEN c.agenda_base_version END) * 100.0 / COUNT(DISTINCT c.agenda_base_version), 2) as response_rate FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND sent_time >= :period_start",
         "system": "SDTP에서 특정 기간 동안 조직의 응답률을 계산합니다",
         "sql_prompt": "지정된 기간 동안 SDTP 패널의 응답률을 계산합니다"
       },
@@ -5008,7 +5002,7 @@
         ]
       },
       "sql_template": {
-        "query": "SELECT strftime('%Y-%m', c.sent_time) as month, COUNT(DISTINCT c.agenda_base_version) as total, COUNT(DISTINCT CASE WHEN r.:organization IS NOT NULL THEN c.agenda_base_version END) as responded, ROUND(COUNT(DISTINCT CASE WHEN r.:organization IS NOT NULL THEN c.agenda_base_version END) * 100.0 / COUNT(DISTINCT c.agenda_base_version), 2) as rate FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND strftime('%Y', c.sent_time) = strftime('%Y', 'now') GROUP BY month ORDER BY month",
+        "query": "SELECT strftime('%Y-%m', c.sent_time) as month, COUNT(DISTINCT c.agenda_base_version) as total, COUNT(DISTINCT CASE WHEN CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL THEN c.agenda_base_version END) as responded, ROUND(COUNT(DISTINCT CASE WHEN CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL THEN c.agenda_base_version END) * 100.0 / COUNT(DISTINCT c.agenda_base_version), 2) as rate FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.mail_type = 'REQUEST' AND strftime('%Y', c.sent_time) = strftime('%Y', 'now') GROUP BY month ORDER BY month",
         "system": "SDTP에서 올해 조직의 월별 응답률을 계산합니다",
         "sql_prompt": "올해 SDTP 패널의 월별 응답률을 계산합니다"
       },
@@ -5108,7 +5102,7 @@
         ]
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.sent_time FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.sender_type = 'CHAIR' AND c.hasAttachments = 1 AND c.mail_type = 'REQUEST' AND (c.deadline > datetime('now') OR c.has_deadline = 0) AND (r.:organization IS NULL OR r.:organization = '') ORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.sent_time FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_panel = 'SDTP' AND c.sender_type = 'CHAIR' AND c.hasAttachments = 1 AND c.mail_type = 'REQUEST' AND (c.deadline > datetime('now') OR c.has_deadline = 0) AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') ORDER BY c.deadline ASC",
         "system": "SDTP에서 특정 조직이 미응답한 첨부파일 포함 의제를 조회합니다",
         "sql_prompt": "SDTP에서 첨부파일이 있고 응답이 필요한 의제를 찾습니다"
       },
@@ -5155,11 +5149,18 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, decision_status, sent_time, sent_time, deadline FROM agenda_chair WHERE agenda_code = 'PL25016' ORDER BY sent_time DESC LIMIT 1",
+        "query": "SELECT agenda_code, agenda_base_version, subject, decision_status, sent_time, sent_time, deadline FROM agenda_chair WHERE agenda_base_version = ':agenda_base_version' ORDER BY sent_time DESC LIMIT 1",
         "system": "특정 의제의 현재 상태를 조회합니다",
         "sql_prompt": "PL25016 의제의 최신 버전과 상태를 조회합니다"
       },
-      "parameters": [],
+      "parameters": [
+        {
+          "name": "agenda_base_version",
+          "type": "string",
+          "required": true,
+          "default": "PL25016"
+        }
+      ],
       "related_db": "iacsgraph.db",
       "related_tables": [
         "agenda_chair"
@@ -5238,7 +5239,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.sender_type = 'CHAIR' AND c.hasAttachments = 1 AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.:organization IS NULL OR r.:organization = '') ORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.sender_type = 'CHAIR' AND c.hasAttachments = 1 AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') ORDER BY c.deadline ASC",
         "system": "특정 조직이 응답해야 하는 의장 발신 첨부파일 포함 의제를 조회합니다",
         "sql_prompt": "의장이 보낸 첨부파일이 있는 미응답 의제를 찾습니다"
       },
@@ -5400,7 +5401,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.hasAttachments = 1 AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.:organization IS NULL OR r.:organization = '') ORDER BY c.deadline ASC",
+        "query": "SELECT c.agenda_code, c.agenda_base_version, c.subject, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.hasAttachments = 1 AND c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') ORDER BY c.deadline ASC",
         "system": "특정 조직이 응답해야 하는 첨부파일 포함 의제를 조회합니다",
         "sql_prompt": "첨부파일이 있는 미응답 의제들을 조회합니다"
       },
@@ -5481,7 +5482,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, agenda_base_version, subject, hasAttachments, sent_time FROM agenda_chair WHERE agenda_base_version = ':agenda' ORDER BY agenda_version DESC LIMIT 1",
+        "query": "SELECT agenda_code, agenda_base_version, subject, hasAttachments, sent_time FROM agenda_chair WHERE agenda_base_version = :agenda ORDER BY agenda_version DESC LIMIT 1",
         "system": "특정 의제의 첨부파일 정보를 조회합니다",
         "sql_prompt": "지정된 의제의 첨부파일 유무를 확인합니다"
       },
@@ -5525,7 +5526,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.:organization as opinion FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' AND r.:organization IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END as opinion FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda AND CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제에 대한 특정 조직의 의견을 조회합니다",
         "sql_prompt": "지정된 의제에 대한 조직의 응답 내용을 조회합니다"
       },
@@ -5575,7 +5576,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.:organization as opinion, c.sent_time FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' AND r.:organization IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END as opinion, c.sent_time FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda AND CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제에 대한 특정 조직의 의견을 조회합니다",
         "sql_prompt": "지정된 의제에 대한 조직의 응답을 조회합니다"
       },
@@ -5743,7 +5744,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 모든 조직 응답을 조회합니다",
         "sql_prompt": "의제에 대한 모든 기관의 의견을 조회하여 비교 분석합니다"
       },
@@ -5832,7 +5833,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 모든 조직 응답을 조회합니다",
         "sql_prompt": "의제에 대한 모든 기관의 의견을 조회하여 비교 분석합니다"
       },
@@ -5921,7 +5922,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제에 대한 여러 조직의 의견을 조회합니다",
         "sql_prompt": "의제에 대한 모든 기관의 응답을 조회합니다"
       },
@@ -5971,7 +5972,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT agenda_code, subject, keywords, body FROM agenda_chair WHERE agenda_base_version = ':agenda' ORDER BY agenda_version DESC LIMIT 1",
+        "query": "SELECT agenda_code, subject, keywords, body FROM agenda_chair WHERE agenda_base_version = :agenda ORDER BY agenda_version DESC LIMIT 1",
         "system": "특정 의제의 키워드를 조회합니다",
         "sql_prompt": "의제의 키워드와 내용을 조회합니다"
       },
@@ -6015,7 +6016,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 모든 응답을 조회합니다",
         "sql_prompt": "의제에 대한 모든 기관의 응답을 조회합니다"
       },
@@ -6062,7 +6063,7 @@
         ]
       },
       "sql_template": {
-        "query": "WITH target_keywords AS (SELECT keywords FROM agenda_chair WHERE agenda_base_version = ':agenda' LIMIT 1) SELECT c.agenda_code, c.subject, c.keywords, c.sent_time FROM agenda_chair c, target_keywords t WHERE c.agenda_panel = 'SDTP' AND c.agenda_code != ':agenda' AND c.keywords LIKE '%' || t.keywords || '%' ORDER BY c.sent_time DESC LIMIT 10",
+        "query": "WITH target_keywords AS (SELECT keywords FROM agenda_chair WHERE agenda_base_version = :agenda LIMIT 1) SELECT c.agenda_code, c.subject, c.keywords, c.sent_time FROM agenda_chair c, target_keywords t WHERE c.agenda_panel = 'SDTP' AND c.agenda_code != :agenda AND c.keywords LIKE '%' || t.keywords || '%' ORDER BY c.sent_time DESC LIMIT 10",
         "system": "특정 의제의 키워드와 관련된 SDTP 의제를 검색합니다",
         "sql_prompt": "의제의 키워드를 기반으로 SDTP에서 관련 의제를 찾습니다"
       },
@@ -6108,7 +6109,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' AND r.KR IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda AND r.KR IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 KR 의견과 다른 조직 응답을 조회합니다",
         "sql_prompt": "의제에 대한 KR과 다른 기관들의 의견을 조회합니다"
       },
@@ -6155,7 +6156,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' AND r.KR IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, r.* FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda AND r.KR IS NOT NULL ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제의 KR 의견과 다른 조직 응답을 조회합니다",
         "sql_prompt": "의제에 대한 KR과 다른 기관들의 의견을 조회합니다"
       },
@@ -6200,7 +6201,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, c.body, r.* FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = ':agenda' AND (c.body LIKE '%UR%' OR c.body LIKE '%Unified Requirement%' OR c.keywords LIKE '%UR%') ORDER BY c.agenda_version DESC LIMIT 1",
+        "query": "SELECT c.agenda_code, c.subject, c.body, r.* FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.agenda_base_version = :agenda AND (c.body LIKE '%UR%' OR c.body LIKE '%Unified Requirement%' OR c.keywords LIKE '%UR%') ORDER BY c.agenda_version DESC LIMIT 1",
         "system": "특정 의제에서 UR 관련 내용을 검색합니다",
         "sql_prompt": "의제와 응답에서 UR 관련 키워드를 검색합니다"
       },
@@ -6219,71 +6220,6 @@
       ],
       "routing_type": "sql",
       "to_agent": "의제에서 UR 관련 내용을 찾아 어떤 통일규칙이 논의되고 있는지 분석해 주세요."
-    },
-    {
-      "template_id": "agenda_multiple_organizations_opinions",
-      "template_version": "2.0.0",
-      "template_category": "opinion_analysis",
-      "query_info": {
-        "natural_questions": [
-          "(original) {agenda} 에서 {organization},{organization},{organization} 의견은?",
-          "(similar1) 특정 의제에 대한 여러 기관의 의견을 한번에 보여주세요",
-          "(similar2) 하나의 안건에 대해 3개 조직의 입장을 비교하고 싶어요",
-          "(similar3) 이 의제에서 세 기관이 어떤 의견을 냈는지 확인해줘",
-          "(similar4) 선택한 3개 조직이 동일한 의제에 대해 제시한 의견을 비교 분석할 수 있도록 정리해 주세요",
-          "(ext) 특정 의제에 대해 3개 이상의 조직들이 제출한 의견을 상세히 비교하고, 공통점과 차이점을 분석해 주세요"
-        ],
-        "keywords": [
-          "의견",
-          "비교",
-          "여러기관",
-          "분석"
-        ]
-      },
-      "target_scope": {
-        "scope_type": "specific",
-        "target_organizations": [],
-        "target_panels": []
-      },
-      "sql_template": {
-        "query": "SELECT \n                    c.agenda_code,\n                    c.agenda_base_version,\n                    c.subject,\n                    c.body as content,\n                    rc.{organization1} as {organization1}_opinion,\n                    rc.{organization2} as {organization2}_opinion,\n                    rc.{organization3} as {organization3}_opinion,\n                    rt.{organization1} as {organization1}_response_time,\n                    rt.{organization2} as {organization2}_response_time,\n                    rt.{organization3} as {organization3}_response_time\n                FROM agenda_chair c\n                LEFT JOIN agenda_responses_content rc ON c.agenda_base_version = rc.agenda_base_version\n                LEFT JOIN agenda_responses_receivedtime rt ON c.agenda_base_version = rt.agenda_base_version\n                WHERE c.agenda_code LIKE ':agenda%'",
-        "system": "특정 의제에 대한 여러 조직의 의견을 조회합니다",
-        "sql_prompt": "하나의 의제에 대해 3개 조직의 응답을 비교합니다"
-      },
-      "parameters": [
-        {
-          "name": "agenda",
-          "type": "string",
-          "required": true,
-          "mcp_format": "extracted_agenda"
-        },
-        {
-          "name": "organization1",
-          "type": "string",
-          "required": true,
-          "mcp_format": "extracted_organization"
-        },
-        {
-          "name": "organization2",
-          "type": "string",
-          "required": true,
-          "mcp_format": "extracted_organization"
-        },
-        {
-          "name": "organization3",
-          "type": "string",
-          "required": true,
-          "mcp_format": "extracted_organization"
-        }
-      ],
-      "related_db": "iacsgraph.db",
-      "related_tables": [
-        "agenda_chair",
-        "agenda_responses_content",
-        "agenda_responses_receivedtime"
-      ],
-      "routing_type": "sql",
-      "to_agent": "3개 조직의 의견을 비교 분석하여 공통점과 차이점을 정리해 주세요."
     },
     {
       "template_id": "agenda_fastest_response_organization",
@@ -6931,7 +6867,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT c.agenda_code, c.subject, c.sent_time, r.:organization as opinion FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE r.:organization IS NOT NULL AND ((subject LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%')) AND sent_time >= :period_start ORDER BY c.sent_time DESC",
+        "query": "SELECT c.agenda_code, c.subject, c.sent_time, CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END as opinion FROM agenda_chair c JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NOT NULL AND ((subject LIKE '%' || :keyword || '%' OR body LIKE '%' || :keyword || '%' OR keywords LIKE '%' || :keyword || '%')) AND sent_time >= :period_start ORDER BY c.sent_time DESC",
         "system": "특정 조직의 키워드 관련 응답을 조회합니다",
         "sql_prompt": "조직이 특정 키워드 관련 의제에서 보인 의견을 조회합니다"
       },
@@ -6945,10 +6881,9 @@
         },
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "keyword",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         },
@@ -7515,10 +7450,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "keyword",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -7607,10 +7541,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "keyword",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
@@ -7699,10 +7632,9 @@
       "parameters": [
         {
           "name": "keyword",
-          "type": "string",
+          "type": "array",
           "required": true,
           "default": "keyword",
-          "multi_query": true,
           "description": "검색할 키워드",
           "mcp_format": "extracted_keywords"
         }
