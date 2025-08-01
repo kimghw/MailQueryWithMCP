@@ -10,7 +10,7 @@ import re
 logger = logging.getLogger(__name__)
 
 
-class SQLGeneratorV3:
+class SQLGenerator:
     """SQL generator that returns list of queries for array parameters"""
     
     def __init__(self):
@@ -115,8 +115,11 @@ class SQLGeneratorV3:
         if 'extracted_organization' in mcp_params:
             merged['organization'] = mcp_params['extracted_organization']
         
+        if 'extracted_intent' in mcp_params:
+            merged['intent'] = mcp_params['extracted_intent']
+        
         # Copy other parameters
-        for param in ['limit', 'status', 'agenda', 'panel']:
+        for param in ['limit', 'status', 'agenda', 'panel', 'intent']:
             if param in mcp_params:
                 merged[param] = mcp_params[param]
         

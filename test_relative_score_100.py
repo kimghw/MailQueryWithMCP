@@ -1,23 +1,42 @@
 #!/usr/bin/env python3
 """
-Test 100 diverse queries against the query templates
-Analyze failures and low confidence matches
+100개 질의에 대한 Relative Score 계산 테스트
 """
-import json
+
 import sys
 import os
-from pathlib import Path
-from typing import List, Dict, Any
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Add parent directory to path
-sys.path.append(str(Path(__file__).parent))
+from modules.common.parsers.query_parameter_extractor import QueryParameterExtractor
+import json
+from collections import defaultdict
 
-from modules.query_assistant.services.query_matcher import QueryMatcher
-# from modules.common.services.synonym_service import SynonymService  # Not needed - QueryMatcher has its own
+def calculate_relative_score(params):
+    """파라미터를 기반으로 relative_score 계산"""
+    key_fields = ['organization', 'date_range', 'keywords', 'intent', 
+                  'committee', 'agenda_base', 'agenda_base_version']
+    
+    filled_count = 0
+    for field in key_fields:
+        if field == 'keywords':
+            # keywords는 normalized_query를 분석해서 추출 (간단한 방식)
+            if params.get('normalized_query'):
+                keywords = params['normalized_query'].split()
+                if len(keywords) > 0:
+                    filled_count += 1
+        elif params.get(field) is not None:
+            filled_count += 1
+    
+    relative_score = round((filled_count / len(key_fields)) * 0.2, 3)
+    return relative_score, filled_count
 
-def generate_test_queries() -> List[Dict[str, Any]]:
-    """Generate 100 diverse test queries based on database schema"""
-    queries = [
+def analyze_queries():
+    """100개 질의 분석"""
+    # QueryParameterExtractor 초기화
+    extractor = QueryParameterExtractor()
+    
+    # 100개 테스트 케이스
+    test_cases = [
         # 아젠다 관련 (15개)
         {"query": "최근 아젠다 목록 보여줘", "expected_category": "agenda"},
         {"query": "어제 등록된 아젠다 조회", "expected_category": "agenda"},
@@ -137,171 +156,130 @@ def generate_test_queries() -> List[Dict[str, Any]]:
         {"query": "업데이트 알림", "expected_category": "notification"}
     ]
     
-    return queries
-
-def analyze_results(test_results: List[Dict]) -> Dict[str, Any]:
-    """Analyze test results and generate summary"""
-    total = len(test_results)
-    matched = sum(1 for r in test_results if r['matched'])
-    high_confidence = sum(1 for r in test_results if r['matched'] and r['confidence'] > 0.7)
-    medium_confidence = sum(1 for r in test_results if r['matched'] and 0.5 <= r['confidence'] <= 0.7)
-    low_confidence = sum(1 for r in test_results if r['matched'] and r['confidence'] < 0.5)
+    # 결과 저장
+    results = []
+    category_stats = defaultdict(lambda: {'count': 0, 'total_score': 0, 'filled_fields': []})
     
-    # Category accuracy
-    category_stats = {}
-    for result in test_results:
-        category = result['expected_category']
-        if category not in category_stats:
-            category_stats[category] = {'total': 0, 'matched': 0, 'correct': 0}
-        
-        category_stats[category]['total'] += 1
-        if result['matched']:
-            category_stats[category]['matched'] += 1
-            # Check if category matches (simplified check)
-            if result['best_match']:
-                # best_match contains 'category' field directly
-                match_category = result['best_match'].get('category', '').lower()
-                if category in match_category:
-                    category_stats[category]['correct'] += 1
+    print("=" * 80)
+    print("100개 질의에 대한 Relative Score 계산")
+    print("=" * 80)
+    print()
     
-    return {
-        'total_queries': total,
-        'matched_queries': matched,
-        'match_rate': matched / total * 100,
-        'high_confidence': high_confidence,
-        'medium_confidence': medium_confidence,
-        'low_confidence': low_confidence,
-        'unmatched': total - matched,
-        'category_stats': category_stats
-    }
-
-def main():
-    print("="*80)
-    print("100 Query Test with Individual Question Embeddings")
-    print("="*80)
-    
-    # Initialize services
-    query_matcher = QueryMatcher()  # Uses built-in synonym service
-    
-    # Generate test queries
-    test_queries = generate_test_queries()
-    print(f"\nTesting {len(test_queries)} queries...")
-    
-    # Run tests
-    test_results = []
-    failures = []
-    
-    for i, test_case in enumerate(test_queries, 1):
+    for idx, test_case in enumerate(test_cases, 1):
         query = test_case['query']
-        expected_category = test_case['expected_category']
+        category = test_case['expected_category']
         
-        try:
-            # Suppress debug output to avoid validation errors
-            os.environ['SUPPRESS_DEBUG'] = '1'
-            
-            # Process query
-            matches = query_matcher.find_best_matches(
-                query=query,
-                top_k=3,
-                return_similar=False
-            )
-            
-            # Restore debug output
-            os.environ.pop('SUPPRESS_DEBUG', None)
-            
-            if matches and len(matches) > 0:
-                best_match = matches[0]
-                confidence = best_match.get('similarity', 0.0)
-                
-                result = {
-                    'query': query,
-                    'expected_category': expected_category,
-                    'matched': True,
-                    'confidence': confidence,
-                    'best_match': best_match,
-                    'keywords': best_match.get('keyword_matches', [])
-                }
-                
-                if confidence < 0.5:
-                    failures.append(result)
-                    
-            else:
-                result = {
-                    'query': query,
-                    'expected_category': expected_category,
-                    'matched': False,
-                    'confidence': 0.0,
-                    'best_match': None,
-                    'keywords': []
-                }
-                failures.append(result)
-            
-            test_results.append(result)
-            
-            # Progress indicator
-            if i % 10 == 0:
-                print(f"  Processed {i}/{len(test_queries)} queries...")
-                
-        except Exception as e:
-            print(f"Error processing query '{query}': {e}")
-            test_results.append({
-                'query': query,
-                'expected_category': expected_category,
-                'matched': False,
-                'confidence': 0.0,
-                'best_match': None,
-                'error': str(e)
-            })
-    
-    # Analyze results
-    print("\n" + "="*80)
-    print("RESULTS SUMMARY")
-    print("="*80)
-    
-    summary = analyze_results(test_results)
-    
-    print(f"\nOverall Performance:")
-    print(f"  Total queries: {summary['total_queries']}")
-    print(f"  Matched: {summary['matched_queries']} ({summary['match_rate']:.1f}%)")
-    print(f"  Unmatched: {summary['unmatched']}")
-    
-    print(f"\nConfidence Distribution:")
-    print(f"  High (>0.7): {summary['high_confidence']}")
-    print(f"  Medium (0.5-0.7): {summary['medium_confidence']}")
-    print(f"  Low (<0.5): {summary['low_confidence']}")
-    
-    print(f"\nCategory Performance:")
-    for category, stats in summary['category_stats'].items():
-        match_rate = stats['matched'] / stats['total'] * 100 if stats['total'] > 0 else 0
-        print(f"  {category}: {stats['matched']}/{stats['total']} ({match_rate:.1f}%)")
-    
-    # Show failures
-    print(f"\n{'='*80}")
-    print(f"FAILED OR LOW CONFIDENCE MATCHES ({len(failures)} total)")
-    print(f"{'='*80}")
-    
-    for i, failure in enumerate(failures[:20], 1):  # Show first 20
-        print(f"\n{i}. Query: \"{failure['query']}\"")
-        print(f"   Expected category: {failure['expected_category']}")
-        print(f"   Keywords: {failure['keywords'][:5]}")
+        # 파라미터 추출
+        params = extractor.extract_parameters(query)
         
-        if failure['matched']:
-            match = failure['best_match']
-            print(f"   Matched with low confidence ({failure['confidence']:.3f}):")
-            print(f"   - Template: {match.get('template_id', 'N/A')}")
-            print(f"   - Question: {match.get('matched_question', 'N/A')[:100]}...")
-        else:
-            print(f"   No match found")
+        # relative_score 계산
+        score, filled_count = calculate_relative_score(params)
+        
+        # 결과 저장
+        result = {
+            'index': idx,
+            'query': query,
+            'category': category,
+            'relative_score': score,
+            'filled_count': filled_count,
+            'extracted_params': {
+                'organization': params.get('organization'),
+                'organization_code': params.get('organization_code'),
+                'date_range': params.get('date_range'),
+                'committee': params.get('committee'),
+                'agenda_base': params.get('agenda_base'),
+                'agenda_base_version': params.get('agenda_base_version'),
+                'status': params.get('status'),
+                'limit': params.get('limit')
+            }
+        }
+        results.append(result)
+        
+        # 카테고리별 통계
+        category_stats[category]['count'] += 1
+        category_stats[category]['total_score'] += score
+        category_stats[category]['filled_fields'].append(filled_count)
+        
+        # 상세 출력 (처음 5개와 마지막 5개만)
+        if idx <= 5 or idx > 95:
+            print(f"[{idx:3d}] {query}")
+            print(f"      Score: {score} (필드: {filled_count}/7)")
+            if params.get('organization'):
+                print(f"      - organization: {params['organization']}")
+            if params.get('committee'):
+                print(f"      - committee: {params['committee']}")
+            if params.get('date_range'):
+                print(f"      - date_range: 있음")
+            if params.get('status'):
+                print(f"      - status: {params['status']}")
+            print()
     
-    # Save detailed results
-    with open('test_results_individual_questions.json', 'w', encoding='utf-8') as f:
-        json.dump({
-            'summary': summary,
-            'detailed_results': test_results,
-            'failures': failures
-        }, f, ensure_ascii=False, indent=2)
+    # 카테고리별 통계 출력
+    print("\n" + "=" * 80)
+    print("카테고리별 Relative Score 통계")
+    print("=" * 80)
+    print(f"{'카테고리':<15} {'쿼리수':>8} {'평균점수':>10} {'평균필드수':>12}")
+    print("-" * 80)
     
-    print(f"\nDetailed results saved to: test_results_individual_questions.json")
+    total_queries = 0
+    total_score_sum = 0
+    
+    for category, stats in sorted(category_stats.items()):
+        avg_score = stats['total_score'] / stats['count']
+        avg_fields = sum(stats['filled_fields']) / len(stats['filled_fields'])
+        print(f"{category:<15} {stats['count']:>8} {avg_score:>10.3f} {avg_fields:>12.1f}")
+        total_queries += stats['count']
+        total_score_sum += stats['total_score']
+    
+    print("-" * 80)
+    overall_avg = total_score_sum / total_queries
+    print(f"{'전체':<15} {total_queries:>8} {overall_avg:>10.3f}")
+    
+    # Score 분포 분석
+    print("\n" + "=" * 80)
+    print("Relative Score 분포")
+    print("=" * 80)
+    
+    score_distribution = defaultdict(int)
+    for result in results:
+        score_range = f"{result['relative_score']:.3f}"
+        score_distribution[score_range] += 1
+    
+    for score, count in sorted(score_distribution.items()):
+        bar = '█' * (count // 2) if count > 0 else ''
+        print(f"Score {score}: {count:3d} {bar}")
+    
+    # 결과를 JSON 파일로 저장 (datetime 객체를 문자열로 변환)
+    json_results = []
+    for result in results:
+        json_result = result.copy()
+        if json_result['extracted_params'].get('date_range'):
+            # datetime 객체를 문자열로 변환
+            date_range = json_result['extracted_params']['date_range']
+            if isinstance(date_range, dict):
+                if 'start' in date_range:
+                    date_range['start'] = str(date_range['start'])
+                if 'end' in date_range:
+                    date_range['end'] = str(date_range['end'])
+        json_results.append(json_result)
+    
+    output_data = {
+        'total_queries': len(test_cases),
+        'results': json_results,
+        'category_statistics': {k: {'count': v['count'], 'total_score': v['total_score'], 
+                                   'avg_score': v['total_score'] / v['count'],
+                                   'avg_fields': sum(v['filled_fields']) / len(v['filled_fields'])}
+                               for k, v in category_stats.items()},
+        'overall_average_score': overall_avg,
+        'score_distribution': dict(score_distribution)
+    }
+    
+    with open('relative_score_analysis.json', 'w', encoding='utf-8') as f:
+        json.dump(output_data, f, ensure_ascii=False, indent=2)
+    
+    print(f"\n결과가 'relative_score_analysis.json'에 저장되었습니다.")
+    
+    return results
 
 if __name__ == "__main__":
-    main()
+    analyze_queries()

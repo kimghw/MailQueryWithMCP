@@ -162,13 +162,31 @@ class VectorStore:
                 template_keywords = set(result.payload.get("keywords", []))
                 query_keywords = set(keywords) if keywords else set()
                 keyword_matches = list(template_keywords.intersection(query_keywords))
-                keyword_score = len(keyword_matches) / max(len(query_keywords), 1) if query_keywords else 0
+                
+                # Enhanced keyword scoring: consider both match ratio and absolute matches
+                if query_keywords:
+                    match_ratio = len(keyword_matches) / len(query_keywords)
+                    # Give bonus for multiple keyword matches
+                    match_bonus = min(len(keyword_matches) * 0.1, 0.3)  # Up to 0.3 bonus
+                    keyword_score = min(match_ratio + match_bonus, 1.0)  # Cap at 1.0
+                else:
+                    keyword_score = 0
                 
                 # Use only vector score when no keywords available
                 if not keywords:
                     combined_score = result.score  # 100% vector similarity
+                    if result.score > 0.3:  # Debug high scoring results
+                        logger.info(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keywords: None")
                 else:
-                    combined_score = (result.score * 0.7) + (keyword_score * 0.3)
+                    # Increase keyword weight: 50% vector + 50% keyword
+                    # Or even higher keyword weight if many keywords match
+                    if keyword_score > 0.5:  # More than half keywords match
+                        combined_score = (result.score * 0.4) + (keyword_score * 0.6)  # 40% vector, 60% keyword
+                    else:
+                        combined_score = (result.score * 0.5) + (keyword_score * 0.5)  # 50% vector, 50% keyword
+                    
+                    if result.score > 0.3:  # Debug high scoring results
+                        logger.info(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keyword: {keyword_score:.3f}, Combined: {combined_score:.3f}")
                 
                 # Keep the highest score for each template
                 if template_id not in template_scores or combined_score > template_scores[template_id]['score']:
@@ -256,10 +274,97 @@ class VectorStore:
             # Sort by combined score and limit
             results.sort(key=lambda x: x.score, reverse=True)
             return results[:limit]
-            
+        
         except Exception as e:
             logger.error(f"Error searching templates: {e}")
             return []
+    
+    def search_by_vector(
+        self,
+        vector: List[float],
+        top_k: int = 10,
+        score_threshold: float = 0.0,
+        category: Optional[str] = None
+    ) -> List[VectorSearchResult]:
+        """Search using pre-computed vector"""
+        
+        # Set up filters
+        filter_conditions = []
+        if category:
+            filter_conditions.append(
+                FieldCondition(
+                    key="template_category",
+                    match=MatchValue(value=category)
+                )
+            )
+        
+        # Perform vector search
+        search_results = self.client.search(
+            collection_name=self.collection_name,
+            query_vector=vector,
+            limit=top_k * 5,  # Get more results since we have multiple embeddings per template
+            with_payload=True,
+            query_filter=Filter(must=filter_conditions) if filter_conditions else None
+        )
+        
+        # Group results by template_id
+        template_scores = {}
+        for result in search_results:
+            template_id = result.payload.get("template_id")
+            if not template_id:
+                continue
+            
+            # Keep the highest score for each template
+            if template_id not in template_scores or result.score > template_scores[template_id]['score']:
+                template_scores[template_id] = {
+                    'result': result,
+                    'score': result.score,
+                    'embedding_type': result.payload.get('embedding_type', ''),
+                    'matched_text': result.payload.get('embedded_text', '')
+                }
+        
+        # Process unique templates
+        results = []
+        for template_data in sorted(template_scores.values(), key=lambda x: x['score'], reverse=True):
+            result = template_data['result']
+            
+            if template_data['score'] >= score_threshold:
+                # Create QueryTemplate from payload
+                parameters_list = result.payload.get("parameters", [])
+                
+                # Extract template fields
+                natural_questions = result.payload.get("natural_questions", [])
+                sql_query = result.payload.get("sql_query", "")
+                tables = result.payload.get("related_tables", [])
+                
+                # Create template - handle natural_questions as string
+                template = QueryTemplate(
+                    template_id=result.payload.get("template_id"),
+                    category=result.payload.get("template_category", ""),
+                    natural_questions=natural_questions[0] if natural_questions else "",  # Take first question
+                    sql_query=sql_query,
+                    sql_query_with_parameters=result.payload.get("sql_query_with_parameters", sql_query),
+                    keywords=result.payload.get("keywords", []),
+                    required_params=result.payload.get("required_params", []),
+                    default_params=result.payload.get("default_params", {}),
+                    query_filter=result.payload.get("query_filter", []),
+                    parameters=parameters_list,
+                    related_tables=tables
+                )
+                
+                # Create search result
+                search_result = VectorSearchResult(
+                    template_id=template.template_id,
+                    score=template_data['score'],
+                    template=template,
+                    keyword_matches=[],
+                    matched_question=template_data.get('matched_text', ''),
+                    embedding_type=template_data['embedding_type']
+                )
+                
+                results.append(search_result)
+        
+        return results[:top_k]
     
         
     def get_template_count(self) -> int:

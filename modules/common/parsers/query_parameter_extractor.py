@@ -107,6 +107,11 @@ class QueryParameterExtractor:
             if panel:
                 result['agenda_panel'] = panel
         
+        # 8. Committee 정보 추출 (패널 동의어 처리)
+        committee = self._extract_committee(normalized_query)
+        if committee:
+            result['committee'] = committee
+        
         return result
     
     def normalize_query(self, query: str) -> str:
@@ -160,6 +165,22 @@ class QueryParameterExtractor:
             match = re.search(pattern, text)
             if match:
                 return match.group(1)
+        
+        return None
+    
+    def _extract_committee(self, text: str) -> Optional[str]:
+        """위원회/패널 정보 추출 (동의어 처리 포함)"""
+        # 패널 동의어를 확인 (SDTP, GPG)
+        committee_patterns = {
+            'SDTP': ['디지털 기술 패널', 'PL', '디지털 패널', 'SDTP'],
+            'GPG': ['GPG']
+        }
+        
+        text_lower = text.lower()
+        for committee_code, patterns in committee_patterns.items():
+            for pattern in patterns:
+                if pattern.lower() in text_lower:
+                    return committee_code
         
         return None
     

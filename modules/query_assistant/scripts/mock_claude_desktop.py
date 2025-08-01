@@ -22,50 +22,145 @@ class MockClaudeDesktop:
             raise ValueError("OPENROUTER_API_KEY not found in environment")
             
         self.api_base = "https://openrouter.ai/api/v1"
-        self.model = "anthropic/claude-3.5-haiku-20241022"  # Fast and cheap for testing
+        self.model = "anthropic/claude-3.5-sonnet-20241022"  # More capable model
         
-        # Load keyword extraction prompt
-        keyword_prompt_file = Path(__file__).parent / "modules" / "query_assistant" / "prompts" / "keyword_extraction_prompt.txt"
-        try:
-            with open(keyword_prompt_file, 'r', encoding='utf-8') as f:
-                keyword_prompt = f.read()
-        except FileNotFoundError:
-            keyword_prompt = ""
-        
-        # Load system prompt from file
-        prompt_file = Path(__file__).parent / "modules" / "query_assistant" / "prompts" / "mcp_system_prompt.txt"
+        # Load MCP system prompt from file
+        prompt_file = Path(__file__).parent.parent / "prompts" / "mcp_system_prompt.txt"
         try:
             with open(prompt_file, 'r', encoding='utf-8') as f:
-                mcp_prompt = f.read()
+                self.system_prompt = f.read()
         except FileNotFoundError:
             # Fallback to default prompt if file not found
-            mcp_prompt = "Extract parameters from the query."
+            self.system_prompt = """IACSGRAPH 해양 데이터베이스 쿼리 처리 시스템입니다.
+
+사용자 질의에서 다음을 추출하세요:
+
+1. keywords: 주요 키워드들
+2. organization: 조직 코드 매핑
+3. period: 기간 추출 (시작날짜와 종료날짜)
+4. intent: 질의 의도 (search|list|analyze|count)
+5. query_scope: "all"(모든 기관), "one"(단일 기관), "more"(여러 기관)"""
+
+    async def analyze_queries_batch(self, queries: List[str], batch_size: int = 100) -> List[Dict[str, Any]]:
+        """Analyze multiple queries in batch using LLM to extract keywords and parameters
         
-        # Combine prompts for better keyword extraction
-        self.system_prompt = f"""{keyword_prompt}
+        Args:
+            queries: List of queries to analyze
+            batch_size: Maximum number of queries per batch (default: 100)
+            
+        Returns:
+            List of analysis results for each query
+        """
+        results = []
+        
+        # Process in batches
+        for i in range(0, len(queries), batch_size):
+            batch_queries = queries[i:i + batch_size]
+            
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://github.com/kimghw/IACSGRAPH",
+                "X-Title": "IACSGRAPH Batch Query Test"
+            }
+            
+            # Get current date for relative date parsing
+            from datetime import datetime
+            today = datetime.now().strftime('%Y-%m-%d')
+            
+            # Create batch prompt
+            batch_prompt = f"""다음 {len(batch_queries)}개의 질의를 각각 분석하여 JSON 배열 형식으로 응답하세요.
 
-{mcp_prompt}
+오늘 날짜: {today}
 
-Additionally, respond in JSON format:
-{{
+질의 목록:
+"""
+            for idx, query in enumerate(batch_queries):
+                batch_prompt += f"{idx + 1}. {query}\n"
+            
+            batch_prompt += """
+각 질의에 대해 다음 형식의 JSON 객체를 포함하는 배열을 반환하세요:
+[
+  {
+    "query_index": 1,
     "keywords": ["keyword1", "keyword2", ...],
-    "parameters": {{
-        "organization": "ORG_CODE" or null,
-        "sender_organization": null,
-        "response_org": null,
-        "days": number or null,
-        "date_range": null,
-        "agenda_code": null,
-        "agenda_panel": null,
-        "status": "approved|rejected|pending" or null,
-        "limit": number or null,
-        "keyword": null
-    }},
-    "extracted_period": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}} or null,
+    "organization": "ORG_CODE" or null,
+    "extracted_period": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"} or null,
     "intent": "search|list|analyze|count",
-    "confidence": 0.0-1.0
-}}"""
-
+    "query_scope": "all|one|more"
+  },
+  ...
+]"""
+            
+            payload = {
+                "model": self.model,
+                "messages": [
+                    {"role": "system", "content": self.system_prompt},
+                    {"role": "user", "content": batch_prompt}
+                ],
+                "response_format": {"type": "json_object"},
+                "temperature": 0.3,
+                "max_tokens": 4000  # Increased for batch processing
+            }
+            
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    f"{self.api_base}/chat/completions",
+                    headers=headers,
+                    json=payload
+                ) as response:
+                    if response.status != 200:
+                        error_text = await response.text()
+                        raise Exception(f"OpenRouter API error: {response.status} - {error_text}")
+                    
+                    result = await response.json()
+                    content = result['choices'][0]['message']['content']
+                    
+                    try:
+                        # Parse the batch response
+                        batch_results = json.loads(content)
+                        
+                        # If response is wrapped in an object, extract the array
+                        if isinstance(batch_results, dict) and 'results' in batch_results:
+                            batch_results = batch_results['results']
+                        elif isinstance(batch_results, dict) and 'queries' in batch_results:
+                            batch_results = batch_results['queries']
+                        
+                        # Ensure we have a list
+                        if not isinstance(batch_results, list):
+                            batch_results = [batch_results]
+                        
+                        # Map results back to original queries
+                        for idx, query in enumerate(batch_queries):
+                            if idx < len(batch_results):
+                                result_item = batch_results[idx]
+                                # Add original query to result
+                                result_item['original_query'] = query
+                                results.append(result_item)
+                            else:
+                                # Fallback if not enough results
+                                results.append({
+                                    "original_query": query,
+                                    "keywords": query.split(),
+                                    "parameters": {},
+                                    "intent": "unknown",
+                                    "confidence": 0.5
+                                })
+                                
+                    except (json.JSONDecodeError, KeyError) as e:
+                        # Fallback for all queries in batch
+                        for query in batch_queries:
+                            results.append({
+                                "original_query": query,
+                                "keywords": query.split(),
+                                "parameters": {},
+                                "intent": "unknown",
+                                "confidence": 0.5,
+                                "error": str(e)
+                            })
+        
+        return results
+    
     async def analyze_query(self, query: str) -> Dict[str, Any]:
         """Analyze query using LLM to extract keywords and parameters"""
         
@@ -88,7 +183,14 @@ Additionally, respond in JSON format:
 
 오늘 날짜: {today}
 
-위 질의를 분석하여 JSON 형식으로 응답하세요."""}
+위 질의를 분석하여 다음 JSON 형식으로 응답하세요:
+{{
+    "keywords": ["keyword1", "keyword2", ...],
+    "organization": "ORG_CODE" or null,
+    "extracted_period": {{"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"}} or null,
+    "intent": "search|list|analyze|count",
+    "query_scope": "all|one|more"
+}}"""}
             ],
             "response_format": {"type": "json_object"},
             "temperature": 0.3,
@@ -123,9 +225,10 @@ Additionally, respond in JSON format:
                     # Fallback if JSON parsing fails
                     return {
                         "keywords": query.split(),
-                        "parameters": {},
-                        "intent": "unknown",
-                        "confidence": 0.5
+                        "organization": None,
+                        "extracted_period": None,
+                        "intent": "search",
+                        "query_scope": "one"
                     }
 
     async def process_query_with_mcp(self, query: str, category: Optional[str] = None, 
@@ -143,9 +246,10 @@ Additionally, respond in JSON format:
         # First, analyze with LLM (simulating Claude's system prompt)
         print(f"[LLM] Analyzing: {query}")
         analysis = await self.analyze_query(query)
-        print(f"[LLM] Extracted keywords: {analysis['keywords']}")
-        print(f"[LLM] Extracted parameters: {analysis['parameters']}")
+        print(f"[LLM] Extracted keywords: {analysis.get('keywords', [])}")
+        print(f"[LLM] Extracted organization: {analysis.get('organization', 'None')}")
         print(f"[LLM] Extracted period: {analysis.get('extracted_period', 'None')}")
+        print(f"[LLM] Query scope: {analysis.get('query_scope', 'one')}")
         
         # Convert LLM parameters to MCP format
         extracted_period = None
@@ -153,20 +257,8 @@ Additionally, respond in JSON format:
         # Use extracted_period if available from LLM
         if 'extracted_period' in analysis and analysis['extracted_period']:
             extracted_period = analysis['extracted_period']
-        elif 'extracted_dates' in analysis and analysis['extracted_dates']:
-            # Backward compatibility: extracted_dates → extracted_period
-            extracted_period = analysis['extracted_dates']
-        elif analysis['parameters'].get('days'):
-            # Convert days to period
-            from datetime import datetime, timedelta
-            end_date = datetime.now()
-            start_date = end_date - timedelta(days=analysis['parameters']['days'])
-            extracted_period = {
-                'start': start_date.strftime('%Y-%m-%d'),
-                'end': end_date.strftime('%Y-%m-%d')
-            }
         else:
-            # Default: 3 months if period is ambiguous
+            # Default: 3 months if period is not extracted
             from datetime import datetime, timedelta
             end_date = datetime.now()
             start_date = end_date - timedelta(days=90)
@@ -175,44 +267,15 @@ Additionally, respond in JSON format:
                 'end': end_date.strftime('%Y-%m-%d')
             }
         
-        # Extract organization from LLM or keywords
-        extracted_organization = None
-        if analysis['parameters'].get('organization'):
-            extracted_organization = analysis['parameters']['organization']
-        elif analysis['parameters'].get('sender_organization'):
-            extracted_organization = analysis['parameters']['sender_organization']
-        elif analysis['parameters'].get('response_org'):
-            extracted_organization = analysis['parameters']['response_org']
+        # Extract organization from LLM
+        extracted_organization = analysis.get('organization')
         
-        # If LLM didn't extract organization, check keywords
-        if not extracted_organization:
-            # Common organization mappings
-            org_keywords = {
-                '한국선급': 'KR',
-                'KR': 'KR',
-                '일본선급': 'NK',
-                'NK': 'NK',
-                '중국선급': 'CCS',
-                'CCS': 'CCS',
-                'IMO': 'IMO',
-                'IACS': 'IACS'
-            }
-            for keyword in analysis['keywords']:
-                if keyword in org_keywords:
-                    extracted_organization = org_keywords[keyword]
-                    print(f"[LLM] Extracted organization from keyword: {keyword} → {extracted_organization}")
-                    break
-        
-        # Determine query scope
-        query_scope = 'one'  # default
-        if '모든' in query or '전체' in query:
-            query_scope = 'all'
-        elif '여러' in query or ('과' in query and '의' in query):
-            query_scope = 'more'
+        # Use query_scope from LLM or determine from query
+        query_scope = analysis.get('query_scope', 'one')
         
         # Import the enhanced MCP server
-        from modules.query_assistant.mcp_server_enhanced import EnhancedIacsGraphQueryServer
-        from modules.query_assistant.mcp_server_enhanced import EnhancedQueryRequest
+        from ..mcp_server_enhanced import EnhancedIacsGraphQueryServer
+        from ..mcp_server_enhanced import EnhancedQueryRequest
         
         try:
             # Initialize Enhanced MCP Server
@@ -226,6 +289,7 @@ Additionally, respond in JSON format:
                 extracted_period=extracted_period,
                 extracted_keywords=analysis['keywords'],
                 extracted_organization=extracted_organization,
+                intent=analysis.get('intent', 'search'),
                 query_scope=query_scope,
                 category=category,
                 execute=execute,
@@ -238,6 +302,7 @@ Additionally, respond in JSON format:
             print(f"  Extracted Period: {mcp_request.extracted_period}")
             print(f"  Extracted Keywords: {mcp_request.extracted_keywords}")
             print(f"  Extracted Organization: {mcp_request.extracted_organization}")
+            print(f"  Intent: {mcp_request.intent}")
             print(f"  Query Scope: {mcp_request.query_scope}")
             
             # Call MCP server's handler directly
@@ -258,6 +323,7 @@ Additionally, respond in JSON format:
                     "extracted_period": mcp_request.extracted_period,
                     "extracted_keywords": mcp_request.extracted_keywords,
                     "extracted_organization": mcp_request.extracted_organization,
+                    "intent": mcp_request.intent,
                     "query_scope": mcp_request.query_scope,
                     "category": mcp_request.category,
                     "execute": mcp_request.execute,
@@ -308,7 +374,8 @@ Additionally, respond in JSON format:
                 "llm_contribution": {
                     "period": extracted_period if 'extracted_period' in locals() else None,
                     "keywords": analysis['keywords'],
-                    "organization": extracted_organization if 'extracted_organization' in locals() else None
+                    "organization": extracted_organization if 'extracted_organization' in locals() else None,
+                    "intent": analysis.get('intent', 'search')
                 },
                 "llm_analysis": analysis
             }
@@ -361,10 +428,11 @@ async def test_sample_queries(mock: MockClaudeDesktop, num_queries: int = 7):
             if result.get('llm_analysis'):
                 llm = result['llm_analysis']
                 print(f"\n📊 LLM Analysis:")
-                print(f"  Keywords: {llm['keywords'][:5]}")
-                print(f"  Parameters: {llm['parameters']}")
-                print(f"  Intent: {llm['intent']}")
-                print(f"  Confidence: {llm['confidence']}")
+                print(f"  Keywords: {llm.get('keywords', [])[:5]}")
+                print(f"  Organization: {llm.get('organization', 'None')}")
+                print(f"  Period: {llm.get('extracted_period', 'None')}")
+                print(f"  Intent: {llm.get('intent', 'search')}")
+                print(f"  Query Scope: {llm.get('query_scope', 'one')}")
             
             # Display query result (MCP format)
             if result.get('result'):
@@ -393,7 +461,7 @@ async def test_sample_queries(mock: MockClaudeDesktop, num_queries: int = 7):
 
 async def test_100_queries(mock: MockClaudeDesktop, detail: bool = False):
     """Test 100 queries from test_100_queries.py"""
-    from modules.query_assistant.scripts.test_100_queries import generate_test_queries
+    from .test_100_queries import generate_test_queries
     import time
     from datetime import datetime
     
@@ -441,7 +509,7 @@ async def test_100_queries(mock: MockClaudeDesktop, detail: bool = False):
                 'result_count': len(query_result.get('results', [])),
                 'error': query_result.get('error'),
                 'llm_keywords': result.get('llm_analysis', {}).get('keywords', []),
-                'llm_confidence': result.get('llm_analysis', {}).get('confidence', 0)
+                'llm_organization': result.get('llm_analysis', {}).get('organization')
             }
             
             results.append(test_result)

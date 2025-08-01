@@ -41,6 +41,10 @@ class EnhancedQueryRequest(BaseModel):
         None,
         description="Query scope: 'all' (모든 패널/기관), 'one' (단일), 'more' (2개 이상)"
     )
+    intent: Optional[str] = Field(
+        None,
+        description="Query intent: 'search' (검색), 'list' (목록), 'analyze' (분석), 'count' (개수)"
+    )
     
     # 기존 파라미터
     category: Optional[str] = Field(None, description="Query category filter")
@@ -169,6 +173,12 @@ MCP server will extract:
             extractor = QueryParameterExtractor()
             rule_based_params = extractor.extract_parameters(request.query)
             
+            # Extract keywords using keyword expander
+            from .services.keyword_expander import KeywordExpander
+            keyword_expander = KeywordExpander()
+            expansion = keyword_expander.expand_query(request.query)
+            rule_based_params['keywords'] = expansion.expanded_keywords
+            
             # 2. LLM 파라미터 병합 - LLM 우선
             enhanced_params = rule_based_params.copy()
             
@@ -246,6 +256,11 @@ MCP server will extract:
                 enhanced_params['keywords'] = request.extracted_keywords
                 logger.info(f"Using LLM-extracted keywords: {request.extracted_keywords}")
             
+            # intent 파라미터 처리
+            if request.intent:
+                enhanced_params['intent'] = request.intent
+                logger.info(f"Using LLM-extracted intent: {request.intent}")
+            
             # Import scope handler
             from .services.query_scope_handler import QueryScopeHandler
             scope_handler = QueryScopeHandler()
@@ -284,10 +299,12 @@ MCP server will extract:
                 'keywords': search_keywords,  # 템플릿 매칭용 키워드
                 'llm_keywords': enhanced_params.get('llm_keywords'),
                 'expanded_keywords': list(set(search_keywords)),  # 중복 제거
+                'intent': enhanced_params.get('intent'),  # intent 추가
                 # MCP parameters for SQL generation
                 'extracted_period': request.extracted_period,
                 'extracted_keywords': request.extracted_keywords,
-                'extracted_organization': request.extracted_organization
+                'extracted_organization': request.extracted_organization,
+                'extracted_intent': request.intent  # MCP intent 추가
             }
             
             # 5. 쿼리 실행
@@ -312,7 +329,8 @@ MCP server will extract:
                 'llm_contribution': {
                     'period': request.extracted_period,
                     'keywords': request.extracted_keywords,
-                    'organization': request.extracted_organization
+                    'organization': request.extracted_organization,
+                    'intent': request.intent
                 }
             }
             
@@ -322,7 +340,12 @@ MCP server will extract:
                 'error': str(e),
                 'extracted_params': {},
                 'rule_based_params': {},
-                'llm_contribution': {}
+                'llm_contribution': {
+                    'period': request.extracted_period,
+                    'keywords': request.extracted_keywords,
+                    'organization': request.extracted_organization,
+                    'intent': request.intent
+                }
             }
     
     async def _handle_parameter_extraction(self, request: ParameterExtractionRequest) -> Dict[str, Any]:
@@ -396,18 +419,22 @@ MCP server will extract:
             lines.append("")
         
         # LLM 기여도
-        if result['llm_contribution']['dates'] or result['llm_contribution']['keywords']:
+        if any(result['llm_contribution'].values()):
             lines.append("🤖 LLM Extracted Parameters:")
-            if result['llm_contribution']['dates']:
-                lines.append(f"  📅 Dates: {result['llm_contribution']['dates']}")
-            if result['llm_contribution']['keywords']:
+            if result['llm_contribution'].get('period'):
+                lines.append(f"  📅 Period: {result['llm_contribution']['period']}")
+            if result['llm_contribution'].get('keywords'):
                 lines.append(f"  🔑 Keywords: {', '.join(result['llm_contribution']['keywords'])}")
+            if result['llm_contribution'].get('organization'):
+                lines.append(f"  🏢 Organization: {result['llm_contribution']['organization']}")
+            if result['llm_contribution'].get('intent'):
+                lines.append(f"  🎯 Intent: {result['llm_contribution']['intent']}")
             lines.append("")
         
         # 병합된 전체 파라미터
         lines.append("📋 Final Merged Parameters:")
         important_params = ['agenda_base', 'agenda_base_version', 'organization_code', 'organization', 
-                           'date_range', 'days', 'status', 'llm_keywords']
+                           'date_range', 'days', 'status', 'llm_keywords', 'intent']
         for key in important_params:
             if key in result['extracted_params'] and result['extracted_params'][key]:
                 value = result['extracted_params'][key]

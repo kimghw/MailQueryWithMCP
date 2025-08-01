@@ -34,10 +34,11 @@ MCP 도구 호출:
 <tool_name>query_with_llm_params</tool_name>
 <arguments>
 {
-  "query": "원본 질의",
+  "query": "원본 질의", // 질의 의도롤 분석해서 intent를 좀 더 명확하게 질의 개션
   "extracted_period": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"},
   "extracted_keywords": [],
   "extracted_organization": null,
+  "intent": "search|list|analyze|count",
   "query_scope": "one",
   "category": null,
   "execute": true,

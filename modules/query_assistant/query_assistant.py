@@ -127,9 +127,15 @@ class QueryAssistant:
             expansion = self.keyword_expander.expand_query(normalized_query)
             
             # Search for matching templates with lower threshold
+            # Use MCP integrated keywords (already includes LLM + rule-based)
+            search_keywords = []
+            if additional_params:
+                # MCP server already merged LLM + rule-based keywords
+                search_keywords = additional_params.get('keywords', [])
+            
             search_results = self.vector_store.search(
                 query=user_query,
-                keywords=expansion.expanded_keywords,
+                keywords=search_keywords,  # Use LLM keywords or expanded keywords
                 category=category,
                 limit=10,  # Get more candidates for filtering
                 score_threshold=0.3  # Lower threshold for better matching
@@ -145,42 +151,16 @@ class QueryAssistant:
                     error="No matching query template found"
                 )
             
-            # Filter templates based on available parameters
-            # Combine all available parameter keys
-            available_params = set()
-            available_params.update(extracted_params.keys())
-            if additional_params:
-                available_params.update(additional_params.keys())
-            
-            # Also add parameters we can derive or have defaults for
-            available_params.update(['date_range', 'days', 'period', 'limit'])
-            
-            # Filter templates where we have all required parameters
-            valid_templates = []
-            for result in search_results:
-                template = result.template
-                required_params = set(template.required_params)
-                
-                # Check if we can satisfy all required parameters
-                can_satisfy = True
-                for req_param in required_params:
-                    # Check if we have the parameter or can derive it
-                    if req_param not in available_params:
-                        # Check if template has a default for this parameter
-                        if req_param not in template.default_params:
-                            can_satisfy = False
-                            break
-                
-                if can_satisfy:
-                    valid_templates.append(result)
-            
-            # If no valid templates, return the best match anyway (for error reporting)
-            if not valid_templates:
-                logger.warning(f"No templates with satisfiable parameters found, using best match")
-                best_match = search_results[0]
+            # Don't filter - use all search results and rely on vector/keyword scoring
+            # The vector store already calculated scores with keyword matching
+            # Just use the top result
+            if not search_results:
+                logger.warning(f"No templates found for query: {user_query}")
+                best_match = None
             else:
-                # Use the highest scoring valid template
-                best_match = valid_templates[0]
+                # Use the highest scoring template (already sorted by score)
+                best_match = search_results[0]
+                logger.info(f"Selected template: {best_match.template_id} with score: {best_match.score:.3f}")
             
             template = best_match.template
             
@@ -469,7 +449,7 @@ class QueryAssistant:
         template_param_defs = self._get_template_param_definitions(template)
         
         # Use SQL generator with proper parameter merging
-        sql, merged_params = self.sql_generator.generate_sql(
+        queries, merged_params = self.sql_generator.generate_sql(
             sql_template=template.sql_query_with_parameters,
             template_params=template_param_defs,
             mcp_params=mcp_params or {},
@@ -480,7 +460,15 @@ class QueryAssistant:
         # Update parameters with merged values
         parameters.update(merged_params)
         
-        return sql
+        # If multiple queries returned (array parameters), join them with UNION ALL
+        if isinstance(queries, list) and len(queries) > 1:
+            # Add wrapper to combine results
+            combined_sql = " UNION ALL ".join(f"({query})" for query in queries)
+            return combined_sql
+        elif isinstance(queries, list):
+            return queries[0]
+        else:
+            return queries
     
     def _get_template_param_definitions(self, template: QueryTemplate) -> List[Dict[str, Any]]:
         """Get parameter definitions from template metadata"""
