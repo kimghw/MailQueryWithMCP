@@ -47,6 +47,7 @@ class SynonymService:
                 "리플",
                 "리플라이",
                 "reply",
+                "의견서",
             ],
             # 조직/기관 관련
             "기관": [
@@ -58,11 +59,14 @@ class SynonymService:
                 "회사",
                 "업체",
                 "소속",
+                "부서별",
+                "기관별",
+                "조직별",
             ],
             "선급": ["class_society", "선급"],
             # 상태 관련
-            "승인": ["approved", "승인", "허가", "수락", "통과", "가결", "인정"],
-            "반려": ["rejected", "반려", "거부", "거절", "부결", "불가", "기각"],
+            "승인": ["approved", "승인", "허가", "수락", "통과", "가결", "인정", "허가된", "수락된", "통과된", "가결된"],
+            "반려": ["rejected", "반려", "거부", "거절", "부결", "불가", "기각", "거부된", "거절된", "부결된", "기각된"],
             "보류": [
                 "pending",
                 "미결정",
@@ -75,6 +79,8 @@ class SynonymService:
                 "검토중",
                 "처리중",
                 "미완료",
+                "대기중인",
+                "검토중인",
             ],
             # 시간 표현
             "최근": ["recent", "최근"],
@@ -102,7 +108,7 @@ class SynonymService:
             # 마감/기한 관련
             "마감": ["deadline", "마감", "기한", "마감일"],
             # 긴급도 관련
-            "긴급": ["urgent", "임박", "긴급", "시급"],
+            "긴급": ["urgent", "임박", "긴급", "시급", "임박한", "시급한"],
             # 패널 관련
             "SDTP": ["SDTP", "디지털 기술 패널", "PL", "디지털 패널"],
             "GPG": ["GPG"],
@@ -255,6 +261,7 @@ class SynonymService:
                 "ChinaClassification",
                 "China Class",
                 "ChinaClass",
+                "China Classification",
                 "씨씨에스",
                 "씨.씨.에스",
                 "차이나클래스",
@@ -442,8 +449,15 @@ class SynonymService:
         # 용어 동의어 처리 (조직 동의어와 동일한 방식)
         for term_code, synonyms in self.term_synonyms.items():
             for synonym in synonyms:
-                if synonym != term_code:  # 코드 자체는 변경하지 않음
-                    pattern = rf"\b{re.escape(synonym)}\b"
+                if synonym.lower() != term_code.lower():  # 대소문자 무시하고 비교
+                    # 한글과 영어가 섞인 경우를 처리하기 위해 단어 경계 패턴 수정
+                    # 영어의 경우 앞뒤에 영문자가 아닌 것, 한글의 경우 단어 경계 사용
+                    if re.match(r'^[a-zA-Z]+$', synonym):
+                        # 순수 영어인 경우: 앞뒤가 영문자가 아닌 경우만 매칭
+                        pattern = rf"(?<![a-zA-Z]){re.escape(synonym)}(?![a-zA-Z])"
+                    else:
+                        # 한글이 포함된 경우: 기존 단어 경계 사용
+                        pattern = rf"\b{re.escape(synonym)}\b"
                     normalized = re.sub(
                         pattern, term_code, normalized, flags=re.IGNORECASE
                     )
@@ -452,7 +466,13 @@ class SynonymService:
         for org_code, synonyms in self.organization_synonyms.items():
             for synonym in synonyms:
                 if synonym != org_code:  # 코드 자체는 변경하지 않음
-                    pattern = rf"\b{re.escape(synonym)}\b"
+                    # 한글과 영어가 섞인 경우를 처리하기 위해 단어 경계 패턴 수정
+                    if re.match(r'^[a-zA-Z]+$', synonym):
+                        # 순수 영어인 경우: 앞뒤가 영문자가 아닌 경우만 매칭
+                        pattern = rf"(?<![a-zA-Z]){re.escape(synonym)}(?![a-zA-Z])"
+                    else:
+                        # 한글이 포함된 경우: 기존 단어 경계 사용
+                        pattern = rf"\b{re.escape(synonym)}\b"
                     normalized = re.sub(
                         pattern, org_code, normalized, flags=re.IGNORECASE
                     )
