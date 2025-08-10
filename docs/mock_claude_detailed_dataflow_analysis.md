@@ -1,144 +1,83 @@
-# Mock Claude Desktop 상세 데이터 플로우 및 파일 분석
+# Mock Claude Desktop 상세 데이터 플로우 분석
 
 ## 목차
-1. [전체 아키텍처 개요](#1-전체-아키텍처-개요)
+1. [시스템 아키텍처 개요](#1-시스템-아키텍처-개요)
 2. [Phase 1: LLM 배치 분석](#2-phase-1-llm-배치-분석)
 3. [Phase 2: MCP 개별 처리](#3-phase-2-mcp-개별-처리)
-4. [파일별 역할 및 데이터 처리](#4-파일별-역할-및-데이터-처리)
-5. [데이터 포맷 상세 명세](#5-데이터-포맷-상세-명세)
-6. [시퀀스 다이어그램](#6-시퀀스-다이어그램)
-7. [성능 분석 및 병목 지점](#7-성능-분석-및-병목-지점)
+4. [데이터 포맷 및 변환](#4-데이터-포맷-및-변환)
+5. [파라미터 처리 상세](#5-파라미터-처리-상세)
+6. [성능 분석 및 최적화](#6-성능-분석-및-최적화)
+7. [주요 파일별 역할](#7-주요-파일별-역할)
 
 ---
 
-## 1. 전체 아키텍처 개요
+## 1. 시스템 아키텍처 개요
 
-### 1.1 시스템 구성도
+### 1.1 전체 데이터 플로우
 ```mermaid
-graph TB
-    subgraph "Entry Points"
-        CMD[명령줄 실행]
-        BATCH[mock_claude_desktop_batch.py]
-        SINGLE[mock_claude_desktop.py]
+flowchart TB
+    subgraph "입력"
+        Input[100개 테스트 질의]
     end
     
-    subgraph "External APIs"
-        OPENROUTER[OpenRouter API<br/>Claude 3.5 Sonnet]
-        OPENAI[OpenAI API<br/>text-embedding-3-large]
+    subgraph "Phase 1: LLM 배치 분석"
+        Input --> BatchLLM[analyze_queries_batch<br/>mock_claude_desktop.py]
+        BatchLLM --> LLMReq[배치 프롬프트 생성<br/>mcp_system_prompt.txt 사용]
+        LLMReq --> OpenRouter[OpenRouter API<br/>Claude 3.5 Sonnet]
+        OpenRouter --> LLMResp[JSON Array 응답<br/>100개 분석 결과]
     end
     
-    subgraph "Core Processing"
-        MCP[mcp_server_enhanced.py]
-        QPE[query_parameter_extractor.py]
-        KE[keyword_expander.py]
-        SS[synonym_service.py]
-        VS[vector_store.py]
-        QM[query_matcher.py]
-        SG[sql_generator.py]
+    subgraph "Phase 2: MCP 개별 처리 (100회 반복)"
+        LLMResp --> Loop{각 질의별 처리}
+        Loop --> Request[EnhancedQueryRequest 생성]
+        Request --> MCP[mcp_server_enhanced.py<br/>_handle_enhanced_query]
+        
+        subgraph "MCP 내부 처리"
+            MCP --> Extract[규칙 기반 추출<br/>QueryParameterExtractor]
+            Extract --> Expand[키워드 확장<br/>KeywordExpander]
+            Expand --> Merge[파라미터 병합<br/>LLM + 규칙 기반]
+            Merge --> Vector[벡터 검색<br/>VectorStore]
+            Vector --> Embed[OpenAI Embedding<br/>text-embedding-3-large]
+            Embed --> Qdrant[Qdrant 벡터 DB<br/>유사도 검색]
+            Qdrant --> Match[템플릿 매칭<br/>QueryMatcher]
+            Match --> SQL[SQL 생성<br/>SqlGenerator]
+            SQL --> Execute[SQL 실행<br/>SQLite DB]
+        end
+        
+        Execute --> Response[MCP Response]
+        Response --> Loop
     end
     
-    subgraph "Data Storage"
-        QDRANT[(Qdrant Vector DB)]
-        SQLITE[(SQLite DB<br/>iacsgraph.db)]
-        TEMPLATES[query_templates_unified.json]
-    end
-    
-    subgraph "Utilities"
-        DH[date_handler.py]
-        AP[agenda_parser.py]
-        QSH[query_scope_handler.py]
-    end
-    
-    CMD --> BATCH
-    BATCH --> OPENROUTER
-    BATCH --> MCP
-    SINGLE --> OPENROUTER
-    SINGLE --> MCP
-    
-    MCP --> QPE
-    MCP --> KE
-    QPE --> SS
-    QPE --> AP
-    KE --> SS
-    
-    MCP --> VS
-    VS --> OPENAI
-    VS --> QDRANT
-    VS --> QM
-    QM --> TEMPLATES
-    
-    MCP --> SG
-    SG --> SQLITE
-    
-    MCP --> DH
-    MCP --> QSH
+    Loop --> Output[최종 JSON 결과]
 ```
 
-### 1.2 처리 흐름 개요
-1. **배치 모드**: 100개 질의를 한 번에 LLM으로 분석
-2. **개별 모드**: 각 질의를 개별적으로 LLM 분석
-3. **MCP 처리**: 모든 질의는 개별적으로 MCP 서버 통과
-4. **결과 집계**: JSON 형식으로 저장
+### 1.2 처리 시간 분포
+- **총 시간**: 107.02초 (100개 질의)
+- **Phase 1**: 14.45초 (13.5%) - LLM 배치 분석
+- **Phase 2**: 92.57초 (86.5%) - MCP 개별 처리
+  - OpenAI Embedding: 76.1초 (82.2%)
+  - Qdrant 검색: 10.0초 (10.8%)
+  - 기타 처리: 6.47초 (7.0%)
 
 ---
 
 ## 2. Phase 1: LLM 배치 분석
 
-### 2.1 시작점: mock_claude_desktop_batch.py
-
-#### 파일 경로
-```
-/home/kimghw/IACSGRAPH/modules/query_assistant/scripts/mock_claude_desktop_batch.py
-```
-
-#### 주요 함수
+### 2.1 입력 데이터
 ```python
-async def process_queries_with_batch_llm(queries: List[str], batch_size: int = 100) -> Dict[str, Any]:
-```
-
-#### 데이터 흐름
-```
-100개 질의 리스트
-    ↓
-배치 프롬프트 생성
-    ↓
-OpenRouter API 호출
-    ↓
-JSON 응답 파싱
-    ↓
-100개 분석 결과
-```
-
-### 2.2 LLM 분석: mock_claude_desktop.py
-
-#### 파일 경로
-```
-/home/kimghw/IACSGRAPH/modules/query_assistant/scripts/mock_claude_desktop.py
-```
-
-#### 주요 함수
-```python
-async def analyze_queries_batch(self, queries: List[str], batch_size: int = 100) -> List[Dict[str, Any]]:
-```
-
-#### 입력 데이터 (예시)
-```python
-queries = [
-    "최근 아젠다 목록 보여줘",
-    "한국선급 응답 현황",
-    "어제 받은 이메일들",
+# 100개 테스트 질의 예시
+test_cases = [
+    {"query": "최근 아젠다 목록 보여줘", "expected_category": "agenda"},
+    {"query": "한국선급 응답 현황", "expected_category": "response"},
+    {"query": "디지털 기술 패널의 최신 아젠다", "expected_category": "agenda"},
     # ... 97개 더
 ]
 ```
 
-#### 프롬프트 구성
+### 2.2 LLM 프롬프트 구성
 ```python
-# 시스템 프롬프트 (파일에서 로드)
-keyword_prompt_file = Path(__file__).parent.parent / "prompts" / "keyword_extraction_prompt.txt"
-mcp_prompt_file = Path(__file__).parent.parent / "prompts" / "mcp_system_prompt.txt"
-
-# 배치 프롬프트 생성
-batch_prompt = f"""다음 {len(batch_queries)}개의 질의를 각각 분석하여 JSON 배열 형식으로 응답하세요.
+# mcp_system_prompt.txt 기반 배치 프롬프트
+batch_prompt = f"""다음 {len(queries)}개의 질의를 각각 분석하여 JSON 배열 형식으로 응답하세요.
 
 오늘 날짜: {today}
 
@@ -146,644 +85,467 @@ batch_prompt = f"""다음 {len(batch_queries)}개의 질의를 각각 분석하�
 1. 최근 아젠다 목록 보여줘
 2. 한국선급 응답 현황
 ...
-100. 업데이트 알림
 
 각 질의에 대해 다음 형식의 JSON 객체를 포함하는 배열을 반환하세요:
 [
   {
     "query_index": 1,
     "keywords": ["keyword1", "keyword2", ...],
-    "parameters": {
-      "organization": "ORG_CODE" or null,
-      "sender_organization": null,
-      "response_org": null,
-      "days": number or null,
-      "date_range": null,
-      "agenda_code": null,
-      "agenda_panel": null,
-      "status": "approved|rejected|pending" or null,
-      "limit": number or null,
-      "keyword": null
-    },
+    "organization": "ORG_CODE" or null,
     "extracted_period": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"} or null,
     "intent": "search|list|analyze|count",
-    "confidence": 0.0-1.0
+    "query_scope": "all|one|more"
   },
   ...
-]"""
+]
+"""
 ```
 
-#### OpenRouter API 요청
-```python
-payload = {
-    "model": "anthropic/claude-3.5-sonnet-20241022",
-    "messages": [
-        {"role": "system", "content": self.system_prompt},
-        {"role": "user", "content": batch_prompt}
-    ],
-    "response_format": {"type": "json_object"},
-    "temperature": 0.3,
-    "max_tokens": 4000
-}
-
-# API 엔드포인트
-url = "https://openrouter.ai/api/v1/chat/completions"
-
-# 헤더
-headers = {
-    "Authorization": f"Bearer {self.api_key}",
-    "Content-Type": "application/json",
-    "HTTP-Referer": "https://github.com/kimghw/IACSGRAPH",
-    "X-Title": "IACSGRAPH Batch Query Test"
-}
-```
-
-#### LLM 응답 파싱
-```python
-# 응답 예시
-response = {
-    "choices": [{
-        "message": {
-            "content": """[
-                {
-                    "query_index": 1,
-                    "keywords": ["최근", "아젠다", "목록"],
-                    "parameters": {
-                        "organization": null,
-                        "days": 30,
-                        "status": null,
-                        "limit": 10
-                    },
-                    "extracted_period": {
-                        "start": "2025-07-02",
-                        "end": "2025-08-01"
-                    },
-                    "intent": "list",
-                    "confidence": 0.9
-                },
-                ... // 99개 더
-            ]"""
-        }
-    }]
-}
-
-# 파싱 로직
-try:
-    batch_results = json.loads(content)
-    # 결과가 객체로 래핑된 경우 처리
-    if isinstance(batch_results, dict) and 'results' in batch_results:
-        batch_results = batch_results['results']
-except json.JSONDecodeError as e:
-    # 폴백 처리
+### 2.3 LLM 응답 예시
+```json
+[
+  {
+    "query_index": 1,
+    "keywords": ["최근", "아젠다", "목록"],
+    "organization": null,
+    "extracted_period": {"start": "2025-07-02", "end": "2025-08-01"},
+    "intent": "list",
+    "query_scope": "one"
+  },
+  {
+    "query_index": 2,
+    "keywords": ["한국선급", "응답", "현황"],
+    "organization": "KR",
+    "extracted_period": {"start": "2025-05-03", "end": "2025-08-01"},
+    "intent": "search",
+    "query_scope": "one"
+  },
+  {
+    "query_index": 3,
+    "keywords": ["디지털", "기술", "패널", "최신", "아젠다"],
+    "organization": null,
+    "extracted_period": {"start": "2025-07-02", "end": "2025-08-01"},
+    "intent": "list",
+    "query_scope": "one"
+  }
+]
 ```
 
 ---
 
 ## 3. Phase 2: MCP 개별 처리
 
-### 3.1 MCP Request 생성
-
-#### 데이터 변환 (mock_claude_desktop_batch.py)
+### 3.1 EnhancedQueryRequest 생성
 ```python
-for idx, (query, llm_result) in enumerate(zip(queries, all_llm_results)):
-    # LLM 결과에서 파라미터 추출
-    extracted_period = llm_result.get('extracted_period')
-    extracted_keywords = llm_result.get('keywords', [])
-    
-    # 조직 파라미터 처리
-    params = llm_result.get('parameters', {})
-    extracted_organization = (
-        params.get('organization') or 
-        params.get('sender_organization') or 
-        params.get('response_org')
-    )
-    
-    # 쿼리 스코프 결정
-    query_scope = 'one'  # 기본값
-    if '모든' in query or '전체' in query:
-        query_scope = 'all'
-    elif '여러' in query or ('과' in query and '의' in query):
-        query_scope = 'more'
-    
-    # MCP Request 생성
-    mcp_request = EnhancedQueryRequest(
-        query=query,
-        extracted_period=extracted_period,
-        extracted_keywords=extracted_keywords,
-        extracted_organization=extracted_organization,
-        query_scope=query_scope,
-        category=None,
-        execute=True,
-        limit=10,
-        use_defaults=True
-    )
+# LLM 결과를 MCP Request로 변환
+mcp_request = EnhancedQueryRequest(
+    query=query,                                    # 원본 질의
+    extracted_period=llm_result.get('extracted_period'),
+    extracted_keywords=llm_result.get('keywords', []),
+    extracted_organization=llm_result.get('organization'),
+    intent=llm_result.get('intent', 'search'),
+    query_scope=llm_result.get('query_scope', 'one'),
+    category=None,                                  # 자동 탐지
+    execute=True,                                   # SQL 실행
+    limit=10,
+    use_defaults=True
+)
 ```
 
-### 3.2 MCP 서버 처리: mcp_server_enhanced.py
+### 3.2 MCP 서버 처리 단계
 
-#### 파일 경로
-```
-/home/kimghw/IACSGRAPH/modules/query_assistant/mcp_server_enhanced.py
-```
-
-#### 주요 함수
+#### 3.2.1 규칙 기반 파라미터 추출
 ```python
-async def _handle_enhanced_query(self, request: EnhancedQueryRequest) -> Dict[str, Any]:
+# QueryParameterExtractor가 추출하는 파라미터들
+rule_based_params = {
+    # 기본 정보
+    'original_query': '디지털 기술 패널의 최신 아젠다',
+    'normalized_query': 'SDTP의 최신 agenda',  # 동의어 처리됨
+    
+    # 아젠다 정보 (agenda_parser.py)
+    'agenda_code': None,                        # 특정 코드 없음
+    'agenda_base': None,
+    'agenda_base_version': None,
+    'agenda_panel': None,
+    
+    # 조직 정보
+    'organization': None,
+    'organization_code': None,
+    
+    # 패널/위원회 정보 (동의어 처리)
+    'committee': 'SDTP',                        # "디지털 기술 패널" → "SDTP"
+    
+    # 날짜 정보
+    'date_range': None,                         # LLM이 추출함
+    'days': None,
+    
+    # 기타
+    'status': None,
+    'limit': None,
+    'keywords': []                              # 초기값
+}
 ```
 
-#### 처리 단계
-
-##### 3.2.1 규칙 기반 파라미터 추출
+#### 3.2.2 키워드 확장
 ```python
-# modules/common/parsers/query_parameter_extractor.py
-from ..common.parsers import QueryParameterExtractor
-extractor = QueryParameterExtractor()
-rule_based_params = extractor.extract_parameters(request.query)
+# KeywordExpander 처리 결과
+expansion = {
+    'original_keywords': ['디지털', '기술', '패널', '최신', '아젠다'],
+    'expanded_keywords': [
+        'SDTP', '디지털 기술 패널', 'PL', '디지털 패널',  # 패널 동의어
+        'digital', 'technology', 'panel',                  # 영어 변환
+        '최근', 'recent', 'latest',                       # 시간 동의어
+        'agenda', '아젠다', '의제'                        # 아젠다 동의어
+    ],
+    'confidence_score': 0.9
+}
 ```
 
-**QueryParameterExtractor 처리**
+#### 3.2.3 파라미터 병합 로직
 ```python
-# 파일: modules/common/parsers/query_parameter_extractor.py
-
-def extract_parameters(self, query: str) -> Dict[str, Any]:
-    # 1. 동의어 정규화
-    normalized_query = self.normalize_query(query)  # synonym_service.py 사용
-    
-    # 2. 아젠다 코드 파싱
-    agenda_info = self.agenda_parser.parse_agenda_code(query)  # agenda_parser.py 사용
-    
-    # 3. 조직 정보 추출
-    organizations = self.agenda_parser.extract_organizations(query)
-    
-    # 4. 날짜 정보 추출
-    date_info = self.agenda_parser.extract_date_info(query)
-    
-    # 5. 상태 정보 추출
-    status = self._extract_status(normalized_query)
-    
-    # 6. 숫자 파라미터 추출
-    limit = self._extract_limit(query)
-    
-    # 7. 패널 정보 추출
-    panel = self.agenda_parser.extract_panel(query)
-    
-    # 8. Committee 정보 추출 (패널 동의어 처리)
-    committee = self._extract_committee(normalized_query)
-    
-    return {
-        'original_query': query,
-        'normalized_query': normalized_query,
-        'agenda_code': agenda_info.get('agenda_code'),
-        'organization_code': organizations[0] if organizations else None,
-        'date_range': date_info,
-        'status': status,
-        'limit': limit,
-        'agenda_panel': panel,
-        'committee': committee  # SDTP, GPG 등
-    }
-```
-
-##### 3.2.2 키워드 확장
-```python
-# modules/query_assistant/services/keyword_expander.py
-from .services.keyword_expander import KeywordExpander
-keyword_expander = KeywordExpander()
-expansion = keyword_expander.expand_query(request.query)
-rule_based_params['keywords'] = expansion.expanded_keywords
-```
-
-**KeywordExpander 처리**
-```python
-# 파일: modules/query_assistant/services/keyword_expander.py
-
-def expand_query(self, user_query: str) -> QueryExpansion:
-    # 1. 동의어 정규화
-    normalized_query = self.synonym_service.normalize_text(user_query)
-    
-    # 2. 키워드 추출
-    original_keywords = self._extract_keywords(normalized_query)
-    
-    # 3. 키워드 확장
-    expanded_keywords = self._expand_keywords(original_keywords, normalized_query)
-    # - 한영 매핑 확인
-    # - 조직명 확인
-    # - 시간 키워드 확인
-    # - 의도 패턴 확인
-    
-    return QueryExpansion(
-        original_keywords=list(original_keywords),
-        expanded_keywords=list(expanded_keywords),
-        missing_params=missing_params,
-        suggestions=suggestions,
-        confidence_score=confidence_score
-    )
-```
-
-##### 3.2.3 LLM과 규칙 기반 파라미터 병합
-```python
-# LLM 파라미터 우선 병합
+# LLM과 규칙 기반 파라미터 병합
 enhanced_params = rule_based_params.copy()
 
-# 조직 파라미터 처리
+# 1. 조직 파라미터 (LLM 우선)
 if request.extracted_organization:
     enhanced_params['organization'] = request.extracted_organization
     enhanced_params['organization_code'] = request.extracted_organization
-elif enhanced_params.get('organization'):
-    # 동의어 처리
-    normalized_org = extractor.synonym_service.normalize_organization(
-        enhanced_params['organization']
-    )
-    enhanced_params['organization'] = normalized_org
 
-# 날짜 파라미터 처리
+# 2. 날짜 파라미터 (LLM 우선)
 if request.extracted_period:
     enhanced_params['date_range'] = {
         'type': 'range',
         'from': request.extracted_period['start'],
         'to': request.extracted_period['end']
     }
+    # 일수 계산
+    start = datetime.strptime(request.extracted_period['start'], '%Y-%m-%d')
+    end = datetime.strptime(request.extracted_period['end'], '%Y-%m-%d')
+    enhanced_params['days'] = (end - start).days
+
+# 3. 키워드 처리
+# 주의: LLM 키워드가 있으면 확장된 키워드는 덮어씌워짐
+if request.extracted_keywords:
+    enhanced_params['keywords'] = request.extracted_keywords
+    enhanced_params['llm_keywords'] = request.extracted_keywords
 else:
-    # EnhancedDateHandler 사용
-    from .services.enhanced_date_handler import EnhancedDateHandler
-    date_handler = EnhancedDateHandler()
-    processed_params = date_handler.process_date_parameters(
-        template_params,
-        None,
-        enhanced_params
-    )
+    enhanced_params['keywords'] = expansion.expanded_keywords
 
-# Intent 파라미터 처리 (LLM 우선)
-if request.intent:
-    enhanced_params['intent'] = request.intent
-elif not enhanced_params.get('intent'):
-    enhanced_params['intent'] = 'search'  # 기본값
+# 4. Intent 처리 (LLM 값 사용)
+enhanced_params['intent'] = request.intent
 
-# Committee 파라미터 처리 (규칙 기반 추출 결과 사용)
-if enhanced_params.get('committee'):
-    # 이미 규칙 기반으로 추출됨
-    pass
+# 5. Committee는 규칙 기반 값 유지
+# enhanced_params['committee'] = 'SDTP' (이미 설정됨)
 
-# Agenda 파라미터 처리 (규칙 기반 추출 결과 사용)
-if enhanced_params.get('agenda_code'):
-    # agenda_base와 agenda_base_version은 이미 추출됨
-    # agenda_base: 패널+년도+번호 (예: PL25016)
-    # agenda_base_version: 전체 코드 (예: PL25016a) - DB PRIMARY KEY
-    pass
+# 6. Query Scope 정보 추가
+scope_handler = QueryScopeHandler()
+scope_info = scope_handler.get_scope_info(
+    request.query_scope,
+    enhanced_params.get('organization')
+)
+enhanced_params['scope_info'] = scope_info
 
-# Relative Score 계산 (파라미터 충실도 점수)
-# 주요 필드 7개 중 null이 아닌 필드 개수로 점수 계산
+# 7. Relative Score 계산
+# 주요 필드 7개 중 채워진 필드 비율로 점수 계산 (0.2점 만점)
 key_fields = ['organization', 'date_range', 'keywords', 'intent', 
               'committee', 'agenda_base', 'agenda_base_version']
-filled_count = 0
-for field in key_fields:
-    if field == 'keywords':
-        if enhanced_params.get(field) and len(enhanced_params[field]) > 0:
-            filled_count += 1
-    elif enhanced_params.get(field) is not None:
-        filled_count += 1
-
-# 0.2점 만점으로 정규화 (7개 필드 기준)
-enhanced_params['relative_score'] = round((filled_count / len(key_fields)) * 0.2, 3)
+filled_count = sum(1 for field in key_fields 
+                  if enhanced_params.get(field) and 
+                  (field != 'keywords' or len(enhanced_params[field]) > 0))
+enhanced_params['relative_score'] = round((filled_count / 7) * 0.2, 3)
 ```
 
-##### 3.2.4 템플릿 검색
+### 3.3 벡터 검색 및 템플릿 매칭
+
+#### 3.3.1 검색 쿼리 생성
 ```python
-# QueryAssistant 호출
-result = self.query_assistant.process_query(
-    user_query=request.query,
-    category=request.category,
-    execute=request.execute,
-    use_defaults=request.use_defaults,
-    additional_params=execution_params
+# 키워드를 포함한 검색 텍스트 생성
+search_keywords = enhanced_params.get('keywords', [])
+query_text = f"{request.query} {' '.join(search_keywords)}"
+# 예: "디지털 기술 패널의 최신 아젠다 디지털 기술 패널 최신 아젠다"
+```
+
+#### 3.3.2 OpenAI 임베딩
+```python
+# text-embedding-3-large 모델로 3072차원 벡터 생성
+embedding = openai_client.embeddings.create(
+    input=query_text,
+    model="text-embedding-3-large",
+    dimensions=3072
 )
 ```
 
-### 3.3 QueryAssistant 처리: query_assistant.py
-
-#### 파일 경로
-```
-/home/kimghw/IACSGRAPH/modules/query_assistant/query_assistant.py
-```
-
-#### 주요 처리 흐름
+#### 3.3.3 템플릿 매칭 점수 계산
 ```python
-def process_query(self, user_query: str, ...) -> QueryResult:
-    # 1. 파라미터 분석
-    analysis = self.analyze_query(user_query)
+# 벡터 유사도와 키워드 매칭을 조합한 최종 점수
+for result in vector_search_results:
+    # 키워드 매칭 점수 계산
+    keyword_matches = set(query_keywords) & set(template_keywords)
+    keyword_score = len(keyword_matches) / max(len(query_keywords), 1)
     
-    # 2. 템플릿 검색 - VectorStore 사용
-    search_results = self.vector_store.search_templates(
-        query=user_query,
-        keywords=search_keywords,
-        filters={}  # 필터링 제거됨
-    )
-    
-    # 3. SQL 생성
-    if best_match:
-        sql_result = self.sql_generator.generate_sql(
-            template=best_match['template'],
-            parameters=final_params,
-            llm_dates=llm_dates
-        )
-    
-    # 4. SQL 실행
-    if execute:
-        results = self.db_executor.execute_query(
-            sql_result['sql'],
-            sql_result['parameters']
-        )
-```
-
-### 3.4 VectorStore 처리: vector_store.py
-
-#### 파일 경로
-```
-/home/kimghw/IACSGRAPH/modules/query_assistant/services/vector_store.py
-```
-
-#### 벡터 검색 프로세스
-```python
-def search_templates(self, query: str, keywords: List[str] = None, ...) -> List[Dict]:
-    # 1. 쿼리 텍스트 준비
-    if keywords:
-        query_text = f"{query} {' '.join(keywords)}"
+    # 최종 점수 계산
+    if keyword_score > 0.5:
+        combined_score = (result.score * 0.4) + (keyword_score * 0.6)
     else:
-        query_text = query
-    
-    # 2. OpenAI 임베딩 생성
-    query_embedding = self._get_embedding(query_text)
-    
-    # 3. Qdrant 벡터 검색
-    search_results = self.qdrant_client.search(
-        collection_name=self.collection_name,
-        query_vector=query_embedding,
-        limit=limit,
-        score_threshold=0.5
-    )
-    
-    # 4. 키워드 점수 계산 및 재정렬
-    scored_results = []
-    for result in search_results:
-        # 키워드 매칭 점수 계산
-        keyword_score = self._calculate_keyword_score(
-            query_keywords,
-            template_keywords
-        )
-        
-        # 최종 점수: 벡터 50% + 키워드 50%
-        if keyword_score > 0.5:
-            combined_score = (result.score * 0.4) + (keyword_score * 0.6)
-        else:
-            combined_score = (result.score * 0.5) + (keyword_score * 0.5)
-        
-        scored_results.append({
-            'template': template,
-            'score': combined_score,
-            'vector_score': result.score,
-            'keyword_score': keyword_score,
-            'keyword_matches': keyword_matches
-        })
+        combined_score = (result.score * 0.5) + (keyword_score * 0.5)
 ```
 
-#### OpenAI 임베딩 API 호출
+### 3.4 SQL 생성 및 실행
+
+#### 3.4.1 템플릿 선택 및 SQL 생성
 ```python
-def _get_embedding(self, text: str) -> List[float]:
-    response = self.openai_client.embeddings.create(
-        input=text,
+# 최고 점수 템플릿의 SQL 사용
+best_template = search_results[0]
+sql_template = best_template['template']['sql_template']['query']
+
+# 예시: SDTP 관련 아젠다 조회
+sql = """
+SELECT agenda_code, subject, sent_time, deadline
+FROM agenda_chair
+WHERE committee = :committee
+AND sent_time >= :period_start
+AND sent_time <= :period_end
+ORDER BY sent_time DESC
+LIMIT :limit
+"""
+
+# 파라미터 바인딩
+sql_params = {
+    'committee': 'SDTP',
+    'period_start': '2025-07-02',
+    'period_end': '2025-08-01',
+    'limit': 10
+}
+```
+
+---
+
+## 4. 데이터 포맷 및 변환
+
+### 4.1 데이터 변환 흐름
+```
+사용자 질의 (문자열)
+    ↓
+LLM 분석 결과 (JSON)
+    ↓
+EnhancedQueryRequest (Pydantic 모델)
+    ↓
+Enhanced Parameters (딕셔너리)
+    ↓
+SQL Parameters (딕셔너리)
+    ↓
+Query Results (리스트)
+    ↓
+MCP Response (딕셔너리)
+```
+
+### 4.2 주요 데이터 구조
+
+#### EnhancedQueryRequest
+```python
+class EnhancedQueryRequest(BaseModel):
+    query: str
+    extracted_period: Optional[Dict[str, str]]
+    extracted_keywords: Optional[List[str]]
+    extracted_organization: Optional[str]
+    intent: Optional[str] = 'search'
+    query_scope: Optional[str] = 'one'
+    category: Optional[str] = None
+    execute: bool = True
+    limit: Optional[int] = 10
+    use_defaults: bool = True
+```
+
+#### MCP Response
+```python
+{
+    'result': QueryResult(
+        query_id='sdtp_recent_agendas',
+        executed_sql='SELECT ... WHERE committee = :committee ...',
+        parameters={'committee': 'SDTP', ...},
+        results=[...],
+        execution_time=0.002,
+        error=None
+    ),
+    'extracted_params': enhanced_params,
+    'rule_based_params': rule_based_params,
+    'llm_contribution': {
+        'period': {"start": "2025-07-02", "end": "2025-08-01"},
+        'keywords': ["디지털", "기술", "패널", "최신", "아젠다"],
+        'organization': None,
+        'intent': "list",
+        'query_scope': "one"
+    }
+}
+```
+
+---
+
+## 5. 파라미터 처리 상세
+
+### 5.1 파라미터 우선순위
+1. **LLM 추출 파라미터** (최우선)
+   - organization, period, keywords, intent, query_scope
+
+2. **규칙 기반 추출** (보조)
+   - agenda 코드 파싱
+   - 조직명 동의어 처리
+   - 패널/위원회 동의어 처리
+   - 상태 키워드 매칭
+
+3. **템플릿 기본값**
+   - 템플릿에 정의된 기본 파라미터
+
+4. **시스템 기본값**
+   - period: 최근 3개월
+   - query_scope: one
+   - limit: 10
+
+### 5.2 동의어 처리 체계
+
+#### 조직 동의어
+```python
+organization_synonyms = {
+    'KR': ['한국선급', '한선', 'Korean Register', 'KR'],
+    'NK': ['일본선급', '일선', 'Nippon Kaiji', 'NK', 'Class NK'],
+    'CCS': ['중국선급', 'China Classification Society', 'CCS'],
+    # ...
+}
+```
+
+#### 패널/위원회 동의어
+```python
+panel_synonyms = {
+    'SDTP': ['SDTP', '디지털 기술 패널', 'PL', '디지털 패널'],
+    'GPG': ['GPG', 'Goal-based Panel Group'],
+    # ...
+}
+```
+
+### 5.3 날짜 처리 로직
+```python
+# 상대적 날짜 표현 처리
+date_keywords = {
+    '오늘': lambda: today,
+    '어제': lambda: today - timedelta(days=1),
+    '최근': lambda: (today - timedelta(days=30), today),
+    '이번주': lambda: (today - timedelta(days=today.weekday()), today),
+    '이번달': lambda: (today.replace(day=1), today),
+    # ...
+}
+```
+
+---
+
+## 6. 성능 분석 및 최적화
+
+### 6.1 현재 병목 지점
+| 구성 요소 | 시간 (초) | 비율 | 설명 |
+|-----------|-----------|------|------|
+| OpenAI Embedding | 76.1 | 71.1% | 각 쿼리마다 API 호출 |
+| Qdrant 검색 | 10.0 | 9.3% | 벡터 유사도 검색 |
+| LLM 배치 분석 | 14.45 | 13.5% | 100개 질의 한 번에 처리 |
+| 기타 처리 | 6.47 | 6.1% | 파라미터 추출, SQL 실행 등 |
+
+### 6.2 최적화 방안
+
+#### 6.2.1 임베딩 캐싱
+```python
+class EmbeddingCache:
+    def __init__(self, ttl=3600):
+        self.cache = {}
+        self.ttl = ttl
+    
+    def get_embedding(self, text):
+        cache_key = hashlib.md5(text.encode()).hexdigest()
+        
+        if cache_key in self.cache:
+            cached_time, embedding = self.cache[cache_key]
+            if time.time() - cached_time < self.ttl:
+                return embedding
+        
+        # Cache miss - API 호출
+        embedding = self._fetch_embedding(text)
+        self.cache[cache_key] = (time.time(), embedding)
+        return embedding
+```
+
+#### 6.2.2 배치 임베딩
+```python
+async def get_embeddings_batch(texts: List[str]) -> List[List[float]]:
+    """여러 텍스트를 한 번의 API 호출로 임베딩"""
+    response = await openai_client.embeddings.create(
+        input=texts,  # 최대 2048개 텍스트
         model="text-embedding-3-large",
         dimensions=3072
     )
-    return response.data[0].embedding
+    return [item.embedding for item in response.data]
 ```
 
-### 3.5 SQL 생성 및 실행
+#### 6.2.3 예상 개선 효과
+| 최적화 방법 | 예상 시간 절감 | 최종 처리 시간 |
+|-------------|----------------|----------------|
+| 임베딩 캐싱 (50% 적중) | 38초 | 69초 |
+| 배치 임베딩 | 74초 | 33초 |
+| 캐싱 + 배치 | 75초 | 32초 |
 
-#### SQL Generator: sql_generator.py
-```python
-# 파일: modules/query_assistant/services/sql_generator.py
+### 6.3 추가 최적화 기회
+1. **Qdrant 인덱스 최적화**
+   - HNSW 파라미터 튜닝
+   - 사전 필터링으로 검색 공간 축소
 
-def generate_sql(self, template: Dict, parameters: Dict, ...) -> Dict:
-    # 1. 템플릿 SQL 가져오기
-    sql_template = template['sql_template']['query']
-    
-    # 2. 파라미터 치환
-    filled_sql = self._substitute_parameters(sql_template, final_params)
-    
-    # 3. 유효성 검증
-    validation_result = self._validate_sql(filled_sql)
-    
-    return {
-        'sql': filled_sql,
-        'parameters': final_params,
-        'validation': validation_result
-    }
-```
+2. **SQL 결과 캐싱**
+   - 자주 사용되는 쿼리 결과 캐싱
+   - TTL 기반 무효화
 
-#### Database Executor: database_executor.py
-```python
-# 파일: modules/query_assistant/services/database_executor.py
-
-def execute_query(self, sql: str, parameters: Dict = None) -> List[Dict]:
-    try:
-        # SQLite 연결
-        with sqlite3.connect(self.db_path) as conn:
-            conn.row_factory = sqlite3.Row
-            cursor = conn.cursor()
-            
-            # SQL 실행
-            if parameters:
-                cursor.execute(sql, parameters)
-            else:
-                cursor.execute(sql)
-            
-            # 결과 반환
-            return [dict(row) for row in cursor.fetchall()]
-    except sqlite3.Error as e:
-        logger.error(f"SQLite query error: {e}")
-        raise
-```
+3. **비동기 처리 강화**
+   - 파라미터 추출과 임베딩을 병렬 처리
+   - SQL 실행 비동기화
 
 ---
 
-## 4. 파일별 역할 및 데이터 처리
+## 7. 주요 파일별 역할
 
-### 4.1 스크립트 파일
+### 7.1 엔트리 포인트
+| 파일 | 역할 |
+|------|------|
+| `mock_claude_desktop_batch.py` | 배치 처리 진입점, 결과 집계 |
+| `mock_claude_desktop.py` | LLM 분석 처리, API 통신 |
+| `test_100_queries.py` | 테스트 질의 생성 |
 
-| 파일명 | 경로 | 역할 | 주요 데이터 입출력 |
-|--------|------|------|-------------------|
-| mock_claude_desktop_batch.py | modules/query_assistant/scripts/ | 배치 처리 진입점 | 입력: 100개 질의<br>출력: JSON 결과 파일 |
-| mock_claude_desktop.py | modules/query_assistant/scripts/ | LLM 분석 처리 | 입력: 질의 텍스트<br>출력: 파라미터 JSON |
-| test_100_queries.py | modules/query_assistant/scripts/ | 테스트 질의 생성 | 출력: 100개 테스트 질의 |
+### 7.2 핵심 처리 모듈
+| 파일 | 역할 |
+|------|------|
+| `mcp_server_enhanced.py` | MCP 프로토콜 핸들러, 파라미터 병합 |
+| `query_assistant.py` | 쿼리 처리 오케스트레이션 |
+| `vector_store.py` | 벡터 검색 및 템플릿 매칭 |
 
-### 4.2 핵심 처리 파일
+### 7.3 파라미터 추출 모듈
+| 파일 | 역할 |
+|------|------|
+| `query_parameter_extractor.py` | 규칙 기반 파라미터 추출 |
+| `agenda_parser.py` | 아젠다 코드 및 조직 파싱 |
+| `keyword_expander.py` | 키워드 확장 및 동의어 처리 |
 
-| 파일명 | 경로 | 역할 | 주요 데이터 입출력 |
-|--------|------|------|-------------------|
-| mcp_server_enhanced.py | modules/query_assistant/ | MCP 서버 핸들러 | 입력: EnhancedQueryRequest<br>출력: QueryResult + 메타데이터 |
-| query_assistant.py | modules/query_assistant/ | 쿼리 처리 오케스트레이터 | 입력: 사용자 쿼리<br>출력: SQL 실행 결과 |
-| vector_store.py | modules/query_assistant/services/ | 벡터 검색 처리 | 입력: 쿼리 텍스트<br>출력: 매칭된 템플릿 |
+### 7.4 유틸리티 모듈
+| 파일 | 역할 |
+|------|------|
+| `synonym_service.py` | 조직 및 패널 동의어 매핑 |
+| `enhanced_date_handler.py` | 날짜 표현 파싱 및 변환 |
+| `query_scope_handler.py` | 쿼리 범위 SQL 조건 생성 |
 
-### 4.3 파라미터 추출 파일
-
-| 파일명 | 경로 | 역할 | 주요 데이터 입출력 |
-|--------|------|------|-------------------|
-| query_parameter_extractor.py | modules/common/parsers/ | 규칙 기반 파라미터 추출 | 입력: 쿼리 텍스트<br>출력: 파라미터 딕셔너리 |
-| agenda_parser.py | modules/common/parsers/ | 아젠다 코드 파싱 | 입력: 텍스트<br>출력: 아젠다 정보 |
-| keyword_expander.py | modules/query_assistant/services/ | 키워드 확장 | 입력: 쿼리<br>출력: 확장된 키워드 |
-
-### 4.4 유틸리티 파일
-
-| 파일명 | 경로 | 역할 | 주요 데이터 입출력 |
-|--------|------|------|-------------------|
-| synonym_service.py | modules/common/services/ | 동의어 처리 (패널 포함) | 입력: 텍스트<br>출력: 정규화된 텍스트<br>패널: SDTP, GPG |
-| enhanced_date_handler.py | modules/query_assistant/services/ | 날짜 처리 | 입력: 날짜 파라미터<br>출력: SQL 날짜 형식 |
-| query_scope_handler.py | modules/query_assistant/services/ | 쿼리 범위 처리 | 입력: 스코프 타입<br>출력: SQL 조건문 |
-
-### 4.5 데이터 파일
-
-| 파일명 | 경로 | 내용 | 형식 |
-|--------|------|------|------|
-| query_templates_unified.json | modules/templates/data/ | 쿼리 템플릿 정의 | JSON (184개 템플릿) |
-| keyword_extraction_prompt.txt | modules/query_assistant/prompts/ | LLM 키워드 추출 프롬프트 | 텍스트 |
-| mcp_system_prompt.txt | modules/query_assistant/prompts/ | MCP 시스템 프롬프트 | 텍스트 |
+### 7.5 데이터 파일
+| 파일 | 내용 |
+|------|------|
+| `query_templates_unified.json` | 184개 쿼리 템플릿 정의 |
+| `mcp_system_prompt.txt` | LLM 시스템 프롬프트 |
+| `iacsgraph.db` | SQLite 데이터베이스 |
 
 ---
 
-## 5. 데이터 포맷 상세 명세
+## 8. 시퀀스 다이어그램
 
-### 5.1 EnhancedQueryRequest (MCP 입력)
-```python
-class EnhancedQueryRequest(BaseModel):
-    query: str                                    # "한국선급 응답 현황"
-    extracted_period: Optional[Dict[str, str]]    # {"start": "2025-07-01", "end": "2025-08-01"}
-    extracted_keywords: Optional[List[str]]       # ["한국선급", "응답", "현황"]
-    extracted_organization: Optional[str]         # "KR"
-    query_scope: Optional[str]                   # "one" | "all" | "more"
-    category: Optional[str]                      # None (자동 탐지)
-    execute: bool                                # True
-    limit: Optional[int]                         # 10
-    use_defaults: bool                           # True
-```
-
-### 5.2 QueryResult (MCP 출력)
-```python
-class QueryResult(BaseModel):
-    query_id: str                    # "kr_response_required_agendas"
-    executed_sql: str                # "SELECT ... FROM agenda_chair WHERE ..."
-    parameters: Dict[str, Any]       # {"organization": "KR", "period_start": "2025-07-01"}
-    results: List[Dict[str, Any]]    # [{"agenda_code": "PL25016a", ...}, ...]
-    execution_time: float            # 0.001
-    error: Optional[str]             # None
-    validation_info: Optional[Dict]  # {"is_valid": true, "issues": []}
-```
-
-### 5.3 템플릿 매칭 결과
-```python
-{
-    'template': {
-        'template_id': 'kr_response_required_agendas',
-        'template_category': 'response',
-        'query_info': {
-            'natural_questions': [...],
-            'keywords': ['KR', '응답', '필요', 'response']
-        },
-        'sql_template': {
-            'query': 'SELECT ... WHERE sender_organization = :organization',
-            'system': '한국선급이 응답해야 하는 아젠다 조회',
-            'sql_prompt': '...'
-        },
-        'parameters': [...]
-    },
-    'score': 0.88,                   # 최종 점수
-    'vector_score': 0.85,            # 벡터 유사도
-    'keyword_score': 0.91,           # 키워드 매칭 점수
-    'keyword_matches': ['KR', '응답', 'response']
-}
-```
-
-### 5.4 LLM 분석 결과 (배치)
-```python
-[
-    {
-        "query_index": 1,
-        "keywords": ["한국선급", "응답", "현황"],
-        "parameters": {
-            "organization": "KR",
-            "sender_organization": "KR",
-            "response_org": "KR",
-            "days": null,
-            "date_range": null,
-            "agenda_code": null,
-            "agenda_panel": null,
-            "status": null,
-            "limit": 10,
-            "keyword": null
-        },
-        "extracted_period": {
-            "start": "2025-07-01",
-            "end": "2025-08-01"
-        },
-        "intent": "search",
-        "confidence": 0.95,
-        "original_query": "한국선급 응답 현황"  # 추가됨
-    },
-    // ... 99개 더
-]
-```
-
-### 5.5 최종 결과 파일 (JSON)
-```python
-{
-    "test_date": "2025-08-01T22:24:36",
-    "batch_size": 100,
-    "summary": {
-        "total_queries": 100,
-        "success_count": 51,
-        "error_count": 49,
-        "success_rate": 51.0,
-        "llm_time": 14.45,              # Phase 1 시간
-        "mcp_time": 92.57,              # Phase 2 시간
-        "total_time": 107.02,
-        "avg_time_per_query": 1.07
-    },
-    "detailed_results": [
-        {
-            "index": 1,
-            "query": "한국선급 응답 현황",
-            "llm_analysis": {
-                "keywords": ["한국선급", "응답", "현황"],
-                "parameters": {"organization": "KR", ...},
-                "extracted_period": {"start": "2025-07-01", "end": "2025-08-01"},
-                "intent": "search",
-                "confidence": 0.95
-            },
-            "mcp_response": {
-                "result": {
-                    "query_id": "kr_response_required_agendas",
-                    "executed_sql": "SELECT ...",
-                    "parameters": {...},
-                    "results": [...],
-                    "execution_time": 0.001,
-                    "error": null
-                },
-                "extracted_params": {...},
-                "rule_based_params": {...},
-                "llm_contribution": {...}
-            },
-            "success": true,
-            "template_id": "kr_response_required_agendas",
-            "error": null
-        },
-        // ... 99개 더
-    ]
-}
-```
-
----
-
-## 6. 시퀀스 다이어그램
-
-### 6.1 전체 처리 시퀀스
+### 8.1 전체 처리 시퀀스
 ```mermaid
 sequenceDiagram
     participant User
@@ -831,7 +593,7 @@ sequenceDiagram
     Batch-->>User: JSON 결과 파일
 ```
 
-### 6.2 파라미터 병합 상세 시퀀스
+### 8.2 파라미터 병합 상세 시퀀스
 ```mermaid
 sequenceDiagram
     participant MCP as MCP Server
@@ -843,115 +605,28 @@ sequenceDiagram
     LLM-->>MCP: {organization: "KR", period: {...}, keywords: [...]}
     
     MCP->>Rule: Extract rule-based params
-    Rule-->>MCP: {agenda_code: null, organization: "한국선급", ...}
+    Rule-->>MCP: {committee: "SDTP", organization: null, ...}
     
     MCP->>Merge: Merge parameters (LLM priority)
     
-    Note over Merge: 1. Organization<br/>LLM: "KR" → Use this<br/>Rule: "한국선급" → Ignored
+    Note over Merge: 1. Organization<br/>LLM: "KR" → Use this<br/>Rule: null → Ignored
     
     Note over Merge: 2. Period<br/>LLM: {start, end} → Use this<br/>Rule: null → Use default
     
-    Note over Merge: 3. Keywords<br/>LLM: ["한국선급", "응답"]<br/>Rule: ["KR", "response"]<br/>→ Combine both
+    Note over Merge: 3. Keywords<br/>LLM: ["한국선급", "응답"]<br/>Rule expanded: ["KR", "response"]<br/>→ Use LLM keywords only
+    
+    Note over Merge: 4. Committee<br/>LLM: null<br/>Rule: "SDTP" → Use this
     
     Merge-->>MCP: Enhanced parameters
 ```
 
 ---
 
-## 7. 성능 분석 및 병목 지점
+## 9. 에러 처리 및 폴백
 
-### 7.1 시간 소요 분석 (100개 질의)
-
-```
-총 시간: 107.02초
-├─ Phase 1 (LLM 배치): 14.45초 (13.5%)
-│  └─ 100개 질의를 1번의 API 호출로 처리
-└─ Phase 2 (MCP 처리): 92.57초 (86.5%)
-   ├─ OpenAI Embedding: 76.1초 (82.2%)
-   │  └─ 각 쿼리마다 API 호출 (0.761초 × 100)
-   ├─ Qdrant 검색: 10.0초 (10.8%)
-   ├─ 파라미터 추출: 3.0초 (3.2%)
-   ├─ SQL 생성: 2.0초 (2.2%)
-   └─ SQL 실행: 1.47초 (1.6%)
-```
-
-### 7.2 병목 지점 상세
-
-#### 7.2.1 OpenAI Embedding API (최대 병목)
-- **위치**: `vector_store.py` → `_get_embedding()`
-- **호출 빈도**: 쿼리당 1회 (총 100회)
-- **평균 시간**: 0.761초/호출
-- **총 시간**: 76.1초 (전체의 71%)
-
+### 9.1 LLM 응답 에러 처리
 ```python
-# 현재 구현 (개별 호출)
-for query in queries:
-    embedding = self._get_embedding(query)  # 0.761초
-```
-
-#### 7.2.2 개선 방안
-
-##### 방안 1: 임베딩 캐싱
-```python
-# 캐시 구현 예시
-class VectorStore:
-    def __init__(self):
-        self.embedding_cache = {}
-    
-    def _get_embedding(self, text: str) -> List[float]:
-        cache_key = hashlib.md5(text.encode()).hexdigest()
-        
-        if cache_key in self.embedding_cache:
-            return self.embedding_cache[cache_key]
-        
-        embedding = self.openai_client.embeddings.create(...)
-        self.embedding_cache[cache_key] = embedding
-        return embedding
-```
-
-##### 방안 2: 배치 임베딩
-```python
-# OpenAI API는 배치 임베딩 지원
-def _get_embeddings_batch(self, texts: List[str]) -> List[List[float]]:
-    response = self.openai_client.embeddings.create(
-        input=texts,  # 여러 텍스트 한번에
-        model="text-embedding-3-large",
-        dimensions=3072
-    )
-    return [item.embedding for item in response.data]
-```
-
-##### 방안 3: 로컬 임베딩 모델
-```python
-# Sentence Transformers 사용
-from sentence_transformers import SentenceTransformer
-
-class VectorStore:
-    def __init__(self):
-        self.model = SentenceTransformer('all-MiniLM-L6-v2')
-    
-    def _get_embedding(self, text: str) -> List[float]:
-        return self.model.encode(text).tolist()  # ~0.01초
-```
-
-### 7.3 예상 개선 효과
-
-| 개선 방안 | 현재 | 개선 후 | 절감 시간 |
-|----------|------|---------|----------|
-| 임베딩 캐싱 (50% 중복 가정) | 76.1초 | 38.0초 | 38.1초 |
-| 배치 임베딩 (100개 한번에) | 76.1초 | 2.0초 | 74.1초 |
-| 로컬 모델 | 76.1초 | 1.0초 | 75.1초 |
-| **조합 (배치 + 캐싱)** | **76.1초** | **1.0초** | **75.1초** |
-
-**최종 예상 시간**: 107초 → 32초 (약 70% 단축)
-
----
-
-## 8. 데이터 검증 및 에러 처리
-
-### 8.1 LLM 응답 검증
-```python
-# mock_claude_desktop.py
+# mock_claude_desktop.py - LLM 응답 파싱
 try:
     batch_results = json.loads(content)
     
@@ -967,130 +642,328 @@ try:
         batch_results = [batch_results]
         
 except json.JSONDecodeError as e:
+    logger.error(f"Failed to parse LLM response: {e}")
     # 폴백: 기본 키워드 분할
     for query in batch_queries:
         results.append({
             "original_query": query,
             "keywords": query.split(),
-            "parameters": {},
-            "intent": "unknown",
-            "confidence": 0.5,
+            "organization": None,
+            "extracted_period": None,
+            "intent": "search",
+            "query_scope": "one",
             "error": str(e)
         })
 ```
 
-### 8.2 SQL 실행 에러 처리
+### 9.2 MCP 처리 에러
 ```python
-# mcp_server_enhanced.py
+# mcp_server_enhanced.py - 에러 처리
 try:
     result = self.query_assistant.process_query(...)
-except sqlite3.Error as e:
-    if "near \"now\"" in str(e):
-        # SQLite datetime 함수 문제
-        logger.error("SQLite datetime function error")
-    elif "Incorrect number of bindings" in str(e):
-        # 파라미터 바인딩 문제
-        logger.error("SQL parameter binding error")
+except Exception as e:
+    error_msg = str(e)
+    
+    # SQL 관련 에러
+    if "near \"now\"" in error_msg:
+        logger.error("SQLite datetime function error - needs conversion")
+    elif "Incorrect number of bindings" in error_msg:
+        logger.error("SQL parameter binding mismatch")
+    elif "no such column" in error_msg:
+        logger.error(f"Invalid column reference: {error_msg}")
+    
+    # 템플릿 매칭 실패
+    elif "No matching query template found" in error_msg:
+        logger.warning(f"Template not found for: {request.query}")
+    
+    return {
+        'result': QueryResult(
+            query_id="",
+            executed_sql="",
+            parameters={},
+            results=[],
+            execution_time=0.0,
+            error=error_msg
+        ),
+        'extracted_params': {},
+        'rule_based_params': {},
+        'llm_contribution': {}
+    }
 ```
 
-### 8.3 템플릿 매칭 실패
+### 9.3 벡터 검색 에러
 ```python
-# query_assistant.py
-if not search_results:
-    logger.warning(f"No templates found for query: {user_query}")
-    return QueryResult(
-        query_id="",
-        executed_sql="",
-        parameters={},
-        results=[],
-        execution_time=0.0,
-        error="No matching query template found"
-    )
+# vector_store.py - 임베딩 에러 처리
+def _get_embedding(self, text: str) -> Optional[List[float]]:
+    try:
+        response = self.openai_client.embeddings.create(
+            input=text,
+            model="text-embedding-3-large",
+            dimensions=3072
+        )
+        return response.data[0].embedding
+    except openai.RateLimitError:
+        logger.error("OpenAI rate limit exceeded")
+        time.sleep(1)  # 재시도 전 대기
+        return self._get_embedding(text)
+    except Exception as e:
+        logger.error(f"Embedding error: {e}")
+        return None
+```
+
+### 9.4 SQL 실행 에러
+```python
+# database_executor.py - SQL 실행 에러 처리
+def execute_query(self, sql: str, parameters: Dict = None) -> List[Dict]:
+    try:
+        with sqlite3.connect(self.db_path) as conn:
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            # datetime 함수 호환성 처리
+            if "datetime('now')" in sql:
+                sql = sql.replace("datetime('now')", "date('now')")
+            
+            cursor.execute(sql, parameters or {})
+            return [dict(row) for row in cursor.fetchall()]
+            
+    except sqlite3.OperationalError as e:
+        if "no such table" in str(e):
+            logger.error(f"Table not found: {e}")
+        elif "no such column" in str(e):
+            logger.error(f"Column not found: {e}")
+        raise
+    except sqlite3.IntegrityError as e:
+        logger.error(f"Data integrity error: {e}")
+        raise
 ```
 
 ---
 
-## 9. 결론 및 권장사항
+## 10. 실제 SQL 실행 예시
 
-### 9.1 현재 시스템의 장점
-1. **LLM 배치 처리**: 100개 질의를 14.45초에 분석
-2. **파라미터 병합**: LLM과 규칙 기반 추출의 장점 결합
-3. **키워드 확장**: 한국어-영어 동의어 처리
-4. **벡터 + 키워드 매칭**: 하이브리드 검색
+### 10.1 한국선급 응답 현황 조회
+```sql
+-- 템플릿: kr_response_required_agendas
+-- 질의: "한국선급 응답 현황"
 
-### 9.2 개선이 필요한 부분
-1. **임베딩 최적화**: 배치 처리 또는 캐싱 필요
-2. **SQL 에러 처리**: datetime 함수 호환성 문제
-3. **템플릿 범위**: 문서/메일 관련 템플릿 부족
-4. **동의어 확장**: "문서" 등 누락된 매핑
+SELECT 
+    a.agenda_code,
+    a.subject,
+    a.deadline,
+    a.sent_time,
+    CASE 
+        WHEN r.response_time IS NOT NULL THEN 'responded'
+        WHEN a.deadline < date('now') THEN 'overdue'
+        ELSE 'pending'
+    END as response_status
+FROM agenda_chair a
+LEFT JOIN responses r ON a.agenda_code = r.agenda_code AND r.organization = 'KR'
+WHERE a.sender_organization = 'KR'
+AND a.sent_time >= '2025-05-03'
+AND a.has_deadline = 1
+ORDER BY a.deadline ASC, a.sent_time DESC
+LIMIT 10;
+```
 
-### 9.3 즉시 적용 가능한 개선
-1. 임베딩 캐싱 구현 (예상 효과: 50% 시간 단축)
-2. SQL datetime 함수 수정 (strftime 사용)
-3. 문서 관련 동의어 추가
-4. 에러 로깅 강화
+### 10.2 SDTP 최신 아젠다 조회
+```sql
+-- 템플릿: committee_recent_agendas
+-- 질의: "디지털 기술 패널의 최신 아젠다"
 
-### 9.4 중장기 개선 방향
-1. 로컬 임베딩 모델 도입
-2. 템플릿 자동 생성 시스템
-3. 쿼리 결과 캐싱
-4. 비동기 처리 강화
+SELECT 
+    agenda_code,
+    subject,
+    sent_time,
+    deadline,
+    sender_organization
+FROM agenda_chair
+WHERE committee = 'SDTP'
+AND sent_time >= '2025-07-02'
+AND sent_time <= '2025-08-01'
+ORDER BY sent_time DESC
+LIMIT 10;
+```
+
+### 10.3 전체 기관 아젠다 통계
+```sql
+-- 템플릿: all_organizations_agenda_stats
+-- 질의: "모든 기관의 아젠다 현황"
+
+SELECT 
+    sender_organization,
+    COUNT(*) as agenda_count,
+    COUNT(CASE WHEN has_deadline = 1 THEN 1 END) as with_deadline,
+    COUNT(CASE WHEN status = 'approved' THEN 1 END) as approved,
+    MAX(sent_time) as latest_agenda
+FROM agenda_chair
+WHERE sent_time >= date('now', '-90 days')
+GROUP BY sender_organization
+ORDER BY agenda_count DESC;
+```
 
 ---
 
-## 10. 2024년 8월 업데이트 사항
+## 11. 테스트 결과 분석
 
-### 10.1 프롬프트 통일
-- **변경 전**: mock 파일들이 자체 프롬프트 사용 (intent, confidence 등 추가 필드)
-- **변경 후**: 실제 MCP 시스템 프롬프트 (mcp_system_prompt.txt) 사용
-
-### 10.2 파라미터 구조 단순화
+### 11.1 성공률 분석 (51/100)
 ```python
-# 이전 구조 (mock 자체 프롬프트)
+# 카테고리별 성공률
+category_stats = {
+    'agenda': {'total': 30, 'success': 20, 'rate': 66.7},
+    'response': {'total': 25, 'success': 15, 'rate': 60.0},
+    'document': {'total': 20, 'success': 5, 'rate': 25.0},
+    'email': {'total': 15, 'success': 6, 'rate': 40.0},
+    'analysis': {'total': 10, 'success': 5, 'rate': 50.0}
+}
+```
+
+### 11.2 주요 실패 원인
+1. **템플릿 부재 (40%)**
+   - 문서/이메일 관련 템플릿 부족
+   - "받은 문서", "발송한 이메일" 등
+
+2. **SQL 에러 (35%)**
+   - datetime 함수 호환성
+   - 파라미터 바인딩 불일치
+   - 존재하지 않는 컬럼 참조
+
+3. **파라미터 추출 실패 (25%)**
+   - 복잡한 날짜 표현
+   - 다중 조건 쿼리
+   - 모호한 조직 참조
+
+### 11.3 개선 권장사항
+1. **템플릿 확장**
+   - document_* 카테고리 템플릿 추가
+   - email_* 카테고리 템플릿 추가
+
+2. **동의어 처리 강화**
+   - "문서", "서류", "자료" → document
+   - "메일", "이메일", "편지" → email
+
+3. **SQL 호환성**
+   - datetime → date 자동 변환
+   - 파라미터 검증 강화
+
+### 11.4 성능 메트릭
+```python
+performance_metrics = {
+    'llm_batch_time': 14.45,      # 초
+    'avg_llm_per_query': 0.14,    # 초
+    'mcp_total_time': 92.57,      # 초
+    'avg_mcp_per_query': 0.93,    # 초
+    'embedding_time': 76.1,       # 초 (82.2%)
+    'vector_search_time': 10.0,   # 초 (10.8%)
+    'sql_execution_time': 1.47,   # 초 (1.6%)
+}
+```
+
+---
+
+## 12. 최근 업데이트 (2025년 1월)
+
+### 12.1 프롬프트 통합
+- mock 파일들이 실제 MCP 시스템 프롬프트 사용
+- `parameters` 객체 제거, 플랫 구조로 변경
+- `confidence` 필드 제거
+
+### 12.2 패널 동의어 처리 추가
+- SDTP, GPG 등 패널 동의어 매핑
+- `committee` 필드 추출 기능 추가
+- 다양한 패널 표현을 통일된 코드로 변환
+
+### 12.3 Query Scope 처리 개선
+- LLM이 직접 query_scope 결정
+- all, one, more 세 가지 범위 지원
+- SQL 조건문 자동 생성
+
+---
+
+## 13. 부록: 주요 데이터 구조 참조
+
+### 13.1 테스트 질의 카테고리
+```python
+test_categories = {
+    'agenda': [
+        "최근 아젠다 목록 보여줘",
+        "디지털 기술 패널의 최신 아젠다",
+        "PL25016a 아젠다 상세 정보"
+    ],
+    'response': [
+        "한국선급 응답 현황",
+        "응답 필요한 아젠다들",
+        "기한 지난 미응답 아젠다"
+    ],
+    'document': [
+        "받은 문서 목록",
+        "최근 업로드된 문서",
+        "기술 관련 문서들"
+    ],
+    'email': [
+        "어제 받은 이메일들",
+        "발송한 메일 현황",
+        "중요 메일 목록"
+    ],
+    'analysis': [
+        "이번달 아젠다 통계",
+        "기관별 응답률 분석",
+        "주간 활동 요약"
+    ]
+}
+```
+
+### 13.2 최종 결과 파일 구조
+```json
 {
-    "keywords": [...],
-    "parameters": {
-        "organization": "KR",
-        "days": 30,
-        "status": null,
-        ...
+    "test_date": "2025-08-01T22:24:36",
+    "batch_size": 100,
+    "config": {
+        "llm_model": "anthropic/claude-3.5-sonnet-20241022",
+        "embedding_model": "text-embedding-3-large",
+        "vector_dimensions": 3072,
+        "template_count": 184
     },
-    "intent": "search",
-    "confidence": 0.9
-}
-
-# 새로운 구조 (MCP 프롬프트 형식)
-{
-    "keywords": [...],
-    "organization": "KR",
-    "extracted_period": {"start": "YYYY-MM-DD", "end": "YYYY-MM-DD"},
-    "intent": "search",
-    "query_scope": "one"
+    "summary": {
+        "total_queries": 100,
+        "success_count": 51,
+        "error_count": 49,
+        "success_rate": 51.0,
+        "llm_time": 14.45,
+        "mcp_time": 92.57,
+        "total_time": 107.02,
+        "avg_time_per_query": 1.07
+    },
+    "category_breakdown": {
+        "agenda": {"success": 20, "total": 30},
+        "response": {"success": 15, "total": 25},
+        "document": {"success": 5, "total": 20},
+        "email": {"success": 6, "total": 15},
+        "analysis": {"success": 5, "total": 10}
+    },
+    "error_breakdown": {
+        "template_not_found": 20,
+        "sql_error": 17,
+        "parameter_extraction_failed": 12
+    },
+    "detailed_results": [...]
 }
 ```
 
-### 10.3 파일별 주요 변경사항
+### 13.3 환경 변수 및 설정
+```python
+# 환경 변수
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
 
-#### mock_claude_desktop.py
-- `mcp_system_prompt.txt` 파일 로드 및 사용
-- `parameters` 객체 제거, 최상위 레벨로 필드 이동
-- `confidence` 필드 제거 (intent는 유지)
-- fallback 로직 업데이트 (intent 포함)
+# 경로 설정
+BASE_DIR = Path(__file__).parent.parent.parent.parent
+TEMPLATES_DIR = BASE_DIR / "modules" / "templates" / "data"
+PROMPTS_DIR = BASE_DIR / "modules" / "query_assistant" / "prompts"
+DB_PATH = BASE_DIR / "data" / "iacsgraph.db"
 
-#### mock_claude_desktop_batch.py
-- LLM 결과에서 직접 필드 접근 (parameters 객체 없이)
-- `query_scope` LLM이 결정하도록 변경 (이전: 코드에서 판단)
-- 에러 시 기본값 구조 업데이트
-
-### 10.4 성능 영향
-- 파라미터 추출 로직 단순화로 약간의 성능 향상
-- LLM 응답 크기 감소 (불필요한 필드 제거)
-- 실제 시스템과의 일관성 향상
-
-### 10.5 패널 동의어 처리 추가 (2025년 1월)
-- **synonym_service.py**: 패널 동의어 추가
-  - SDTP: ["SDTP", "디지털 기술 패널", "PL", "디지털 패널"]
-  - GPG: ["GPG"]
-- **query_parameter_extractor.py**: committee 필드 추출 기능 추가
-  - `_extract_committee()` 메서드로 패널 정보를 committee 필드로 추출
-  - 동의어 처리를 통해 다양한 표현을 통일된 코드로 변환
+# Qdrant 설정
+QDRANT_HOST = "localhost"
+QDRANT_PORT = 6333
+COLLECTION_NAME = "query_templates"
+```
