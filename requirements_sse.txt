@@ -1,0 +1,4 @@
+# SSE MCP Server Requirements
+aiohttp==3.9.1
+aiohttp-sse==2.1.0
+aiohttp-cors==0.7.0
