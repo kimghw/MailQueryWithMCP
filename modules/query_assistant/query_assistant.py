@@ -133,13 +133,29 @@ class QueryAssistant:
                 # MCP server already merged LLM + rule-based keywords
                 search_keywords = additional_params.get('keywords', [])
             
+            # Log template search parameters
+            logger.info(f"🔍 Template Search Parameters:")
+            logger.info(f"  - Query: {user_query}")
+            logger.info(f"  - Keywords: {search_keywords}")
+            logger.info(f"  - Category: {category}")
+            logger.info(f"  - Limit: 10, Threshold: 0.3")
+            
             search_results = self.vector_store.search(
                 query=user_query,
                 keywords=search_keywords,  # Use LLM keywords or expanded keywords
-                category=category,
+                category=None,  # Disable category filtering
                 limit=10,  # Get more candidates for filtering
                 score_threshold=0.3  # Lower threshold for better matching
             )
+            
+            # Log template matching results
+            logger.info(f"📊 Template Matching Results: Found {len(search_results)} templates")
+            for i, result in enumerate(search_results[:5]):  # Log top 5 results
+                logger.info(f"  #{i+1} Template: {result.template.template_id}")
+                logger.info(f"     - Category: {result.template.category}")
+                logger.info(f"     - Score: {result.score:.4f}")
+                logger.info(f"     - Keywords: {', '.join(result.template.keywords[:5])}...")
+                logger.info(f"     - Question: {result.template.natural_questions[:100]}...")
             
             if not search_results:
                 return QueryResult(
@@ -160,7 +176,11 @@ class QueryAssistant:
             else:
                 # Use the highest scoring template (already sorted by score)
                 best_match = search_results[0]
-                logger.info(f"Selected template: {best_match.template_id} with score: {best_match.score:.3f}")
+                logger.info(f"✅ Selected Best Template:")
+                logger.info(f"  - Template ID: {best_match.template.template_id}")
+                logger.info(f"  - Category: {best_match.template.category}")
+                logger.info(f"  - Score: {best_match.score:.4f}")
+                logger.info(f"  - SQL Template: {best_match.template.sql_query[:150]}...")
             
             template = best_match.template
             

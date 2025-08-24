@@ -31,32 +31,32 @@ class EnhancedQueryRequest(BaseModel):
     query: str = Field(..., description="Natural language query")
     
     # LLM이 추출한 파라미터들
-    extracted_period: Optional[Dict[str, str]] = Field(
-        None, 
-        description="LLM-extracted period with start and end dates (e.g., {'start': '2024-01-01', 'end': '2024-01-31'})"
+    extracted_period: Dict[str, str] = Field(
+        ..., 
+        description="LLM-extracted period with start and end dates in YYYY-MM-DD format (e.g., {'start': 'YYYY-MM-DD', 'end': 'YYYY-MM-DD'}). If no end date is specified in the query, use the current date as 'end'. If dates cannot be determined from the query, use the current date as 'end' and 30 days before as 'start'."
     )
-    extracted_keywords: Optional[List[str]] = Field(
-        None,
+    extracted_keywords: List[str] = Field(
+        ...,
         description="LLM-extracted keywords from the query"
     )
     extracted_organization: Optional[str] = Field(
         None,
-        description="LLM-extracted organization code (e.g., 'KR', 'IMO', 'IACS')"
+        description="Organization code extracted from query. Must be one of: KR, NK, CCS, ABS, DNV, BV, LR, RINA, RS, IRS, PRS, CRS, TL, IMO, IACS. If organization is not clearly identifiable or not in this list, use the string \"null\" (not JSON null)."
     )
-    query_scope: Optional[str] = Field(
-        None,
+    query_scope: str = Field(
+        ...,
         description="Query scope: 'all' (모든 패널/기관), 'one' (단일), 'more' (2개 이상)"
     )
-    intent: Optional[str] = Field(
-        None,
+    intent: str = Field(
+        ...,
         description="Query intent: 'search' (검색), 'list' (목록), 'analyze' (분석), 'count' (개수)"
     )
     
     # 기존 파라미터
-    category: Optional[str] = Field(None, description="Query category filter")
-    execute: bool = Field(True, description="Whether to execute the SQL")
-    limit: Optional[int] = Field(None, description="Result limit")
-    use_defaults: bool = Field(False, description="Use default values for missing parameters")
+    category: str = Field(..., description="Query category filter")
+    execute: bool = Field(True, description="Whether to execute the SQL (default: true)")
+    limit: int = Field(10, description="Result limit (default: 10)")
+    use_defaults: bool = Field(True, description="Use default values for missing parameters (default: true)")
 
 
 class ParameterExtractionRequest(BaseModel):
@@ -109,6 +109,7 @@ class StarletteSSEServer:
         @self.mcp_server.list_tools()
         async def handle_list_tools() -> List[Tool]:
             """List available tools"""
+            logger.info("🔧 [MCP Handler] list_tools() called")
             return [
                 Tool(
                     name="query_with_llm_params",
@@ -126,13 +127,20 @@ Claude should additionally extract:
    - 'all': 모든 패널/기관에 관한 질의 (e.g., "모든 기관의 응답", "전체 패널 현황")
    - 'one': 단일 패널/기관 질의 (e.g., "KR 응답", "PL 패널 의제")
    - 'more': 2개 이상 패널/기관 질의 (e.g., "KR과 BV의 응답", "여러 기관")
+4. Organization code (if not identifiable, set to null)
 
 Example:
 Query: "Show me all organizations' responses from last week"
 Claude extracts:
 - period: {"start": "2024-01-15", "end": "2024-01-22"}
 - keywords: ["response", "recent", "all", "organizations"]
+- organization: null
 - scope: "all"
+
+Optional parameters (with defaults):
+- execute: true
+- limit: 10
+- use_defaults: true
 
 MCP server will extract:
 - agenda_base: "PL25016"
@@ -166,11 +174,21 @@ MCP server will extract:
         @self.mcp_server.call_tool()
         async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Handle tool calls"""
+            logger.info(f"🛠️ [MCP Handler] call_tool() called with tool: {name}")
+            
+            # Preprocess arguments
+            arguments = self._preprocess_arguments(arguments)
             
             if name == "query_with_llm_params":
                 request = EnhancedQueryRequest(**arguments)
                 result = await self._handle_enhanced_query(request)
-                return [TextContent(type="text", text=self._format_enhanced_result(result))]
+                formatted_text = self._format_enhanced_result(result)
+                logger.info("📤 MCP Response to Claude Desktop:")
+                logger.info("=" * 80)
+                for line in formatted_text.split('\n'):
+                    logger.info(line)
+                logger.info("=" * 80)
+                return [TextContent(type="text", text=formatted_text)]
                 
             elif name == "extract_parameters_only":
                 request = ParameterExtractionRequest(**arguments)
@@ -188,6 +206,7 @@ MCP server will extract:
         @self.mcp_server.list_prompts()
         async def handle_list_prompts() -> List[Prompt]:
             """List available prompts"""
+            logger.info("📋 [MCP Handler] list_prompts() called")
             return [
                 Prompt(
                     name="iacsgraph_query",
@@ -205,6 +224,8 @@ MCP server will extract:
         @self.mcp_server.get_prompt()
         async def handle_get_prompt(name: str, arguments: Dict[str, Any]) -> PromptMessage:
             """Get specific prompt"""
+            logger.info(f"📝 [MCP Handler] get_prompt() called with prompt: {name}")
+            logger.info(f"   Arguments: {arguments}")
             if name == "iacsgraph_query":
                 user_query = arguments.get("user_query", "")
                 
@@ -232,6 +253,73 @@ MCP server will extract:
         except Exception as e:
             logger.error(f"Error loading system prompt: {e}")
             return "IACSGRAPH 해양 데이터베이스 쿼리 처리 시스템입니다."
+    
+    def _preprocess_arguments(self, arguments: Dict[str, Any]) -> Dict[str, Any]:
+        """Preprocess arguments from Claude Desktop
+        
+        Claude Desktop에서 전달받은 arguments를 정제하는 전처리 함수
+        - 백슬래시 제거
+        - 타입 변환 (string → int, JSON 파싱)
+        - "null" 문자열을 None으로 변환
+        """
+        import json
+        
+        # Clean backslashes from all string values in arguments
+        def clean_backslashes(obj):
+            if isinstance(obj, str):
+                return obj.replace('\\', '')
+            elif isinstance(obj, dict):
+                return {k: clean_backslashes(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [clean_backslashes(item) for item in obj]
+            return obj
+        
+        # Apply cleaning to all arguments
+        arguments = clean_backslashes(arguments)
+        
+        # Log incoming arguments
+        logger.info(f"=== Incoming arguments ===")
+        logger.info(f"Raw arguments: {arguments}")
+        logger.info(f"Arguments type: {type(arguments)}")
+        for key, value in arguments.items():
+            logger.info(f"  {key}: {value} (type: {type(value).__name__})")
+        
+        # Special handling for limit field - convert string to int
+        if 'limit' in arguments and isinstance(arguments['limit'], str):
+            # Remove surrounding quotes and try to convert to int
+            cleaned_limit = arguments['limit'].strip().strip("'").strip('"')
+            try:
+                arguments['limit'] = int(cleaned_limit)
+            except ValueError:
+                # If conversion fails, keep original value
+                pass
+        
+        # Handle string-wrapped JSON for period
+        if 'extracted_period' in arguments and isinstance(arguments['extracted_period'], str):
+            try:
+                arguments['extracted_period'] = json.loads(arguments['extracted_period'])
+            except:
+                pass
+        
+        # Handle string-wrapped JSON for keywords
+        if 'extracted_keywords' in arguments and isinstance(arguments['extracted_keywords'], str):
+            try:
+                arguments['extracted_keywords'] = json.loads(arguments['extracted_keywords'])
+            except:
+                pass
+        
+        # Handle string "null" to actual null
+        null_fields = ['extracted_organization', 'category', 'query_scope', 'intent']
+        for key in null_fields:
+            if key in arguments and arguments[key] == 'null':
+                arguments[key] = None
+        
+        # Log after conversion
+        logger.info(f"=== After preprocessing ===")
+        for key, value in arguments.items():
+            logger.info(f"  {key}: {value} (type: {type(value).__name__})")
+        
+        return arguments
     
     async def _handle_enhanced_query(self, request: EnhancedQueryRequest) -> Dict[str, Any]:
         """Handle query with LLM-extracted parameters"""
@@ -579,7 +667,8 @@ MCP server will extract:
         """Create Starlette application"""
         async def handle_sse(request):
             """Handle SSE connections"""
-            logger.info("SSE connection established")
+            logger.info("🌐 [MCP Server] SSE connection established")
+            logger.info(f"   Remote: {request.client.host}:{request.client.port}")
             async with self.sse_transport.connect_sse(
                 request.scope, request.receive, request._send
             ) as streams:
@@ -631,6 +720,16 @@ MCP server will extract:
 
 def main():
     """Main entry point"""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler('/home/kimghw/IACSGRAPH/mcp_server_detail.log')
+        ]
+    )
+    
     # Get configuration from environment or use defaults
     db_config = {
         "type": os.getenv("DB_TYPE", "sqlite"),
