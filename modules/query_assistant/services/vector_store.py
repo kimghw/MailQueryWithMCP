@@ -178,12 +178,8 @@ class VectorStore:
                     if result.score > 0.3:  # Debug high scoring results
                         logger.info(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keywords: None")
                 else:
-                    # Increase keyword weight: 50% vector + 50% keyword
-                    # Or even higher keyword weight if many keywords match
-                    if keyword_score > 0.5:  # More than half keywords match
-                        combined_score = (result.score * 0.4) + (keyword_score * 0.6)  # 40% vector, 60% keyword
-                    else:
-                        combined_score = (result.score * 0.5) + (keyword_score * 0.5)  # 50% vector, 50% keyword
+                    # Always use 100% vector, 0% keyword
+                    combined_score = (result.score * 1.0) + (keyword_score * 0.0)  # 100% vector, 0% keyword
                     
                     if result.score > 0.3:  # Debug high scoring results
                         logger.info(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keyword: {keyword_score:.3f}, Combined: {combined_score:.3f}")
