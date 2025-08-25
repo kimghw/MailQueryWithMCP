@@ -110,7 +110,7 @@ class HTTPStreamingMCPServer:
             return [
                 Tool(
                     name="simple_query",
-                    title="Simple Query",
+                    title="🔍 Simple Query",
                     description="Execute a simple database query",
                     inputSchema={
                         "type": "object",
@@ -125,7 +125,7 @@ class HTTPStreamingMCPServer:
                 ),
                 Tool(
                     name="query",
-                    title="Query Database",
+                    title="📊 Query Database",
                     description="Execute natural language query with options",
                     inputSchema={
                         "type": "object",
@@ -152,8 +152,8 @@ class HTTPStreamingMCPServer:
                 ),
                 Tool(
                     name="query_with_llm_params",
-                    title="Query with LLM Parameters",
-                    description="Execute natural language query with LLM-extracted parameters",
+                    title="🤖 Query with LLM Parameters",
+                    description="Retrieve the emails discussing IACS GPG, panels, and working groups.",
                     inputSchema={
                         "type": "object",
                         "properties": {
@@ -178,14 +178,15 @@ class HTTPStreamingMCPServer:
                             },
                             "extracted_keywords": {
                                 "type": "array",
-                                "description": "Keywords from the query",
+                                "description": "Keywords from the query (required)",
                                 "items": {
                                     "type": "string"
                                 }
                             },
                             "extracted_organization": {
                                 "type": "string",
-                                "description": "Organization code (KR, NK, etc.)"
+                                "description": "Organization code (KR, NK, etc.) - defaults to KR if not provided",
+                                "default": "KR"
                             },
                             "query_scope": {
                                 "type": "string",
@@ -194,11 +195,11 @@ class HTTPStreamingMCPServer:
                             },
                             "intent": {
                                 "type": "string",
-                                "description": "Query intent: search, list, analyze, or count",
+                                "description": "Query intent: search, list, analyze, or count (required)",
                                 "enum": ["search", "list", "analyze", "count"]
                             }
                         },
-                        "required": ["query"]
+                        "required": ["query", "extracted_keywords", "extracted_organization", "intent"]
                     }
                 )
             ]
@@ -210,9 +211,11 @@ class HTTPStreamingMCPServer:
         async def handle_call_tool(name: str, arguments: Dict[str, Any]) -> List[TextContent]:
             """Handle tool calls"""
             logger.info(f"🛠️ [MCP Handler] call_tool() called with tool: {name}")
+            logger.info(f"📝 [MCP Handler] Raw arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
             
             # Preprocess arguments
             arguments = self._preprocess_arguments(arguments)
+            logger.info(f"🔄 [MCP Handler] Preprocessed arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
             
             if name == "simple_query":
                 # Simple query handler
@@ -220,6 +223,17 @@ class HTTPStreamingMCPServer:
                 return [TextContent(type="text", text=self._format_query_result(result))]
                 
             elif name == "query_with_llm_params":
+                # Set default values for required fields if not provided
+                if 'extracted_organization' not in arguments or not arguments.get('extracted_organization'):
+                    arguments['extracted_organization'] = 'KR'
+                
+                logger.info(f"🤖 [MCP Handler] Processing query_with_llm_params")
+                logger.info(f"  • Query: {arguments.get('query')}")
+                logger.info(f"  • Keywords: {arguments.get('extracted_keywords')}")
+                logger.info(f"  • Organization: {arguments.get('extracted_organization')}")
+                logger.info(f"  • Period: {arguments.get('extracted_period')}")
+                logger.info(f"  • Intent: {arguments.get('intent')}")
+                
                 request = EnhancedQueryRequest(**arguments)
                 result = await self._handle_enhanced_query(request)
                 formatted_text = self._format_enhanced_result(result)
@@ -243,7 +257,7 @@ class HTTPStreamingMCPServer:
             return [
                 Prompt(
                     name="iacsgraph_query",
-                    description="IACSGRAPH 해양 데이터베이스 쿼리 처리를 위한 시스템 프롬프트",
+                    description="IACS 업무 활동 중 송수신한 메일 시스템을 관리 합니다.",
                     arguments=[
                         PromptArgument(
                             name="user_query",
@@ -337,6 +351,7 @@ class HTTPStreamingMCPServer:
     
     async def _handle_enhanced_query(self, request: EnhancedQueryRequest) -> Dict[str, Any]:
         """Handle query with LLM-extracted parameters"""
+        logger.info(f"📊 [Enhanced Query] Starting processing for: {request.query}")
         try:
             from ..common.parsers import QueryParameterExtractor
             extractor = QueryParameterExtractor()
@@ -422,6 +437,12 @@ class HTTPStreamingMCPServer:
             }
             
             # Execute query
+            logger.info(f"🚀 [Enhanced Query] Executing query with params:")
+            logger.info(f"  • Keywords for search: {search_keywords}")
+            logger.info(f"  • Organization: {execution_params.get('organization_code')}")
+            logger.info(f"  • Date range: {execution_params.get('date_range')}")
+            logger.info(f"  • Intent: {execution_params.get('intent')}")
+            
             result = self.query_assistant.process_query(
                 user_query=request.query,
                 category=request.category,
@@ -429,6 +450,11 @@ class HTTPStreamingMCPServer:
                 use_defaults=request.use_defaults,
                 additional_params=execution_params
             )
+            
+            logger.info(f"✅ [Enhanced Query] Query executed successfully")
+            logger.info(f"  • SQL executed: {getattr(result, 'executed_sql', 'N/A')[:200]}...")
+            logger.info(f"  • Results count: {len(getattr(result, 'results', []))}")
+            logger.info(f"  • Execution time: {getattr(result, 'execution_time', 0):.2f}s")
             
             return {
                 'result': result,
@@ -646,6 +672,9 @@ class HTTPStreamingMCPServer:
                 caps_dict['resources'] = {
                     "listChanged": False
                 }
+            # Remove completions field if it's null (not supported by this server)
+            if caps_dict.get('completions') is None:
+                caps_dict.pop('completions', None)
             
             self.sessions[session_id] = {
                 'initialized': True,
@@ -670,7 +699,7 @@ class HTTPStreamingMCPServer:
                     "capabilities": caps_dict,
                     "serverInfo": {
                         "name": "iacsgraph-query-assistant-http",
-                        "title": "IACSGRAPH Query Assistant",
+                        "title": "🌊 IACSGRAPH Query Assistant",
                         "version": "2.0.0"
                     },
                     "instructions": "IACSGRAPH 해양 데이터베이스 쿼리 시스템입니다. 'query' 도구를 사용하여 자연어로 데이터베이스를 조회할 수 있습니다."
@@ -697,6 +726,9 @@ class HTTPStreamingMCPServer:
                         cleaned_tool[key] = value
                 tools_data.append(cleaned_tool)
             
+            # Debug: Log the actual tool data being sent
+            logger.info(f"📤 Tool data details: {json.dumps(tools_data, indent=2)}")
+            
             logger.info(f"📤 Returning {len(tools_data)} tools: {[t['name'] for t in tools_data]}")
             
             response = {
@@ -712,6 +744,10 @@ class HTTPStreamingMCPServer:
             # Call tool
             tool_name = params.get('name')
             tool_args = params.get('arguments', {})
+            
+            logger.info(f"🔧 [MCP Server] Received tools/call request")
+            logger.info(f"  • Tool: {tool_name}")
+            logger.info(f"  • Arguments: {json.dumps(tool_args, indent=2, ensure_ascii=False)}")
             
             try:
                 if 'call_tool' in self._handlers:
