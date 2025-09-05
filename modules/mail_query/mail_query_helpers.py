@@ -55,6 +55,7 @@ def parse_graph_mail_item(item: Dict[str, Any]) -> GraphMailItem:
             body=item.get("body"),
             is_read=item.get("isRead", False),
             has_attachments=item.get("hasAttachments", False),
+            attachments=item.get("attachments"),  # 첨부파일 데이터 추가
             importance=item.get("importance", "normal"),
             web_link=item.get("webLink"),
         )

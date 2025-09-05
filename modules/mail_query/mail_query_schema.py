@@ -74,6 +74,7 @@ class MailQueryRequest(BaseModel):
                 "body",
                 "isRead",
                 "hasAttachments",
+                "attachments",
                 "importance",
                 "webLink",
             }
@@ -101,6 +102,7 @@ class GraphMailItem(BaseModel):
     body: Optional[Dict[str, Any]] = Field(None, description="본문 전체")
     is_read: bool = Field(default=False, description="읽음 상태")
     has_attachments: bool = Field(default=False, description="첨부파일 여부")
+    attachments: Optional[List[Dict[str, Any]]] = Field(None, description="첨부파일 목록")
     importance: str = Field(default="normal", description="중요도")
     web_link: Optional[str] = Field(None, description="웹 링크")
 

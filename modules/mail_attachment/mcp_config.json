@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mail-attachment-server": {
+      "command": "python",
+      "args": ["-m", "modules.mail_attachment.mcp_server_mail_attachment"],
+      "env": {
+        "PYTHONPATH": "/home/kimghw/IACSGRAPH"
+      }
+    }
+  }
+}

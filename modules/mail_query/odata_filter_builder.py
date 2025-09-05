@@ -99,6 +99,7 @@ class ODataFilterBuilder:
             "body",
             "isRead",
             "hasAttachments",
+            "attachments",  # 첨부파일 정보 추가
             "importance",
             "webLink",
             "parentFolderId",

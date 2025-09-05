@@ -203,3 +203,9 @@ test_results/
 
 # Backup folders in query_templates_split
 modules/templates/data/query_templates_split/backup*/
+
+# Email attachments directory
+/attachments/
+
+# MCP server output files
+*.out

@@ -74,7 +74,16 @@ class GraphAPIClient:
             params["$filter"] = odata_filter
         if select_fields:
             params["$select"] = select_fields
+            # attachments가 select 필드에 포함되면 expand도 추가
+            # select_fields는 콤마로 구분된 문자열이므로 확인
+            if "attachments" in select_fields:
+                params["$expand"] = "attachments"
+                logger.info(f"Attachments expand 추가됨: select_fields={select_fields}")
 
+        # 디버그 로그 추가
+        logger.info(f"Graph API 쿼리 파라미터: {params}")
+        logger.info(f"Graph API URL: {url}")
+        
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Accept": "application/json",
@@ -132,7 +141,12 @@ class GraphAPIClient:
 
                     # 성공 응답 처리
                     if response.status == 200:
-                        return await response.json()
+                        data = await response.json()
+                        # 첫 번째 메시지의 attachments 확인
+                        if data.get("value") and len(data["value"]) > 0:
+                            first_msg = data["value"][0]
+                            logger.info(f"첫 번째 메시지 attachments 필드: {first_msg.get('attachments', 'NOT FOUND')}")
+                        return data
 
                     # 인증 오류 처리
                     if response.status == 401:
@@ -191,3 +205,98 @@ class GraphAPIClient:
         raise APIConnectionError(
             f"Graph API 호출 실패: 최대 재시도 횟수 초과", api_endpoint=url
         )
+
+    async def put(
+        self,
+        endpoint: str,
+        data: bytes,
+        headers: Optional[Dict[str, str]] = None,
+        access_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        PUT 요청을 통해 파일 업로드
+        
+        Args:
+            endpoint: API 엔드포인트 (예: /me/drive/root:/path/file.pdf:/content)
+            data: 업로드할 파일 데이터
+            headers: 추가 헤더
+            access_token: 액세스 토큰
+            
+        Returns:
+            업로드 결과 또는 None
+        """
+        if not access_token:
+            logger.error("Access token is required for PUT requests")
+            return None
+            
+        url = f"{self.base_url}{endpoint}"
+        
+        # 기본 헤더 설정
+        request_headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/octet-stream"
+        }
+        
+        # 추가 헤더 병합
+        if headers:
+            request_headers.update(headers)
+        
+        try:
+            session = await self._get_session()
+            async with session.put(
+                url,
+                data=data,
+                headers=request_headers
+            ) as response:
+                if response.status in [200, 201]:
+                    return await response.json()
+                elif response.status == 409:
+                    logger.warning(f"Conflict at {endpoint} - file may already exist")
+                    return None
+                else:
+                    error_text = await response.text()
+                    logger.error(f"PUT request failed: {response.status} - {error_text}")
+                    return None
+                    
+        except Exception as e:
+            logger.error(f"PUT request exception: {str(e)}")
+            return None
+    
+    async def post(
+        self,
+        endpoint: str,
+        json_data: Optional[Dict[str, Any]] = None,
+        access_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        POST 요청
+        
+        Args:
+            endpoint: API 엔드포인트
+            json_data: JSON 데이터
+            access_token: 액세스 토큰
+            
+        Returns:
+            응답 데이터 또는 None
+        """
+        if not access_token:
+            logger.error("Access token is required for POST requests")
+            return None
+            
+        url = f"{self.base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json",
+            "Accept": "application/json"
+        }
+        
+        try:
+            return await self._make_request_with_retry(
+                method="POST",
+                url=url,
+                headers=headers,
+                json_data=json_data
+            )
+        except Exception as e:
+            logger.error(f"POST request failed: {str(e)}")
+            return None
