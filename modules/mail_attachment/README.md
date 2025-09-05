@@ -25,6 +25,11 @@
   - **HWP**: `.hwp` (hwp5html 권장, pyhwp 또는 hwp5 대체 가능)
   - **이미지**: `.jpg`, `.jpeg`, `.png`, `.gif`, `.bmp`, `.tiff` (pytesseract, PIL 필요)
 
+- **시스템 변환기 우선 사용**:
+  - `SystemFileConverter`를 통해 시스템 명령어 기반 변환 시도
+  - hwp5html, hwp5txt, pdftotext 등 시스템 도구 활용
+  - 시스템 변환 실패 시 Python 라이브러리로 폴백
+
 ### 3. EmailSaver
 이메일 본문과 메타데이터를 파일로 저장하는 클래스입니다.
 
@@ -292,6 +297,24 @@ pip install -r requirements.txt
 - `-n` 옵션으로 한 번에 처리할 메일 수 제한
 - 대용량 파일은 별도로 처리
 
+## 최근 업데이트
+
+### 2025-09-05 업데이트
+1. **HTTP Streaming MCP 서버 추가** (포트 8002)
+   - Claude.ai 웹 인터페이스와 완벽 호환
+   - chunked transfer encoding 기반 실시간 스트리밍
+   - 자동 파일 정리 기능 추가
+
+2. **텍스트 변환 기능 개선**
+   - SystemFileConverter 추가로 시스템 명령어 우선 사용
+   - 텍스트 미리보기 3000자로 확장
+   - FileConverter 초기화 버그 수정
+
+3. **LLM 응답 최적화**
+   - 응답 중요도 2단계로 단순화 (important/general)
+   - 형식화 프롬프트 추가로 일관된 응답 형식
+   - 이모지 타이틀 추가로 가독성 향상
+
 ## 향후 개선사항
 
 1. 병렬 다운로드 지원
@@ -304,11 +327,22 @@ pip install -r requirements.txt
 
 이 모듈은 Model Context Protocol (MCP) 서버를 통해 AI 모델에 이메일 및 첨부파일 조회 기능을 제공합니다.
 
+### MCP 서버 구현 방식
+
+#### HTTP Streaming 기반 서버 (포트 8002)
+- **구현 방식**: HTTP chunked transfer encoding을 사용한 스트리밍 통신
+- **호환성**: Claude.ai 웹 인터페이스와 완벽 호환
+- **특징**: 
+  - 실시간 스트리밍 응답 지원
+  - 자동 파일 정리 기능 (응답 후 다운로드 파일 삭제)
+  - 텍스트 미리보기 3000자로 확장
+  - LLM 응답 형식화 프롬프트 포함
+
 ### MCP 서버 실행
 
 #### 1. 로컬 실행
 ```bash
-# MCP 서버 시작 (포트 8767)
+# HTTP Streaming MCP 서버 시작 (포트 8002)
 python -m modules.mail_attachment.mcp_server_mail_attachment
 
 # 또는 스크립트 사용
@@ -332,7 +366,7 @@ python -m modules.mail_attachment.mcp_server_mail_attachment
 python -m modules.mail_attachment.mcp_server_mail_attachment
 
 # 터미널 2: Cloudflare 터널 실행
-cloudflared tunnel --url http://localhost:8767
+cloudflared tunnel --url http://localhost:8002
 ```
 
 ##### 접속 방법
@@ -353,6 +387,26 @@ cloudflared tunnel --url http://localhost:8767
 - 무료 서비스로 임시/개발 용도에 적합
 
 ### 제공되는 MCP 도구
-- **query_email**: 메일 조회 및 첨부파일 처리
-- **list_active_accounts**: 활성 이메일 계정 목록 조회
-- **convert_file_to_text**: 파일을 텍스트로 변환
+
+#### 1. query_email (📧 Query Email)
+메일 조회 및 첨부파일 자동 텍스트 변환
+- **기능**: 
+  - 이메일 본문 조회
+  - 첨부파일 다운로드 및 텍스트 변환
+  - 중요도별 응답 형식화 (중요/일반)
+  - 자동 파일 정리
+- **옵션**:
+  - `user_id`: 사용자 ID (이메일 @ 앞부분)
+  - `days_back`: 조회 기간
+  - `start_date/end_date`: 날짜 범위 지정
+  - `include_body`: 본문 포함 여부
+  - `download_attachments`: 첨부파일 처리 여부
+  - `urgency_level`: 응답 중요도 (important/general)
+
+#### 2. list_active_accounts (👥 List Active Accounts)
+활성 이메일 계정 목록 조회
+
+#### 3. convert_file_to_text (📄 Convert File to Text)
+로컬 파일을 텍스트로 변환
+- **지원 형식**: PDF, Word, Excel, HWP, 이미지 등
+- **시스템 변환기 우선 사용**: hwp5html, hwp5txt 등
