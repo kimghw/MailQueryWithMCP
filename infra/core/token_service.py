@@ -21,8 +21,10 @@ from .exceptions import (
 )
 from .logger import get_logger
 from .oauth_client import get_oauth_client
+from .auth_logger import get_auth_logger
 
 logger = get_logger(__name__)
+auth_logger = get_auth_logger()
 
 
 class TokenService:
@@ -160,12 +162,14 @@ class TokenService:
                     # 계정 상태를 ACTIVE로 업데이트
                     await self.update_account_status(user_id, "ACTIVE")
                     logger.debug(f"유효한 액세스 토큰 반환: user_id={user_id}")
+                    auth_logger.log_authentication(user_id, "VALID", "token still valid")
                     return account["access_token"]
 
             # 토큰이 만료된 경우 갱신 시도
             refresh_token = account["refresh_token"]
             if not refresh_token:
                 logger.warning(f"리프레시 토큰이 없음: user_id={user_id}")
+                auth_logger.log_authentication(user_id, "INACTIVE", "no refresh token")
                 await self.update_account_status(user_id, "INACTIVE")
                 return None
 
@@ -213,17 +217,21 @@ class TokenService:
             # 계정 상태를 ACTIVE로 업데이트
             await self.update_account_status(user_id, "ACTIVE")
             logger.info(f"계정별 설정으로 토큰 갱신 성공: user_id={user_id}")
+            auth_logger.log_token_refresh(user_id, True, "auto", None)
             return new_token_info["access_token"]
 
         except TokenExpiredError:
             # 리프레시 토큰도 만료된 경우
             logger.warning(f"리프레시 토큰 만료: user_id={user_id}")
+            auth_logger.log_token_refresh(user_id, False, "auto", "refresh token expired")
+            auth_logger.log_authentication(user_id, "REAUTH_REQUIRED", "refresh token expired")
             await self.update_account_status(user_id, "REAUTH_REQUIRED")
             await self.deactivate_account(user_id)
             return None
 
         except Exception as e:
             logger.error(f"토큰 조회/갱신 실패: user_id={user_id}, error={str(e)}")
+            auth_logger.log_token_refresh(user_id, False, "auto", str(e))
             return None
 
     async def validate_and_refresh_token(self, user_id: str) -> Dict[str, Any]:
@@ -349,14 +357,17 @@ class TokenService:
             )
 
             logger.info(f"강제 토큰 갱신 성공: user_id={user_id}")
+            auth_logger.log_token_refresh(user_id, True, "force", None)
             return True
 
         except TokenExpiredError:
             logger.warning(f"리프레시 토큰 만료로 강제 갱신 실패: user_id={user_id}")
+            auth_logger.log_token_refresh(user_id, False, "force", "refresh token expired")
             await self.deactivate_account(user_id)
             return False
         except Exception as e:
             logger.error(f"강제 토큰 갱신 실패: user_id={user_id}, error={str(e)}")
+            auth_logger.log_token_refresh(user_id, False, "force", str(e))
             return False
 
     async def deactivate_account(self, user_id: str) -> bool:

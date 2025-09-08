@@ -28,6 +28,7 @@ from starlette.routing import Route
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
 
+from infra.core.auth_logger import get_auth_logger
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from modules.mail_attachment import AttachmentDownloader, EmailSaver, FileConverter
@@ -39,6 +40,7 @@ from modules.mail_query import (
 )
 
 logger = get_logger(__name__)
+auth_logger = get_auth_logger()
 
 
 class HTTPStreamingMailAttachmentServer:
@@ -53,6 +55,9 @@ class HTTPStreamingMailAttachmentServer:
 
         # Database
         self.db = get_database_manager()
+
+        # Initialize database connection and check authentication
+        self._initialize_and_check_auth()
 
         # Attachment handling components
         self.attachment_downloader = AttachmentDownloader("./mcp_attachments")
@@ -74,6 +79,66 @@ class HTTPStreamingMailAttachmentServer:
         logger.info(
             f"🚀 HTTP Streaming Mail Attachment Server initialized on port {port}"
         )
+
+    def _initialize_and_check_auth(self):
+        """Initialize database connection and check authentication status"""
+        logger.info("🔍 Initializing database and checking authentication...")
+
+        try:
+            # Force database connection initialization
+            query = "SELECT COUNT(*) FROM accounts WHERE is_active = 1"
+            result = self.db.fetch_one(query)
+            active_accounts = result[0] if result else 0
+
+            logger.info(f"✅ Database connection successful")
+            logger.info(f"📊 Active accounts found: {active_accounts}")
+
+            # Check authentication status for all active accounts
+            if active_accounts > 0:
+                auth_query = """
+                SELECT user_id, 
+                       CASE 
+                           WHEN access_token IS NOT NULL AND token_expiry > datetime('now') THEN 'VALID'
+                           WHEN refresh_token IS NOT NULL THEN 'REFRESH_NEEDED'
+                           ELSE 'EXPIRED'
+                       END as auth_status
+                FROM accounts 
+                WHERE is_active = 1
+                ORDER BY user_id
+                """
+                auth_results = self.db.fetch_all(auth_query)
+
+                logger.info("🔐 Authentication status:")
+
+                # Count by status
+                valid_count = sum(1 for row in auth_results if row[1] == "VALID")
+                refresh_count = sum(
+                    1 for row in auth_results if row[1] == "REFRESH_NEEDED"
+                )
+                expired_count = sum(1 for row in auth_results if row[1] == "EXPIRED")
+
+                for row in auth_results:
+                    user_id, status = row
+                    status_emoji = (
+                        "✅"
+                        if status == "VALID"
+                        else "⚠️" if status == "REFRESH_NEEDED" else "❌"
+                    )
+                    logger.info(f"   {status_emoji} {user_id}: {status}")
+                    auth_logger.log_authentication(
+                        user_id, status, "server startup check"
+                    )
+
+                # Log batch check summary
+                auth_logger.log_batch_auth_check(
+                    active_accounts, valid_count, refresh_count, expired_count
+                )
+            else:
+                logger.warning("⚠️ No active accounts found in database")
+
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize database or check auth: {str(e)}")
+            raise
 
     def _register_handlers(self):
         """Register MCP protocol handlers"""
@@ -103,31 +168,31 @@ class HTTPStreamingMailAttachmentServer:
                             "max_mails": {
                                 "type": "integer",
                                 "description": "Maximum number of mails to retrieve",
-                                "default": 100,
+                                "default": 300,
                             },
                             "include_body": {
                                 "type": "boolean",
-                                "description": "Include full email body",
+                                "description": "Include full email body content in the response. When true, returns complete HTML/text content of each email. When false, only returns email preview (first ~255 chars). Useful for detailed content analysis",
                                 "default": True,
                             },
                             "download_attachments": {
                                 "type": "boolean",
-                                "description": "Download and convert attachments",
-                                "default": True,
+                                "description": "Download email attachments and convert supported formats (PDF, DOCX, XLSX, etc.) to text. When true, creates local copies and includes text content in response. When false, only shows attachment metadata (name, size)",
+                                "default": False,
                             },
                             "has_attachments_filter": {
                                 "type": "boolean",
-                                "description": "Filter for emails with attachments only",
+                                "description": "Filter to retrieve only emails that contain attachments. When true, excludes all emails without attachments. When false or not specified, returns all emails regardless of attachment status",
                             },
                             "save_emails": {
                                 "type": "boolean",
-                                "description": "Save email bodies as text files",
+                                "description": "Save each email as individual text file to disk (mcp_attachments/{user_id}/). Files include headers, body, and attachment list. Useful for archiving or offline access. File names contain subject, date, and sender",
                                 "default": True,
                             },
                             "save_csv": {
                                 "type": "boolean",
-                                "description": "Save email metadata as CSV file",
-                                "default": True,
+                                "description": "Export all retrieved emails' metadata to a single CSV file. Includes: subject, sender, date, read status, importance, attachment count/names, body preview (100 chars). Excel-compatible format with UTF-8 BOM encoding",
+                                "default": False,
                             },
                             "start_date": {
                                 "type": "string",
@@ -136,6 +201,25 @@ class HTTPStreamingMailAttachmentServer:
                             "end_date": {
                                 "type": "string",
                                 "description": "End date in YYYY-MM-DD format. When user mentions a time period without specific end date, use today's date. For 'this week' or 'last month', end_date should be today.",
+                            },
+                            "sender_address": {
+                                "type": "string",
+                                "description": "📥 받은 메일 필터: 특정 발신자가 나에게 보낸 메일만 조회. 예: 'kim@company.com' → kim이 나에게 보낸 메일만. (내가 kim에게 보낸 메일은 포함 안 됨)",
+                            },
+                            "subject_contains": {
+                                "type": "string",
+                                "description": "Filter emails by subject text. Only emails containing this text in the subject will be retrieved. Case-insensitive partial matching (e.g., 'meeting' matches 'Weekly Meeting Report').",
+                            },
+                            "recipient_address": {
+                                "type": "string",
+                                "description": "📨 보낸 메일 필터: 내가 특정 수신자에게 보낸 메일만 조회. 예: 'kim@company.com' → 내가 kim에게 보낸 메일만. (kim이 나에게 보낸 메일은 포함 안 됨)",
+                            },
+                            "conversation_with": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string"
+                                },
+                                "description": "💬 대화 전체 조회: 특정 사람과 주고받은 모든 메일. 예: ['kim@company.com'] → ①kim이 나에게 보낸 메일 + ②내가 kim에게 보낸 메일 모두 포함. 완전한 대화 내역을 보려면 이것을 사용하세요.",
                             },
                         },
                         "required": [
@@ -304,6 +388,7 @@ class HTTPStreamingMailAttachmentServer:
 조회 사용자: {user_id}
 
 다음 순서와 형식으로 테이블을 작성하세요:
+** 모든 메일 리스트에 대해서 작성해 주세요 **
 
 **📊 표 구성 (필수 열)**:
 | 유형 | 날짜 | 발신자/수신자 | 제목 | 주요내용 | 응답필요성 | 응답기한 | 첨부 |
@@ -311,7 +396,7 @@ class HTTPStreamingMailAttachmentServer:
 **각 열 작성 지침**:
 1. **유형**: 
    - 📥 받은메일: 발신자 이메일이 조회 사용자({user_id})와 다른 경우
-   - 📤 보낸메일: 발신자 이메일이 조회 사용자({user_id})와 같은 경우
+   - 📨 보낸메일: 발신자 이메일이 조회 사용자({user_id})와 같은 경우
 2. **날짜**: YYYY-MM-DD HH:MM 형식
 3. **발신자/수신자**: 
    - 받은메일: 발신자 이름 (이메일)
@@ -332,7 +417,7 @@ class HTTPStreamingMailAttachmentServer:
 
 **예시**:
 | 📥 | 2024-01-15 09:30 | 김철수 (kim@company.com) | 프로젝트 진행 현황 보고 | Q1 목표 달성률 85%, 추가 예산 승인 요청 | 🔴 긴급 | 1/17까지 | 보고서.pdf |
-| 📤 | 2024-01-15 11:20 | → 이영희 (lee@company.com) | Re: 프로젝트 진행 현황 보고 | 예산 승인 완료, 진행하시기 바랍니다 | ✅ 발송완료 | - | - |
+| 📨 | 2024-01-15 11:20 | → 이영희 (lee@company.com) | Re: 프로젝트 진행 현황 보고 | 예산 승인 완료, 진행하시기 바랍니다 | ✅ 발송완료 | - | - |
 
 이메일 내용과 첨부파일을 분석하여 응답 필요성과 기한을 정확히 판단하세요.
 """
@@ -459,14 +544,18 @@ class HTTPStreamingMailAttachmentServer:
                 return "Error: user_id is required"
 
             days_back = arguments.get("days_back", 30)
-            max_mails = arguments.get("max_mails", 10)
-            include_body = arguments.get("include_body", False)
-            download_attachments = arguments.get("download_attachments", True)
+            max_mails = arguments.get("max_mails", 300)  # inputSchema default와 일치
+            include_body = arguments.get("include_body", True)  # inputSchema default와 일치
+            download_attachments = arguments.get("download_attachments", False)  # inputSchema default와 일치
             has_attachments_filter = arguments.get("has_attachments_filter")
-            save_emails = arguments.get("save_emails", True)
-            save_csv = arguments.get("save_csv", True)
+            save_emails = arguments.get("save_emails", True)  # inputSchema default와 일치
+            save_csv = arguments.get("save_csv", False)  # inputSchema default와 일치
             start_date_str = arguments.get("start_date")
             end_date_str = arguments.get("end_date")
+            sender_address = arguments.get("sender_address")
+            recipient_address = arguments.get("recipient_address")
+            subject_contains = arguments.get("subject_contains")
+            conversation_with = arguments.get("conversation_with", [])
 
             # Create mail query
             orchestrator = MailQueryOrchestrator()
@@ -512,11 +601,25 @@ class HTTPStreamingMailAttachmentServer:
                 end_date = datetime.now()
                 start_date = end_date - timedelta(days=days_back - 1)
 
+            # Check for conflicting parameters
+            if conversation_with and sender_address:
+                return "Error: conversation_with cannot be used with sender_address"
+            if conversation_with and recipient_address:
+                return "Error: conversation_with cannot be used with recipient_address"
+            if sender_address and recipient_address:
+                return "Error: sender_address and recipient_address cannot be used together"
+            
             # Setup filters with the calculated date range
             filters = MailQueryFilters(date_from=start_date, date_to=end_date)
 
             if has_attachments_filter is not None:
                 filters.has_attachments = has_attachments_filter
+            
+            if sender_address:
+                filters.sender_address = sender_address
+                
+            if subject_contains:
+                filters.subject_contains = subject_contains
 
             # Setup fields
             select_fields = [
@@ -535,11 +638,23 @@ class HTTPStreamingMailAttachmentServer:
             if download_attachments or has_attachments_filter:
                 select_fields.append("attachments")
 
+            # Adjust query for conversation_with or recipient_address
+            if conversation_with or recipient_address:
+                # For conversation_with/recipient_address, we need to get more emails and filter client-side
+                # Also need toRecipients field
+                if "toRecipients" not in select_fields:
+                    select_fields.append("toRecipients")
+                
+                # Get more emails to ensure we find conversations
+                query_max_mails = min(max_mails * 3, 500)  # Get 3x more, max 500
+            else:
+                query_max_mails = max_mails
+            
             # Create request
             request = MailQueryRequest(
                 user_id=user_id,
                 filters=filters,
-                pagination=PaginationOptions(top=max_mails, skip=0, max_pages=1),
+                pagination=PaginationOptions(top=query_max_mails, skip=0, max_pages=1),
                 select_fields=select_fields,
             )
 
@@ -558,7 +673,74 @@ class HTTPStreamingMailAttachmentServer:
                 result_text += f"조회 기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')} ({days_back}일간)\n"
             else:
                 result_text += f"조회 기간: 최근 {days_back}일\n"
-            result_text += f"총 메일 수: {response.total_fetched}개\n\n"
+            
+            # Display filters if applied
+            if conversation_with:
+                result_text += f"대화 필터: {', '.join(conversation_with)}\n"
+            if sender_address:
+                result_text += f"발신자 필터: {sender_address}\n"
+            if recipient_address:
+                result_text += f"수신자 필터: {recipient_address}\n"
+            if subject_contains:
+                result_text += f"제목 필터: '{subject_contains}' 포함\n"
+                
+            # Filter messages for conversation_with or recipient_address
+            if conversation_with or recipient_address:
+                filtered_messages = []
+                conversation_emails = [email.lower() for email in conversation_with]
+                
+                for mail in response.messages:
+                    include_mail = False
+                    
+                    # Get sender email
+                    sender_email = ""
+                    if mail.from_address and isinstance(mail.from_address, dict):
+                        email_addr = mail.from_address.get("emailAddress", {})
+                        sender_email = email_addr.get("address", "").lower()
+                    
+                    # For conversation_with filter
+                    if conversation_with:
+                        # Check if sender is in conversation_with
+                        if sender_email in conversation_emails:
+                            include_mail = True
+                        
+                        # Check if this is a sent mail (from the user)
+                        elif sender_email and f"{user_id}@" in sender_email:
+                            # This is a sent mail, check recipients
+                            if hasattr(mail, 'to_recipients') and mail.to_recipients:
+                                for recipient in mail.to_recipients:
+                                    if isinstance(recipient, dict):
+                                        recip_addr = recipient.get("emailAddress", {})
+                                        if isinstance(recip_addr, dict):
+                                            recip_email = recip_addr.get("address", "").lower()
+                                            if recip_email in conversation_emails:
+                                                include_mail = True
+                                                break
+                    
+                    # For recipient_address filter (only sent mails)
+                    elif recipient_address:
+                        # Only include if this is a sent mail from the user
+                        if sender_email and f"{user_id}@" in sender_email:
+                            # Check recipients
+                            if hasattr(mail, 'to_recipients') and mail.to_recipients:
+                                for recipient in mail.to_recipients:
+                                    if isinstance(recipient, dict):
+                                        recip_addr = recipient.get("emailAddress", {})
+                                        if isinstance(recip_addr, dict):
+                                            recip_email = recip_addr.get("address", "").lower()
+                                            if recip_email == recipient_address.lower():
+                                                include_mail = True
+                                                break
+                    
+                    if include_mail:
+                        filtered_messages.append(mail)
+                
+                # Update response with filtered messages
+                response.messages = filtered_messages[:max_mails]  # Limit to requested max
+                actual_total = len(filtered_messages)
+                result_text += f"총 메일 수: {len(response.messages)}개 (전체 {actual_total}개 중)\n\n"
+            else:
+                result_text += f"총 메일 수: {response.total_fetched}개\n\n"
 
             # Process each mail
             blocked_senders = ["block@krs.co.kr"]  # 차단할 발신자 목록
@@ -784,20 +966,47 @@ class HTTPStreamingMailAttachmentServer:
                     logger.error(f"CSV 저장 실패: {str(e)}")
                     result_text += f"\n❌ CSV 저장 중 오류 발생: {str(e)}\n"
 
-            # 포맷팅 지침 추가
+            # 포맷팅 지침 추가 - format_email_results 프롬프트와 동일한 형식 사용
             result_text += "\n\n" + "=" * 60 + "\n"
-            result_text += "📊 LLM 응답 포맷팅 지침\n"
+            result_text += "📧 이메일 조회 결과 포맷팅 지침\n"
             result_text += "=" * 60 + "\n"
-            result_text += """
-위 메일들을 다음 테이블 형식으로 정리해주세요:
+            result_text += f"""
+조회 사용자: {user_id}
 
-| 날짜 | 발신자 | 제목 | 주요내용 | 응답필요성 | 응답기한 | 첨부 |
+다음 순서와 형식으로 테이블을 작성하세요:
+**모든 송수신 메일 리스트에 대해서 작성해 주세요**
+**모든 송수신 메일 리스트에 대해서 작성해 주세요**
 
-응답필요성 기준:
-- 🔴 중요: 응답 필요 (회신/승인/검토 요청 등)
-- 🟢 일반: 단순 참고/공지 (응답 불필요)
+**📊 표 구성 (필수 열)**:
+| 유형 | 날짜 | 발신자/수신자 | 제목 | 주요내용 | 응답필요성 | 응답기한 | 첨부 |
 
-각 메일의 내용과 첨부파일을 분석하여 응답 필요성과 기한을 판단하세요.
+**각 열 작성 지침**:
+1. **유형**: 
+   - 📥 받은메일: 발신자 이메일이 조회 사용자({user_id})와 다른 경우
+   - 📨 보낸메일: 발신자 이메일이 조회 사용자({user_id})와 같은 경우
+2. **날짜**: YYYY-MM-DD HH:MM 형식
+3. **발신자/수신자**: 
+   - 받은메일: 발신자 이름 (이메일)
+   - 보낸메일: → 수신자 이름 (이메일)
+4. **제목**: 전체 제목 (너무 길면 ... 사용)
+5. **주요내용**: 핵심 내용 1-2줄 요약
+6. **응답필요성**: 
+   - 받은메일: 🔴 중요 (응답 필요) / 🟢 일반 (참고용)
+   - 보낸메일: ✅ 발송완료 / ⏳ 응답대기
+7. **응답기한**: 구체적 날짜 또는 "즉시", "3일 내", "없음" 등
+8. **첨부**: 파일명 (파일형식) 또는 "없음"
+
+**응답 필요성 판단 기준**:
+- 질문이 포함된 경우
+- "회신 요청", "답변 부탁" 등의 표현
+- 마감일이 명시된 경우
+- 승인/검토 요청이 있는 경우
+
+**예시**:
+| 📥 | 2024-01-15 09:30 | 김철수 (kim@company.com) | 프로젝트 진행 현황 보고 | Q1 목표 달성률 85%, 추가 예산 승인 요청 | 🔴 중요 | 1/17까지 | 보고서.pdf |
+| 📤 | 2024-01-15 11:20 | → 이영희 (lee@company.com) | Re: 프로젝트 진행 현황 보고 | 예산 승인 완료, 진행하시기 바랍니다 | ✅ 발송완료 | - | 없음 |
+
+이메일 내용과 첨부파일을 분석하여 응답 필요성과 기한을 정확히 판단하세요.
 """
 
             # 다운로드된 파일들 삭제

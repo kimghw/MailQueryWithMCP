@@ -51,7 +51,8 @@ echo
 # Start Cloudflare tunnel and capture output
 echo -e "${BLUE}2️⃣  Cloudflare 터널 생성 중...${NC}"
 TUNNEL_LOG="tunnel_output.log"
-cloudflared tunnel --url http://localhost:${PORT} 2>&1 | tee $TUNNEL_LOG &
+# Use stdbuf to disable buffering
+stdbuf -oL -eL cloudflared tunnel --url http://localhost:${PORT} 2>&1 | tee $TUNNEL_LOG &
 TUNNEL_PID=$!
 
 # Wait for tunnel URL
@@ -119,4 +120,6 @@ cleanup() {
 trap cleanup SIGINT SIGTERM
 
 # Keep running
-wait $SERVER_PID $TUNNEL_PID
+while kill -0 $SERVER_PID 2>/dev/null && kill -0 $TUNNEL_PID 2>/dev/null; do
+    sleep 1
+done

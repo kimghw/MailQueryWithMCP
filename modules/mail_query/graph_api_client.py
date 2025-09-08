@@ -30,7 +30,7 @@ class GraphAPIClient:
         self.config = get_config()
         self.base_url = "https://graph.microsoft.com/v1.0"
         self.max_retries = 3
-        self.timeout = aiohttp.ClientTimeout(total=30)
+        self.timeout = aiohttp.ClientTimeout(total=60)
         self._session: Optional[aiohttp.ClientSession] = None
         self._session_lock = asyncio.Lock()
 

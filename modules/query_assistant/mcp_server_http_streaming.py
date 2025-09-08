@@ -21,11 +21,19 @@ from starlette.routing import Route
 from starlette.requests import Request
 import uvicorn
 from pathlib import Path
+import sys
 
+# Add parent directory to path
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+from infra.core.database import get_database_manager
+from infra.core.auth_logger import get_auth_logger
 from .query_assistant import QueryAssistant
 from .schema import QueryResult
+from .mail_data_refresher import MailDataRefresher
 
 logger = logging.getLogger(__name__)
+auth_logger = get_auth_logger()
 
 
 class EnhancedQueryRequest(BaseModel):
@@ -85,6 +93,13 @@ class HTTPStreamingMCPServer:
             openai_api_key=openai_api_key
         )
         
+        # Initialize database connection and check authentication
+        self._initialize_and_check_auth()
+        
+        # Initialize mail data refresher
+        self.mail_refresher = MailDataRefresher()
+        self._mail_refresh_done = False
+        
         # Load system prompt
         self.system_prompt = self._load_system_prompt()
         
@@ -99,6 +114,59 @@ class HTTPStreamingMCPServer:
         
         # Create Starlette app
         self.app = self._create_app()
+    
+    def _initialize_and_check_auth(self):
+        """Initialize database connection and check authentication status"""
+        logger.info("🔍 Initializing database and checking authentication...")
+        
+        try:
+            # Get database manager directly from query assistant
+            db = get_database_manager()
+            
+            # Force database connection initialization
+            query = "SELECT COUNT(*) FROM accounts WHERE is_active = 1"
+            result = db.fetch_one(query)
+            active_accounts = result[0] if result else 0
+            
+            logger.info(f"✅ Database connection successful")
+            logger.info(f"📊 Active accounts found: {active_accounts}")
+            
+            # Check authentication status for all active accounts
+            if active_accounts > 0:
+                auth_query = """
+                SELECT user_id, 
+                       CASE 
+                           WHEN access_token IS NOT NULL AND token_expiry > datetime('now') THEN 'VALID'
+                           WHEN refresh_token IS NOT NULL THEN 'REFRESH_NEEDED'
+                           ELSE 'EXPIRED'
+                       END as auth_status
+                FROM accounts 
+                WHERE is_active = 1
+                ORDER BY user_id
+                """
+                auth_results = db.fetch_all(auth_query)
+                
+                logger.info("🔐 Authentication status:")
+                
+                # Count by status
+                valid_count = sum(1 for row in auth_results if row[1] == "VALID")
+                refresh_count = sum(1 for row in auth_results if row[1] == "REFRESH_NEEDED") 
+                expired_count = sum(1 for row in auth_results if row[1] == "EXPIRED")
+                
+                for row in auth_results:
+                    user_id, status = row
+                    status_emoji = "✅" if status == "VALID" else "⚠️" if status == "REFRESH_NEEDED" else "❌"
+                    logger.info(f"   {status_emoji} {user_id}: {status}")
+                    auth_logger.log_authentication(user_id, status, "server startup check")
+                
+                # Log batch check summary
+                auth_logger.log_batch_auth_check(active_accounts, valid_count, refresh_count, expired_count)
+            else:
+                logger.warning("⚠️ No active accounts found in database")
+                
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize database or check auth: {str(e)}")
+            raise
     
     def _register_handlers(self):
         """Register MCP protocol handlers"""
@@ -212,6 +280,27 @@ class HTTPStreamingMCPServer:
             """Handle tool calls"""
             logger.info(f"🛠️ [MCP Handler] call_tool() called with tool: {name}")
             logger.info(f"📝 [MCP Handler] Raw arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
+            
+            # Mail data refresh for krsdtp account before first query
+            if not self._mail_refresh_done:
+                logger.info("📧 [MCP Handler] Refreshing mail data for krsdtp account...")
+                try:
+                    refresh_result = await self.mail_refresher.refresh_mail_data_for_user(
+                        user_id="krsdtp",
+                        max_mails=1000,
+                        use_last_date=True
+                    )
+                    
+                    if refresh_result['status'] == 'success':
+                        logger.info(f"✅ Mail refresh completed: {refresh_result['mail_count']} mails queried, "
+                                   f"{refresh_result.get('processed_count', 0)} processed, "
+                                   f"{refresh_result.get('events_processed', 0)} events saved to agenda_chair")
+                    else:
+                        logger.warning(f"⚠️ Mail refresh failed: {refresh_result.get('error', 'Unknown error')}")
+                    
+                    self._mail_refresh_done = True
+                except Exception as e:
+                    logger.error(f"❌ Error during mail refresh: {e}")
             
             # Preprocess arguments
             arguments = self._preprocess_arguments(arguments)

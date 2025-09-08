@@ -95,16 +95,16 @@ class GraphMailItem(BaseModel):
         None, alias="from", description="From 필드"
     )
     to_recipients: List[Dict[str, Any]] = Field(
-        default_factory=list, description="수신자 목록"
+        default_factory=list, alias="toRecipients", description="수신자 목록"
     )
-    received_date_time: datetime = Field(..., description="수신 시간")
-    body_preview: Optional[str] = Field(None, description="본문 미리보기")
+    received_date_time: datetime = Field(..., alias="receivedDateTime", description="수신 시간")
+    body_preview: Optional[str] = Field(None, alias="bodyPreview", description="본문 미리보기")
     body: Optional[Dict[str, Any]] = Field(None, description="본문 전체")
-    is_read: bool = Field(default=False, description="읽음 상태")
-    has_attachments: bool = Field(default=False, description="첨부파일 여부")
+    is_read: bool = Field(default=False, alias="isRead", description="읽음 상태")
+    has_attachments: bool = Field(default=False, alias="hasAttachments", description="첨부파일 여부")
     attachments: Optional[List[Dict[str, Any]]] = Field(None, description="첨부파일 목록")
     importance: str = Field(default="normal", description="중요도")
-    web_link: Optional[str] = Field(None, description="웹 링크")
+    web_link: Optional[str] = Field(None, alias="webLink", description="웹 링크")
 
     class Config:
         populate_by_name = True
