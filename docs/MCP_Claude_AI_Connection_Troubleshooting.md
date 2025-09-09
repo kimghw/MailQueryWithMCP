@@ -7,6 +7,7 @@ claude.ai에서 MCP 서버 연결 시 다음과 같은 문제가 발생했습니
 1. **연결 상태 문제**: "연결됨" 대신 "구성"으로만 표시
 2. **도구 가시성 문제**: 도구(tools)가 표시되지 않거나 검색되지 않음
 3. **초기화 실패**: MCP 프로토콜 초기화 과정에서 오류 발생
+4. **Tool execution failed 에러**: 서버는 정상 작동하지만 Claude Connector에서 에러 표시
 
 ## 근본 원인 분석
 
@@ -119,6 +120,57 @@ async def handle_initialize(params: InitializeParams) -> InitializeResult:
             version="2.0.0"
         )
     )
+```
+
+#### HTTP Streaming Server에서의 수정 (2025-09-09 업데이트)
+
+HTTP Streaming 방식의 MCP 서버에서는 tools와 prompts capabilities도 명시적으로 설정해야 합니다:
+
+```python
+# modules/mail_attachment/mcp_server/server.py
+if method == "initialize":
+    # Initialize session with standard Mcp-Session-Id
+    session_id = secrets.token_urlsafe(24)
+    caps = self.mcp_server.get_capabilities(
+        notification_options=NotificationOptions(), experimental_capabilities={}
+    )
+    
+    # Fix null fields to empty objects/lists for spec compliance
+    caps_dict = caps.model_dump()
+    if caps_dict.get("logging") is None:
+        caps_dict["logging"] = {}
+    if caps_dict.get("resources") is None:
+        caps_dict["resources"] = {"listChanged": False}
+    
+    # Fix tools and prompts to show they are available
+    if caps_dict.get("tools") is None:
+        caps_dict["tools"] = {"listChanged": True}
+    if caps_dict.get("prompts") is None:
+        caps_dict["prompts"] = {"listChanged": True}
+    
+    # Remove completions field if it's null (not supported by this server)
+    if caps_dict.get("completions") is None:
+        caps_dict.pop("completions", None)
+```
+
+이 수정으로 초기화 응답이 다음과 같이 변경됩니다:
+
+```json
+{
+  "capabilities": {
+    "experimental": {},
+    "logging": {},
+    "prompts": {
+      "listChanged": true  // null → {"listChanged": true}
+    },
+    "resources": {
+      "listChanged": false
+    },
+    "tools": {
+      "listChanged": true  // null → {"listChanged": true}
+    }
+  }
+}
 ```
 
 ### 2. 도구 스키마 단순화

@@ -10,7 +10,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 # Default values
-PORT=8767
+PORT=${MCP_PORT:-8002}  # Use environment variable or default
 RUN_TUNNEL=false
 
 # Parse command line arguments
@@ -28,7 +28,7 @@ while [[ $# -gt 0 ]]; do
             echo "Usage: $0 [options]"
             echo "Options:"
             echo "  -t, --tunnel    Run with Cloudflare tunnel"
-            echo "  -p, --port      Specify port (default: 8767)"
+            echo "  -p, --port      Specify port (default: ${MCP_PORT:-8002})"
             echo "  -h, --help      Show this help message"
             exit 0
             ;;
@@ -43,8 +43,9 @@ done
 echo -e "${GREEN}🚀 Starting MCP Mail Attachment Server...${NC}"
 echo -e "${BLUE}Server will run on port ${PORT}${NC}"
 
-# Set Python path
+# Set Python path and settings path
 export PYTHONPATH=/home/kimghw/IACSGRAPH
+export MCP_SETTINGS_PATH=${MCP_SETTINGS_PATH:-"/home/kimghw/IACSGRAPH/modules/mail_attachment/settings.json"}
 
 # Change to project directory
 cd /home/kimghw/IACSGRAPH
