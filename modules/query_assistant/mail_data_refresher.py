@@ -34,17 +34,15 @@ class MailDataRefresher:
         logger.info("📧 MailDataRefresher initialized")
         
     async def get_last_mail_date(self, user_id: str) -> Optional[datetime]:
-        """특정 사용자의 마지막 메일 수신 시간 조회"""
+        """agenda_all에서 마지막 메일 수신 시간 조회"""
         try:
             query = """
-            SELECT MAX(received_time) as last_received
-            FROM mail_history mh
-            JOIN accounts a ON mh.account_id = a.id
-            WHERE a.user_id = ?
+            SELECT MAX(sent_time) as last_received
+            FROM agenda_all
             """
             
-            # Use synchronous database call
-            result = self.db_manager.fetch_one(query, (user_id,))
+            # Use synchronous database call - no parameters needed
+            result = self.db_manager.fetch_one(query)
             
             if result and result[0]:
                 # ISO format string to datetime
@@ -80,16 +78,23 @@ class MailDataRefresher:
             # 2. 시작 날짜 결정
             if use_last_date:
                 start_date = await self.get_last_mail_date(user_id)
-                logger.info(f"📅 Using last mail date as start: {start_date}")
+                if start_date:
+                    logger.info(f"📅 Using last mail date from agenda_all: {start_date}")
+                else:
+                    logger.info(f"📅 No previous mail found, using 30 days back")
+                    start_date = datetime.now() - timedelta(days=30)
             else:
                 start_date = datetime.now() - timedelta(days=30)
                 
             # 날짜 계산 - timezone aware 처리
-            now = datetime.now()
-            if start_date.tzinfo is not None:
-                # start_date가 timezone aware인 경우
-                from datetime import timezone
-                now = datetime.now(timezone.utc)
+            from datetime import timezone
+            
+            # 항상 timezone aware datetime 사용
+            if start_date.tzinfo is None:
+                start_date = start_date.replace(tzinfo=timezone.utc)
+            
+            # 현재 시간도 UTC로
+            now = datetime.now(timezone.utc)
                 
             days_back = (now - start_date).days
             if days_back < 1:
@@ -97,15 +102,31 @@ class MailDataRefresher:
                 
             logger.info(f"📊 Query parameters: days_back={days_back}, max_mails={max_mails}")
             
-            # 3. 메일 조회
+            # 3. 메일 조회 - 날짜 필터 추가
+            from modules.mail_query.mail_query_schema import MailQueryFilters, PaginationOptions
+            
+            # 날짜 필터 생성
+            filters = MailQueryFilters(
+                date_from=start_date,  # 마지막 수신 날짜부터
+                date_to=now  # 현재까지
+            )
+            
+            # 페이징 옵션
+            pagination = PaginationOptions(
+                top=50,  # 한 번에 50개씩
+                max_pages=max_mails // 50 if max_mails > 50 else 1  # 최대 페이지 수 계산
+            )
+            
             query_request = MailQueryRequest(
                 user_id=user_id,
-                days_back=days_back,
-                top=max_mails,
-                orderby="receivedDateTime desc"
+                filters=filters,
+                pagination=pagination
             )
             
             logger.info(f"🔍 Querying emails for {user_id}...")
+            logger.info(f"📅 Date filter: {start_date.strftime('%Y-%m-%d %H:%M:%S')} to {now.strftime('%Y-%m-%d %H:%M:%S')}")
+            logger.info(f"📊 Filter object: date_from={filters.date_from}, date_to={filters.date_to}")
+            logger.info(f"📄 Pagination: top={pagination.top}, max_pages={pagination.max_pages}")
             query_response = await self.mail_query_orchestrator.mail_query_user_emails(query_request)
             
             mail_count = len(query_response.messages) if query_response.messages else 0

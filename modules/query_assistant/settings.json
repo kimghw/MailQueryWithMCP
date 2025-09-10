@@ -61,7 +61,7 @@
   },
   "api_server": {
     "host": "0.0.0.0",
-    "port": 8000,
+    "port": 8001,
     "cors": {
       "enabled": true,
       "origins": ["*"],
@@ -118,5 +118,14 @@
     "debug_mode": false,
     "metrics_collection": true,
     "async_processing": true
+  },
+  "mcp_server": {
+    "host": "0.0.0.0",
+    "port": 8001,
+    "protocol": "http-streaming",
+    "tunnel": {
+      "enabled": false,
+      "provider": "cloudflare"
+    }
   }
 }

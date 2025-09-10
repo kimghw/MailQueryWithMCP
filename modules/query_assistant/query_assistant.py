@@ -3,9 +3,11 @@
 import re
 import logging
 import sqlite3
+import json
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 import os
+from pathlib import Path
 
 from .schema import (
     QueryTemplate, QueryExpansion, QueryResult, 
@@ -23,7 +25,15 @@ from .services.sql_generator import SQLGenerator
 # Common parsers import
 from ..common.parsers import QueryParameterExtractor
 
-logger = logging.getLogger(__name__)
+# Logger configuration
+from .utils.logger_config import get_query_logger, log_query_execution
+
+logger = get_query_logger()
+
+# Load settings
+settings_path = Path(__file__).parent / "settings.json"
+with open(settings_path, 'r', encoding='utf-8') as f:
+    SETTINGS = json.load(f)
 
 
 class QueryAssistant:
@@ -133,29 +143,28 @@ class QueryAssistant:
                 # MCP server already merged LLM + rule-based keywords
                 search_keywords = additional_params.get('keywords', [])
             
+            # Get threshold from settings
+            threshold = SETTINGS.get("vector_store", {}).get("search", {}).get("score_threshold", 0.5)
+            
             # Log template search parameters
             logger.info(f"🔍 Template Search Parameters:")
             logger.info(f"  - Query: {user_query}")
             logger.info(f"  - Keywords: {search_keywords}")
             logger.info(f"  - Category: {category}")
-            logger.info(f"  - Limit: 10, Threshold: 0.3")
+            logger.info(f"  - Limit: 10, Threshold: {threshold}")
             
             search_results = self.vector_store.search(
                 query=user_query,
                 keywords=search_keywords,  # Use LLM keywords or expanded keywords
                 category=None,  # Disable category filtering
                 limit=10,  # Get more candidates for filtering
-                score_threshold=0.3  # Lower threshold for better matching
+                score_threshold=threshold  # Use threshold from settings
             )
             
             # Log template matching results
-            logger.info(f"📊 Template Matching Results: Found {len(search_results)} templates")
+            logger.info(f"📊 Template Matching Results: Found {len(search_results)} templates (showing top 5)")
             for i, result in enumerate(search_results[:5]):  # Log top 5 results
-                logger.info(f"  #{i+1} Template: {result.template.template_id}")
-                logger.info(f"     - Category: {result.template.category}")
-                logger.info(f"     - Score: {result.score:.4f}")
-                logger.info(f"     - Keywords: {', '.join(result.template.keywords[:5])}...")
-                logger.info(f"     - Question: {result.template.natural_questions[:100]}...")
+                logger.info(f"  #{i+1} {result.template.template_id} | Score: {result.score:.4f} | {result.template.category}")
             
             if not search_results:
                 return QueryResult(
@@ -275,6 +284,14 @@ class QueryAssistant:
                 else:
                     # Log usage without updating vector store
                     logger.debug(f"Template {template.template_id} used")
+                
+                # Log query execution with structured format
+                log_query_execution(
+                    query=user_query,
+                    template_id=template.template_id,
+                    results={"results": results, "status": "success"},
+                    execution_time=execution_time
+                )
                 
                 return QueryResult(
                     query_id=template.template_id,

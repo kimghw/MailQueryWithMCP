@@ -176,13 +176,13 @@ class VectorStore:
                 if not keywords:
                     combined_score = result.score  # 100% vector similarity
                     if result.score > 0.3:  # Debug high scoring results
-                        logger.info(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keywords: None")
+                        logger.debug(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keywords: None")
                 else:
                     # Always use 100% vector, 0% keyword
                     combined_score = (result.score * 1.0) + (keyword_score * 0.0)  # 100% vector, 0% keyword
                     
                     if result.score > 0.3:  # Debug high scoring results
-                        logger.info(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keyword: {keyword_score:.3f}, Combined: {combined_score:.3f}")
+                        logger.debug(f"[HIGH SCORE] Query match - Template: {template_id}, Vector: {result.score:.3f}, Keyword: {keyword_score:.3f}, Combined: {combined_score:.3f}")
                 
                 # Keep the highest score for each template
                 if template_id not in template_scores or combined_score > template_scores[template_id]['score']:

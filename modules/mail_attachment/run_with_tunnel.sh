@@ -67,8 +67,27 @@ if [ ! -z "$EXISTING_TUNNEL_PID" ]; then
     # Try to find existing tunnel URL from process output or logs
     TUNNEL_URL=$(ps aux | grep "cloudflared" | grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' | head -1)
     
-    if [ -z "$TUNNEL_URL" ] && [ -f "tunnel_output.log" ]; then
-        TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' tunnel_output.log | tail -1)
+    # Try various log file locations
+    if [ -z "$TUNNEL_URL" ]; then
+        # Check port-specific log file first
+        if [ -f "tunnel_output_${PORT}.log" ]; then
+            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' tunnel_output_${PORT}.log | tail -1)
+        fi
+        
+        # Check parent directory for port-specific log
+        if [ -z "$TUNNEL_URL" ] && [ -f "../tunnel_output_${PORT}.log" ]; then
+            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' ../tunnel_output_${PORT}.log | tail -1)
+        fi
+        
+        # Check project root for port-specific log
+        if [ -z "$TUNNEL_URL" ] && [ -f "/home/kimghw/IACSGRAPH/tunnel_output_${PORT}.log" ]; then
+            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' /home/kimghw/IACSGRAPH/tunnel_output_${PORT}.log | tail -1)
+        fi
+        
+        # Fallback to generic tunnel_output.log
+        if [ -z "$TUNNEL_URL" ] && [ -f "tunnel_output.log" ]; then
+            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' tunnel_output.log | tail -1)
+        fi
     fi
     
     if [ ! -z "$TUNNEL_URL" ]; then
@@ -83,7 +102,7 @@ fi
 # Create new tunnel if needed
 if [ -z "$TUNNEL_URL" ]; then
     echo -e "${BLUE}2️⃣  Cloudflare 터널 생성 중...${NC}"
-    TUNNEL_LOG="tunnel_output.log"
+    TUNNEL_LOG="/home/kimghw/IACSGRAPH/tunnel_output_${PORT}.log"
     # Use stdbuf to disable buffering
     stdbuf -oL -eL cloudflared tunnel --url http://localhost:${PORT} 2>&1 | tee $TUNNEL_LOG &
     TUNNEL_PID=$!

@@ -170,7 +170,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.sent_time, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.deadline IS NOT NULL AND c.deadline > datetime('now') AND c.mail_type = 'REQUEST' AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') AND c.sent_time >= :period_start ORDER BY c.deadline ASC",
+        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.sent_time, c.deadline, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.deadline IS NOT NULL AND c.deadline > datetime('now') AND c.mail_type = 'REQUEST' AND (r.KR IS NULL OR r.KR = '') AND c.sent_time >= :period_start ORDER BY c.deadline ASC",
         "system": "지정된 조직이 아직 응답하지 않은 진행 중인 의제를 조회합니다",
         "sql_prompt": "진행 중인 의제 중 지정된 조직의 응답이 없는 건을 찾습니다"
       },
@@ -227,7 +227,7 @@
         "target_panels": "all"
       },
       "sql_template": {
-        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.deadline, c.sent_time, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END IS NULL OR CASE :organization WHEN 'KR' THEN r.KR WHEN 'NK' THEN r.NK WHEN 'DNV' THEN r.DNV WHEN 'ABS' THEN r.ABS WHEN 'BV' THEN r.BV WHEN 'CCS' THEN r.CCS WHEN 'CRS' THEN r.CRS WHEN 'IRS' THEN r.IRS WHEN 'PRS' THEN r.PRS WHEN 'RINA' THEN r.RINA WHEN 'LR' THEN r.LR WHEN 'IL' THEN r.IL WHEN 'TL' THEN r.TL END = '') AND c.sent_time >= :period_start ORDER BY c.deadline ASC",
+        "query": "SELECT DISTINCT c.agenda_code, c.agenda_base_version, c.subject, c.body, c.deadline, c.sent_time, c.agenda_panel FROM agenda_chair c LEFT JOIN agenda_responses_content r ON c.agenda_base_version = r.agenda_base_version WHERE c.mail_type = 'REQUEST' AND c.has_deadline = 1 AND c.deadline > datetime('now') AND (r.KR IS NULL OR r.KR = '') AND c.sent_time >= :period_start ORDER BY c.deadline ASC",
         "system": "지정된 조직이 응답해야 하는 의제를 조회합니다",
         "sql_prompt": "마감일이 있고 아직 응답하지 않은 의제를 찾습니다"
       },
