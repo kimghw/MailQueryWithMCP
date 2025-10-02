@@ -115,7 +115,7 @@ class EnhancedDateHandler:
         keyword_mappings = {
             '오늘': (0, 'today'),
             '어제': (1, 'yesterday'),
-            '최근': (7, 'recent'),
+            '최근': (30, 'recent'),  # 기본값을 30일로 변경
             '이번주': (7, 'this_week'),
             '지난주': (14, 'last_week'),
             '이번달': (30, 'this_month'),
@@ -126,6 +126,18 @@ class EnhancedDateHandler:
         }
         
         query_lower = query.lower()
+        
+        # Check for explicit day numbers first (e.g., "최근 30일", "최근 7일")
+        import re
+        day_pattern = r'최근\s*(\d+)\s*일'
+        match = re.search(day_pattern, query_lower)
+        if match:
+            date_keywords['has_date_keyword'] = True
+            date_keywords['keywords'].append('recent_n_days')
+            date_keywords['estimated_days'] = int(match.group(1))
+            return date_keywords
+        
+        # Then check keyword mappings
         for korean, (days, english) in keyword_mappings.items():
             if korean in query_lower:
                 date_keywords['has_date_keyword'] = True
