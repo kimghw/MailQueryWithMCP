@@ -70,6 +70,12 @@ class OAuthConfig(BaseModel):
             "offline_access",
             "Calendars.Read",
             "Calendars.ReadWrite",
+            "Files.Read",
+            "Files.ReadWrite",
+            "Files.ReadWrite.All",
+            "Sites.Read.All",
+            "Sites.ReadWrite.All",
+            "Sites.Selected",
         }
         for permission in v:
             if permission not in valid_permissions:
