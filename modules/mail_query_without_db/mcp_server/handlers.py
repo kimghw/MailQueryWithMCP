@@ -126,6 +126,101 @@ class MCPHandlers:
                 description="List all active email accounts",
                 inputSchema={"type": "object", "properties": {}},
             ),
+            # Account Management Tools
+            Tool(
+                name="create_enrollment_file",
+                title="📝 Create Enrollment File",
+                description="Create an enrollment YAML file with account configuration (user_id, email, OAuth credentials)",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "User ID (e.g., 'kimghw')"},
+                        "email": {"type": "string", "description": "Email address (e.g., 'kimghw@krs.co.kr')"},
+                        "user_name": {"type": "string", "description": "User display name (optional, defaults to user_id)"},
+                        "oauth_client_id": {"type": "string", "description": "Microsoft Azure App OAuth Client ID"},
+                        "oauth_client_secret": {"type": "string", "description": "Microsoft Azure App OAuth Client Secret"},
+                        "oauth_tenant_id": {"type": "string", "description": "Microsoft Azure AD Tenant ID"},
+                        "oauth_redirect_uri": {"type": "string", "description": "OAuth redirect URI (optional, defaults to http://localhost:5000/auth/callback)"},
+                        "delegated_permissions": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "description": "List of delegated permissions (optional, defaults to Mail.ReadWrite, Mail.Send, offline_access, Files.ReadWrite.All, Sites.ReadWrite.All)"
+                        }
+                    },
+                    "required": ["user_id", "email", "oauth_client_id", "oauth_client_secret", "oauth_tenant_id"]
+                }
+            ),
+            Tool(
+                name="list_enrollments",
+                title="📋 List Enrollment Files",
+                description="List all enrollment YAML files in the enrollment directory",
+                inputSchema={"type": "object", "properties": {}}
+            ),
+            Tool(
+                name="enroll_account",
+                title="✅ Enroll Account to Database",
+                description="Register an account from enrollment YAML file to the database. Must create enrollment file first",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "User ID (must match an existing enrollment file)"}
+                    },
+                    "required": ["user_id"]
+                }
+            ),
+            Tool(
+                name="list_accounts",
+                title="👥 List Registered Accounts",
+                description="List all registered accounts in the database with their status",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["all", "active", "inactive"],
+                            "description": "Filter by account status (default: all)",
+                            "default": "all"
+                        }
+                    }
+                }
+            ),
+            Tool(
+                name="get_account_status",
+                title="📊 Get Account Status",
+                description="Get detailed status information for a specific account",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "User ID to query"}
+                    },
+                    "required": ["user_id"]
+                }
+            ),
+            # Authentication Tools
+            Tool(
+                name="start_authentication",
+                title="🔐 Start OAuth Authentication",
+                description="Start OAuth authentication flow for an account. Account must be enrolled in DB first. Returns auth URL to open in browser",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "User ID (must be already enrolled in database)"}
+                    },
+                    "required": ["user_id"]
+                }
+            ),
+            Tool(
+                name="check_auth_status",
+                title="🔍 Check Authentication Status",
+                description="Check the status of an authentication session",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "session_id": {"type": "string", "description": "Session ID from start_authentication"}
+                    },
+                    "required": ["session_id"]
+                }
+            ),
         ]
     
     async def handle_call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
@@ -145,7 +240,37 @@ class MCPHandlers:
             elif name == "list_active_accounts":
                 result = await self.tools.list_active_accounts()
                 return [TextContent(type="text", text=result)]
-            
+
+            # Account Management Tool Calls
+            elif name == "create_enrollment_file":
+                result = await self.tools.create_enrollment_file(arguments)
+                return [TextContent(type="text", text=result)]
+
+            elif name == "list_enrollments":
+                result = await self.tools.list_enrollments(arguments)
+                return [TextContent(type="text", text=result)]
+
+            elif name == "enroll_account":
+                result = await self.tools.enroll_account(arguments)
+                return [TextContent(type="text", text=result)]
+
+            elif name == "list_accounts":
+                result = await self.tools.list_accounts(arguments)
+                return [TextContent(type="text", text=result)]
+
+            elif name == "get_account_status":
+                result = await self.tools.get_account_status(arguments)
+                return [TextContent(type="text", text=result)]
+
+            # Authentication Tool Calls
+            elif name == "start_authentication":
+                result = await self.tools.start_authentication(arguments)
+                return [TextContent(type="text", text=result)]
+
+            elif name == "check_auth_status":
+                result = await self.tools.check_auth_status(arguments)
+                return [TextContent(type="text", text=result)]
+
             else:
                 raise ValueError(f"Unknown tool: {name}")
         

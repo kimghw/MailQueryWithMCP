@@ -17,19 +17,23 @@ from modules.mail_query import (
     PaginationOptions,
 )
 from .config import get_config
+from .account_auth_tools import AccountAuthTools
 
 logger = get_logger(__name__)
 
 
 class MailAttachmentTools:
-    """Tool implementations for mail attachment handling"""
-    
+    """Tool implementations for mail attachment handling, account management, and authentication"""
+
     def __init__(self):
         self.config = get_config()
         self.db = get_database_manager()
         self.attachment_downloader = AttachmentDownloader(self.config.attachments_dir)
         self.file_converter = FileConverter()
         self.email_saver = EmailSaver(self.config.attachments_dir)
+
+        # Account and Auth tools
+        self.account_auth_tools = AccountAuthTools()
     
     async def query_email(self, arguments: Dict[str, Any]) -> str:
         """Handle mail query with attachments"""
@@ -572,6 +576,42 @@ class MailAttachmentTools:
                 }
                 
                 writer.writerow(row)
-        
+
         logger.info(f"Email metadata CSV saved: {csv_file}")
         return csv_file
+
+    # ========================================================================
+    # Account Management Tools
+    # ========================================================================
+
+    async def create_enrollment_file(self, arguments: Dict[str, Any]) -> str:
+        """Create enrollment YAML file for account configuration"""
+        return await self.account_auth_tools.create_enrollment_file(arguments)
+
+    async def list_enrollments(self, arguments: Dict[str, Any]) -> str:
+        """List all enrollment files"""
+        return await self.account_auth_tools.list_enrollments(arguments)
+
+    async def enroll_account(self, arguments: Dict[str, Any]) -> str:
+        """Register account to database from enrollment file"""
+        return await self.account_auth_tools.enroll_account(arguments)
+
+    async def list_accounts(self, arguments: Dict[str, Any]) -> str:
+        """List registered accounts"""
+        return await self.account_auth_tools.list_accounts(arguments)
+
+    async def get_account_status(self, arguments: Dict[str, Any]) -> str:
+        """Get detailed account status"""
+        return await self.account_auth_tools.get_account_status(arguments)
+
+    # ========================================================================
+    # Authentication Tools
+    # ========================================================================
+
+    async def start_authentication(self, arguments: Dict[str, Any]) -> str:
+        """Start OAuth authentication flow"""
+        return await self.account_auth_tools.start_authentication(arguments)
+
+    async def check_auth_status(self, arguments: Dict[str, Any]) -> str:
+        """Check authentication status"""
+        return await self.account_auth_tools.check_auth_status(arguments)
