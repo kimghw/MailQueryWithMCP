@@ -66,16 +66,14 @@ def format_query_result(result: QueryResult) -> str:
     lines.append(f"📊 Results: {len(result.results)} rows")
     
     if result.results:
-        lines.append(f"\n📈 Full Results (Total: {len(result.results)} rows):")
-        for i, row in enumerate(result.results):
+        lines.append("\n📈 Results:")
+        for i, row in enumerate(result.results[:10]):
             lines.append(f"\nRow {i+1}:")
             for key, value in row.items():
-                # Truncate very long body text for readability
-                if key == 'body' and value and len(str(value)) > 500:
-                    display_value = str(value)[:500] + "... [truncated]"
-                else:
-                    display_value = value
-                lines.append(f"  {key}: {display_value}")
+                lines.append(f"  {key}: {value}")
+                
+        if len(result.results) > 10:
+            lines.append(f"\n... and {len(result.results) - 10} more rows")
     
     return "\n".join(lines)
 
@@ -120,15 +118,13 @@ def format_enhanced_result(result: Dict[str, Any]) -> str:
             lines.append(f"📊 Results: {len(query_result.results)} rows")
             
             if query_result.results:
-                lines.append(f"\n📈 Full Results (Total: {len(query_result.results)} rows):")
-                for i, row in enumerate(query_result.results):
+                lines.append("\n📈 Sample Results:")
+                for i, row in enumerate(query_result.results[:3]):
                     lines.append(f"\nRow {i+1}:")
                     for key, value in row.items():
-                        # Truncate very long body text for readability
-                        if key == 'body' and value and len(str(value)) > 500:
-                            display_value = str(value)[:500] + "... [truncated]"
-                        else:
-                            display_value = value
-                        lines.append(f"  {key}: {display_value}")
+                        lines.append(f"  {key}: {value}")
+                        
+                if len(query_result.results) > 3:
+                    lines.append(f"\n... and {len(query_result.results) - 3} more rows")
     
     return "\n".join(lines)

@@ -40,12 +40,6 @@ class SQLGenerator:
                 - queries: List of SQL queries (1 or more)
                 - merged_parameters: All parameters merged
         """
-        logger.debug("=== generate_sql called ===")
-        logger.debug(f"Template params: {template_params}")
-        logger.debug(f"MCP params: {mcp_params}")
-        logger.debug(f"Synonym params: {synonym_params}")
-        logger.debug(f"Template defaults: {template_defaults}")
-        
         # 1. Merge parameters
         merged_params = self._merge_parameters(
             template_defaults or {},
@@ -86,37 +80,26 @@ class SQLGenerator:
         
         # Start with template defaults
         merged.update(template_defaults)
-        logger.debug(f"After template defaults: {merged}")
         
         # Apply template parameter defaults
         for param_def in template_param_defs:
             param_name = param_def.get('name')
             if param_name and 'default' in param_def:
                 default_value = param_def['default']
-                logger.debug(f"Processing param '{param_name}' with type '{param_def.get('type')}' and default '{default_value}'")
                 
                 # Handle datetime defaults
                 if param_def.get('type') == 'datetime' and isinstance(default_value, str):
-                    logger.debug(f"Datetime parameter detected: '{param_name}' = '{default_value}'")
                     if default_value.startswith("datetime("):
-                        logger.debug(f"Calling _calculate_datetime with: '{default_value}'")
                         calculated_value = self._calculate_datetime(default_value)
-                        logger.debug(f"_calculate_datetime returned: '{calculated_value}'")
                         if calculated_value:
                             merged[param_name] = calculated_value
-                            logger.debug(f"Set '{param_name}' to calculated value: '{calculated_value}'")
-                        else:
-                            logger.warning(f"Failed to calculate datetime for '{default_value}'")
                     else:
                         merged[param_name] = default_value
-                        logger.debug(f"Using datetime string as-is: '{default_value}'")
                 else:
                     merged[param_name] = default_value
-                    logger.debug(f"Set '{param_name}' to default: '{default_value}'")
         
         # Override with synonym parameters
         merged.update({k: v for k, v in synonym_params.items() if v is not None})
-        logger.debug(f"After synonym parameters: {merged}")
         
         # Override with MCP parameters (highest priority)
         if 'extracted_period' in mcp_params and mcp_params['extracted_period']:
@@ -124,28 +107,22 @@ class SQLGenerator:
             if isinstance(period_data, dict):
                 merged['period_start'] = period_data.get('start')
                 merged['period_end'] = period_data.get('end')
-                logger.debug(f"Applied period from MCP: start={period_data.get('start')}, end={period_data.get('end')}")
         
         if 'extracted_keywords' in mcp_params and mcp_params['extracted_keywords']:
             merged['keyword'] = mcp_params['extracted_keywords']
             merged['keywords'] = mcp_params['extracted_keywords']  # Legacy
-            logger.debug(f"Applied keywords from MCP: {mcp_params['extracted_keywords']}")
         
         if 'extracted_organization' in mcp_params:
             merged['organization'] = mcp_params['extracted_organization']
-            logger.debug(f"Applied organization from MCP: {mcp_params['extracted_organization']}")
         
         if 'extracted_intent' in mcp_params:
             merged['intent'] = mcp_params['extracted_intent']
-            logger.debug(f"Applied intent from MCP: {mcp_params['extracted_intent']}")
         
         # Copy other parameters
         for param in ['limit', 'status', 'agenda', 'panel', 'intent']:
             if param in mcp_params:
                 merged[param] = mcp_params[param]
-                logger.debug(f"Applied {param} from MCP: {mcp_params[param]}")
         
-        logger.debug(f"Final merged parameters: {merged}")
         return merged
     
     def _get_array_params(
@@ -202,7 +179,6 @@ class SQLGenerator:
     def _substitute_parameters(self, sql_template: str, params: Dict[str, Any]) -> str:
         """Simple parameter substitution using :param_name syntax"""
         sql = sql_template
-        logger.debug(f"Starting parameter substitution with params: {params}")
         
         # Handle CASE statements for dynamic columns
         case_pattern = r'CASE\s+:(\w+)\s+(.+?)\s+END'
@@ -219,9 +195,7 @@ class SQLGenerator:
             
             if placeholder not in sql:
                 continue
-            
-            logger.debug(f"Substituting {placeholder} with value: {value} (type: {type(value).__name__})")
-            
+                
             if value is None:
                 sql = sql.replace(placeholder, "NULL")
             elif isinstance(value, str):
@@ -237,9 +211,7 @@ class SQLGenerator:
             elif isinstance(value, (int, float)):
                 sql = sql.replace(placeholder, str(value))
             elif isinstance(value, datetime):
-                formatted = value.strftime('%Y-%m-%d %H:%M:%S')
-                sql = sql.replace(placeholder, f"'{formatted}'")
-                logger.debug(f"Datetime {param_name} formatted as: {formatted}")
+                sql = sql.replace(placeholder, f"'{value.strftime('%Y-%m-%d %H:%M:%S')}'")
             elif isinstance(value, list):
                 # Use first value for non-array context
                 first_val = value[0] if value else None
@@ -248,27 +220,17 @@ class SQLGenerator:
                 else:
                     sql = sql.replace(placeholder, str(first_val))
         
-        logger.debug(f"SQL after substitution: {sql[:200]}...")  # Log first 200 chars
         return sql.strip()
     
     def _calculate_datetime(self, datetime_expr: str) -> Optional[str]:
         """Calculate datetime from SQLite expression"""
-        logger.debug(f"_calculate_datetime called with: '{datetime_expr}'")
-        
         match = re.match(r"datetime\('now',\s*'([+-]\d+)\s+days?'\)", datetime_expr)
         if match:
             days = int(match.group(1))
-            logger.debug(f"Matched relative datetime pattern with {days} days")
             calculated = datetime.now() + timedelta(days=days)
-            result = calculated.strftime('%Y-%m-%d %H:%M:%S')
-            logger.debug(f"Calculated datetime: {result}")
-            return result
+            return calculated.strftime('%Y-%m-%d %H:%M:%S')
         
         if datetime_expr == "datetime('now')":
-            logger.debug("Matched 'datetime(now)' pattern")
-            result = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            logger.debug(f"Current datetime: {result}")
-            return result
+            return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        logger.debug(f"No matching datetime pattern for: '{datetime_expr}'")
         return None

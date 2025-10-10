@@ -262,19 +262,6 @@ class QueryTools:
             logger.info(f"  • Results count: {len(getattr(result, 'results', []))}")
             logger.info(f"  • Execution time: {getattr(result, 'execution_time', 0):.2f}s")
             
-            # Log query results for debugging
-            if hasattr(result, 'results') and result.results:
-                logger.info(f"\n📊 Query Results (Total: {len(result.results)} rows):")
-                for idx, row in enumerate(result.results, 1):
-                    logger.info(f"\n--- Row {idx} ---")
-                    for key, value in row.items():
-                        if key == 'body' and value:
-                            # Truncate long body text
-                            display_value = value[:200] + "..." if len(str(value)) > 200 else value
-                        else:
-                            display_value = value
-                        logger.info(f"  {key}: {display_value}")
-            
             return {
                 'result': result,
                 'extracted_params': execution_params,

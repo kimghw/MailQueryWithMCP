@@ -1,31 +1,29 @@
 """Main Query Assistant implementation"""
 
-import json
-import logging
-import os
 import re
+import logging
 import sqlite3
+import json
+from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
+import os
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+
+from .schema import (
+    QueryTemplate, QueryExpansion, QueryResult, 
+    VectorSearchResult, DEFAULT_PARAMS
+)
+from .services import VectorStoreUnified
+from .services.keyword_expander import KeywordExpander
+from .services.db_connector import create_db_connector, DBConnector
+from .services.parameter_validator import ParameterValidator
+from .services.domain_ner import DomainNER, EntityType
+from .repositories.preprocessing_repository import PreprocessingRepository
+from .services.template_loader import TemplateLoader
+from .services.sql_generator import SQLGenerator
 
 # Common parsers import
 from ..common.parsers import QueryParameterExtractor
-from .repositories.preprocessing_repository import PreprocessingRepository
-from .schema import (
-    DEFAULT_PARAMS,
-    QueryExpansion,
-    QueryResult,
-    QueryTemplate,
-    VectorSearchResult,
-)
-from .services import VectorStoreUnified
-from .services.db_connector import DBConnector, create_db_connector
-from .services.domain_ner import DomainNER, EntityType
-from .services.keyword_expander import KeywordExpander
-from .services.parameter_validator import ParameterValidator
-from .services.sql_generator import SQLGenerator
-from .services.template_loader import TemplateLoader
 
 # Logger configuration
 from .utils.logger_config import get_query_logger, log_query_execution
@@ -34,23 +32,23 @@ logger = get_query_logger()
 
 # Load settings
 settings_path = Path(__file__).parent / "settings.json"
-with open(settings_path, "r", encoding="utf-8") as f:
+with open(settings_path, 'r', encoding='utf-8') as f:
     SETTINGS = json.load(f)
 
 
 class QueryAssistant:
     """Natural language to SQL query assistant"""
-
+    
     def __init__(
         self,
         db_config: Optional[Dict[str, Any]] = None,
         db_path: Optional[str] = None,  # For backward compatibility
         qdrant_url: str = "localhost",
         qdrant_port: int = 6333,
-        openai_api_key: Optional[str] = None,
+        openai_api_key: Optional[str] = None
     ):
         """Initialize Query Assistant
-
+        
         Args:
             db_config: Database configuration dict with keys:
                 - type: "sqlite", "sqlserver", "postgresql"
@@ -67,19 +65,21 @@ class QueryAssistant:
             db_config = {"type": "sqlite", "path": db_path}
         elif db_config is None:
             raise ValueError("Either db_config or db_path must be provided")
-
+        
         self.db_config = db_config
         self.db_connector = create_db_connector(db_config)
-
+        
         # Test database connection
         if not self.db_connector.test_connection():
             raise ConnectionError("Failed to connect to database")
-
+        
         # Initialize vector store with HTTP embeddings
         self.vector_store = VectorStoreUnified(
-            qdrant_url=qdrant_url, qdrant_port=qdrant_port, api_key=openai_api_key
+            qdrant_url=qdrant_url,
+            qdrant_port=qdrant_port,
+            api_key=openai_api_key
         )
-
+        
         # Initialize preprocessing repository
         try:
             self.preprocessing_repo = PreprocessingRepository()
@@ -87,13 +87,13 @@ class QueryAssistant:
         except Exception as e:
             logger.warning(f"Failed to initialize preprocessing repository: {e}")
             self.preprocessing_repo = None
-
+        
         # Initialize keyword expander with preprocessing repo
         self.keyword_expander = KeywordExpander(self.preprocessing_repo)
-
+        
         # Initialize parameter validator
         self.parameter_validator = ParameterValidator(self.db_connector)
-
+        
         # Initialize NER with preprocessing repository
         if self.preprocessing_repo:
             self.ner = DomainNER(self.preprocessing_repo)
@@ -101,96 +101,71 @@ class QueryAssistant:
         else:
             self.ner = DomainNER()
             logger.info("Initialized NER without preprocessing dataset")
-
+        
         # Initialize query parameter extractor
         self.param_extractor = QueryParameterExtractor(self.preprocessing_repo)
         logger.info("Initialized query parameter extractor")
-
+        
         # Initialize template loader
         self.template_loader = TemplateLoader(vector_store=self.vector_store)
-
+        
         # Initialize SQL generator
         self.sql_generator = SQLGenerator()
-
+        
+    
     def process_query(
-        self,
+        self, 
         user_query: str,
         category: Optional[str] = None,
         execute: bool = True,
         use_defaults: bool = False,
-        additional_params: Optional[Dict[str, Any]] = None,
+        additional_params: Optional[Dict[str, Any]] = None
     ) -> QueryResult:
         """Process natural language query and optionally execute SQL"""
         try:
             # Extract parameters using common parser
             extracted_params = self.param_extractor.extract_parameters(user_query)
-            normalized_query = extracted_params.get("normalized_query", user_query)
-
-            # Override with MCP-provided parameters if available
-            if additional_params and additional_params.get("extracted_period"):
-                # Use MCP-provided date range instead of locally extracted
-                period = additional_params["extracted_period"]
-                extracted_params["date_range"] = {
-                    "start": datetime.fromisoformat(period["start"]),
-                    "end": datetime.fromisoformat(period["end"]),
-                }
-                # Calculate days from the actual date range
-                days_diff = (
-                    extracted_params["date_range"]["end"]
-                    - extracted_params["date_range"]["start"]
-                ).days
-                extracted_params["days"] = days_diff + 1
-                logger.info(
-                    f"Using MCP-provided date range: {period['start']} to {period['end']} ({extracted_params['days']} days)"
-                )
-
+            normalized_query = extracted_params.get('normalized_query', user_query)
+            
             logger.info(f"Extracted parameters: {extracted_params}")
-
+            
             # Extract named entities
             entities = self.ner.extract_entities(normalized_query)
             entity_summary = self.ner.get_entity_summary(entities)
-
+            
             # Extract and expand keywords
             expansion = self.keyword_expander.expand_query(normalized_query)
-
+            
             # Search for matching templates with lower threshold
             # Use MCP integrated keywords (already includes LLM + rule-based)
             search_keywords = []
             if additional_params:
                 # MCP server already merged LLM + rule-based keywords
-                search_keywords = additional_params.get("keywords", [])
-
+                search_keywords = additional_params.get('keywords', [])
+            
             # Get threshold from settings
-            threshold = (
-                SETTINGS.get("vector_store", {})
-                .get("search", {})
-                .get("score_threshold", 0.5)
-            )
-
+            threshold = SETTINGS.get("vector_store", {}).get("search", {}).get("score_threshold", 0.5)
+            
             # Log template search parameters
             logger.info(f"🔍 Template Search Parameters:")
             logger.info(f"  - Query: {user_query}")
             logger.info(f"  - Keywords: {search_keywords}")
             logger.info(f"  - Category: {category}")
             logger.info(f"  - Limit: 10, Threshold: {threshold}")
-
+            
             search_results = self.vector_store.search(
                 query=user_query,
                 keywords=search_keywords,  # Use LLM keywords or expanded keywords
                 category=None,  # Disable category filtering
                 limit=10,  # Get more candidates for filtering
-                score_threshold=threshold,  # Use threshold from settings
+                score_threshold=threshold  # Use threshold from settings
             )
-
+            
             # Log template matching results
-            logger.info(
-                f"📊 Template Matching Results: Found {len(search_results)} templates (showing top 5)"
-            )
+            logger.info(f"📊 Template Matching Results: Found {len(search_results)} templates (showing top 5)")
             for i, result in enumerate(search_results[:5]):  # Log top 5 results
-                logger.info(
-                    f"  #{i+1} {result.template.template_id} | Score: {result.score:.4f} | {result.template.category}"
-                )
-
+                logger.info(f"  #{i+1} {result.template.template_id} | Score: {result.score:.4f} | {result.template.category}")
+            
             if not search_results:
                 return QueryResult(
                     query_id="",
@@ -198,9 +173,9 @@ class QueryAssistant:
                     parameters={},
                     results=[],
                     execution_time=0.0,
-                    error="No matching query template found",
+                    error="No matching query template found"
                 )
-
+            
             # Don't filter - use all search results and rely on vector/keyword scoring
             # The vector store already calculated scores with keyword matching
             # Just use the top result
@@ -214,72 +189,59 @@ class QueryAssistant:
                 logger.info(f"  - Template ID: {best_match.template.template_id}")
                 logger.info(f"  - Category: {best_match.template.category}")
                 logger.info(f"  - Score: {best_match.score:.4f}")
-                logger.info(
-                    f"  - SQL Template: {best_match.template.sql_query[:150]}..."
-                )
-
+                logger.info(f"  - SQL Template: {best_match.template.sql_query[:150]}...")
+            
             template = best_match.template
-
+            
             # Extract parameters from user query with NER results
             parameters = self._extract_parameters(
-                user_query, template, expansion, entities
+                user_query, 
+                template,
+                expansion,
+                entities
             )
-
+            
             # Merge with parameters from common parser
             for key, value in extracted_params.items():
-                if (
-                    key not in ["original_query", "normalized_query"]
-                    and value is not None
-                ):
+                if key not in ['original_query', 'normalized_query'] and value is not None:
                     parameters[key] = value
-
+            
             # Merge with additional parameters if provided
             if additional_params:
                 parameters.update(additional_params)
-
+            
             # Validate parameters and get suggestions
             validation_result = self.parameter_validator.validate_and_suggest(
-                template=template, extracted_params=parameters, user_query=user_query
+                template=template,
+                extracted_params=parameters,
+                user_query=user_query
             )
-
+            
             if not validation_result["is_valid"]:
                 if use_defaults:
                     # Apply template-specific defaults first
                     template_defaults = template.default_params
-
+                    
                     # Apply defaults for missing required parameters
                     for param in validation_result["missing_params"]:
                         # First check template-specific defaults
                         if param in template_defaults:
                             parameters[param] = template_defaults[param]
-                            logger.info(
-                                f"Applied template default for {param}: {template_defaults[param]}"
-                            )
+                            logger.info(f"Applied template default for {param}: {template_defaults[param]}")
                         # Then check global defaults
                         elif param in DEFAULT_PARAMS:
                             parameters[param] = DEFAULT_PARAMS[param]
-                            logger.info(
-                                f"Applied global default for {param}: {DEFAULT_PARAMS[param]}"
-                            )
+                            logger.info(f"Applied global default for {param}: {DEFAULT_PARAMS[param]}")
                         # Finally use suggestions
-                        elif (
-                            param in validation_result["suggestions"]
-                            and validation_result["suggestions"][param]
-                        ):
-                            parameters[param] = validation_result["suggestions"][param][
-                                0
-                            ]
-                            logger.info(
-                                f"Applied suggested value for {param}: {validation_result['suggestions'][param][0]}"
-                            )
-
+                        elif param in validation_result["suggestions"] and validation_result["suggestions"][param]:
+                            parameters[param] = validation_result["suggestions"][param][0]
+                            logger.info(f"Applied suggested value for {param}: {validation_result['suggestions'][param][0]}")
+                    
                     # Apply all template defaults for optional params too
                     for param, value in template_defaults.items():
                         if param not in parameters:
                             parameters[param] = value
-                            logger.info(
-                                f"Applied template default for optional {param}: {value}"
-                            )
+                            logger.info(f"Applied template default for optional {param}: {value}")
                 else:
                     # Return validation result with suggestions
                     return QueryResult(
@@ -289,59 +251,55 @@ class QueryAssistant:
                         results=[],
                         execution_time=0.0,
                         error=validation_result["clarification_message"],
-                        validation_info=validation_result,  # Add validation info to response
+                        validation_info=validation_result  # Add validation info to response
                     )
-
+            
             # Apply default values for optional parameters
             for param in template.query_filter:
                 if param not in parameters:
                     parameters[param] = DEFAULT_PARAMS.get(param, "")
-
+            
             # Generate SQL - use parameterized version if parameters exist
             if parameters and any(parameters.values()):
                 # Get MCP parameters if provided through additional_params
                 mcp_params = {}
                 if additional_params:
-                    for key in [
-                        "extracted_period",
-                        "extracted_keywords",
-                        "extracted_organization",
-                    ]:
+                    for key in ['extracted_period', 'extracted_keywords', 'extracted_organization']:
                         if key in additional_params:
                             mcp_params[key] = additional_params[key]
-
+                
                 sql = self._generate_sql(template, parameters, mcp_params)
             else:
                 sql = template.sql_query
-
+            
             # Execute if requested
             if execute:
                 start_time = datetime.now()
                 results = self._execute_sql(sql)
                 execution_time = (datetime.now() - start_time).total_seconds()
-
+                
                 # Update usage statistics - check if method exists
-                if hasattr(self.vector_store, "update_usage_stats"):
+                if hasattr(self.vector_store, 'update_usage_stats'):
                     self.vector_store.update_usage_stats(template.template_id)
                 else:
                     # Log usage without updating vector store
                     logger.debug(f"Template {template.template_id} used")
-
+                
                 # Log query execution with structured format
                 log_query_execution(
                     query=user_query,
                     template_id=template.template_id,
                     results={"results": results, "status": "success"},
-                    execution_time=execution_time,
+                    execution_time=execution_time
                 )
-
+                
                 return QueryResult(
                     query_id=template.template_id,
                     executed_sql=sql,
                     parameters=parameters,
                     results=results,
                     execution_time=execution_time,
-                    error=None,
+                    error=None
                 )
             else:
                 return QueryResult(
@@ -350,9 +308,9 @@ class QueryAssistant:
                     parameters=parameters,
                     results=[],
                     execution_time=0.0,
-                    error=None,
+                    error=None
                 )
-
+                
         except Exception as e:
             logger.error(f"Error processing query: {e}")
             return QueryResult(
@@ -361,94 +319,71 @@ class QueryAssistant:
                 parameters={},
                 results=[],
                 execution_time=0.0,
-                error=str(e),
+                error=str(e)
             )
-
+    
     def _extract_parameters(
-        self,
-        query: str,
+        self, 
+        query: str, 
         template: QueryTemplate,
         expansion: QueryExpansion,
-        entities: List = None,
+        entities: List = None
     ) -> Dict[str, Any]:
         """Extract parameters from user query using NER results"""
         parameters = {}
-
+        
         # NER 기반 파라미터 추출 (우선순위 높음)
         if entities:
             for entity in entities:
                 # Organization 파라미터
-                if (
-                    entity.entity_type == EntityType.ORGANIZATION
-                    and "organization"
-                    in template.required_params + template.query_filter
-                ):
+                if (entity.entity_type == EntityType.ORGANIZATION and 
+                    "organization" in template.required_params + template.query_filter):
                     parameters["organization"] = entity.normalized_value
-                    logger.info(
-                        f"NER extracted organization: {entity.normalized_value}"
-                    )
-
+                    logger.info(f"NER extracted organization: {entity.normalized_value}")
+                
                 # Time period 파라미터
-                elif entity.entity_type == EntityType.TIME_PERIOD and any(
-                    p in ["period", "days", "weeks", "months", "years"]
-                    for p in template.required_params + template.query_filter
-                ):
+                elif (entity.entity_type == EntityType.TIME_PERIOD and 
+                      any(p in ["period", "days", "weeks", "months", "years"] 
+                          for p in template.required_params + template.query_filter)):
                     if isinstance(entity.normalized_value, dict):
                         if "days" in entity.normalized_value:
                             parameters["days"] = entity.normalized_value["days"]
                             parameters["period"] = entity.text
-                            logger.info(
-                                f"NER extracted time period: {entity.normalized_value['days']} days"
-                            )
-
+                            logger.info(f"NER extracted time period: {entity.normalized_value['days']} days")
+                
                 # Status 파라미터
-                elif (
-                    entity.entity_type == EntityType.STATUS
-                    and "status" in template.required_params + template.query_filter
-                ):
+                elif (entity.entity_type == EntityType.STATUS and 
+                      "status" in template.required_params + template.query_filter):
                     parameters["status"] = entity.normalized_value
                     logger.info(f"NER extracted status: {entity.normalized_value}")
-
+                
                 # Quantity 파라미터
-                elif (
-                    entity.entity_type == EntityType.QUANTITY
-                    and "limit" in template.query_filter
-                ):
-                    if (
-                        isinstance(entity.normalized_value, dict)
-                        and "value" in entity.normalized_value
-                    ):
+                elif (entity.entity_type == EntityType.QUANTITY and 
+                      "limit" in template.query_filter):
+                    if isinstance(entity.normalized_value, dict) and "value" in entity.normalized_value:
                         if isinstance(entity.normalized_value["value"], int):
                             parameters["limit"] = entity.normalized_value["value"]
-                            logger.info(
-                                f"NER extracted limit: {entity.normalized_value['value']}"
-                            )
-
+                            logger.info(f"NER extracted limit: {entity.normalized_value['value']}")
+                
                 # Agenda ID 파라미터
-                elif (
-                    entity.entity_type == EntityType.AGENDA_ID
-                    and "agenda_id" in template.required_params + template.query_filter
-                ):
+                elif (entity.entity_type == EntityType.AGENDA_ID and 
+                      "agenda_id" in template.required_params + template.query_filter):
                     parameters["agenda_id"] = entity.normalized_value
                     logger.info(f"NER extracted agenda_id: {entity.normalized_value}")
-
+                
                 # Keyword 파라미터
-                elif (
-                    entity.entity_type == EntityType.KEYWORD
-                    and "keyword" in template.required_params + template.query_filter
-                ):
+                elif (entity.entity_type == EntityType.KEYWORD and 
+                      "keyword" in template.required_params + template.query_filter):
                     parameters["keyword"] = entity.normalized_value
                     logger.info(f"NER extracted keyword: {entity.normalized_value}")
-
+        
         # Extract period parameter
         if "period" in template.required_params or "period" in template.query_filter:
-            period_match = re.search(
-                r"(\d+)\s*(일|주|개월|년|days?|weeks?|months?|years?)", query
-            )
+            period_match = re.search(r'(\d+)\s*(일|주|개월|년|days?|weeks?|months?|years?)', query)
             if period_match:
                 value = int(period_match.group(1))
                 unit = period_match.group(2)
-
+                
                 # Convert to days
                 if unit in ["주", "weeks", "week"]:
                     parameters["days"] = value * 7
@@ -458,57 +393,54 @@ class QueryAssistant:
                     parameters["days"] = value * 365
                 else:
                     parameters["days"] = value
-
+                
                 parameters["period"] = period_match.group(0)
-
+        
         # Extract time period for specific summary templates
         if "weeks" in template.query_filter:
-            weeks_match = re.search(r"(\d+)\s*(주|weeks?)", query)
+            weeks_match = re.search(r'(\d+)\s*(주|weeks?)', query)
             if weeks_match:
                 parameters["weeks"] = int(weeks_match.group(1))
-
+                
         if "months" in template.query_filter:
-            months_match = re.search(r"(\d+)\s*(개월|달|months?)", query)
+            months_match = re.search(r'(\d+)\s*(개월|달|months?)', query)
             if months_match:
                 parameters["months"] = int(months_match.group(1))
-
+                
         if "quarters" in template.query_filter:
-            quarters_match = re.search(r"(\d+)\s*(분기|quarters?)", query)
+            quarters_match = re.search(r'(\d+)\s*(분기|quarters?)', query)
             if quarters_match:
-                parameters["quarters"] = (
-                    int(quarters_match.group(1)) * 3
-                )  # Convert quarters to months
-
+                parameters["quarters"] = int(quarters_match.group(1)) * 3  # Convert quarters to months
+                
         if "years" in template.query_filter:
-            years_match = re.search(r"(\d+)\s*(년|년간|years?)", query)
+            years_match = re.search(r'(\d+)\s*(년|년간|years?)', query)
             if years_match:
                 parameters["years"] = int(years_match.group(1))
-
+        
         # Extract organization parameter
         if "organization" in template.required_params:
             # Use synonym service to extract organization
             from ..common.services.synonym_service import SynonymService
-
             syn_service = SynonymService(self.preprocessing_repo)
             org_code = syn_service.get_organization_code(query)
             if org_code:
                 parameters["organization"] = org_code
-
+        
         # Extract status parameter
         if "status" in template.required_params:
             status_map = {
                 "승인": "approved",
-                "반려": "rejected",
+                "반려": "rejected", 
                 "미결정": "pending",
                 "approved": "approved",
                 "rejected": "rejected",
-                "pending": "pending",
+                "pending": "pending"
             }
             for korean, english in status_map.items():
                 if korean in query:
                     parameters["status"] = english
                     break
-
+        
         # Extract keyword parameter for search
         if "keyword" in template.required_params:
             # Extract quoted text
@@ -517,42 +449,26 @@ class QueryAssistant:
                 parameters["keyword"] = quoted[0]
             else:
                 # Try to find domain-specific terms first
-                domain_terms = ["IMO", "MEPC", "MSC", "KR", "ISO", "IEC", "ITU"]
+                domain_terms = ['IMO', 'MEPC', 'MSC', 'KR', 'ISO', 'IEC', 'ITU']
                 found_domain_term = None
                 for term in domain_terms:
-                    if term in expansion.expanded_keywords or term.lower() in [
-                        k.lower() for k in expansion.expanded_keywords
-                    ]:
+                    if term in expansion.expanded_keywords or term.lower() in [k.lower() for k in expansion.expanded_keywords]:
                         found_domain_term = term
                         break
-
+                
                 if found_domain_term:
                     parameters["keyword"] = found_domain_term
                 elif expansion.expanded_keywords:
                     # Filter out common words and use the most specific keyword
-                    common_words = [
-                        "최근",
-                        "관련",
-                        "문서",
-                        "목록",
-                        "조회",
-                        "보여줘",
-                        "찾아줘",
-                    ]
-                    specific_keywords = [
-                        k for k in expansion.expanded_keywords if k not in common_words
-                    ]
-                    parameters["keyword"] = (
-                        specific_keywords[0]
-                        if specific_keywords
-                        else expansion.expanded_keywords[0]
-                    )
-
+                    common_words = ['최근', '관련', '문서', '목록', '조회', '보여줘', '찾아줘']
+                    specific_keywords = [k for k in expansion.expanded_keywords if k not in common_words]
+                    parameters["keyword"] = specific_keywords[0] if specific_keywords else expansion.expanded_keywords[0]
+        
         # Extract limit if mentioned
-        limit_match = re.search(r"(\d+)\s*개", query)
+        limit_match = re.search(r'(\d+)\s*개', query)
         if limit_match:
             parameters["limit"] = int(limit_match.group(1))
-
+        
         # Period format for summary reports
         if "period_format" in template.query_filter:
             if "주간" in query or "weekly" in query.lower():
@@ -561,31 +477,26 @@ class QueryAssistant:
             elif "월간" in query or "monthly" in query.lower():
                 parameters["period_format"] = "%Y-%m"
                 parameters["days"] = parameters.get("days", 90)
-
+        
         return parameters
-
-    def _generate_sql(
-        self,
-        template: QueryTemplate,
-        parameters: Dict[str, Any],
-        mcp_params: Dict[str, Any] = None,
-    ) -> str:
+    
+    def _generate_sql(self, template: QueryTemplate, parameters: Dict[str, Any], mcp_params: Dict[str, Any] = None) -> str:
         """Generate SQL from template and parameters using enhanced SQL generator"""
         # Get template parameter definitions
         template_param_defs = self._get_template_param_definitions(template)
-
+        
         # Use SQL generator with proper parameter merging
         queries, merged_params = self.sql_generator.generate_sql(
             sql_template=template.sql_query_with_parameters,
             template_params=template_param_defs,
             mcp_params=mcp_params or {},
             synonym_params=parameters,
-            template_defaults=template.default_params,
+            template_defaults=template.default_params
         )
-
+        
         # Update parameters with merged values
         parameters.update(merged_params)
-
+        
         # If multiple queries returned (array parameters), join them with UNION ALL
         if isinstance(queries, list) and len(queries) > 1:
             # Add wrapper to combine results
@@ -595,87 +506,91 @@ class QueryAssistant:
             return queries[0]
         else:
             return queries
-
-    def _get_template_param_definitions(
-        self, template: QueryTemplate
-    ) -> List[Dict[str, Any]]:
+    
+    def _get_template_param_definitions(self, template: QueryTemplate) -> List[Dict[str, Any]]:
         """Get parameter definitions from template metadata"""
         # Try to get parameters from the template object first
-        if hasattr(template, "__dict__") and "parameters" in template.__dict__:
-            return template.__dict__["parameters"]
-
+        if hasattr(template, '__dict__') and 'parameters' in template.__dict__:
+            return template.__dict__['parameters']
+        
         # Try to get parameters from the template object directly
-        if hasattr(template, "parameters") and template.parameters:
+        if hasattr(template, 'parameters') and template.parameters:
             return template.parameters
-
+        
         # Fallback: construct basic param definitions from template
         param_defs = []
-
+        
         # Add required params
         for param in template.required_params:
             param_def = {
-                "name": param,
-                "type": "string",
-                "required": True,
-                "sql_builder": {"type": "string", "placeholder": f"{{{param}}}"},
+                'name': param,
+                'type': 'string',
+                'required': True,
+                'sql_builder': {
+                    'type': 'string',
+                    'placeholder': f'{{{param}}}'
+                }
             }
-
+            
             # Special handling for known param types
-            if param == "organization" or param == "organization_code":
-                param_def["mcp_format"] = "extracted_organization"
-                param_def["sql_builder"] = {
-                    "type": "string",
-                    "placeholder": f"{{{param}}}",
+            if param == 'organization' or param == 'organization_code':
+                param_def['mcp_format'] = 'extracted_organization'
+                param_def['sql_builder'] = {
+                    'type': 'string',
+                    'placeholder': f'{{{param}}}'
                 }
-            elif param == "period" or param == "date_range":
-                param_def["type"] = "period"
-                param_def["sql_builder"] = {
-                    "type": "period",
-                    "field": "sent_time",
-                    "placeholder": "{period_condition}",
+            elif param == 'period' or param == 'date_range':
+                param_def['type'] = 'period'
+                param_def['sql_builder'] = {
+                    'type': 'period',
+                    'field': 'sent_time',
+                    'placeholder': '{period_condition}'
                 }
-                param_def["mcp_format"] = "extracted_period"
-
+                param_def['mcp_format'] = 'extracted_period'
+            
             param_defs.append(param_def)
-
+        
         # Add optional params
         for param in template.query_filter:
             param_def = {
-                "name": param,
-                "type": "string",
-                "required": False,
-                "sql_builder": {"type": "string", "placeholder": f"{{{param}}}"},
+                'name': param,
+                'type': 'string',
+                'required': False,
+                'sql_builder': {
+                    'type': 'string',
+                    'placeholder': f'{{{param}}}'
+                }
             }
-
+            
             # Special handling for known param types
-            if param == "limit":
-                param_def["type"] = "number"
-                param_def["sql_builder"]["type"] = "number"
-            elif param == "days":
-                param_def["type"] = "number"
-                param_def["sql_builder"]["type"] = "number"
-            elif param == "period":
-                param_def["type"] = "period"
-                param_def["sql_builder"] = {
-                    "type": "period",
-                    "field": "sent_time",
-                    "placeholder": "{period_condition}",
+            if param == 'limit':
+                param_def['type'] = 'number'
+                param_def['sql_builder']['type'] = 'number'
+            elif param == 'days':
+                param_def['type'] = 'number'
+                param_def['sql_builder']['type'] = 'number'
+            elif param == 'period':
+                param_def['type'] = 'period'
+                param_def['sql_builder'] = {
+                    'type': 'period',
+                    'field': 'sent_time',
+                    'placeholder': '{period_condition}'
                 }
-                param_def["mcp_format"] = "extracted_period"
-            elif param == "keywords" or param == "keyword":
-                param_def["type"] = "keywords"
-                param_def["sql_builder"] = {
-                    "type": "keywords",
-                    "field": "title",
-                    "operator": "LIKE",
-                    "placeholder": "{keywords_condition}",
+                param_def['mcp_format'] = 'extracted_period'
+            elif param == 'keywords' or param == 'keyword':
+                param_def['type'] = 'keywords'
+                param_def['sql_builder'] = {
+                    'type': 'keywords',
+                    'field': 'title',
+                    'operator': 'LIKE',
+                    'placeholder': '{keywords_condition}'
                 }
-                param_def["mcp_format"] = "extracted_keywords"
-
+                param_def['mcp_format'] = 'extracted_keywords'
+            
             param_defs.append(param_def)
-
+        
         return param_defs
-
+    
     def _execute_sql(self, sql: str) -> List[Dict[str, Any]]:
         """Execute SQL query and return results"""
         try:
@@ -683,51 +598,56 @@ class QueryAssistant:
         except Exception as e:
             logger.error(f"Error executing SQL: {e}")
             raise
-
-    def get_suggestions(self, partial_query: str) -> List[Tuple[str, float]]:
+    
+    def get_suggestions(
+        self, 
+        partial_query: str
+    ) -> List[Tuple[str, float]]:
         """Get query suggestions based on partial input"""
         try:
             # Extract keywords from partial query
             expansion = self.keyword_expander.expand_query(partial_query)
-
+            
             # Search for matching templates
             search_results = self.vector_store.search(
                 query=partial_query,
                 keywords=expansion.expanded_keywords,
                 limit=10,
-                score_threshold=0.3,  # Lower threshold for suggestions
+                score_threshold=0.3  # Lower threshold for suggestions
             )
-
+            
             # Format suggestions
             suggestions = []
             for result in search_results:
                 suggestion = (result.template.natural_query, result.score)
                 suggestions.append(suggestion)
-
+            
             return suggestions
-
+            
         except Exception as e:
             logger.error(f"Error getting suggestions: {e}")
             return []
-
+    
     def get_popular_queries(self, limit: int = 10) -> List[QueryTemplate]:
         """Get most frequently used query templates"""
         return self.vector_store.get_popular_templates(limit)
-
+    
     def analyze_query(self, user_query: str) -> Dict[str, Any]:
         """Analyze user query without executing"""
         # Extract named entities
         entities = self.ner.extract_entities(user_query)
         entity_summary = self.ner.get_entity_summary(entities)
-
+        
         # Get query expansion
         expansion = self.keyword_expander.expand_query(user_query)
-
+        
         # Search for matching templates
         search_results = self.vector_store.search(
-            query=user_query, keywords=expansion.expanded_keywords, limit=3
+            query=user_query,
+            keywords=expansion.expanded_keywords,
+            limit=3
         )
-
+        
         # Prepare analysis
         analysis = {
             "original_query": user_query,
@@ -737,7 +657,7 @@ class QueryAssistant:
                     "type": e.entity_type.value,
                     "normalized": e.normalized_value,
                     "confidence": e.confidence,
-                    "position": [e.start_pos, e.end_pos],
+                    "position": [e.start_pos, e.end_pos]
                 }
                 for e in entities
             ],
@@ -747,9 +667,9 @@ class QueryAssistant:
             "missing_info": expansion.missing_params,
             "suggestions": expansion.suggestions,
             "confidence": expansion.confidence_score,
-            "matching_templates": [],
+            "matching_templates": []
         }
-
+        
         for result in search_results:
             template_info = {
                 "id": result.template.template_id,
@@ -757,8 +677,8 @@ class QueryAssistant:
                 "category": result.template.category,
                 "match_score": result.score,
                 "keyword_matches": result.keyword_matches,
-                "required_params": result.template.required_params,
+                "required_params": result.template.required_params
             }
             analysis["matching_templates"].append(template_info)
-
+        
         return analysis
