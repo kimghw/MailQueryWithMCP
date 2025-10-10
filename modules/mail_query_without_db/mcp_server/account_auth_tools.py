@@ -66,17 +66,21 @@ class AccountAuthTools:
             # enrollment 파일 경로
             enrollment_file = self.enrollment_dir / f"{user_id}.yaml"
 
-            # YAML 데이터 구성
+            # YAML 데이터 구성 (올바른 구조)
             enrollment_data = {
-                "user_id": user_id,
-                "user_name": user_name,
-                "email": email,
-                "oauth": {
+                "account": {
+                    "email": email,
+                    "name": user_name,
+                    "user_id": user_id
+                },
+                "microsoft_graph": {
                     "client_id": oauth_client_id,
                     "client_secret": oauth_client_secret,
-                    "tenant_id": oauth_tenant_id,
-                    "redirect_uri": oauth_redirect_uri,
+                    "tenant_id": oauth_tenant_id
+                },
+                "oauth": {
                     "auth_type": "Authorization Code Flow",
+                    "redirect_uri": oauth_redirect_uri,
                     "delegated_permissions": delegated_permissions
                 }
             }

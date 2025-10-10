@@ -67,14 +67,15 @@ class MailAttachmentTools:
             if start_date_str and end_date_str:
                 try:
                     start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-                    
-                    if start_date > end_date:
-                        return "Error: start_date is later than end_date"
-                    
+                    # end_date는 해당 날짜의 끝(23:59:59)까지 포함하도록 +1일로 설정
+                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)
+
+                    if start_date >= end_date:
+                        return "Error: start_date is later than or equal to end_date"
+
                     # days_back is ignored when both dates are specified
-                    days_back = (end_date - start_date).days + 1
-                    
+                    days_back = (end_date - start_date).days
+
                 except ValueError as e:
                     return f"Error: Invalid date format. Expected YYYY-MM-DD. {str(e)}"
             
@@ -90,8 +91,9 @@ class MailAttachmentTools:
             # Only end date specified
             elif end_date_str:
                 try:
-                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-                    start_date = end_date - timedelta(days=days_back - 1)
+                    # end_date는 해당 날짜의 끝(23:59:59)까지 포함하도록 +1일로 설정
+                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)
+                    start_date = end_date - timedelta(days=days_back)
                 except ValueError:
                     return f"Error: Invalid end_date format. Expected YYYY-MM-DD, got {end_date_str}"
             
@@ -226,9 +228,9 @@ class MailAttachmentTools:
                 # Update response with filtered messages
                 response.messages = filtered_messages[:max_mails]  # Limit to requested max
                 actual_total = len(filtered_messages)
-                result_text += f"총 메일 수: {len(response.messages)}개 (전체 {actual_total}개 중)\n\n"
+                result_text += f"총 메일 수: {len(response.messages)}개 (필터링 전: {actual_total}개)\n\n"
             else:
-                result_text += f"총 메일 수: {response.total_fetched}개\n\n"
+                result_text += f"총 메일 수: {len(response.messages)}개\n\n"
             
             # Process each mail
             blocked_senders = self.config.blocked_senders  # 차단할 발신자 목록
