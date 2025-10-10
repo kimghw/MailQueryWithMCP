@@ -16,6 +16,12 @@ Email Dashboard 모듈
 - EmailDashboardService: 모듈 서비스 관리
 """
 
+from infra.core.logger import get_logger
+
+
+
+logger = get_logger(__name__)
+
 # 안전한 import를 위한 예외 처리
 try:
     # 핵심 인프라 컴포넌트 import
@@ -44,11 +50,11 @@ try:
     from .token_service import get_token_service, token_service
 
 except ImportError as e:
-    print(f"Infra core 모듈 import 오류: {e}")
-    print("의존성 확인:")
-    print("1. infra.core 모듈이 올바르게 설정되었는지 확인")
-    print("2. 프로젝트 루트에서 실행하고 있는지 확인")
-    print("3. PYTHONPATH가 올바르게 설정되었는지 확인")
+    logger.info(f"Infra core 모듈 import 오류: {e}")
+    logger.info("의존성 확인:")
+    logger.info("1. infra.core 모듈이 올바르게 설정되었는지 확인")
+    logger.info("2. 프로젝트 루트에서 실행하고 있는지 확인")
+    logger.info("3. PYTHONPATH가 올바르게 설정되었는지 확인")
     raise
 
 __all__ = [

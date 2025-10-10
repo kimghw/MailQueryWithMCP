@@ -14,7 +14,11 @@ from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
+from infra.core.logger import get_logger
 
+
+
+logger = get_logger(__name__)
 
 class Config:
     """애플리케이션 설정을 관리하는 클래스"""
@@ -34,7 +38,7 @@ class Config:
             load_dotenv(env_file)
         else:
             # .env 파일이 없는 경우 경고만 출력
-            print(f"경고: .env 파일을 찾을 수 없습니다: {env_file}")
+            logger.info(f"경고: .env 파일을 찾을 수 없습니다: {env_file}")
 
     def _validate_required_settings(self) -> None:
         """필수 설정값들이 있는지 검증"""

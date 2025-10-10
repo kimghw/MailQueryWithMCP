@@ -40,18 +40,18 @@ def enroll_all_accounts():
 
         # 결과 출력
         print("\n" + "="*60)
-        print("계정 등록 결과")
+        logger.info("계정 등록 결과")
         print("="*60)
-        print(f"처리된 파일 수: {result.total_files}")
-        print(f"생성된 계정: {result.created_accounts}")
-        print(f"업데이트된 계정: {result.updated_accounts}")
-        print(f"비활성화된 계정: {result.deactivated_accounts}")
-        print(f"오류 발생: {len(result.errors)}")
+        logger.info(f"처리된 파일 수: {result.total_files}")
+        logger.info(f"생성된 계정: {result.created_accounts}")
+        logger.info(f"업데이트된 계정: {result.updated_accounts}")
+        logger.info(f"비활성화된 계정: {result.deactivated_accounts}")
+        logger.info(f"오류 발생: {len(result.errors)}")
 
         if result.errors:
-            print("\n오류 목록:")
+            logger.info("\n오류 목록:")
             for error in result.errors:
-                print(f"  - {error}")
+                logger.info(f"  - {error}")
 
         print("="*60)
 
@@ -59,7 +59,7 @@ def enroll_all_accounts():
 
     except Exception as e:
         logger.error(f"계정 등록 중 오류 발생: {e}")
-        print(f"\n❌ 오류 발생: {e}")
+        logger.info(f"\n❌ 오류 발생: {e}")
         return False
 
 
@@ -75,7 +75,7 @@ def enroll_single_account(user_id: str):
     enrollment_file = ENROLLMENT_DIR / f"{user_id}.yaml"
 
     if not enrollment_file.exists():
-        print(f"❌ enrollment 파일을 찾을 수 없습니다: {enrollment_file}")
+        logger.info(f"❌ enrollment 파일을 찾을 수 없습니다: {enrollment_file}")
         logger.error(f"파일이 존재하지 않음: {enrollment_file}")
         return False
 
@@ -86,35 +86,35 @@ def enroll_single_account(user_id: str):
         validation_result = orchestrator.account_validate_enrollment_file(str(enrollment_file))
 
         if not validation_result["valid"]:
-            print(f"❌ enrollment 파일 검증 실패:")
+            logger.info(f"❌ enrollment 파일 검증 실패:")
             for error in validation_result["errors"]:
-                print(f"  - {error}")
+                logger.info(f"  - {error}")
             return False
 
         if validation_result["warnings"]:
-            print("⚠️  경고:")
+            logger.info("⚠️  경고:")
             for warning in validation_result["warnings"]:
-                print(f"  - {warning}")
+                logger.info(f"  - {warning}")
 
         # 계정 등록
         result = orchestrator.account_sync_single_file(str(enrollment_file))
 
         # 결과 출력
         print("\n" + "="*60)
-        print(f"계정 등록 결과: {user_id}")
+        logger.info(f"계정 등록 결과: {user_id}")
         print("="*60)
 
         if result.get("success"):
             action = result.get("action")
             if action == "created":
-                print(f"✅ 계정이 생성되었습니다: {user_id}")
+                logger.info(f"✅ 계정이 생성되었습니다: {user_id}")
             elif action == "updated":
-                print(f"✅ 계정이 업데이트되었습니다: {user_id}")
+                logger.info(f"✅ 계정이 업데이트되었습니다: {user_id}")
             elif action == "skipped":
-                print(f"ℹ️  계정이 이미 최신 상태입니다: {user_id}")
+                logger.info(f"ℹ️  계정이 이미 최신 상태입니다: {user_id}")
         else:
             error = result.get("error", "알 수 없는 오류")
-            print(f"❌ 계정 등록 실패: {error}")
+            logger.info(f"❌ 계정 등록 실패: {error}")
 
         print("="*60)
 
@@ -122,7 +122,7 @@ def enroll_single_account(user_id: str):
 
     except Exception as e:
         logger.error(f"계정 등록 중 오류 발생: {e}")
-        print(f"\n❌ 오류 발생: {e}")
+        logger.info(f"\n❌ 오류 발생: {e}")
         return False
 
 
@@ -152,7 +152,7 @@ def main():
 
     # enrollment 디렉토리 확인
     if not ENROLLMENT_DIR.exists():
-        print(f"❌ enrollment 디렉토리를 찾을 수 없습니다: {ENROLLMENT_DIR}")
+        logger.info(f"❌ enrollment 디렉토리를 찾을 수 없습니다: {ENROLLMENT_DIR}")
         return 1
 
     # 인자에 따라 분기

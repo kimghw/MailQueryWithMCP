@@ -2,12 +2,20 @@
 
 # MCP Stdio Server 실행 스크립트
 
-# Set Python path and working directory
-export PYTHONPATH=/home/kimghw/IACSGRAPH
-cd /home/kimghw/IACSGRAPH
+# Get script directory and project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 
-# Use virtual environment python
-PYTHON="/home/kimghw/IACSGRAPH/.venv/bin/python3"
+# Set Python path and working directory
+export PYTHONPATH="$PROJECT_ROOT"
+cd "$PROJECT_ROOT"
+
+# Use virtual environment if exists, otherwise use system python3
+if [ -f "$PROJECT_ROOT/.venv/bin/python3" ]; then
+    PYTHON="$PROJECT_ROOT/.venv/bin/python3"
+else
+    PYTHON="python3"
+fi
 
 # Run the stdio server
 exec $PYTHON -m modules.mail_query_without_db.mcp_server_stdio

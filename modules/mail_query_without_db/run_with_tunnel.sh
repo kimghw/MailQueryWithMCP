@@ -1,199 +1,129 @@
 #!/bin/bash
 
-# MCP Mail Attachment Server with Cloudflare Tunnel
-# 서버와 터널을 함께 실행하고 URL을 보기 좋게 표시
+# MCP Server with Cloudflare Tunnel
+# 로컬 MCP 서버를 Cloudflare Tunnel을 통해 외부에 노출
 
-# Colors
-GREEN='\033[0;32m'
-BLUE='\033[0;34m'
-YELLOW='\033[1;33m'
+set -e
+
+# 색상 정의
 RED='\033[0;31m'
-CYAN='\033[0;36m'
-BOLD='\033[1m'
-NC='\033[0m' # No Color
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
 
-# Use environment variable or default from settings
-PORT=${MCP_PORT:-8002}
+# 기본값
+PORT=${1:-8002}
+HOST="localhost"
 
-echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BOLD}${GREEN}   📧 MCP Mail Attachment Server - Cloudflare Tunnel${NC}"
-echo -e "${BOLD}${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo
+echo -e "${BLUE}🚀 MCP Server with Cloudflare Tunnel${NC}"
+echo "================================"
 
-# Check cloudflared
-if ! command -v cloudflared &> /dev/null; then
-    echo -e "${RED}❌ cloudflared가 설치되지 않았습니다.${NC}"
-    echo -e "${YELLOW}설치 방법: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/installation${NC}"
-    exit 1
-fi
+# Get script directory and project root
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 
 # Set environment
-export PYTHONPATH=/home/kimghw/IACSGRAPH
-export MCP_SETTINGS_PATH=${MCP_SETTINGS_PATH:-"/home/kimghw/IACSGRAPH/modules/mail_query_without_db/settings.json"}
-cd /home/kimghw/IACSGRAPH
+export PYTHONPATH="$PROJECT_ROOT"
+export MCP_SETTINGS_PATH="${MCP_SETTINGS_PATH:-"$SCRIPT_DIR/config.json"}"
+cd "$PROJECT_ROOT"
 
-# Start MCP server
-echo -e "${BLUE}1️⃣  MCP 서버 시작 중... (포트: ${PORT})${NC}"
-python -m modules.mail_query_without_db.mcp_server_mail_attachment > mcp_server.log 2>&1 &
+# Python 확인
+if [ -f "$PROJECT_ROOT/.venv/bin/python3" ]; then
+    PYTHON="$PROJECT_ROOT/.venv/bin/python3"
+else
+    PYTHON="python3"
+fi
+
+echo -e "${GREEN}✓${NC} Project Root: $PROJECT_ROOT"
+echo -e "${GREEN}✓${NC} Python: $PYTHON"
+echo -e "${GREEN}✓${NC} Port: $PORT"
+
+# Cloudflare Tunnel 설치 확인
+if ! command -v cloudflared &> /dev/null; then
+    echo -e "${YELLOW}⚠${NC} cloudflared not found. Installing..."
+    
+    if command -v wget &> /dev/null; then
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+        sudo dpkg -i cloudflared-linux-amd64.deb
+        rm cloudflared-linux-amd64.deb
+    else
+        echo -e "${RED}✗${NC} wget not found. Please install cloudflared manually."
+        exit 1
+    fi
+fi
+
+# MCP 서버 시작
+echo ""
+echo -e "${BLUE}Starting MCP Server...${NC}"
+$PYTHON -m modules.mail_query_without_db.mcp_server.server --port $PORT --host $HOST &
 SERVER_PID=$!
 
-# Wait for server
+# 서버 시작 대기
 sleep 3
 
-# Check if server is running
-if ! kill -0 $SERVER_PID 2>/dev/null; then
-    echo -e "${RED}❌ MCP 서버 시작 실패${NC}"
-    cat mcp_server.log
+# 서버 확인
+if ! ps -p $SERVER_PID > /dev/null; then
+    echo -e "${RED}✗${NC} Server failed to start"
     exit 1
 fi
 
-echo -e "${GREEN}✅ MCP 서버 실행 중 (PID: $SERVER_PID)${NC}"
-echo
+echo -e "${GREEN}✓${NC} Server started (PID: $SERVER_PID)"
 
-# Check if tunnel is already running
-# Try multiple patterns to find existing tunnel
-EXISTING_TUNNEL_PID=$(pgrep -f "cloudflared.*tunnel.*${PORT}" | head -1)
-if [ -z "$EXISTING_TUNNEL_PID" ]; then
-    EXISTING_TUNNEL_PID=$(pgrep -f "cloudflared.*tunnel.*url.*localhost:${PORT}" | head -1)
-fi
+# Cloudflare Tunnel 시작
+echo ""
+echo -e "${BLUE}Starting Cloudflare Tunnel...${NC}"
+TUNNEL_LOG="$PROJECT_ROOT/tunnel_output_${PORT}.log"
+cloudflared tunnel --url http://$HOST:$PORT > "$TUNNEL_LOG" 2>&1 &
+TUNNEL_PID=$!
+
+# Tunnel URL 대기
+echo "Waiting for tunnel URL..."
+sleep 5
+
+# Tunnel URL 추출
 TUNNEL_URL=""
-TUNNEL_PID=""
-TUNNEL_CREATED=false
-
-if [ ! -z "$EXISTING_TUNNEL_PID" ]; then
-    echo -e "${GREEN}✅ 기존 Cloudflare 터널 발견 (PID: $EXISTING_TUNNEL_PID)${NC}"
-    echo -e "${YELLOW}   기존 터널 URL 찾는 중...${NC}"
-    
-    # Try to find existing tunnel URL from process output or logs
-    TUNNEL_URL=$(ps aux | grep "cloudflared" | grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' | head -1)
-    
-    # Try various log file locations
-    if [ -z "$TUNNEL_URL" ]; then
-        # Check port-specific log file first
-        if [ -f "tunnel_output_${PORT}.log" ]; then
-            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' tunnel_output_${PORT}.log | tail -1)
-        fi
-        
-        # Check parent directory for port-specific log
-        if [ -z "$TUNNEL_URL" ] && [ -f "../tunnel_output_${PORT}.log" ]; then
-            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' ../tunnel_output_${PORT}.log | tail -1)
-        fi
-        
-        # Check project root for port-specific log
-        if [ -z "$TUNNEL_URL" ] && [ -f "/home/kimghw/IACSGRAPH/tunnel_output_${PORT}.log" ]; then
-            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' /home/kimghw/IACSGRAPH/tunnel_output_${PORT}.log | tail -1)
-        fi
-        
-        # Fallback to generic tunnel_output.log
-        if [ -z "$TUNNEL_URL" ] && [ -f "tunnel_output.log" ]; then
-            TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' tunnel_output.log | tail -1)
+for i in {1..10}; do
+    if [ -f "$TUNNEL_LOG" ]; then
+        TUNNEL_URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' "$TUNNEL_LOG" | tail -1)
+        if [ -n "$TUNNEL_URL" ]; then
+            break
         fi
     fi
-    
-    if [ ! -z "$TUNNEL_URL" ]; then
-        echo -e "${GREEN}✅ 기존 터널 URL: ${YELLOW}$TUNNEL_URL${NC}"
-        TUNNEL_PID=$EXISTING_TUNNEL_PID
-    else
-        echo -e "${YELLOW}⚠️  기존 터널 URL을 찾을 수 없어 새 터널을 생성합니다.${NC}"
-        kill $EXISTING_TUNNEL_PID 2>/dev/null
-    fi
-fi
-
-# Create new tunnel if needed
-if [ -z "$TUNNEL_URL" ]; then
-    echo -e "${BLUE}2️⃣  Cloudflare 터널 생성 중...${NC}"
-    TUNNEL_LOG="/home/kimghw/IACSGRAPH/tunnel_output_${PORT}.log"
-    # Use stdbuf to disable buffering
-    stdbuf -oL -eL cloudflared tunnel --url http://localhost:${PORT} 2>&1 | tee $TUNNEL_LOG &
-    TUNNEL_PID=$!
-    TUNNEL_CREATED=true
-
-    # Wait for tunnel URL
-    echo -e "${YELLOW}   터널 URL 대기 중...${NC}"
-    COUNTER=0
-
-    while [ $COUNTER -lt 30 ]; do
-        if [ -f $TUNNEL_LOG ]; then
-            URL=$(grep -o 'https://[a-zA-Z0-9-]*\.trycloudflare\.com' $TUNNEL_LOG | head -1)
-            if [ ! -z "$URL" ]; then
-                TUNNEL_URL=$URL
-                break
-            fi
-        fi
-        sleep 1
-        COUNTER=$((COUNTER + 1))
-        echo -n "."
-    done
-fi
-
-echo
-echo
+    sleep 1
+done
 
 if [ -z "$TUNNEL_URL" ]; then
-    echo -e "${RED}❌ 터널 URL을 찾을 수 없습니다${NC}"
-    cat $TUNNEL_LOG
-    kill $SERVER_PID 2>/dev/null
-    kill $TUNNEL_PID 2>/dev/null
+    echo -e "${RED}✗${NC} Failed to get tunnel URL"
+    kill $SERVER_PID $TUNNEL_PID 2>/dev/null
     exit 1
 fi
 
-# Display success info
-echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BOLD}${GREEN}✨ 서버가 성공적으로 시작되었습니다!${NC}"
-echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo
-echo -e "${CYAN}📍 접속 정보:${NC}"
-echo -e "${BOLD}   🌐 Public URL: ${YELLOW}$TUNNEL_URL${NC}"
-echo -e "${BOLD}   🏠 Local URL:  ${BLUE}http://localhost:${PORT}${NC}"
-echo
-echo -e "${CYAN}🔍 테스트 URL:${NC}"
-echo -e "   Health: ${YELLOW}${TUNNEL_URL}/health${NC}"
-echo -e "   Info:   ${YELLOW}${TUNNEL_URL}/info${NC}"
-echo
-echo -e "${CYAN}🤖 Claude.ai 설정:${NC}"
-echo -e "   1. Claude.ai에서 MCP 서버 추가"
-echo -e "   2. URL에 ${YELLOW}$TUNNEL_URL${NC} 입력"
-echo -e "   3. 연결 확인 후 사용"
-echo
-echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${RED}종료하려면 Ctrl+C를 누르세요${NC}"
-echo -e "${BOLD}${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+# 결과 출력
+echo ""
+echo -e "${GREEN}================================${NC}"
+echo -e "${GREEN}✓ MCP Server is running!${NC}"
+echo -e "${GREEN}================================${NC}"
+echo ""
+echo -e "Local:     ${BLUE}http://$HOST:$PORT${NC}"
+echo -e "Tunnel:    ${BLUE}$TUNNEL_URL${NC}"
+echo ""
+echo -e "Server PID:  $SERVER_PID"
+echo -e "Tunnel PID:  $TUNNEL_PID"
+echo -e "Tunnel Log:  $TUNNEL_LOG"
+echo ""
+echo -e "Press ${YELLOW}Ctrl+C${NC} to stop both server and tunnel"
 
 # Cleanup function
 cleanup() {
-    echo
-    echo -e "${YELLOW}🛑 종료 중...${NC}"
-    
-    # Only kill tunnel if we created it
-    if [ "$TUNNEL_CREATED" = true ] && [ ! -z "$TUNNEL_PID" ]; then
-        kill $TUNNEL_PID 2>/dev/null && echo -e "${BLUE}   ✓ 터널 종료${NC}"
-    else
-        echo -e "${BLUE}   ℹ️  터널 유지 (기존 터널 사용)${NC}"
-    fi
-    
-    kill $SERVER_PID 2>/dev/null && echo -e "${BLUE}   ✓ 서버 종료${NC}"
-    rm -f mcp_server.log 2>/dev/null
-    
-    # Only remove tunnel log if we created the tunnel
-    if [ "$TUNNEL_CREATED" = true ]; then
-        rm -f $TUNNEL_LOG 2>/dev/null
-    fi
-    
-    echo -e "${GREEN}✅ 정상 종료되었습니다${NC}"
+    echo ""
+    echo -e "${YELLOW}Stopping server and tunnel...${NC}"
+    kill $SERVER_PID $TUNNEL_PID 2>/dev/null
+    echo -e "${GREEN}✓${NC} Stopped"
     exit 0
 }
 
-trap cleanup SIGINT SIGTERM
+trap cleanup INT TERM
 
-# Keep running - monitor only server if using existing tunnel
-if [ "$TUNNEL_CREATED" = true ]; then
-    # Monitor both server and tunnel
-    while kill -0 $SERVER_PID 2>/dev/null && kill -0 $TUNNEL_PID 2>/dev/null; do
-        sleep 1
-    done
-else
-    # Monitor only server (tunnel runs independently)
-    while kill -0 $SERVER_PID 2>/dev/null; do
-        sleep 1
-    done
-fi
+# Wait
+wait $SERVER_PID

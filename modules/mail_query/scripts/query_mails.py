@@ -149,10 +149,10 @@ class MailQueryRunner:
         self, user_id: str, days_back: int = 60, max_mails: int = 10
     ):
         """단일 계정 메일 조회"""
-        print(f"🔍 {user_id} 계정 메일 조회")
+        logger.info(f"🔍 {user_id} 계정 메일 조회")
         print("=" * 80)
-        print(f"기간: 최근 {days_back}일")
-        print(f"최대 메일 수: {max_mails}개")
+        logger.info(f"기간: 최근 {days_back}일")
+        logger.info(f"최대 메일 수: {max_mails}개")
         print("=" * 80)
 
         result = await self.query_account_mails(user_id, days_back, max_mails)
@@ -162,7 +162,7 @@ class MailQueryRunner:
             print(f"실행 시간: {result['execution_time_ms']}ms")
 
             if result["messages"]:
-                print(f"\n📋 최근 메일 목록:")
+                logger.info(f"\n📋 최근 메일 목록:")
                 for i, msg in enumerate(result["messages"], 1):
                     print(f"\n{i}. {msg['subject']}")
                     print(f"   발신자: {msg['sender']}")
@@ -177,21 +177,21 @@ class MailQueryRunner:
     ):
         """모든 계정 메일 조회"""
 
-        print("🚀 모든 계정 메일 조회")
+        logger.info("🚀 모든 계정 메일 조회")
         print("=" * 80)
-        print(f"설정: 최근 {days_back}일, 계정당 최대 {max_mails_per_account}개 메일")
+        logger.info(f"설정: 최근 {days_back}일, 계정당 최대 {max_mails_per_account}개 메일")
         print(f"시작 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         print("=" * 80)
 
         # 1. 활성 계정 조회
         accounts = await self.get_all_active_accounts()
-        print(f"\n📋 활성 계정 수: {len(accounts)}개")
+        logger.info(f"\n📋 활성 계정 수: {len(accounts)}개")
 
         for account in accounts:
             print(f"  - {account['user_id']} ({account['user_name']})")
 
         # 2. 각 계정별 메일 조회
-        print(f"\n📧 계정별 메일 조회 시작...")
+        logger.info(f"\n📧 계정별 메일 조회 시작...")
         print("-" * 80)
 
         all_results = []
@@ -201,7 +201,7 @@ class MailQueryRunner:
 
         for i, account in enumerate(accounts, 1):
             user_id = account["user_id"]
-            print(f"\n[{i}/{len(accounts)}] {user_id} 조회 중...")
+            logger.info(f"\n[{i}/{len(accounts)}] {user_id} 조회 중...")
 
             # 메일 조회
             result = await self.query_account_mails(
@@ -220,7 +220,7 @@ class MailQueryRunner:
 
                 # 메일 샘플 출력
                 if result["messages"]:
-                    print(f"  📋 최근 메일:")
+                    logger.info(f"  📋 최근 메일:")
                     for j, msg in enumerate(result["messages"][:3], 1):
                         print(f"    {j}. {msg['subject']}")
                         print(f"       발신자: {msg['sender']}")
@@ -231,19 +231,19 @@ class MailQueryRunner:
 
         # 3. 전체 결과 요약
         print("\n" + "=" * 80)
-        print("📊 전체 결과 요약")
+        logger.info("📊 전체 결과 요약")
         print("=" * 80)
 
-        print(f"\n✅ 성공: {success_count}/{len(accounts)} 계정")
-        print(f"📧 총 메일 수: {total_mails}개")
+        logger.info(f"\n✅ 성공: {success_count}/{len(accounts)} 계정")
+        logger.info(f"📧 총 메일 수: {total_mails}개")
 
         if failed_accounts:
-            print(f"\n❌ 실패한 계정 ({len(failed_accounts)}개):")
+            logger.info(f"\n❌ 실패한 계정 ({len(failed_accounts)}개):")
             for account in failed_accounts:
-                print(f"  - {account}")
+                logger.info(f"  - {account}")
 
         # 4. 계정별 통계
-        print(f"\n📈 계정별 메일 통계:")
+        logger.info(f"\n📈 계정별 메일 통계:")
         print(f"{'계정 ID':<20} {'메일 수':>10} {'실행시간(ms)':>15} {'상태':>10}")
         print("-" * 60)
 
@@ -260,13 +260,13 @@ class MailQueryRunner:
             total_execution_time / len(all_results) if all_results else 0
         )
 
-        print(f"\n⏱️  실행 시간 분석:")
+        logger.info(f"\n⏱️  실행 시간 분석:")
         print(
             f"  - 총 실행 시간: {total_execution_time}ms ({total_execution_time/1000:.2f}초)"
         )
-        print(f"  - 평균 실행 시간: {avg_execution_time:.0f}ms/계정")
+        logger.info(f"  - 평균 실행 시간: {avg_execution_time:.0f}ms/계정")
 
-        print(f"\n✅ 조회 완료!")
+        logger.info(f"\n✅ 조회 완료!")
         print(f"종료 시간: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
     async def close(self):

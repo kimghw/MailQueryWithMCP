@@ -28,7 +28,11 @@ project_root = Path(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from modules.auth import AuthBulkRequest, AuthStartRequest, get_auth_orchestrator
+from infra.core.logger import get_logger
 
+
+
+logger = get_logger(__name__)
 
 class SimpleAutoAuth:
     """간단한 자동 인증 클래스"""
@@ -38,7 +42,7 @@ class SimpleAutoAuth:
 
     async def check_and_auth_all(self):
         """모든 계정 상태 확인 후 필요한 경우 인증"""
-        print("🔍 모든 계정 상태 확인 중...")
+        logger.info("🔍 모든 계정 상태 확인 중...")
 
         # 오케스트레이터의 기존 메서드 활용
         accounts = await self.orchestrator.auth_orchestrator_get_all_accounts_status()
@@ -57,20 +61,20 @@ class SimpleAutoAuth:
             ):
                 reason = self._get_auth_reason(account)
                 needs_auth.append({"user_id": user_id, "reason": reason})
-                print(f"   ❗ {user_id}: {reason}")
+                logger.info(f"   ❗ {user_id}: {reason}")
             else:
-                print(f"   ✅ {user_id}: 인증 상태 양호")
+                logger.info(f"   ✅ {user_id}: 인증 상태 양호")
 
         if not needs_auth:
-            print("✅ 모든 계정이 유효한 인증 상태입니다!")
+            logger.info("✅ 모든 계정이 유효한 인증 상태입니다!")
             return
 
-        print(f"\n📋 총 {len(needs_auth)}개 계정이 인증을 필요로 합니다")
+        logger.info(f"\n📋 총 {len(needs_auth)}개 계정이 인증을 필요로 합니다")
 
         # 사용자 확인
         response = input("인증을 진행하시겠습니까? (y/N): ")
         if response.lower() not in ["y", "yes"]:
-            print("취소되었습니다.")
+            logger.info("취소되었습니다.")
             return
 
         # 일괄 인증 진행
@@ -79,7 +83,7 @@ class SimpleAutoAuth:
 
     async def single_authenticate(self, user_id: str):
         """단일 사용자 인증"""
-        print(f"🚀 {user_id} 인증 시작...")
+        logger.info(f"🚀 {user_id} 인증 시작...")
 
         # 오케스트레이터의 기존 메서드 활용
         request = AuthStartRequest(user_id=user_id)
@@ -87,9 +91,9 @@ class SimpleAutoAuth:
             request
         )
 
-        print(f"세션 ID: {response.session_id}")
-        print(f"인증 URL: {response.auth_url}")
-        print("\n🌐 브라우저에서 인증 URL을 엽니다...")
+        logger.info(f"세션 ID: {response.session_id}")
+        logger.info(f"인증 URL: {response.auth_url}")
+        logger.info("\n🌐 브라우저에서 인증 URL을 엽니다...")
 
         webbrowser.open(response.auth_url)
 
@@ -98,7 +102,7 @@ class SimpleAutoAuth:
 
     async def bulk_authenticate(self, user_ids: List[str]):
         """일괄 인증"""
-        print(f"🚀 일괄 인증 시작 ({len(user_ids)}명)...")
+        logger.info(f"🚀 일괄 인증 시작 ({len(user_ids)}명)...")
 
         # 오케스트레이터의 기존 메서드 활용
         request = AuthBulkRequest(user_ids=user_ids)
@@ -106,16 +110,16 @@ class SimpleAutoAuth:
             request
         )
 
-        print(f"대기 중: {response.pending_count}명")
-        print(f"이미 완료: {response.completed_count}명")
-        print(f"실패: {response.failed_count}명")
+        logger.info(f"대기 중: {response.pending_count}명")
+        logger.info(f"이미 완료: {response.completed_count}명")
+        logger.info(f"실패: {response.failed_count}명")
 
         # 대기 중인 사용자들의 브라우저 열기
         pending_sessions = {}
         for user_status in response.user_statuses:
             if user_status.auth_url:
-                print(f"\n👤 {user_status.user_id}")
-                print(f"   인증 URL: {user_status.auth_url}")
+                logger.info(f"\n👤 {user_status.user_id}")
+                logger.info(f"   인증 URL: {user_status.auth_url}")
 
                 # 자동으로 브라우저 열기 (2초 간격)
                 webbrowser.open(user_status.auth_url)
@@ -139,16 +143,16 @@ class SimpleAutoAuth:
                 session_id
             )
 
-            print(f"⏳ [{i+check_interval:3d}s] {user_id}: {status.status.value}")
+            logger.info(f"⏳ [{i+check_interval:3d}s] {user_id}: {status.status.value}")
 
             if status.status.value == "COMPLETED":
-                print(f"✅ {user_id} 인증 완료!")
+                logger.info(f"✅ {user_id} 인증 완료!")
                 return True
             elif status.status.value in ["FAILED", "EXPIRED"]:
-                print(f"❌ {user_id} 인증 실패: {status.message}")
+                logger.info(f"❌ {user_id} 인증 실패: {status.message}")
                 return False
 
-        print(f"⏰ {user_id} 인증 대기 시간 초과")
+        logger.info(f"⏰ {user_id} 인증 대기 시간 초과")
         return False
 
     async def _wait_for_bulk_completion(self, pending_sessions: Dict[str, str]):
@@ -157,7 +161,7 @@ class SimpleAutoAuth:
         check_interval = 5
         completed = {}
 
-        print(f"\n⏳ 인증 완료 대기 중... (최대 {max_wait//60}분)")
+        logger.info(f"\n⏳ 인증 완료 대기 중... (최대 {max_wait//60}분)")
 
         for i in range(0, max_wait, check_interval):
             await asyncio.sleep(check_interval)
@@ -176,11 +180,11 @@ class SimpleAutoAuth:
                 if status.status.value == "COMPLETED":
                     completed[user_id] = True
                     new_completions.append(user_id)
-                    print(f"✅ {user_id} 인증 완료!")
+                    logger.info(f"✅ {user_id} 인증 완료!")
                 elif status.status.value in ["FAILED", "EXPIRED"]:
                     completed[user_id] = False
                     new_completions.append(user_id)
-                    print(f"❌ {user_id} 인증 실패: {status.message}")
+                    logger.info(f"❌ {user_id} 인증 실패: {status.message}")
 
             # 모든 인증이 완료되었으면 종료
             if len(completed) >= len(pending_sessions):
@@ -195,7 +199,7 @@ class SimpleAutoAuth:
 
         # 결과 요약
         success_count = sum(1 for success in completed.values() if success)
-        print(f"\n📊 최종 결과: {success_count}/{len(pending_sessions)}명 성공")
+        logger.info(f"\n📊 최종 결과: {success_count}/{len(pending_sessions)}명 성공")
 
     def _get_auth_reason(self, account: Dict[str, Any]) -> str:
         """인증이 필요한 이유 반환"""
@@ -231,7 +235,7 @@ async def main():
     args = parser.parse_args()
 
     print("=" * 60)
-    print("간단한 자동 인증 스크립트 (AuthOrchestrator 기반)")
+    logger.info("간단한 자동 인증 스크립트 (AuthOrchestrator 기반)")
     print("=" * 60)
 
     auth = SimpleAutoAuth()
@@ -239,13 +243,13 @@ async def main():
     try:
         if args.mode == "single":
             if not args.user_id:
-                print("❌ --user-id 필요")
+                logger.info("❌ --user-id 필요")
                 return
             await auth.single_authenticate(args.user_id)
 
         elif args.mode == "bulk":
             if not args.user_ids:
-                print("❌ --user-ids 필요")
+                logger.info("❌ --user-ids 필요")
                 return
             await auth.bulk_authenticate(args.user_ids)
 
@@ -253,15 +257,15 @@ async def main():
             await auth.check_and_auth_all()
 
     except KeyboardInterrupt:
-        print("\n⚠️ 사용자 중단")
+        logger.info("\n⚠️ 사용자 중단")
     except Exception as e:
-        print(f"❌ 오류: {str(e)}")
+        logger.info(f"❌ 오류: {str(e)}")
         import traceback
 
         traceback.print_exc()
     finally:
         await auth.cleanup()
-        print("✅ 완료")
+        logger.info("✅ 완료")
 
 
 if __name__ == "__main__":

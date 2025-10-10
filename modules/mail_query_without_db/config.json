@@ -4,7 +4,7 @@
     "command": "python",
     "args": ["-m", "modules.mail_query_without_db.mcp_server.server"],
     "env": {
-      "PYTHONPATH": "/home/kimghw/MailQueryWithMCP"
+      "PYTHONPATH": "${PROJECT_ROOT}"
     }
   },
   "paths": {

@@ -4,7 +4,11 @@ import json
 import os
 from pathlib import Path
 from typing import Any, Dict
+from infra.core.logger import get_logger
 
+
+
+logger = get_logger(__name__)
 
 class Config:
     """Configuration manager for MCP Server"""
@@ -23,26 +27,35 @@ class Config:
             else:
                 # Default path relative to this file
                 config_path = Path(__file__).parent.parent / "config.json"
-        
+
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
-                self._config = json.load(f)
+                config_str = f.read()
+
+            # Replace ${PROJECT_ROOT} with actual project root
+            project_root = str(Path(__file__).parent.parent.parent.parent)
+            config_str = config_str.replace("${PROJECT_ROOT}", project_root)
+
+            self._config = json.loads(config_str)
         except FileNotFoundError:
             # Use default configuration if file not found
             self._config = self._get_default_config()
         except Exception as e:
-            print(f"Error loading config: {e}")
+            logger.info(f"Error loading config: {e}")
             self._config = self._get_default_config()
     
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration"""
+        # Get project root dynamically
+        project_root = str(Path(__file__).parent.parent.parent.parent)
+
         return {
             "mcp": {
                 "server_name": "mail-query-without-db-server",
                 "command": "python",
                 "args": ["-m", "modules.mail_query_without_db.mcp_server.server"],
                 "env": {
-                    "PYTHONPATH": "/home/kimghw/MailQueryWithMCP"
+                    "PYTHONPATH": project_root
                 }
             },
             "paths": {

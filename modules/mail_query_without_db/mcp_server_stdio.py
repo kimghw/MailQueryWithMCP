@@ -19,12 +19,19 @@ auth_logger = get_auth_logger()
 async def main():
     """Main entry point for stdio MCP server"""
 
+    # Get project root dynamically
+    from pathlib import Path
+    project_root = Path(__file__).parent.parent.parent
+    log_dir = project_root / "logs"
+    log_dir.mkdir(exist_ok=True)
+    log_file = log_dir / "mcp_stdio.log"
+
     # Configure logging to file only (not stdout to avoid interfering with stdio communication)
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
         handlers=[
-            logging.FileHandler("/home/kimghw/IACSGRAPH/logs/mcp_stdio.log"),
+            logging.FileHandler(log_file),
         ],
     )
 
