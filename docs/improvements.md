@@ -7,7 +7,6 @@
 - **기능**:
   - 필수/권장/선택적 환경변수 분류
   - 자동 검증 및 상세 보고서 생성
-  - 예제 .env 파일 자동 생성
   - 검증 스크립트: `scripts/validate_env.py`
 
 #### 사용 방법:
@@ -15,8 +14,9 @@
 # 환경변수 검증
 uv run python scripts/validate_env.py
 
-# 예제 .env 파일 생성
-uv run python scripts/validate_env.py --generate-example
+# .env 파일이 없는 경우
+cp .env.example .env
+# 편집기로 .env 파일을 필요에 맞게 수정
 ```
 
 ### 2. 통합 로깅 시스템 ✅
@@ -124,12 +124,11 @@ except Exception as e:
 
 2. **누락된 환경변수가 있다면**:
    ```bash
-   # 예제 파일 생성
-   uv run python scripts/validate_env.py --generate-example
+   # .env.example을 복사하여 .env 파일 생성
+   cp .env.example .env
 
-   # .env.generated를 참고하여 .env 파일 작성
-   cp .env.generated .env
    # 편집기로 .env 파일 수정
+   nano .env  # 또는 vi, code 등 선호하는 편집기 사용
    ```
 
 3. **서버 실행**:
