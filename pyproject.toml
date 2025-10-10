@@ -1,15 +1,16 @@
 [project]
-name = "iacsgraph"
+name = "mailquerywithmcp"
 version = "0.1.0"
-description = "IACSGraph project to process emails and extract keywords."
-authors = [{ name = "Cline", email = "cline@example.com" }]
+description = "Mail Query MCP Server with Microsoft Graph API integration"
+authors = [{ name = "kimghw", email = "kimghw@example.com" }]
 requires-python = ">=3.10"
 dependencies = [
     # Core MCP Server
     "mcp>=0.1.0",
-    "uvicorn>=0.24.0",
-    "fastapi>=0.104.0",
-    "starlette>=0.27.0",
+
+    # Microsoft Graph API
+    "msgraph-sdk>=1.0.0",
+    "azure-identity>=1.12.0",
 
     # Database & Data Processing
     "sqlalchemy>=2.0.0",
@@ -24,14 +25,30 @@ dependencies = [
     "pyyaml>=6.0.2",
     "cryptography>=45.0.4",
 
-    # Messaging & Scheduling
+    # File Processing
+    "pypdf>=3.0.0",
+    "python-docx>=0.8.11",
+    "openpyxl>=3.0.0",
+
+    # Event Streaming (Optional - for event-driven architecture)
     "kafka-python>=2.0.2",
-    "apscheduler>=3.10.4",
 ]
 
 [project.optional-dependencies]
 dev = [
-    "uv>=0.1.0",
+    "black>=24.0.0",
+    "isort>=5.13.0",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.3.0",
+]
+ocr = [
+    "pytesseract>=0.3.10",
+    "pillow>=10.0.0",
+]
+hwp = [
+    "olefile>=0.46",
 ]
 sqlserver = [
     "pyodbc>=5.0.0",
@@ -40,18 +57,9 @@ postgresql = [
     "psycopg2-binary>=2.9.0",
 ]
 
-[dependency-groups]
-dev = [
-    "black",
-    "isort",
-    "pytest>=8.4.0",
-    "pytest-cov>=6.2.1",
-    "ruff",
-]
-
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["modules*", "infra*", "main*", "scheduler*"]
+include = ["modules*", "infra*", "main*"]
 
 [tool.black]
 line-length = 88

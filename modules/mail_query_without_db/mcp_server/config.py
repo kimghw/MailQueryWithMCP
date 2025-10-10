@@ -22,7 +22,7 @@ class Config:
                 config_path = Path(env_path)
             else:
                 # Default path relative to this file
-                config_path = Path(__file__).parent.parent / "settings.json"
+                config_path = Path(__file__).parent.parent / "config.json"
         
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
@@ -37,9 +37,18 @@ class Config:
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration"""
         return {
+            "mcp": {
+                "server_name": "mail-query-without-db-server",
+                "command": "python",
+                "args": ["-m", "modules.mail_query_without_db.mcp_server.server"],
+                "env": {
+                    "PYTHONPATH": "/home/kimghw/MailQueryWithMCP"
+                }
+            },
             "paths": {
                 "attachments_dir": "./mcp_attachments",
-                "log_file": "mcp_mail_attachment_server.log"
+                "emails_dir": "./mcp_emails",
+                "log_file": "mcp_mail_server.log"
             },
             "server": {
                 "default_host": "0.0.0.0",
@@ -52,9 +61,19 @@ class Config:
                 "csv_encoding": "utf-8-sig"
             },
             "file_handling": {
-                "supported_extensions": [".pdf", ".docx", ".xlsx", ".txt", ".pptx"],
+                "supported_text_extensions": [".txt", ".log", ".md", ".csv"],
+                "supported_pdf_extensions": [".pdf"],
+                "supported_word_extensions": [".doc", ".docx"],
+                "supported_hwp_extensions": [".hwp"],
+                "supported_excel_extensions": [".xls", ".xlsx"],
+                "supported_image_extensions": [".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff"],
                 "max_preview_length": 3000,
+                "max_filename_length": 200,
                 "cleanup_after_query": True
+            },
+            "onedrive": {
+                "enabled": False,
+                "base_path": "/EmailAttachments"
             }
         }
     
@@ -110,6 +129,26 @@ class Config:
     def cleanup_after_query(self) -> bool:
         """Get whether to cleanup files after query"""
         return bool(self.get("file_handling.cleanup_after_query", True))
+
+    @property
+    def emails_dir(self) -> str:
+        """Get emails directory path"""
+        return self.get("paths.emails_dir", "./mcp_emails")
+
+    @property
+    def max_filename_length(self) -> int:
+        """Get maximum filename length"""
+        return int(self.get("file_handling.max_filename_length", 200))
+
+    @property
+    def onedrive_enabled(self) -> bool:
+        """Get OneDrive enabled status"""
+        return bool(self.get("onedrive.enabled", False))
+
+    @property
+    def onedrive_base_path(self) -> str:
+        """Get OneDrive base path"""
+        return self.get("onedrive.base_path", "/EmailAttachments")
 
 
 # Singleton instance
