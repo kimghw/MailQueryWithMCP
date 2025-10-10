@@ -7,6 +7,7 @@ from typing import Any, Dict, List
 from mcp.types import Prompt, PromptArgument, PromptMessage, TextContent, Tool
 
 from infra.core.logger import get_logger
+from infra.core.error_messages import ErrorCode, MCPError
 from .prompts import get_prompt
 from .tools import MailAttachmentTools
 from .utils import preprocess_arguments
@@ -272,11 +273,22 @@ class MCPHandlers:
                 return [TextContent(type="text", text=result)]
 
             else:
-                raise ValueError(f"Unknown tool: {name}")
-        
+                raise MCPError(
+                    ErrorCode.MCP_TOOL_NOT_FOUND,
+                    tool_name=name
+                )
+
+        except MCPError as e:
+            logger.error(f"❌ MCP Error in tool {name}: {e.get_user_message()}")
+            return [TextContent(type="text", text=e.get_user_message())]
         except Exception as e:
-            logger.error(f"❌ Error in tool {name}: {str(e)}", exc_info=True)
-            return [TextContent(type="text", text=f"Error: {str(e)}")]
+            logger.error(f"❌ Unexpected error in tool {name}: {str(e)}", exc_info=True)
+            error = MCPError(
+                ErrorCode.MCP_TOOL_EXECUTION_FAILED,
+                tool_name=name,
+                original_exception=e
+            )
+            return [TextContent(type="text", text=error.get_user_message())]
     
     async def handle_list_prompts(self) -> List[Prompt]:
         """List available prompts"""

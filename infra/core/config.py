@@ -6,6 +6,7 @@ IACSGraph 프로젝트의 설정 관리 시스템
 """
 
 import os
+import sys
 from functools import lru_cache
 from pathlib import Path
 from typing import List, Optional
@@ -14,8 +15,9 @@ from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 
 from .exceptions import ConfigurationError
-from infra.core.logger import get_logger
-
+from .env_validator import EnvValidator
+from .error_messages import ErrorCode, StandardError
+from .logging_config import get_logger
 
 
 logger = get_logger(__name__)
@@ -26,6 +28,7 @@ class Config:
     def __init__(self):
         """설정 초기화 및 환경 변수 로드"""
         self._load_environment()
+        self._validate_with_new_system()
         self._validate_required_settings()
 
     def _load_environment(self) -> None:
@@ -36,9 +39,34 @@ class Config:
 
         if env_file.exists():
             load_dotenv(env_file)
+            logger.debug(f"✅ .env 파일 로드 완료: {env_file}")
         else:
             # .env 파일이 없는 경우 경고만 출력
-            logger.info(f"경고: .env 파일을 찾을 수 없습니다: {env_file}")
+            logger.warning(f"⚠️ .env 파일을 찾을 수 없습니다: {env_file}")
+
+    def _validate_with_new_system(self) -> None:
+        """새로운 환경변수 검증 시스템 사용"""
+        validator = EnvValidator()
+        success, result = validator.validate()
+
+        if not success:
+            logger.error("❌ 환경변수 검증 실패")
+            validator.print_report(sys.stderr)
+
+            # 필수 환경변수가 누락된 경우 예외 발생
+            if result.get("required_missing"):
+                raise StandardError(
+                    ErrorCode.ENV_VAR_MISSING,
+                    context={"missing": result["required_missing"]}
+                )
+        else:
+            logger.info("✅ 환경변수 검증 성공")
+
+            # 권장 환경변수 누락 경고
+            if result.get("recommended_missing"):
+                logger.warning(
+                    f"⚠️ 권장 환경변수 누락 (일부 기능 제한): {', '.join(result['recommended_missing'])}"
+                )
 
     def _validate_required_settings(self) -> None:
         """필수 설정값들이 있는지 검증"""
