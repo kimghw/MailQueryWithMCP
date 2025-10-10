@@ -50,6 +50,14 @@ export MCP_SETTINGS_PATH=${MCP_SETTINGS_PATH:-"/home/kimghw/IACSGRAPH/modules/ma
 # Change to project directory
 cd /home/kimghw/IACSGRAPH
 
+# Use virtual environment python if it exists
+if [ -f "/home/kimghw/IACSGRAPH/.venv/bin/python3" ]; then
+    PYTHON="/home/kimghw/IACSGRAPH/.venv/bin/python3"
+    echo -e "${BLUE}✓ Using virtual environment Python${NC}"
+else
+    PYTHON="python3"
+fi
+
 if [ "$RUN_TUNNEL" = true ]; then
     echo -e "${YELLOW}📡 Running with Cloudflare tunnel enabled${NC}"
     echo "================================================================="
@@ -63,7 +71,7 @@ if [ "$RUN_TUNNEL" = true ]; then
     
     # Start MCP server in background
     echo -e "${GREEN}Starting MCP server on port ${PORT}...${NC}"
-    python -m modules.mail_query_without_db.mcp_server_mail_attachment &
+    $PYTHON -m modules.mail_query_without_db.mcp_server_mail_attachment &
     SERVER_PID=$!
     
     # Wait for server to start
@@ -121,7 +129,7 @@ else
     echo -e "${YELLOW}To run with Cloudflare tunnel, use: $0 --tunnel${NC}"
     echo "================================================================="
     echo -e "${RED}Press Ctrl+C to stop${NC}"
-    
+
     # Run the server
-    python -m modules.mail_query_without_db.mcp_server_mail_attachment
+    $PYTHON -m modules.mail_query_without_db.mcp_server_mail_attachment
 fi

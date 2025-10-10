@@ -5,23 +5,28 @@ description = "IACSGraph project to process emails and extract keywords."
 authors = [{ name = "Cline", email = "cline@example.com" }]
 requires-python = ">=3.10"
 dependencies = [
-    "aiohttp>=3.9.5",
+    # Core MCP Server
+    "mcp>=0.1.0",
+    "uvicorn>=0.24.0",
+    "fastapi>=0.104.0",
+    "starlette>=0.27.0",
+
+    # Database & Data Processing
+    "sqlalchemy>=2.0.0",
     "pydantic[email]>=2.0,<3.0",
-    "apscheduler>=3.10.4",
+
+    # Network & HTTP
+    "aiohttp>=3.9.5",
+    "requests>=2.31.0",
+
+    # Configuration & Utils
     "python-dotenv>=1.0.1",
-    "kafka-python>=2.0.2",
     "pyyaml>=6.0.2",
     "cryptography>=45.0.4",
-    "pytest-cov>=6.2.1",
-    "qdrant-client>=1.7.0",
-    "sentence-transformers>=2.2.0",
-    "numpy>=1.24.0",
-    "mcp>=0.1.0",
-    "requests>=2.31.0",
-    "fastapi>=0.104.0",
-    "uvicorn>=0.24.0",
-    "openai>=0.27.0",
-    "sqlalchemy>=2.0.0",
+
+    # Messaging & Scheduling
+    "kafka-python>=2.0.2",
+    "apscheduler>=3.10.4",
 ]
 
 [project.optional-dependencies]
@@ -35,11 +40,12 @@ postgresql = [
     "psycopg2-binary>=2.9.0",
 ]
 
-[tool.uv]
-dev-dependencies = [
+[dependency-groups]
+dev = [
     "black",
     "isort",
     "pytest>=8.4.0",
+    "pytest-cov>=6.2.1",
     "ruff",
 ]
 
