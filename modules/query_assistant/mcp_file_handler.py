@@ -164,7 +164,7 @@ class MCPFileHandler:
         
         try:
             # FileConverter 사용
-            from modules.mail_attachment import FileConverter
+            from modules.mail_query_without_db import FileConverter
             converter = FileConverter()
             
             if not converter.dependencies['pdf']:

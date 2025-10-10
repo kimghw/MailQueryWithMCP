@@ -1,8 +1,8 @@
 {
   "mcpServers": {
-    "mail-attachment-server": {
+    "mail-query-without-db-server": {
       "command": "python",
-      "args": ["-m", "modules.mail_attachment.mcp_server_mail_attachment"],
+      "args": ["-m", "modules.mail_query_without_db.mcp_server_mail_attachment"],
       "env": {
         "PYTHONPATH": "/home/kimghw/IACSGRAPH"
       }

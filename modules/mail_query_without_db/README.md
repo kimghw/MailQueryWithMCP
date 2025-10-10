@@ -1,6 +1,6 @@
-# Mail Attachment Module
+# Mail Query Without DB Module
 
-이 모듈은 Microsoft Graph API를 통해 이메일의 첨부파일을 다운로드하고 텍스트로 변환하는 기능을 제공합니다.
+이 모듈은 Microsoft Graph API를 통해 이메일의 첨부파일을 다운로드하고 텍스트로 변환하며, 데이터베이스 없이 이메일을 저장하는 기능을 제공합니다.
 
 ## 주요 컴포넌트
 
@@ -110,7 +110,7 @@ python -m scripts.mail_query_attachment -u kimghw -b -a
 ### 프로그래밍 방식 사용
 
 ```python
-from modules.mail_attachment import AttachmentDownloader, FileConverter
+from modules.mail_query_without_db import AttachmentDownloader, FileConverter
 
 # 첨부파일 다운로더 초기화
 downloader = AttachmentDownloader(output_dir="./attachments")
@@ -261,7 +261,7 @@ python -m scripts.mail_query_attachment -u kimghw --start-date 2025-01-15
 ### 시나리오 7: 특정 파일 형식 분석
 ```bash
 # HWP 파일을 텍스트로 변환
-python -c "from modules.mail_attachment import FileConverter; fc = FileConverter(); print(fc.convert_to_text('/path/to/file.hwp'))"
+python -c "from modules.mail_query_without_db import FileConverter; fc = FileConverter(); print(fc.convert_to_text('/path/to/file.hwp'))"
 ```
 
 ## 주의사항
@@ -343,7 +343,7 @@ pip install -r requirements.txt
 #### 1. 로컬 실행
 ```bash
 # HTTP Streaming MCP 서버 시작 (포트 8002)
-python -m modules.mail_attachment.mcp_server_mail_attachment
+python -m modules.mail_query_without_db.mcp_server_mail_attachment
 
 # 또는 스크립트 사용
 ./run_mcp_server.sh
@@ -363,7 +363,7 @@ python -m modules.mail_attachment.mcp_server_mail_attachment
 ##### 방법 2: 수동 실행
 ```bash
 # 터미널 1: MCP 서버 실행
-python -m modules.mail_attachment.mcp_server_mail_attachment
+python -m modules.mail_query_without_db.mcp_server_mail_attachment
 
 # 터미널 2: Cloudflare 터널 실행
 cloudflared tunnel --url http://localhost:8002

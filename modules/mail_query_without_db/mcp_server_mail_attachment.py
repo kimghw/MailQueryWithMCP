@@ -3,8 +3,8 @@
 import logging
 import os
 
-from modules.mail_attachment.mcp_server import HTTPStreamingMailAttachmentServer
-from modules.mail_attachment.mcp_server.config import get_config
+from modules.mail_query_without_db.mcp_server import HTTPStreamingMailAttachmentServer
+from modules.mail_query_without_db.mcp_server.config import get_config
 
 
 def main():

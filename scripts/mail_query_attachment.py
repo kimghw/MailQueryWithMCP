@@ -20,8 +20,8 @@ from modules.mail_query import (
     MailQueryRequest,
     PaginationOptions,
 )
-from modules.mail_attachment import AttachmentDownloader, FileConverter, EmailSaver
-from modules.mail_attachment.onedrive_wrapper import OneDriveWrapper
+from modules.mail_query_without_db import AttachmentDownloader, FileConverter, EmailSaver
+from modules.mail_query_without_db.onedrive_wrapper import OneDriveWrapper
 
 logger = get_logger(__name__)
 

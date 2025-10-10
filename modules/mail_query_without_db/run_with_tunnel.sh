@@ -29,12 +29,12 @@ fi
 
 # Set environment
 export PYTHONPATH=/home/kimghw/IACSGRAPH
-export MCP_SETTINGS_PATH=${MCP_SETTINGS_PATH:-"/home/kimghw/IACSGRAPH/modules/mail_attachment/settings.json"}
+export MCP_SETTINGS_PATH=${MCP_SETTINGS_PATH:-"/home/kimghw/IACSGRAPH/modules/mail_query_without_db/settings.json"}
 cd /home/kimghw/IACSGRAPH
 
 # Start MCP server
 echo -e "${BLUE}1️⃣  MCP 서버 시작 중... (포트: ${PORT})${NC}"
-python -m modules.mail_attachment.mcp_server_mail_attachment > mcp_server.log 2>&1 &
+python -m modules.mail_query_without_db.mcp_server_mail_attachment > mcp_server.log 2>&1 &
 SERVER_PID=$!
 
 # Wait for server

@@ -58,7 +58,7 @@ ps aux | grep -E "cloudflared.*tunnel.*--url" | grep -v grep | while read -r lin
     LOG_FILES=(
         "tunnel_output_${PORT}.log"
         "tunnel_output.log"
-        "../mail_attachment/tunnel.log"
+        "../mail_query_without_db/tunnel.log"
         "../query_assistant/query_assistant_tunnel.log"
         "../../tunnel_output.log"
     )
@@ -106,12 +106,12 @@ echo
 echo -e "${BOLD}${YELLOW}Related MCP Servers:${NC}"
 echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
-# Check mail_attachment server (port 8002)
+# Check mail_query_without_db server (port 8002)
 if lsof -ti:8002 > /dev/null 2>&1; then
     PID=$(lsof -ti:8002 | head -1)
-    echo -e "${GREEN}✅ Mail Attachment Server${NC} - Port 8002 (PID: $PID)"
+    echo -e "${GREEN}✅ Mail Query Without DB Server${NC} - Port 8002 (PID: $PID)"
 else
-    echo -e "${RED}❌ Mail Attachment Server${NC} - Port 8002 not active"
+    echo -e "${RED}❌ Mail Query Without DB Server${NC} - Port 8002 not active"
 fi
 
 # Check query_assistant server (port 8001)

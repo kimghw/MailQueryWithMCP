@@ -1,4 +1,4 @@
-"""Mail attachment processing module"""
+"""Mail query without database - Attachment processing and email saving module"""
 
 from .attachment_downloader import AttachmentDownloader
 from .file_converter import FileConverter

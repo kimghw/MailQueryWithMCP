@@ -9,7 +9,7 @@ from typing import Any, Dict, List
 
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
-from modules.mail_attachment import AttachmentDownloader, EmailSaver, FileConverter
+from modules.mail_query_without_db import AttachmentDownloader, EmailSaver, FileConverter
 from modules.mail_query import (
     MailQueryFilters,
     MailQueryOrchestrator,

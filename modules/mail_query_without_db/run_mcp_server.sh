@@ -45,7 +45,7 @@ echo -e "${BLUE}Server will run on port ${PORT}${NC}"
 
 # Set Python path and settings path
 export PYTHONPATH=/home/kimghw/IACSGRAPH
-export MCP_SETTINGS_PATH=${MCP_SETTINGS_PATH:-"/home/kimghw/IACSGRAPH/modules/mail_attachment/settings.json"}
+export MCP_SETTINGS_PATH=${MCP_SETTINGS_PATH:-"/home/kimghw/IACSGRAPH/modules/mail_query_without_db/settings.json"}
 
 # Change to project directory
 cd /home/kimghw/IACSGRAPH
@@ -63,7 +63,7 @@ if [ "$RUN_TUNNEL" = true ]; then
     
     # Start MCP server in background
     echo -e "${GREEN}Starting MCP server on port ${PORT}...${NC}"
-    python -m modules.mail_attachment.mcp_server_mail_attachment &
+    python -m modules.mail_query_without_db.mcp_server_mail_attachment &
     SERVER_PID=$!
     
     # Wait for server to start
@@ -123,5 +123,5 @@ else
     echo -e "${RED}Press Ctrl+C to stop${NC}"
     
     # Run the server
-    python -m modules.mail_attachment.mcp_server_mail_attachment
+    python -m modules.mail_query_without_db.mcp_server_mail_attachment
 fi
