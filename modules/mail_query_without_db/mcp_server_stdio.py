@@ -2,7 +2,11 @@
 
 import asyncio
 import logging
+import os
 import sys
+
+# CRITICAL: Disable console logging BEFORE any imports that use logging
+os.environ['ENABLE_CONSOLE_LOGGING'] = 'false'
 
 from mcp.server import Server
 from mcp.server.stdio import stdio_server
@@ -27,13 +31,16 @@ async def main():
     log_file = log_dir / "mcp_stdio.log"
 
     # Configure logging to file only (not stdout to avoid interfering with stdio communication)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.FileHandler(log_file),
-        ],
-    )
+    # Remove all existing handlers first
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Add file handler with UTF-8 encoding
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
+    file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
+    root_logger.addHandler(file_handler)
+    root_logger.setLevel(logging.INFO)
 
     logger.info("🚀 Starting stdio MCP Mail Attachment Server")
 

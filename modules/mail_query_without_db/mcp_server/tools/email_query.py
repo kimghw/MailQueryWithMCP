@@ -31,8 +31,7 @@ class EmailQueryTool:
         self.config = config
         self.email_saver = EmailSaver(output_dir=str(self.config.emails_dir))
         self.attachment_downloader = AttachmentDownloader(
-            output_dir=str(self.config.attachments_dir),
-            max_file_size_mb=self.config.max_file_size_mb
+            output_dir=str(self.config.attachments_dir)
         )
         # Define KST timezone (UTC+9)
         self.KST = timezone(timedelta(hours=9))
