@@ -739,6 +739,9 @@ class EmailQueryTool:
 
         result_text += f"\n\n✅ 총 {len(processed_mails)}개의 이메일이 처리되었습니다."
 
+        # Add query options summary
+        result_text += self._get_query_options_summary(filters, download_attachments)
+
         # Add formatting instructions from prompts.py
         result_text += f"\n\n{'='*80}\n"
         result_text += "📋 **결과 포맷팅 요청**\n"
@@ -746,6 +749,61 @@ class EmailQueryTool:
         result_text += self._get_format_instructions(user_id)
 
         return result_text
+
+    def _get_query_options_summary(self, filters: Dict, download_attachments: bool) -> str:
+        """현재 조회 옵션 상태와 추가 옵션 안내"""
+        summary = f"\n\n{'='*80}\n"
+        summary += "📌 **조회 옵션 상태**\n"
+        summary += f"{'='*80}\n"
+
+        # Current options
+        include_body = filters.get("include_body", False)
+        keyword = filters.get("keyword")
+        keyword_filter = filters.get("keyword_filter")
+
+        summary += "\n**현재 활성화된 옵션:**\n"
+        active_options = []
+
+        if include_body:
+            active_options.append("✅ 본문 포함 (`include_body: true`)")
+        else:
+            active_options.append("❌ 제목만 조회 (본문 미포함)")
+
+        if download_attachments:
+            active_options.append("✅ 첨부파일 다운로드 (`download_attachments: true`)")
+        else:
+            active_options.append("❌ 첨부파일 미다운로드")
+
+        if keyword:
+            active_options.append(f"✅ 키워드 검색: '{keyword}' (`keyword: \"{keyword}\"`)")
+        elif keyword_filter:
+            active_options.append(f"✅ 고급 키워드 필터 적용 (`keyword_filter`)")
+        else:
+            active_options.append("❌ 키워드 검색 미사용")
+
+        for option in active_options:
+            summary += f"- {option}\n"
+
+        # Suggestions for inactive options
+        summary += "\n**📢 추가 정보를 원하시면:**\n"
+        suggestions = []
+
+        if not include_body:
+            suggestions.append("- 본문을 조회하고 싶으면 **'본문을 포함해서'** 라는 문구를 추가해주세요")
+
+        if not download_attachments:
+            suggestions.append("- 첨부파일을 다운로드하고 싶으면 **'첨부파일을 포함해서'** 라는 문구를 추가해주세요")
+
+        if not keyword and not keyword_filter:
+            suggestions.append("- 키워드로 검색하고 싶으면 **'[키워드]를 포함해서'** 라는 문구를 추가해주세요")
+            suggestions.append("  (예: \"'프로젝트'를 포함해서 조회해줘\")")
+
+        for suggestion in suggestions:
+            summary += f"{suggestion}\n"
+
+        summary += "\n💡 위 표현으로 다시 질문해주세요."
+
+        return summary
 
     def _get_format_instructions(self, user_id: str) -> str:
         """Get email formatting instructions from prompts.py"""
