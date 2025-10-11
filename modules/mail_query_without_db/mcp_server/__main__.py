@@ -4,6 +4,7 @@ Supports both HTTP and STDIO modes through command-line arguments
 """
 
 import sys
+import os
 import asyncio
 import argparse
 from pathlib import Path
@@ -24,8 +25,8 @@ def main():
     parser.add_argument(
         "--port",
         type=int,
-        default=3000,
-        help="Port for HTTP server (default: 3000)"
+        default=int(os.getenv("PORT", "3000")),
+        help="Port for HTTP server (default: 3000, or PORT env var)"
     )
     parser.add_argument(
         "--host",
@@ -41,10 +42,10 @@ def main():
         asyncio.run(run_stdio_server())
     else:
         # Run HTTP server
-        from .server import MailAttachmentMCPServer
+        from .server import HTTPStreamingMailAttachmentServer
 
-        server = MailAttachmentMCPServer()
-        server.run(host=args.host, port=args.port)
+        server = HTTPStreamingMailAttachmentServer(host=args.host, port=args.port)
+        server.run()
 
 
 if __name__ == "__main__":

@@ -1,0 +1,114 @@
+services:
+  - type: web
+    name: mail-query-mcp-server
+    runtime: python
+    env: python
+    buildCommand: pip install -e .
+    startCommand: ./start.sh
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.3
+
+      # Database Configuration
+      - key: DATABASE_PATH
+        value: ./data/mail_query.db
+
+      # Azure AD / Microsoft Graph API - 계정 인증용
+      # 각 계정마다 별도의 환경변수 설정 (예: ACCOUNT_1_, ACCOUNT_2_)
+      - key: TENANT_ID
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: CLIENT_SECRET
+        sync: false
+
+      # 계정 정보 (여러 계정 지원)
+      # 계정 1
+      - key: ACCOUNT_1_USER_ID
+        sync: false
+      - key: ACCOUNT_1_USER_NAME
+        sync: false
+      - key: ACCOUNT_1_EMAIL
+        sync: false
+      - key: ACCOUNT_1_TENANT_ID
+        sync: false
+      - key: ACCOUNT_1_CLIENT_ID
+        sync: false
+      - key: ACCOUNT_1_CLIENT_SECRET
+        sync: false
+      - key: ACCOUNT_1_REDIRECT_URI
+        value: http://localhost:5000/auth/callback
+
+      # 계정 2 (필요시 추가)
+      # - key: ACCOUNT_2_USER_ID
+      #   sync: false
+      # - key: ACCOUNT_2_USER_NAME
+      #   sync: false
+      # - key: ACCOUNT_2_EMAIL
+      #   sync: false
+
+      # OAuth Settings
+      - key: OAUTH_REDIRECT_PORT
+        value: 5000
+      - key: OAUTH_REDIRECT_PATH
+        value: /auth/callback
+
+      # Security
+      - key: ENCRYPTION_KEY
+        sync: false
+      # API Keys for authentication (comma-separated)
+      # Example: key1,key2,key3
+      - key: API_KEYS
+        sync: false
+
+      # Application Settings
+      - key: LOG_LEVEL
+        value: INFO
+      - key: LOG_FORMAT
+        value: json
+      - key: ENVIRONMENT
+        value: production
+      - key: BATCH_SIZE
+        value: 20
+      - key: TOKEN_REFRESH_BUFFER_MINUTES
+        value: 10
+
+      # Optional: Kafka (이벤트 스트리밍)
+      - key: KAFKA_BOOTSTRAP_SERVERS
+        value: localhost:9092
+      - key: KAFKA_TOPIC_EMAIL_EVENTS
+        value: email-raw-data
+      - key: KAFKA_CONSUMER_GROUP_ID
+        value: mail-query-prod
+      - key: KAFKA_TIMEOUT
+        value: 30
+
+      # Optional: OpenAI/OpenRouter (키워드 추출)
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
+        value: openai/o3-mini
+      - key: OPENROUTER_BASE_URL
+        value: https://openrouter.ai/api/v1
+
+      # Mail Processing Settings
+      - key: ENABLE_MAIL_HISTORY
+        value: true
+      - key: MAX_KEYWORDS_PER_MAIL
+        value: 5
+      - key: MAX_MAILS_PER_ACCOUNT
+        value: 200
+
+      # Mail Filter Settings
+      - key: ENABLE_MAIL_FILTERING
+        value: true
+      - key: ENABLE_SUSPICIOUS_SENDER_CHECK
+        value: true
+      - key: BLOCKED_DOMAINS
+        value: noreply.com,no-reply.com,donotreply.com
+      - key: BLOCKED_KEYWORDS
+        value: newsletter,promotion,marketing
+      - key: BLOCKED_SENDER_PATTERNS
+        value: noreply@,no-reply@,donotreply@

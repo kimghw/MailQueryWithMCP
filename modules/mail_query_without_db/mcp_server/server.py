@@ -17,6 +17,7 @@ from infra.core.auth_logger import get_auth_logger
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from .handlers import MCPHandlers
+from .auth import AuthMiddleware
 
 logger = get_logger(__name__)
 auth_logger = get_auth_logger()
@@ -28,25 +29,33 @@ class HTTPStreamingMailAttachmentServer:
     def __init__(self, host: str = "0.0.0.0", port: int = 8002):
         self.host = host
         self.port = port
-        
+
         # MCP Server
         self.mcp_server = Server("mail-attachment-server")
-        
+
         # Database
         self.db = get_database_manager()
-        
+
         # Initialize database connection and check authentication
         self._initialize_and_check_auth()
-        
+
         # MCP Handlers
         self.handlers = MCPHandlers()
-        
+
+        # Authentication middleware
+        self.auth = AuthMiddleware()
+
         # Active sessions
         self.sessions: Dict[str, Dict[str, Any]] = {}
-        
+
         # Create Starlette app
         self.app = self._create_app()
-        
+
+        if self.auth.enabled:
+            logger.info(f"🔒 API Key authentication is ENABLED")
+        else:
+            logger.warning(f"⚠️  API Key authentication is DISABLED - set API_KEYS environment variable to enable")
+
         logger.info(f"🚀 HTTP Streaming Mail Attachment Server initialized on port {port}")
     
     def _initialize_and_check_auth(self):
@@ -114,16 +123,21 @@ class HTTPStreamingMailAttachmentServer:
     
     async def _handle_streaming_request(self, request: Request):
         """Handle MCP request - returns single JSON response"""
+        # Verify authentication
+        auth_error = self.auth.verify_request(request)
+        if auth_error:
+            return auth_error
+
         # Common headers
         base_headers = {
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS, DELETE",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, X-API-Key, Mcp-Session-Id, MCP-Protocol-Version",
             "Access-Control-Expose-Headers": "Mcp-Session-Id",
         }
-        
+
         # Read and parse request
         try:
             body = await request.body()
@@ -379,7 +393,7 @@ class HTTPStreamingMailAttachmentServer:
                 headers={
                     "Access-Control-Allow-Origin": "*",
                     "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
-                    "Access-Control-Allow-Headers": "Content-Type, Mcp-Session-Id, Authorization, MCP-Protocol-Version",
+                    "Access-Control-Allow-Headers": "Content-Type, Mcp-Session-Id, Authorization, X-API-Key, MCP-Protocol-Version",
                     "Access-Control-Expose-Headers": "Mcp-Session-Id",
                     "Access-Control-Max-Age": "3600",
                 },
