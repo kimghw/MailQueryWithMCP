@@ -26,6 +26,10 @@ dependencies = [
     "cryptography>=45.0.4",
     "colorlog>=6.7.0",
 
+    # Authentication & Security
+    "pyjwt>=2.8.0",
+    "python-jose[cryptography]>=3.3.0",
+
     # File Processing
     "pypdf>=3.0.0",
     "python-docx>=0.8.11",
