@@ -539,7 +539,7 @@ class HTTPStreamingMailAttachmentServer:
                     # Exchange code for tokens using account config
                     oauth_client = get_oauth_client()
                     token_info = await oauth_client.exchange_code_for_tokens_with_account_config(
-                        code=code,
+                        authorization_code=code,
                         client_id=account_dict["oauth_client_id"],
                         client_secret=decrypted_secret,
                         tenant_id=account_dict["oauth_tenant_id"],
