@@ -1,0 +1,24 @@
+{
+  "comment": "사용자 설정 파일 예시 - config.user.json으로 복사하여 사용하세요",
+  "paths": {
+    "comment": "원하는 경로로 변경 가능. ${HOME}, ${USER}, ${PWD} 환경변수 사용 가능",
+    "base_dir": "/home/user/Documents/MCP_Data",
+    "attachments_dir": "/home/user/Documents/MCP_Data/attachments",
+    "emails_dir": "/home/user/Documents/MCP_Data/emails",
+    "exports_dir": "/home/user/Documents/MCP_Data/exports",
+    "temp_dir": "/tmp/mcp_temp"
+  },
+  "email": {
+    "comment": "차단할 발신자 목록 추가 가능",
+    "blocked_senders": [
+      "spam@example.com",
+      "noreply@example.com"
+    ],
+    "default_days_back": 7,
+    "default_max_mails": 100
+  },
+  "file_handling": {
+    "max_file_size_mb": 100,
+    "cleanup_after_query": false
+  }
+}

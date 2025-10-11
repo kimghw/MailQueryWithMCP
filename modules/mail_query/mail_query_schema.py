@@ -9,6 +9,36 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
+class KeywordFilter(BaseModel):
+    """키워드 검색 필터 (클라이언트 측 필터링)"""
+
+    and_keywords: Optional[List[str]] = Field(
+        None,
+        description="AND 조건: 모든 키워드가 포함되어야 함"
+    )
+    or_keywords: Optional[List[str]] = Field(
+        None,
+        description="OR 조건: 하나 이상의 키워드가 포함되어야 함"
+    )
+    not_keywords: Optional[List[str]] = Field(
+        None,
+        description="NOT 조건: 이 키워드들이 포함되지 않아야 함"
+    )
+
+    @field_validator("and_keywords", "or_keywords", "not_keywords")
+    @classmethod
+    def validate_keywords(cls, v):
+        if v is not None:
+            # Strip whitespace and filter empty strings
+            return [k.strip() for k in v if k.strip()]
+        return v
+
+    def model_post_init(self, __context):
+        """최소 하나의 키워드 조건이 필요함을 검증"""
+        if not self.and_keywords and not self.or_keywords and not self.not_keywords:
+            raise ValueError("최소 하나 이상의 키워드 조건(and_keywords, or_keywords, not_keywords)이 필요합니다")
+
+
 class MailQueryFilters(BaseModel):
     """메일 필터 조건"""
 
@@ -19,6 +49,7 @@ class MailQueryFilters(BaseModel):
     is_read: Optional[bool] = Field(None, description="읽음 상태")
     has_attachments: Optional[bool] = Field(None, description="첨부파일 여부")
     importance: Optional[str] = Field(None, description="중요도")
+    keyword_filter: Optional[KeywordFilter] = Field(None, description="키워드 검색 필터 (클라이언트 측)")
 
     @field_validator("importance")
     @classmethod

@@ -5,12 +5,7 @@ import logging
 from typing import Optional, Dict, Any
 from pathlib import Path
 from datetime import datetime
-try:
-    from .onedrive_uploader import OneDriveUploader
-except ImportError:
-    OneDriveUploader = None
-    logger = logging.getLogger(__name__)
-    logger.warning("OneDriveUploader not found, OneDrive features will be disabled")
+# OneDrive functionality removed - not implemented
 
 logger = logging.getLogger(__name__)
 
@@ -121,41 +116,47 @@ class AttachmentDownloader:
     def _sanitize_filename(self, filename: str) -> str:
         """
         Sanitize filename for safe storage
-        
+
         Args:
             filename: Original filename
-            
+
         Returns:
             Sanitized filename
         """
-        # 위험한 문자 제거
-        dangerous_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
-        safe_name = filename
-        
-        for char in dangerous_chars:
-            safe_name = safe_name.replace(char, '_')
-        
-        # 공백을 언더스코어로
-        safe_name = safe_name.replace(' ', '_')
-        
-        # 연속된 언더스코어 정리
-        import re
-        safe_name = re.sub(r'_+', '_', safe_name)
-        
-        # 양 끝의 언더스코어 제거
-        safe_name = safe_name.strip('_')
-        
-        # 빈 파일명 방지
-        if not safe_name or safe_name.strip() == '':
-            safe_name = 'unnamed_file'
-        
-        # 길이 제한 (255자)
-        max_length = 200  # 여유를 두고 200자로 제한
-        if len(safe_name) > max_length:
-            name, ext = Path(safe_name).stem, Path(safe_name).suffix
-            safe_name = name[:max_length - len(ext)] + ext
-        
-        return safe_name
+        # Use common utility function
+        try:
+            from .core.utils import sanitize_filename
+            return sanitize_filename(filename, max_length=200)
+        except ImportError:
+            # Fallback to inline implementation if import fails
+            # 위험한 문자 제거
+            dangerous_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+            safe_name = filename
+
+            for char in dangerous_chars:
+                safe_name = safe_name.replace(char, '_')
+
+            # 공백을 언더스코어로
+            safe_name = safe_name.replace(' ', '_')
+
+            # 연속된 언더스코어 정리
+            import re
+            safe_name = re.sub(r'_+', '_', safe_name)
+
+            # 양 끝의 언더스코어 제거
+            safe_name = safe_name.strip('_')
+
+            # 빈 파일명 방지
+            if not safe_name or safe_name.strip() == '':
+                safe_name = 'unnamed_file'
+
+            # 길이 제한 (255자)
+            max_length = 200  # 여유를 두고 200자로 제한
+            if len(safe_name) > max_length:
+                name, ext = Path(safe_name).stem, Path(safe_name).suffix
+                safe_name = name[:max_length - len(ext)] + ext
+
+            return safe_name
     
     async def download_and_save(
         self,

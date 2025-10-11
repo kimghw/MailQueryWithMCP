@@ -9,7 +9,7 @@ from mcp.types import Prompt, PromptArgument, PromptMessage, TextContent, Tool
 from infra.core.logger import get_logger
 from infra.core.error_messages import ErrorCode, MCPError
 from .prompts import get_prompt
-from .tools import MailAttachmentTools
+from .tools import MailAttachmentTools  # This now imports from tools/__init__.py
 from .utils import preprocess_arguments
 
 logger = get_logger(__name__)
@@ -82,6 +82,31 @@ class MCPHandlers:
                         "subject_contains": {
                             "type": "string",
                             "description": "Filter emails by subject text. Only emails containing this text in the subject will be retrieved. Case-insensitive partial matching (e.g., 'meeting' matches 'Weekly Meeting Report').",
+                        },
+                        "keyword": {
+                            "type": "string",
+                            "description": "전체 메일 검색 키워드 (클라이언트 측 필터링). 제목, 본문, 발신자, 수신자, 첨부파일명 등 모든 필드에서 검색. 날짜/발신자 필터와 함께 사용 가능. 단순 키워드 검색만 지원. 예: '계약서', '프로젝트'. 고급 검색은 keyword_filter를 사용하세요.",
+                        },
+                        "keyword_filter": {
+                            "type": "object",
+                            "description": "구조화된 키워드 검색 필터 (클라이언트 측 필터링). AND/OR/NOT 조건을 조합하여 복잡한 검색 가능. 예: {\"and_keywords\": [\"계약서\", \"2024\"], \"not_keywords\": [\"취소\"]} → 계약서와 2024가 모두 포함되고 취소는 제외",
+                            "properties": {
+                                "and_keywords": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "AND 조건: 모든 키워드가 포함되어야 함. 예: [\"계약서\", \"2024\"] → 둘 다 포함"
+                                },
+                                "or_keywords": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "OR 조건: 하나 이상의 키워드가 포함되어야 함. 예: [\"계약서\", \"제안서\"] → 둘 중 하나 이상"
+                                },
+                                "not_keywords": {
+                                    "type": "array",
+                                    "items": {"type": "string"},
+                                    "description": "NOT 조건: 이 키워드들이 포함되지 않아야 함. 예: [\"취소\", \"반려\"] → 둘 다 제외"
+                                }
+                            }
                         },
                         "recipient_address": {
                             "type": "string",
@@ -222,6 +247,32 @@ class MCPHandlers:
                     "required": ["session_id"]
                 }
             ),
+            # Help Tool
+            Tool(
+                name="help",
+                title="❓ Help - Tool Documentation",
+                description="Get detailed help and documentation for available tools. Use without parameters to see all tools, or specify tool_name for detailed information",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "tool_name": {
+                            "type": "string",
+                            "description": "Name of the tool to get help for (optional). If not specified, shows list of all available tools",
+                            "enum": [
+                                "query_email",
+                                "create_enrollment_file",
+                                "list_enrollments",
+                                "enroll_account",
+                                "list_accounts",
+                                "get_account_status",
+                                "start_authentication",
+                                "check_auth_status",
+                                "list_active_accounts"
+                            ]
+                        }
+                    }
+                }
+            ),
         ]
     
     async def handle_call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
@@ -270,6 +321,11 @@ class MCPHandlers:
 
             elif name == "check_auth_status":
                 result = await self.tools.check_auth_status(arguments)
+                return [TextContent(type="text", text=result)]
+
+            # Help Tool Call
+            elif name == "help":
+                result = await self.tools.help(arguments)
                 return [TextContent(type="text", text=result)]
 
             else:

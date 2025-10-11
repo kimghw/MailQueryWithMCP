@@ -7,10 +7,7 @@ from pathlib import Path
 from datetime import datetime
 from html.parser import HTMLParser
 from io import StringIO
-try:
-    from .onedrive_uploader import OneDriveUploader
-except ImportError:
-    OneDriveUploader = None
+# OneDrive functionality removed - not implemented
 
 logger = logging.getLogger(__name__)
 
@@ -51,19 +48,15 @@ class HTMLTextExtractor(HTMLParser):
 class EmailSaver:
     """이메일 내용을 텍스트 파일로 저장하는 클래스"""
     
-    def __init__(self, output_dir: str = "./emails", enable_onedrive: bool = False):
+    def __init__(self, output_dir: str = "./emails"):
         """
         Initialize email saver
         
         Args:
             output_dir: Directory to save email text files
-            enable_onedrive: Enable OneDrive upload functionality
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(exist_ok=True)
-        self.enable_onedrive = enable_onedrive
-        if enable_onedrive:
-            self.onedrive_uploader = OneDriveUploader()
     
     def html_to_text(self, html_content: str) -> str:
         """
@@ -98,7 +91,6 @@ class EmailSaver:
         user_id: str,
         include_headers: bool = True,
         save_html: bool = False,
-        upload_to_onedrive: bool = False,
         graph_client: Optional[Any] = None
     ) -> Dict[str, Any]:
         """
@@ -109,11 +101,10 @@ class EmailSaver:
             user_id: User ID for directory organization
             include_headers: Include email headers in the file
             save_html: Also save HTML version
-            upload_to_onedrive: Upload to OneDrive after saving
-            graph_client: Microsoft Graph client for OneDrive upload
+            graph_client: Microsoft Graph client (unused, kept for compatibility)
             
         Returns:
-            Dictionary with file paths and OneDrive info
+            Dictionary with file paths
         """
         # 사용자별 디렉토리 생성
         user_dir = self.output_dir / user_id
@@ -181,65 +172,8 @@ class EmailSaver:
             result = {
                 "text_file": text_file,
                 "html_file": html_file if save_html and email_data.get('body', {}).get('content') else None,
-                "email_dir": email_dir,
-                "onedrive": None
+                "email_dir": email_dir
             }
-            
-            # OneDrive 업로드
-            if upload_to_onedrive and self.enable_onedrive and graph_client:
-                import asyncio
-                
-                # 메일 파일들 수집
-                files_to_upload = [text_file]
-                if result["html_file"]:
-                    files_to_upload.append(result["html_file"])
-                
-                # 날짜와 발신자 정보
-                email_date = email_data.get('received_date_time', datetime.now())
-                sender_email = sender_info['email']
-                
-                # 비동기 함수 호출을 위한 태스크 생성
-                try:
-                    # 비동기 컨텍스트에서 실행
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        # 이미 루프가 실행 중이면 태스크 생성
-                        upload_task = asyncio.create_task(
-                            self.onedrive_uploader.upload_email_with_attachments(
-                                graph_client,
-                                text_file,
-                                [],  # 첨부파일은 별도 처리
-                                user_id,
-                                email_date,
-                                sender_email,
-                                subject,  # 메일 제목 추가
-                                access_token
-                            )
-                        )
-                        upload_result = await upload_task
-                    else:
-                        # 루프가 실행 중이 아니면 run_until_complete 사용
-                        upload_result = loop.run_until_complete(
-                            self.onedrive_uploader.upload_email_with_attachments(
-                                graph_client,
-                                text_file,
-                                [],
-                                user_id,
-                                email_date,
-                                sender_email,
-                                subject
-                            )
-                        )
-                except RuntimeError as e:
-                    logger.warning(f"Failed to upload to OneDrive (async issue): {str(e)}")
-                    upload_result = None
-                
-                result["onedrive"] = upload_result
-                
-                if upload_result and upload_result.get("email"):
-                    logger.info(f"Uploaded email to OneDrive: {upload_result['email']['path']}")
-                else:
-                    logger.warning("Failed to upload email to OneDrive")
             
             return result
             
@@ -371,27 +305,33 @@ class EmailSaver:
     
     def _sanitize_filename(self, filename: str) -> str:
         """안전한 파일명 생성"""
-        # 위험한 문자 제거
-        dangerous_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
-        safe_name = filename
-        
-        for char in dangerous_chars:
-            safe_name = safe_name.replace(char, '_')
-        
-        # 공백을 언더스코어로
-        safe_name = safe_name.replace(' ', '_')
-        
-        # 연속된 언더스코어 정리
-        safe_name = re.sub(r'_+', '_', safe_name)
-        
-        # 양 끝의 언더스코어 제거
-        safe_name = safe_name.strip('_')
-        
-        # 빈 파일명 방지
-        if not safe_name or safe_name.strip() == '':
-            safe_name = 'unnamed_email'
-        
-        return safe_name
+        # Use common utility function
+        try:
+            from .core.utils import sanitize_filename
+            return sanitize_filename(filename)
+        except ImportError:
+            # Fallback to inline implementation if import fails
+            # 위험한 문자 제거
+            dangerous_chars = ['/', '\\', ':', '*', '?', '"', '<', '>', '|']
+            safe_name = filename
+
+            for char in dangerous_chars:
+                safe_name = safe_name.replace(char, '_')
+
+            # 공백을 언더스코어로
+            safe_name = safe_name.replace(' ', '_')
+
+            # 연속된 언더스코어 정리
+            safe_name = re.sub(r'_+', '_', safe_name)
+
+            # 양 끝의 언더스코어 제거
+            safe_name = safe_name.strip('_')
+
+            # 빈 파일명 방지
+            if not safe_name or safe_name.strip() == '':
+                safe_name = 'unnamed_email'
+
+            return safe_name
     
     def create_email_summary(self, emails: list[Dict[str, Any]], user_id: str) -> Path:
         """여러 이메일의 요약 파일 생성"""
