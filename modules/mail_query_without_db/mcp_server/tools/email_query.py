@@ -85,9 +85,13 @@ class EmailQueryTool:
         if start_date_str and end_date_str:
             start_date = self.parse_datetime_kst_to_utc(start_date_str)
 
-            # For end_date, if only date is provided, set to 23:59:59 KST
+            # For end_date, if only date is provided, use current time on that date
             if len(end_date_str) == 10:  # YYYY-MM-DD format
-                dt_kst = datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.KST)
+                # Get current time in KST
+                now_kst = datetime.now(self.KST)
+                # Parse the end_date and use current time
+                end_date_only = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                dt_kst = datetime.combine(end_date_only, now_kst.time()).replace(tzinfo=self.KST)
                 end_date = dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
             else:
                 end_date = self.parse_datetime_kst_to_utc(end_date_str)
@@ -106,7 +110,11 @@ class EmailQueryTool:
         # Only end date specified
         elif end_date_str:
             if len(end_date_str) == 10:  # YYYY-MM-DD format
-                dt_kst = datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=self.KST)
+                # Get current time in KST
+                now_kst = datetime.now(self.KST)
+                # Parse the end_date and use current time
+                end_date_only = datetime.strptime(end_date_str, "%Y-%m-%d").date()
+                dt_kst = datetime.combine(end_date_only, now_kst.time()).replace(tzinfo=self.KST)
                 end_date = dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
             else:
                 end_date = self.parse_datetime_kst_to_utc(end_date_str)
