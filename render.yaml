@@ -37,7 +37,7 @@ services:
       - key: ACCOUNT_1_CLIENT_SECRET
         sync: false
       - key: ACCOUNT_1_REDIRECT_URI
-        value: https://mailquerywithmcp.onrender.com/auth/callback
+        sync: false
 
       # 계정 2 (필요시 추가)
       # - key: ACCOUNT_2_USER_ID
