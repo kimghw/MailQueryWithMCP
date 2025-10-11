@@ -425,6 +425,56 @@ class HTTPStreamingMailAttachmentServer:
                 },
             )
         
+        # OAuth callback endpoint
+        async def oauth_callback_handler(request):
+            """Handle OAuth callback from Azure AD"""
+            # Get query parameters
+            params = dict(request.query_params)
+
+            logger.info(f"🔐 OAuth callback received: {list(params.keys())}")
+
+            # Check for error
+            if "error" in params:
+                error = params.get("error")
+                error_description = params.get("error_description", "")
+                logger.error(f"❌ OAuth error: {error} - {error_description}")
+
+                html = f"""
+                <html>
+                <head><title>Authentication Error</title></head>
+                <body>
+                    <h1>❌ Authentication Error</h1>
+                    <p><strong>Error:</strong> {error}</p>
+                    <p><strong>Description:</strong> {error_description}</p>
+                    <p>Please close this window and try again.</p>
+                </body>
+                </html>
+                """
+                return Response(html, media_type="text/html", status_code=400)
+
+            # Check for authorization code
+            code = params.get("code")
+            state = params.get("state")
+
+            if code:
+                logger.info(f"✅ Authorization code received, state: {state}")
+                html = """
+                <html>
+                <head><title>Authentication Successful</title></head>
+                <body>
+                    <h1>✅ Authentication Successful</h1>
+                    <p>Authorization code received successfully.</p>
+                    <p><strong>You can close this window now.</strong></p>
+                    <script>
+                        setTimeout(function() { window.close(); }, 3000);
+                    </script>
+                </body>
+                </html>
+                """
+                return Response(html, media_type="text/html")
+
+            return Response("Missing authorization code", status_code=400)
+
         # OAuth discovery endpoints - indicate no auth required
         async def oauth_authorization_server(request):
             """OAuth authorization server metadata - returns empty to indicate no auth"""
@@ -437,7 +487,7 @@ class HTTPStreamingMailAttachmentServer:
                     "Content-Type": "application/json",
                 },
             )
-        
+
         async def oauth_protected_resource(request):
             """OAuth protected resource metadata - returns empty to indicate no auth"""
             # Return 404 to indicate this resource is not OAuth protected
@@ -461,6 +511,8 @@ class HTTPStreamingMailAttachmentServer:
             # Register endpoint
             Route("/register", endpoint=register_handler, methods=["POST"]),
             Route("/register", endpoint=options_handler, methods=["OPTIONS"]),
+            # OAuth callback endpoint
+            Route("/auth/callback", endpoint=oauth_callback_handler, methods=["GET"]),
             # Health and info endpoints
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/info", endpoint=server_info, methods=["GET"]),
