@@ -36,16 +36,54 @@ def auth_generate_session_id(user_id: str) -> str:
     return session_id
 
 
-def auth_generate_state_token() -> str:
+def auth_generate_state_token(user_id: Optional[str] = None) -> str:
     """
     CSRF 방지용 상태 토큰을 생성합니다.
+
+    Args:
+        user_id: 사용자 ID (선택사항, 제공 시 state에 인코딩됨)
 
     Returns:
         상태 토큰
     """
-    state_token = secrets.token_urlsafe(32)
-    logger.debug(f"상태 토큰 생성: {state_token[:10]}...")
+    random_token = secrets.token_urlsafe(32)
+
+    # user_id가 제공되면 state에 인코딩
+    if user_id:
+        import base64
+        # user_id를 base64로 인코딩하고 random_token과 결합
+        encoded_user_id = base64.urlsafe_b64encode(user_id.encode()).decode()
+        state_token = f"{random_token}:{encoded_user_id}"
+        logger.debug(f"상태 토큰 생성 (user_id 포함): {state_token[:20]}...")
+    else:
+        state_token = random_token
+        logger.debug(f"상태 토큰 생성: {state_token[:10]}...")
+
     return state_token
+
+
+def auth_decode_state_token(state: str) -> tuple[str, Optional[str]]:
+    """
+    상태 토큰에서 user_id를 디코딩합니다.
+
+    Args:
+        state: 상태 토큰
+
+    Returns:
+        (state, user_id) 튜플. user_id가 없으면 None
+    """
+    try:
+        if ":" in state:
+            import base64
+            random_token, encoded_user_id = state.split(":", 1)
+            user_id = base64.urlsafe_b64decode(encoded_user_id).decode()
+            logger.debug(f"상태 토큰에서 user_id 디코딩: {user_id}")
+            return state, user_id
+        else:
+            return state, None
+    except Exception as e:
+        logger.warning(f"상태 토큰 디코딩 실패: {str(e)}")
+        return state, None
 
 
 def auth_validate_callback_url(callback_url: str, expected_redirect_uri: str) -> bool:

@@ -427,7 +427,13 @@ class HTTPStreamingMailAttachmentServer:
         
         # OAuth callback endpoint
         async def oauth_callback_handler(request):
-            """Handle OAuth callback from Azure AD"""
+            """Handle OAuth callback from Azure AD and exchange code for tokens"""
+            from infra.core.database import get_database_manager
+            from infra.core.oauth_client import get_oauth_client
+            from infra.core.token_service import get_token_service
+            from modules.account._account_helpers import AccountCryptoHelpers
+            from modules.auth import get_auth_orchestrator
+
             # Get query parameters
             params = dict(request.query_params)
 
@@ -458,20 +464,135 @@ class HTTPStreamingMailAttachmentServer:
 
             if code:
                 logger.info(f"✅ Authorization code received, state: {state}")
-                html = """
-                <html>
-                <head><title>Authentication Successful</title></head>
-                <body>
-                    <h1>✅ Authentication Successful</h1>
-                    <p>Authorization code received successfully.</p>
-                    <p><strong>You can close this window now.</strong></p>
-                    <script>
-                        setTimeout(function() { window.close(); }, 3000);
-                    </script>
-                </body>
-                </html>
-                """
-                return Response(html, media_type="text/html")
+
+                # Exchange code for tokens
+                try:
+                    # Find user_id from state token (user_id is encoded in state)
+                    from modules.auth._auth_helpers import auth_decode_state_token
+
+                    orchestrator = get_auth_orchestrator()
+                    user_id = None
+
+                    # Decode user_id from state
+                    _, decoded_user_id = auth_decode_state_token(state)
+                    if decoded_user_id:
+                        user_id = decoded_user_id
+                        logger.info(f"✅ User ID decoded from state: {user_id}")
+                    else:
+                        # Fallback: search for session by state
+                        if state and state in orchestrator.auth_sessions:
+                            session = orchestrator.auth_sessions[state]
+                            user_id = session.user_id
+                            logger.info(f"✅ Found session for user_id: {user_id}")
+                        else:
+                            logger.warning(f"⚠️  No session found for state: {state}")
+                            # Try to find user_id from query params as last resort
+                            user_id = params.get("user_id")
+
+                    if not user_id:
+                        logger.error("❌ Could not determine user_id from state or params")
+                        html = """
+                        <html>
+                        <head><title>Authentication Error</title></head>
+                        <body>
+                            <h1>❌ 인증 오류</h1>
+                            <p>인증 세션을 찾을 수 없습니다. 인증 프로세스를 다시 시작해주세요.</p>
+                            <p>You can close this window now.</p>
+                        </body>
+                        </html>
+                        """
+                        return Response(html, media_type="text/html", status_code=400)
+
+                    # Get account OAuth config from database
+                    db = get_database_manager()
+                    account = db.fetch_one(
+                        """
+                        SELECT oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri
+                        FROM accounts
+                        WHERE user_id = ? AND is_active = 1
+                        """,
+                        (user_id,),
+                    )
+
+                    if not account:
+                        logger.error(f"❌ Account not found: {user_id}")
+                        html = f"""
+                        <html>
+                        <head><title>인증 오류</title></head>
+                        <body>
+                            <h1>❌ 인증 오류</h1>
+                            <p>계정을 찾을 수 없습니다: {user_id}</p>
+                            <p>이 창을 닫으셔도 됩니다.</p>
+                        </body>
+                        </html>
+                        """
+                        return Response(html, media_type="text/html", status_code=400)
+
+                    account_dict = dict(account)
+
+                    # Decrypt client secret
+                    crypto_helper = AccountCryptoHelpers()
+                    decrypted_secret = crypto_helper.account_decrypt_sensitive_data(
+                        account_dict["oauth_client_secret"]
+                    )
+
+                    # Exchange code for tokens using account config
+                    oauth_client = get_oauth_client()
+                    token_info = await oauth_client.exchange_code_for_tokens_with_config(
+                        code=code,
+                        client_id=account_dict["oauth_client_id"],
+                        client_secret=decrypted_secret,
+                        tenant_id=account_dict["oauth_tenant_id"],
+                        redirect_uri=account_dict["oauth_redirect_uri"],
+                    )
+
+                    # Store tokens in database
+                    token_service = get_token_service()
+                    await token_service.store_tokens(
+                        user_id=user_id,
+                        token_info=token_info
+                    )
+
+                    # Update session status if exists
+                    if state and state in orchestrator.auth_sessions:
+                        session = orchestrator.auth_sessions[state]
+                        from modules.auth.auth_schema import AuthState
+                        session.status = AuthState.COMPLETED
+                        logger.info(f"✅ Session status updated to COMPLETED")
+
+                    logger.info(f"✅ Tokens saved successfully for user: {user_id}")
+
+                    html = f"""
+                    <html>
+                    <head><title>인증 성공</title></head>
+                    <body>
+                        <h1>✅ 인증 성공</h1>
+                        <p><strong>{user_id}</strong> 계정의 토큰이 성공적으로 저장되었습니다.</p>
+                        <p><strong>이제 이 창을 닫으셔도 됩니다.</strong></p>
+                        <script>
+                            setTimeout(function() {{ window.close(); }}, 3000);
+                        </script>
+                    </body>
+                    </html>
+                    """
+                    return Response(html, media_type="text/html")
+
+                except Exception as e:
+                    logger.error(f"❌ Token exchange failed: {str(e)}")
+                    import traceback
+                    traceback.print_exc()
+
+                    html = f"""
+                    <html>
+                    <head><title>인증 오류</title></head>
+                    <body>
+                        <h1>❌ 토큰 교환 실패</h1>
+                        <p><strong>오류:</strong> {str(e)}</p>
+                        <p>이 창을 닫고 다시 시도해주세요.</p>
+                    </body>
+                    </html>
+                    """
+                    return Response(html, media_type="text/html", status_code=500)
 
             return Response("Missing authorization code", status_code=400)
 
