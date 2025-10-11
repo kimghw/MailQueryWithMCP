@@ -2,7 +2,7 @@
 
 import asyncio
 import yaml
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -272,7 +272,13 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
 
                 # Token expiry status
                 token_expiry = account_dict.get('token_expiry')
-                token_status = "만료" if token_expiry and datetime.fromisoformat(token_expiry) < datetime.now() else "유효"
+                if token_expiry:
+                    expiry_dt = datetime.fromisoformat(token_expiry)
+                    # Ensure comparison with UTC
+                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                    token_status = "만료" if expiry_dt < now_utc else "유효"
+                else:
+                    token_status = "토큰 없음"
 
                 active_mark = "✅" if is_active else "❌"
 
@@ -323,7 +329,9 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
             token_expiry = account_dict.get('token_expiry')
             if token_expiry:
                 expiry_dt = datetime.fromisoformat(token_expiry)
-                if expiry_dt < datetime.now():
+                # Ensure comparison with UTC
+                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                if expiry_dt < now_utc:
                     token_status = f"❌ 만료됨 ({token_expiry})"
                 else:
                     token_status = f"✅ 유효 (만료: {token_expiry})"
