@@ -3,7 +3,7 @@
 import csv
 import logging
 import shutil
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -62,13 +62,44 @@ class MailAttachmentTools:
             # Parse dates if provided - Priority: date range > days_back
             start_date = None
             end_date = None
-            
+
+            # Define KST timezone (UTC+9)
+            KST = timezone(timedelta(hours=9))
+
+            def parse_datetime_kst_to_utc(date_str):
+                """Parse datetime string in KST and convert to UTC
+                Supports formats:
+                - YYYY-MM-DD HH:MM (assumes KST)
+                - YYYY-MM-DD (assumes 00:00:00 KST)
+                """
+                # Try parsing with time (minutes only)
+                try:
+                    # Parse as KST
+                    dt_kst = datetime.strptime(date_str, "%Y-%m-%d %H:%M").replace(tzinfo=KST)
+                    # Convert to UTC
+                    return dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
+                except ValueError:
+                    pass
+
+                # Try parsing date only (assumes 00:00:00 KST)
+                try:
+                    dt_kst = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=KST)
+                    return dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
+                except ValueError:
+                    raise ValueError(f"Invalid date format. Expected 'YYYY-MM-DD [HH:MM]', got '{date_str}'")
+
             # Both dates specified
             if start_date_str and end_date_str:
                 try:
-                    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-                    # end_date는 해당 날짜의 끝(23:59:59)까지 포함하도록 +1일로 설정
-                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)
+                    start_date = parse_datetime_kst_to_utc(start_date_str)
+
+                    # For end_date, if only date is provided, set to 23:59:59 KST
+                    if len(end_date_str) == 10:  # YYYY-MM-DD format
+                        # Parse as end of day in KST (23:59:59)
+                        dt_kst = datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=KST)
+                        end_date = dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
+                    else:
+                        end_date = parse_datetime_kst_to_utc(end_date_str)
 
                     if start_date >= end_date:
                         return "Error: start_date is later than or equal to end_date"
@@ -77,29 +108,36 @@ class MailAttachmentTools:
                     days_back = (end_date - start_date).days
 
                 except ValueError as e:
-                    return f"Error: Invalid date format. Expected YYYY-MM-DD. {str(e)}"
-            
+                    return f"Error: Invalid date format. Expected 'YYYY-MM-DD [HH:MM]'. {str(e)}"
+
             # Only start date specified
             elif start_date_str:
                 try:
-                    start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-                    end_date = datetime.now()
+                    start_date = parse_datetime_kst_to_utc(start_date_str)
+                    # Current time in UTC
+                    end_date = datetime.now(timezone.utc).replace(tzinfo=None)
                     days_back = (end_date - start_date).days + 1
-                except ValueError:
-                    return f"Error: Invalid start_date format. Expected YYYY-MM-DD, got {start_date_str}"
-            
+                except ValueError as e:
+                    return f"Error: Invalid start_date format. Expected 'YYYY-MM-DD [HH:MM]'. {str(e)}"
+
             # Only end date specified
             elif end_date_str:
                 try:
-                    # end_date는 해당 날짜의 끝(23:59:59)까지 포함하도록 +1일로 설정
-                    end_date = datetime.strptime(end_date_str, "%Y-%m-%d") + timedelta(days=1)
+                    # For end_date only, if just date is provided, set to 23:59:59 KST
+                    if len(end_date_str) == 10:  # YYYY-MM-DD format
+                        dt_kst = datetime.strptime(end_date_str + " 23:59:59", "%Y-%m-%d %H:%M:%S").replace(tzinfo=KST)
+                        end_date = dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
+                    else:
+                        end_date = parse_datetime_kst_to_utc(end_date_str)
+
                     start_date = end_date - timedelta(days=days_back)
-                except ValueError:
-                    return f"Error: Invalid end_date format. Expected YYYY-MM-DD, got {end_date_str}"
-            
+                except ValueError as e:
+                    return f"Error: Invalid end_date format. Expected 'YYYY-MM-DD [HH:MM]'. {str(e)}"
+
             # No dates specified, use days_back from now
             else:
-                end_date = datetime.now()
+                # Use UTC time for consistency
+                end_date = datetime.now(timezone.utc).replace(tzinfo=None)
                 start_date = end_date - timedelta(days=days_back - 1)
             
             # Check for conflicting parameters
@@ -158,9 +196,12 @@ class MailAttachmentTools:
             # Format results
             result_text = f"📧 메일 조회 결과 - {user_id}\n"
             result_text += f"{'='*60}\n"
-            # Display date range info
+            # Display date range info (convert UTC back to KST for display)
             if start_date and end_date:
-                result_text += f"조회 기간: {start_date.strftime('%Y-%m-%d')} ~ {end_date.strftime('%Y-%m-%d')} ({days_back}일간)\n"
+                # Convert UTC to KST for display
+                start_kst = start_date.replace(tzinfo=timezone.utc).astimezone(KST)
+                end_kst = end_date.replace(tzinfo=timezone.utc).astimezone(KST)
+                result_text += f"조회 기간: {start_kst.strftime('%Y-%m-%d %H:%M')} ~ {end_kst.strftime('%Y-%m-%d %H:%M')} KST ({days_back}일간)\n"
             else:
                 result_text += f"조회 기간: 최근 {days_back}일\n"
             
@@ -288,13 +329,16 @@ class MailAttachmentTools:
                         logger.error(f"Failed to save email: {str(e)}")
                         mail_saved_path = None
                 
+                # Convert received time to KST for display
+                received_kst = mail.received_date_time.replace(tzinfo=timezone.utc).astimezone(KST)
+
                 # Collect mail info for CSV
                 mail_info = {
                     "id": mail.id,
                     "subject": mail.subject,
                     "sender": sender,
                     "sender_email": sender_email or "unknown@email.com",
-                    "received_date": mail.received_date_time.strftime("%Y-%m-%d %H:%M"),
+                    "received_date": received_kst.strftime("%Y-%m-%d %H:%M"),
                     "received_date_time": mail.received_date_time,
                     "has_attachments": mail.has_attachments,
                     "is_read": mail.is_read,
@@ -324,7 +368,7 @@ class MailAttachmentTools:
                 # Format mail info
                 result_text += f"\n[{i}] {mail.subject}\n"
                 result_text += f"   발신자: {sender}\n"
-                result_text += f"   수신일: {mail.received_date_time.strftime('%Y-%m-%d %H:%M')}\n"
+                result_text += f"   수신일: {received_kst.strftime('%Y-%m-%d %H:%M')} KST\n"
                 result_text += f"   읽음: {'✓' if mail.is_read else '✗'}\n"
                 result_text += f"   첨부: {'📎' if mail.has_attachments else '-'}\n"
                 if save_emails and mail_saved_path:
