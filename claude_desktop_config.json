@@ -4,9 +4,6 @@
       "url": "https://your-app-name.onrender.com",
       "transport": {
         "type": "http"
-      },
-      "headers": {
-        "X-API-Key": "your-api-key-here"
       }
     }
   }
