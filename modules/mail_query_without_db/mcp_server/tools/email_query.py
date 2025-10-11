@@ -672,10 +672,9 @@ class EmailQueryTool:
         if filters.get("subject_contains"):
             result_text += f"제목 필터: '{filters['subject_contains']}' 포함\n"
 
-        result_text += f"총 메일 수: {len(messages)}개\n\n"
-
-        # Process each mail
+        # Process each mail first to get accurate count
         processed_mails = []
+        mail_map = {}  # mail_info와 원본 mail 객체 매핑
         for i, mail in enumerate(messages, 1):
             mail_info = self.format_email_info(
                 mail, i, user_id, save_emails, download_attachments, graph_client
@@ -683,31 +682,55 @@ class EmailQueryTool:
 
             if mail_info:  # Skip if None (blocked sender)
                 processed_mails.append(mail_info)
+                mail_map[mail_info['id']] = mail
 
-                # Add to result text
-                result_text += f"\n[{i}] {mail.subject}\n"
-                result_text += f"   발신자: {mail_info['sender']}\n"
-                result_text += f"   수신일: {mail_info['received_date']} KST\n"
-                result_text += f"   읽음: {'✓' if mail.is_read else '✗'}\n"
-                result_text += f"   첨부: {'📎' if mail.has_attachments else '-'}\n"
+        # Display result summary
+        filtered_count = len(processed_mails)
+        result_text += f"조회된 메일: {filtered_count}개"
 
-                if save_emails and mail_info.get('saved_path'):
-                    result_text += f"   💾 저장됨: {mail_info['saved_path']}\n"
+        # Show what was included in the query
+        query_details = []
+        if filters.get("include_body"):
+            query_details.append("본문 포함")
+        else:
+            query_details.append("제목만")
 
-                # Include body preview if available
-                if filters.get("include_body"):
-                    if mail_info.get("body"):
-                        body_preview = mail_info["body"][:200] + "..." if len(mail_info["body"]) > 200 else mail_info["body"]
-                        result_text += f"   내용: {body_preview}\n"
-                    elif mail_info.get("body_preview"):
-                        result_text += f"   미리보기: {mail_info['body_preview'][:100]}...\n"
+        if download_attachments:
+            query_details.append("첨부파일 다운로드")
 
-                # Show attachment info
-                if mail_info.get("attachments"):
-                    result_text += f"   첨부파일 ({len(mail_info['attachments'])}개):\n"
-                    for att in mail_info["attachments"]:
-                        status = att.get("status", "unknown")
-                        result_text += f"     - {att['name']} ({att['size']:,} bytes) [{status}]\n"
+        if query_details:
+            result_text += f" ({', '.join(query_details)})"
+
+        result_text += "\n\n"
+
+        # Display each mail
+        for i, mail_info in enumerate(processed_mails, 1):
+            mail = mail_map.get(mail_info['id'])
+
+            # Add to result text
+            result_text += f"\n[{i}] {mail_info['subject']}\n"
+            result_text += f"   발신자: {mail_info['sender']}\n"
+            result_text += f"   수신일: {mail_info['received_date']} KST\n"
+            result_text += f"   읽음: {'✓' if mail_info['is_read'] else '✗'}\n"
+            result_text += f"   첨부: {'📎' if mail_info['has_attachments'] else '-'}\n"
+
+            if save_emails and mail_info.get('saved_path'):
+                result_text += f"   💾 저장됨: {mail_info['saved_path']}\n"
+
+            # Include body preview if available
+            if filters.get("include_body"):
+                if mail_info.get("body"):
+                    body_preview = mail_info["body"][:200] + "..." if len(mail_info["body"]) > 200 else mail_info["body"]
+                    result_text += f"   내용: {body_preview}\n"
+                elif mail_info.get("body_preview"):
+                    result_text += f"   미리보기: {mail_info['body_preview'][:100]}...\n"
+
+            # Show attachment info
+            if mail_info.get("attachments"):
+                result_text += f"   첨부파일 ({len(mail_info['attachments'])}개):\n"
+                for att in mail_info["attachments"]:
+                    status = att.get("status", "unknown")
+                    result_text += f"     - {att['name']} ({att['size']:,} bytes) [{status}]\n"
 
         # Save to CSV if requested
         if save_csv and processed_mails:

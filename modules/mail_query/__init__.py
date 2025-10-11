@@ -10,6 +10,7 @@ from .mail_query_schema import (
     MailQueryFilters,
     PaginationOptions,
     GraphMailItem,
+    KeywordFilter,
 )
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "MailQueryFilters",
     "PaginationOptions",
     "GraphMailItem",
+    "KeywordFilter",
 ]
