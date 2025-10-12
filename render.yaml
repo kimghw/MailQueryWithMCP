@@ -16,6 +16,41 @@ services:
       - key: DATABASE_PATH
         value: ./data/mail_query.db
 
+      # Azure AD / Microsoft Graph API - 계정 인증용
+      # 각 계정마다 별도의 환경변수 설정 (예: ACCOUNT_1_, ACCOUNT_2_)
+      - key: TENANT_ID
+        sync: false
+      - key: CLIENT_ID
+        sync: false
+      - key: CLIENT_SECRET
+        sync: false
+
+      # 계정 정보 (여러 계정 지원)
+      # 아래 환경변수들을 Render 대시보드에서 설정하세요
+      # 계정 1 - 필수 설정 항목
+      - key: ACCOUNT_1_USER_ID
+        sync: false
+        # 예시: kimghw
+      - key: ACCOUNT_1_USER_NAME
+        sync: false
+        # 예시: 김길현
+      - key: ACCOUNT_1_EMAIL
+        sync: false
+        # 예시: kimghw@company.com
+      - key: ACCOUNT_1_TENANT_ID
+        sync: false
+        # Azure AD 테넌트 ID (GUID 형식)
+      - key: ACCOUNT_1_CLIENT_ID
+        sync: false
+        # Azure AD 앱 클라이언트 ID (GUID 형식)
+      - key: ACCOUNT_1_CLIENT_SECRET
+        sync: false
+        # Azure AD 앱 클라이언트 시크릿
+      - key: ACCOUNT_1_REDIRECT_URI
+        value: https://mailquerywithmcp.onrender.com/auth/callback
+        # OAuth 콜백 URL (MCP HTTP 서버의 /auth/callback 엔드포인트)
+
+
       # Security
       - key: ENCRYPTION_KEY
         sync: false
