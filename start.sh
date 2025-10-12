@@ -57,17 +57,27 @@ try:
             existing = db.fetch_one("SELECT id FROM accounts WHERE user_id = ?", (user_id,))
 
             if existing:
-                logger.info(f"  ℹ️  Account already exists, skipping...")
+                logger.info(f"  ℹ️  Account already exists, updating...")
+                # Update existing account with new redirect_uri and credentials
+                db.execute_query("""
+                    UPDATE accounts
+                    SET user_name = ?, email = ?,
+                        oauth_client_id = ?, oauth_client_secret = ?,
+                        oauth_tenant_id = ?, oauth_redirect_uri = ?,
+                        updated_at = datetime('now')
+                    WHERE user_id = ?
+                """, (user_name, email, client_id, client_secret, tenant_id, redirect_uri, user_id))
+                logger.info(f"  ✅ Account updated successfully (redirect_uri: {redirect_uri})")
             else:
                 # Insert account (simplified - you may need encryption for secrets)
-                db.execute("""
+                db.execute_query("""
                     INSERT INTO accounts (
                         user_id, user_name, email,
                         oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri,
                         status, is_active, created_at, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, datetime('now'), datetime('now'))
                 """, (user_id, user_name, email, client_id, client_secret, tenant_id, redirect_uri))
-                logger.info(f"  ✅ Account registered successfully")
+                logger.info(f"  ✅ Account registered successfully (redirect_uri: {redirect_uri})")
         else:
             logger.warning(f"  ⚠️  Incomplete account configuration for {prefix}, skipping...")
 
