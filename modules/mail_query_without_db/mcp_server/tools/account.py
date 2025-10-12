@@ -278,7 +278,9 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
                 token_expiry = account_dict.get('token_expiry')
                 if token_expiry:
                     expiry_dt = datetime.fromisoformat(token_expiry)
-                    # Ensure comparison with UTC
+                    # Ensure both are timezone-naive for comparison
+                    if expiry_dt.tzinfo is not None:
+                        expiry_dt = expiry_dt.replace(tzinfo=None)
                     now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
                     token_status = "만료" if expiry_dt < now_utc else "유효"
                 else:
@@ -333,7 +335,9 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
             token_expiry = account_dict.get('token_expiry')
             if token_expiry:
                 expiry_dt = datetime.fromisoformat(token_expiry)
-                # Ensure comparison with UTC
+                # Ensure both are timezone-naive for comparison
+                if expiry_dt.tzinfo is not None:
+                    expiry_dt = expiry_dt.replace(tzinfo=None)
                 now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
                 if expiry_dt < now_utc:
                     token_status = f"❌ 만료됨 ({token_expiry})"
@@ -456,15 +460,23 @@ check_auth_status tool을 사용하여 세션 ID로 확인할 수 있습니다."
         Check authentication status
 
         Args:
-            arguments: Tool arguments containing user_id
+            arguments: Tool arguments containing session_id
 
         Returns:
             Authentication status
         """
         try:
-            user_id = arguments.get("user_id")
-            if not user_id:
-                return "Error: user_id is required"
+            session_id = arguments.get("session_id")
+            if not session_id:
+                return "Error: session_id is required"
+
+            # Get orchestrator and check session
+            orchestrator = get_auth_orchestrator()
+            if session_id not in orchestrator.auth_sessions:
+                return f"Error: 유효하지 않은 세션 ID입니다: {session_id}"
+
+            session = orchestrator.auth_sessions[session_id]
+            user_id = session.user_id
 
             # Check token status in database
             from infra.core.token_service import get_token_service
