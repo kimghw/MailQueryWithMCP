@@ -504,13 +504,22 @@ class EmailQueryTool:
                     try:
                         text_content = self.file_converter.convert_to_text(Path(saved_path))
                         if text_content and not text_content.startswith("Error:"):
+                            # Calculate token count before truncation
+                            original_token_count = len(text_content) // 4
+
                             # Limit text length to prevent excessive token usage
                             max_length = 5000
+                            is_truncated = False
                             if len(text_content) > max_length:
-                                text_content = text_content[:max_length] + f"\n\n... (truncated, total {len(text_content)} chars)"
+                                text_content = text_content[:max_length] + f"\n\n... (truncated, total {len(text_content)} chars, ~{original_token_count} tokens)"
+                                is_truncated = True
+
                             result["text_content"] = text_content
+                            result["token_count"] = len(text_content) // 4
+                            result["original_token_count"] = original_token_count
+                            result["is_truncated"] = is_truncated
                             result["status"] = "converted"
-                            logger.info(f"Successfully converted attachment to text: {att_name} ({len(text_content)} chars)")
+                            logger.info(f"Successfully converted attachment to text: {att_name} ({len(text_content)} chars, ~{result['token_count']} tokens)")
                         else:
                             logger.warning(f"Failed to convert attachment: {att_name} - {text_content}")
                     except Exception as e:
@@ -762,10 +771,16 @@ class EmailQueryTool:
                     status = att.get("status", "unknown")
                     result_text += f"     - {att['name']} ({att['size']:,} bytes) [{status}]\n"
 
+                    # Include token count if converted
+                    if att.get("token_count"):
+                        token_info = f"~{att['token_count']} tokens"
+                        if att.get("is_truncated"):
+                            token_info += f" (원본: ~{att['original_token_count']} tokens)"
+                        result_text += f"       🔢 토큰: {token_info}\n"
+
                     # Include converted text content if available
                     if att.get("text_content"):
-                        text_preview = att["text_content"][:300] + "..." if len(att["text_content"]) > 300 else att["text_content"]
-                        result_text += f"       📄 내용: {text_preview}\n"
+                        result_text += f"       📄 내용:\n{att['text_content']}\n"
 
         # Save to CSV if requested
         if save_csv and processed_mails:
