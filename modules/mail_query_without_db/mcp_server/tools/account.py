@@ -56,7 +56,11 @@ class AccountManagementTool:
             oauth_client_secret = arguments.get("oauth_client_secret")
             oauth_tenant_id = arguments.get("oauth_tenant_id")
             user_name = arguments.get("user_name", user_id if user_id else "")
-            oauth_redirect_uri = arguments.get("oauth_redirect_uri", "http://localhost:5000/auth/callback")
+
+            # Render.com에서는 자동으로 RENDER 환경변수가 설정됨
+            import os
+            default_redirect = "https://mailquerywithmcp.onrender.com/auth/callback" if os.getenv("RENDER") else "http://localhost:5000/auth/callback"
+            oauth_redirect_uri = arguments.get("oauth_redirect_uri", default_redirect)
             delegated_permissions = arguments.get("delegated_permissions", [
                 "Mail.ReadWrite",
                 "Mail.Send",

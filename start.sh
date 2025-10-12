@@ -46,7 +46,9 @@ try:
         tenant_id = os.getenv(f"{prefix}TENANT_ID")
         client_id = os.getenv(f"{prefix}CLIENT_ID")
         client_secret = os.getenv(f"{prefix}CLIENT_SECRET")
-        redirect_uri = os.getenv(f"{prefix}REDIRECT_URI", "http://localhost:5000/auth/callback")
+        # Render.com에서는 자동으로 RENDER 환경변수가 설정됨
+        default_redirect = "https://mailquerywithmcp.onrender.com/auth/callback" if os.getenv("RENDER") else "http://localhost:5000/auth/callback"
+        redirect_uri = os.getenv(f"{prefix}REDIRECT_URI", default_redirect)
 
         if all([user_name, email, tenant_id, client_id, client_secret]):
             logger.info(f"📝 Registering account {account_num}: {user_id} ({email})")
