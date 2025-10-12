@@ -47,8 +47,8 @@ services:
         sync: false
         # Azure AD 앱 클라이언트 시크릿
       - key: ACCOUNT_1_REDIRECT_URI
-        sync: false
-        # 배포 후: https://your-app-name.onrender.com/auth/callback
+        value: https://mailquerywithmcp.onrender.com/auth/callback
+        # OAuth 콜백 URL (MCP HTTP 서버의 /auth/callback 엔드포인트)
 
       # 계정 2 (필요시 추가)
       # - key: ACCOUNT_2_USER_ID
