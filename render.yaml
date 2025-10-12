@@ -50,19 +50,6 @@ services:
         value: https://mailquerywithmcp.onrender.com/auth/callback
         # OAuth 콜백 URL (MCP HTTP 서버의 /auth/callback 엔드포인트)
 
-      # 계정 2 (필요시 추가)
-      # - key: ACCOUNT_2_USER_ID
-      #   sync: false
-      # - key: ACCOUNT_2_USER_NAME
-      #   sync: false
-      # - key: ACCOUNT_2_EMAIL
-      #   sync: false
-
-      # OAuth Settings
-      - key: OAUTH_REDIRECT_PORT
-        value: 5000
-      - key: OAUTH_REDIRECT_PATH
-        value: /auth/callback
 
       # Security
       - key: ENCRYPTION_KEY
@@ -79,26 +66,6 @@ services:
         value: 20
       - key: TOKEN_REFRESH_BUFFER_MINUTES
         value: 10
-
-      # Optional: Kafka (이벤트 스트리밍)
-      - key: KAFKA_BOOTSTRAP_SERVERS
-        value: localhost:9092
-      - key: KAFKA_TOPIC_EMAIL_EVENTS
-        value: email-raw-data
-      - key: KAFKA_CONSUMER_GROUP_ID
-        value: mail-query-prod
-      - key: KAFKA_TIMEOUT
-        value: 30
-
-      # Optional: OpenAI/OpenRouter (키워드 추출)
-      - key: OPENAI_API_KEY
-        sync: false
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: OPENROUTER_MODEL
-        value: openai/o3-mini
-      - key: OPENROUTER_BASE_URL
-        value: https://openrouter.ai/api/v1
 
       # Mail Processing Settings
       - key: ENABLE_MAIL_HISTORY
