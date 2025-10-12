@@ -352,7 +352,7 @@ class EmailQueryTool:
 
         return filtered_messages
 
-    def format_email_info(self, mail, index: int, user_id: str, save_emails: bool,
+    async def format_email_info(self, mail, index: int, user_id: str, save_emails: bool,
                           download_attachments: bool, graph_client=None) -> Dict[str, Any]:
         """
         Format email information for display and storage
@@ -389,7 +389,17 @@ class EmailQueryTool:
         mail_saved_path = None
         if save_emails:
             try:
-                saved_info = self.email_saver.save_email(mail, user_id=user_id)
+                # Convert mail object to dictionary for EmailSaver
+                email_dict = {
+                    'id': mail.id,
+                    'subject': mail.subject,
+                    'received_date_time': mail.received_date_time,
+                    'from': mail.from_address,
+                    'body': mail.body,
+                    'to_recipients': getattr(mail, 'to_recipients', []),
+                    'cc_recipients': getattr(mail, 'cc_recipients', []),
+                }
+                saved_info = await self.email_saver.save_email_as_text(email_dict, user_id=user_id)
                 mail_saved_path = saved_info.get('email_path')
                 logger.info(f"Email saved: {mail_saved_path}")
             except Exception as e:
@@ -474,15 +484,15 @@ class EmailQueryTool:
 
             # Download attachment
             if att_id and graph_client:
-                saved_path = self.attachment_downloader.download_and_save(
+                saved_result = self.attachment_downloader.download_and_save(
                     graph_client=graph_client,
                     user_id=user_id,
-                    mail_id=mail_id,
-                    attachment_id=att_id,
-                    attachment_name=att_name
+                    message_id=mail_id,
+                    attachment=attachment
                 )
 
-                if saved_path:
+                if saved_result and saved_result.get("file_path"):
+                    saved_path = saved_result["file_path"]
                     result = {
                         "name": att_name,
                         "size": att_size,
@@ -628,7 +638,7 @@ class EmailQueryTool:
                 response.messages = response.messages[:max_mails]
 
             # Format results
-            result_text = self.format_results(
+            result_text = await self.format_results(
                 response.messages,
                 user_id,
                 start_date,
@@ -649,7 +659,7 @@ class EmailQueryTool:
             logger.error(traceback.format_exc())
             return f"Error querying emails: {str(e)}"
 
-    def format_results(self, messages: List, user_id: str, start_date, end_date,
+    async def format_results(self, messages: List, user_id: str, start_date, end_date,
                        days_back: int, filters: Dict, save_emails: bool,
                        download_attachments: bool, graph_client, save_csv: bool) -> str:
         """
@@ -696,7 +706,7 @@ class EmailQueryTool:
         processed_mails = []
         mail_map = {}  # mail_info와 원본 mail 객체 매핑
         for i, mail in enumerate(messages, 1):
-            mail_info = self.format_email_info(
+            mail_info = await self.format_email_info(
                 mail, i, user_id, save_emails, download_attachments, graph_client
             )
 

@@ -50,7 +50,7 @@ ocr = [
     "pillow>=10.0.0",
 ]
 hwp = [
-    "pyhwp>=0.1.0",
+    "pyhwp>=0.1b15",
 ]
 sqlserver = [
     "pyodbc>=5.0.0",
