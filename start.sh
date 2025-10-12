@@ -5,12 +5,15 @@ set -e
 
 echo "🚀 Starting Mail Query MCP Server..."
 
+# Load uv environment
+export PATH="$HOME/.cargo/bin:$PATH"
+
 # Create data directory for SQLite if it doesn't exist
 mkdir -p ./data
 
 # Initialize database and register accounts from environment variables
 echo "📦 Initializing database and accounts..."
-python3 <<'EOF'
+uv run python <<'EOF'
 import os
 import sys
 from pathlib import Path
@@ -82,4 +85,11 @@ echo "✅ Initialization complete"
 
 # Start the HTTP MCP server
 echo "🌐 Starting HTTP MCP server..."
-exec python -m modules.mail_query_without_db.mcp_server
+echo "📍 Port: ${PORT:-8002}"
+echo "📍 Host: 0.0.0.0"
+
+# Export PORT for the server to use
+export MCP_PORT="${PORT:-8002}"
+export MCP_HOST="0.0.0.0"
+
+exec uv run python -m modules.mail_query_without_db.mcp_server

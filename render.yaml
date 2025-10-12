@@ -3,7 +3,10 @@ services:
     name: mail-query-mcp-server
     runtime: python
     env: python
-    buildCommand: pip install -e .
+    buildCommand: |
+      curl -LsSf https://astral.sh/uv/install.sh | sh
+      . $HOME/.cargo/env
+      uv sync
     startCommand: ./start.sh
     envVars:
       - key: PYTHON_VERSION
