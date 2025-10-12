@@ -446,7 +446,7 @@ class EmailQueryTool:
         if download_attachments and mail.has_attachments and hasattr(mail, "attachments"):
             if mail.attachments:
                 for attachment in mail.attachments:
-                    att_info = self.process_attachment(
+                    att_info = await self.process_attachment(
                         attachment, mail.id, user_id, graph_client
                     )
                     if att_info:
@@ -454,7 +454,7 @@ class EmailQueryTool:
 
         return mail_info
 
-    def process_attachment(self, attachment: Dict, mail_id: str, user_id: str,
+    async def process_attachment(self, attachment: Dict, mail_id: str, user_id: str,
                           graph_client) -> Optional[Dict]:
         """
         Process a single attachment
@@ -484,7 +484,7 @@ class EmailQueryTool:
 
             # Download attachment
             if att_id and graph_client:
-                saved_result = self.attachment_downloader.download_and_save(
+                saved_result = await self.attachment_downloader.download_and_save(
                     graph_client=graph_client,
                     user_id=user_id,
                     message_id=mail_id,
