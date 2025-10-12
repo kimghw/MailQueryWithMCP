@@ -3,6 +3,7 @@ services:
     name: mail-query-mcp-server
     runtime: python
     env: python
+    healthCheckPath: /health
     buildCommand: |
       curl -LsSf https://astral.sh/uv/install.sh | sh
       . $HOME/.cargo/env

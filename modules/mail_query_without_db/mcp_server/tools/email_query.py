@@ -14,6 +14,7 @@ from modules.mail_query import (
     PaginationOptions
 )
 from modules.mail_query_without_db import AttachmentDownloader, EmailSaver
+from modules.mail_query_without_db.core.converters import FileConverterOrchestrator
 from modules.mail_query_without_db.mcp_server.prompts import get_format_email_results_prompt
 
 logger = get_logger(__name__)
@@ -34,6 +35,7 @@ class EmailQueryTool:
         self.attachment_downloader = AttachmentDownloader(
             output_dir=str(self.config.attachments_dir)
         )
+        self.file_converter = FileConverterOrchestrator()
         # Define KST timezone (UTC+9)
         self.KST = timezone(timedelta(hours=9))
 
@@ -481,12 +483,30 @@ class EmailQueryTool:
                 )
 
                 if saved_path:
-                    return {
+                    result = {
                         "name": att_name,
                         "size": att_size,
                         "saved_path": str(saved_path),
                         "status": "downloaded"
                     }
+
+                    # Convert to text if possible
+                    try:
+                        text_content = self.file_converter.convert_to_text(Path(saved_path))
+                        if text_content and not text_content.startswith("Error:"):
+                            # Limit text length to prevent excessive token usage
+                            max_length = 5000
+                            if len(text_content) > max_length:
+                                text_content = text_content[:max_length] + f"\n\n... (truncated, total {len(text_content)} chars)"
+                            result["text_content"] = text_content
+                            result["status"] = "converted"
+                            logger.info(f"Successfully converted attachment to text: {att_name} ({len(text_content)} chars)")
+                        else:
+                            logger.warning(f"Failed to convert attachment: {att_name} - {text_content}")
+                    except Exception as e:
+                        logger.warning(f"Could not convert attachment to text: {att_name} - {str(e)}")
+
+                    return result
 
             return {
                 "name": att_name,
@@ -731,6 +751,11 @@ class EmailQueryTool:
                 for att in mail_info["attachments"]:
                     status = att.get("status", "unknown")
                     result_text += f"     - {att['name']} ({att['size']:,} bytes) [{status}]\n"
+
+                    # Include converted text content if available
+                    if att.get("text_content"):
+                        text_preview = att["text_content"][:300] + "..." if len(att["text_content"]) > 300 else att["text_content"]
+                        result_text += f"       📄 내용: {text_preview}\n"
 
         # Save to CSV if requested
         if save_csv and processed_mails:

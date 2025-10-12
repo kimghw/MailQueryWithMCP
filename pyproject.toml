@@ -30,6 +30,7 @@ dependencies = [
     "pypdf>=3.0.0",
     "python-docx>=0.8.11",
     "openpyxl>=3.0.0",
+    "olefile>=0.46",
 
     # Event Streaming (Optional - for event-driven architecture)
     "kafka-python>=2.0.2",
@@ -49,7 +50,7 @@ ocr = [
     "pillow>=10.0.0",
 ]
 hwp = [
-    "olefile>=0.46",
+    "pyhwp>=0.1.0",
 ]
 sqlserver = [
     "pyodbc>=5.0.0",
