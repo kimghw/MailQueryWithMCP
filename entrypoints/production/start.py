@@ -106,11 +106,6 @@ def main():
     data_dir = PROJECT_ROOT / "data"
     data_dir.mkdir(exist_ok=True)
 
-    # Initialize database and accounts
-    initialize_database()
-
-    logger.info("✅ Initialization complete")
-
     # Get port and host from environment
     port = int(os.getenv("PORT") or os.getenv("MCP_PORT") or "8002")
     host = os.getenv("MCP_HOST") or "0.0.0.0"
@@ -119,7 +114,12 @@ def main():
     logger.info(f"📍 Port: {port}")
     logger.info(f"📍 Host: {host}")
 
-    # Create and run server
+    # Initialize database and accounts in background
+    import threading
+    init_thread = threading.Thread(target=initialize_database, daemon=True)
+    init_thread.start()
+
+    # Create and run server (starts immediately for Render health check)
     server = HTTPStreamingMailAttachmentServer(host=host, port=port)
     server.run()
 
