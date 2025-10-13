@@ -52,6 +52,26 @@ class ODataFilterBuilder:
 
         return " and ".join(conditions) if conditions else None
 
+    def build_search_query(self, search_query: str) -> str:
+        """
+        $search 쿼리 문자열 생성
+
+        Args:
+            search_query: 검색어 (예: "from:홍길동", "keyword1 AND keyword2")
+
+        Returns:
+            OData $search 쿼리 문자열
+
+        Examples:
+            - "홍길동" -> 모든 필드에서 "홍길동" 검색
+            - "from:김철수" -> 발신자명에 "김철수" 포함
+            - "계약서 AND 승인" -> "계약서"와 "승인" 모두 포함
+            - "보고서 OR 리포트" -> "보고서" 또는 "리포트" 포함
+        """
+        # $search는 특별한 이스케이프 없이 그대로 전달
+        # Graph API가 자동으로 처리
+        return search_query.strip()
+
     def _format_datetime(self, dt: datetime) -> str:
         """datetime을 OData 형식으로 변환"""
         # ISO 8601 형식으로 변환 (Z suffix 추가)

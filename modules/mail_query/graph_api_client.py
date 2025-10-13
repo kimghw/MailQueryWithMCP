@@ -52,6 +52,74 @@ class GraphAPIClient:
             logger.debug("aiohttp 세션 정리됨")
             self._session = None
 
+    async def search_messages(
+        self,
+        access_token: str,
+        search_query: str,
+        select_fields: Optional[str] = None,
+        top: int = 50,
+        skip: int = 0,
+    ) -> Dict[str, Any]:
+        """
+        $search를 사용한 메시지 검색
+
+        Args:
+            access_token: 액세스 토큰
+            search_query: 검색어
+            select_fields: 선택 필드
+            top: 페이지 크기
+            skip: 건너뛸 개수
+
+        Returns:
+            검색 결과
+        """
+        url = f"{self.base_url}/me/messages"
+        params = {
+            "$search": f'"{search_query}"',  # 검색어를 큰따옴표로 감싸기
+            "$top": min(top, 250),  # $search는 최대 250개 제한
+        }
+
+        if select_fields:
+            params["$select"] = select_fields
+            if "attachments" in select_fields:
+                params["$expand"] = "attachments"
+
+        headers = {
+            "Authorization": f"Bearer {access_token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Prefer": 'outlook.body-content-type="text"',
+            "ConsistencyLevel": "eventual",  # $search 사용 시 필수
+        }
+
+        logger.info(f"Graph API $search 쿼리: {params}")
+
+        try:
+            response_data = await self._make_request_with_retry(
+                method="GET", url=url, headers=headers, params=params
+            )
+
+            # GraphMailItem으로 변환
+            messages = []
+            for item in response_data.get("value", []):
+                try:
+                    graph_item = parse_graph_mail_item(item)
+                    messages.append(graph_item)
+                except Exception as e:
+                    logger.warning(f"메일 아이템 파싱 실패: {str(e)}")
+                    continue
+
+            return {
+                "messages": messages,
+                "has_more": "@odata.nextLink" in response_data,
+                "next_link": response_data.get("@odata.nextLink"),
+                "total_count": len(messages),
+            }
+
+        except Exception as e:
+            logger.error(f"Graph API $search 실패: {str(e)}")
+            raise
+
     async def query_messages_single_page(
         self,
         access_token: str,

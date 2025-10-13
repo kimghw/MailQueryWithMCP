@@ -50,6 +50,10 @@ class MailQueryFilters(BaseModel):
     has_attachments: Optional[bool] = Field(None, description="첨부파일 여부")
     importance: Optional[str] = Field(None, description="중요도")
     keyword_filter: Optional[KeywordFilter] = Field(None, description="키워드 검색 필터 (클라이언트 측)")
+    search_query: Optional[str] = Field(
+        None,
+        description="$search 검색어 - 발신자명/키워드 전문검색 (예: 'from:홍길동', 'keyword1 AND keyword2')"
+    )
 
     @field_validator("importance")
     @classmethod
