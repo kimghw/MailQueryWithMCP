@@ -24,8 +24,50 @@ class MCPHandlers:
     async def handle_list_tools(self) -> List[Tool]:
         """List available tools"""
         logger.info("🔧 [MCP Handler] list_tools() called")
-        
+
         return [
+            Tool(
+                name="register_account",
+                title="📝 Register Account",
+                description="Register a new email account with OAuth credentials and save to database",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "User ID (e.g., 'kimghw')"},
+                        "email": {"type": "string", "description": "Email address (e.g., 'kimghw@krs.co.kr')"},
+                        "user_name": {"type": "string", "description": "User display name (optional, defaults to user_id)"},
+                        "oauth_client_id": {"type": "string", "description": "Microsoft Azure App OAuth Client ID"},
+                        "oauth_client_secret": {"type": "string", "description": "Microsoft Azure App OAuth Client Secret"},
+                        "oauth_tenant_id": {"type": "string", "description": "Microsoft Azure AD Tenant ID"},
+                        "oauth_redirect_uri": {"type": "string", "description": "OAuth redirect URI (optional, defaults to http://localhost:5000/auth/callback)"},
+                    },
+                    "required": ["user_id", "email", "oauth_client_id", "oauth_client_secret", "oauth_tenant_id"]
+                }
+            ),
+            Tool(
+                name="get_account_status",
+                title="📊 Get Account Status",
+                description="Get detailed status and authentication information for a specific account",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "User ID to query"}
+                    },
+                    "required": ["user_id"]
+                }
+            ),
+            Tool(
+                name="start_authentication",
+                title="🔐 Start OAuth Authentication",
+                description="Start OAuth authentication flow for a registered account. Returns an authentication URL that you MUST open in a browser to complete Microsoft login. The URL will be provided as a clickable link - please click it to authorize access to the email account.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {"type": "string", "description": "User ID (must be already registered)"}
+                    },
+                    "required": ["user_id"]
+                }
+            ),
             Tool(
                 name="query_email",
                 title="📧 Query Email",
@@ -147,110 +189,8 @@ class MCPHandlers:
                 },
             ),
             Tool(
-                name="list_active_accounts",
-                title="👥 List Active Email Accounts",
-                description="List all active email accounts",
-                inputSchema={"type": "object", "properties": {}},
-            ),
-            # Account Management Tools
-            Tool(
-                name="create_enrollment_file",
-                title="📝 Create Enrollment File",
-                description="Create an enrollment YAML file with account configuration (user_id, email, OAuth credentials)",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "string", "description": "User ID (e.g., 'kimghw')"},
-                        "email": {"type": "string", "description": "Email address (e.g., 'kimghw@krs.co.kr')"},
-                        "user_name": {"type": "string", "description": "User display name (optional, defaults to user_id)"},
-                        "oauth_client_id": {"type": "string", "description": "Microsoft Azure App OAuth Client ID"},
-                        "oauth_client_secret": {"type": "string", "description": "Microsoft Azure App OAuth Client Secret"},
-                        "oauth_tenant_id": {"type": "string", "description": "Microsoft Azure AD Tenant ID"},
-                        "oauth_redirect_uri": {"type": "string", "description": "OAuth redirect URI (optional, defaults to http://localhost:5000/auth/callback)"},
-                        "delegated_permissions": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "List of delegated permissions (optional, defaults to Mail.ReadWrite, Mail.Send, offline_access, Files.ReadWrite.All, Sites.ReadWrite.All)"
-                        }
-                    },
-                    "required": ["user_id", "email", "oauth_client_id", "oauth_client_secret", "oauth_tenant_id"]
-                }
-            ),
-            Tool(
-                name="list_enrollments",
-                title="📋 List Enrollment Files",
-                description="List all enrollment YAML files in the enrollment directory",
-                inputSchema={"type": "object", "properties": {}}
-            ),
-            Tool(
-                name="enroll_account",
-                title="✅ Enroll Account to Database",
-                description="Register an account from enrollment YAML file to the database. Must create enrollment file first",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "string", "description": "User ID (must match an existing enrollment file)"}
-                    },
-                    "required": ["user_id"]
-                }
-            ),
-            Tool(
-                name="list_accounts",
-                title="👥 List Registered Accounts",
-                description="List all registered accounts in the database with their status",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "status": {
-                            "type": "string",
-                            "enum": ["all", "active", "inactive"],
-                            "description": "Filter by account status (default: all)",
-                            "default": "all"
-                        }
-                    }
-                }
-            ),
-            Tool(
-                name="get_account_status",
-                title="📊 Get Account Status",
-                description="Get detailed status information for a specific account",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "string", "description": "User ID to query"}
-                    },
-                    "required": ["user_id"]
-                }
-            ),
-            # Authentication Tools
-            Tool(
-                name="start_authentication",
-                title="🔐 Start OAuth Authentication",
-                description="Start OAuth authentication flow for an account. Account must be enrolled in DB first. Returns auth URL to open in browser",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "string", "description": "User ID (must be already enrolled in database)"}
-                    },
-                    "required": ["user_id"]
-                }
-            ),
-            Tool(
-                name="check_auth_status",
-                title="🔍 Check Authentication Status",
-                description="Check the status of an authentication session",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "session_id": {"type": "string", "description": "Session ID from start_authentication"}
-                    },
-                    "required": ["session_id"]
-                }
-            ),
-            # Help Tool
-            Tool(
                 name="help",
-                title="❓ Help - Tool Documentation",
+                title="❓ Help",
                 description="Get detailed help and documentation for available tools. Use without parameters to see all tools, or specify tool_name for detailed information",
                 inputSchema={
                     "type": "object",
@@ -259,15 +199,11 @@ class MCPHandlers:
                             "type": "string",
                             "description": "Name of the tool to get help for (optional). If not specified, shows list of all available tools",
                             "enum": [
-                                "query_email",
-                                "create_enrollment_file",
-                                "list_enrollments",
-                                "enroll_account",
-                                "list_accounts",
+                                "register_account",
                                 "get_account_status",
                                 "start_authentication",
-                                "check_auth_status",
-                                "list_active_accounts"
+                                "query_email",
+                                "help"
                             ]
                         }
                     }
@@ -279,51 +215,28 @@ class MCPHandlers:
         """Handle tool calls"""
         logger.info(f"🛠️ [MCP Handler] call_tool() called with tool: {name}")
         logger.info(f"📝 [MCP Handler] Raw arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
-        
+
         # Preprocess arguments
         arguments = preprocess_arguments(arguments)
         logger.info(f"🔄 [MCP Handler] Preprocessed arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
-        
+
         try:
-            if name == "query_email":
-                result = await self.tools.query_email(arguments)
-                return [TextContent(type="text", text=result)]
-            
-            elif name == "list_active_accounts":
-                result = await self.tools.list_active_accounts()
-                return [TextContent(type="text", text=result)]
-
-            # Account Management Tool Calls
-            elif name == "create_enrollment_file":
-                result = await self.tools.create_enrollment_file(arguments)
-                return [TextContent(type="text", text=result)]
-
-            elif name == "list_enrollments":
-                result = await self.tools.list_enrollments(arguments)
-                return [TextContent(type="text", text=result)]
-
-            elif name == "enroll_account":
-                result = await self.tools.enroll_account(arguments)
-                return [TextContent(type="text", text=result)]
-
-            elif name == "list_accounts":
-                result = await self.tools.list_accounts(arguments)
+            if name == "register_account":
+                result = await self.tools.register_account(arguments)
                 return [TextContent(type="text", text=result)]
 
             elif name == "get_account_status":
                 result = await self.tools.get_account_status(arguments)
                 return [TextContent(type="text", text=result)]
 
-            # Authentication Tool Calls
             elif name == "start_authentication":
                 result = await self.tools.start_authentication(arguments)
                 return [TextContent(type="text", text=result)]
 
-            elif name == "check_auth_status":
-                result = await self.tools.check_auth_status(arguments)
+            elif name == "query_email":
+                result = await self.tools.query_email(arguments)
                 return [TextContent(type="text", text=result)]
 
-            # Help Tool Call
             elif name == "help":
                 result = await self.tools.help(arguments)
                 return [TextContent(type="text", text=result)]

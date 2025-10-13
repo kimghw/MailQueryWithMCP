@@ -30,6 +30,107 @@ class AccountManagementTool:
         self.enrollment_dir = self.project_root / "enrollment"
         self.db = get_database_manager()
 
+    async def register_account(self, arguments: Dict[str, Any]) -> str:
+        """
+        Register a new account directly to database (no enrollment file needed)
+
+        Args:
+            arguments: Tool arguments containing:
+                - user_id: User ID
+                - email: Email address
+                - user_name: User display name (optional)
+                - oauth_client_id: OAuth Client ID
+                - oauth_client_secret: OAuth Client Secret
+                - oauth_tenant_id: OAuth Tenant ID
+                - oauth_redirect_uri: OAuth Redirect URI (optional)
+
+        Returns:
+            Result message
+        """
+        try:
+            # Extract and validate inputs
+            user_id = arguments.get("user_id")
+            email = arguments.get("email")
+            oauth_client_id = arguments.get("oauth_client_id")
+            oauth_client_secret = arguments.get("oauth_client_secret")
+            oauth_tenant_id = arguments.get("oauth_tenant_id")
+            user_name = arguments.get("user_name", user_id if user_id else "")
+
+            # Set default redirect URI
+            import os
+            default_redirect = "https://mailquerywithmcp.onrender.com/auth/callback" if os.getenv("RENDER") else "http://localhost:5000/auth/callback"
+            oauth_redirect_uri = arguments.get("oauth_redirect_uri", default_redirect)
+
+            # Validate all input data
+            validation_data = {
+                "user_id": user_id,
+                "email": email,
+                "oauth_client_id": oauth_client_id,
+                "oauth_client_secret": oauth_client_secret,
+                "oauth_tenant_id": oauth_tenant_id,
+                "oauth_redirect_uri": oauth_redirect_uri,
+            }
+
+            is_valid, errors = AccountValidator.validate_enrollment_data(validation_data)
+            if not is_valid:
+                error_messages = "\n".join([f"  - {err}" for err in errors])
+                return f"❌ Validation Error:\n{error_messages}"
+
+            # Check if account already exists
+            existing = self.db.fetch_one("SELECT id, user_id FROM accounts WHERE user_id = ?", (user_id,))
+
+            # Encrypt client secret before storing
+            from modules.account._account_helpers import AccountCryptoHelpers
+            crypto_helper = AccountCryptoHelpers()
+            encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
+
+            if existing:
+                # Update existing account
+                self.db.execute_query("""
+                    UPDATE accounts
+                    SET user_name = ?, email = ?,
+                        oauth_client_id = ?, oauth_client_secret = ?,
+                        oauth_tenant_id = ?, oauth_redirect_uri = ?,
+                        updated_at = datetime('now')
+                    WHERE user_id = ?
+                """, (user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id, oauth_redirect_uri, user_id))
+
+                logger.info(f"Account updated: {user_id}")
+
+                return f"""✅ 계정 업데이트 완료
+
+사용자 ID: {user_id}
+이메일: {email}
+상태: 업데이트됨
+
+다음 단계:
+start_authentication 툴로 OAuth 인증을 진행하세요."""
+            else:
+                # Insert new account
+                self.db.execute_query("""
+                    INSERT INTO accounts (
+                        user_id, user_name, email,
+                        oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri,
+                        status, is_active, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, datetime('now'), datetime('now'))
+                """, (user_id, user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id, oauth_redirect_uri))
+
+                logger.info(f"New account registered: {user_id}")
+
+                return f"""✅ 계정 등록 완료
+
+사용자 ID: {user_id}
+이메일: {email}
+상태: 새로 생성됨
+
+다음 단계:
+start_authentication 툴로 OAuth 인증을 진행하세요."""
+
+        except Exception as e:
+            error_msg = f"계정 등록 실패: {str(e)}"
+            logger.error(error_msg)
+            return f"❌ Error: {error_msg}"
+
     async def create_enrollment_file(self, arguments: Dict[str, Any]) -> str:
         """
         Create enrollment YAML file for user
@@ -466,13 +567,13 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
 세션 ID: {response.session_id}
 만료 시간: {response.expires_at}
 
-📋 인증 URL:
+🌐 인증 URL (아래 링크를 클릭하세요):
 {response.auth_url}
 
-위 URL을 브라우저에서 열어 Microsoft 로그인을 완료하세요.
+⚠️  중요: 위 URL을 반드시 브라우저에서 열어 Microsoft 로그인을 완료해야 합니다.
+브라우저에서 로그인 후 권한 승인을 완료하면 자동으로 인증이 완료됩니다.
 
-인증 상태 확인:
-check_auth_status tool을 사용하여 세션 ID로 확인할 수 있습니다."""
+✅ 인증 완료 후 get_account_status 툴로 상태를 확인할 수 있습니다."""
 
         except Exception as e:
             error_msg = f"인증 시작 실패: {str(e)}"

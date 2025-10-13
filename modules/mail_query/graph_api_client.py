@@ -270,26 +270,26 @@ class GraphAPIClient:
     ) -> Optional[Dict[str, Any]]:
         """
         POST 요청
-        
+
         Args:
             endpoint: API 엔드포인트
             json_data: JSON 데이터
             access_token: 액세스 토큰
-            
+
         Returns:
             응답 데이터 또는 None
         """
         if not access_token:
             logger.error("Access token is required for POST requests")
             return None
-            
+
         url = f"{self.base_url}{endpoint}"
         headers = {
             "Authorization": f"Bearer {access_token}",
             "Content-Type": "application/json",
             "Accept": "application/json"
         }
-        
+
         try:
             return await self._make_request_with_retry(
                 method="POST",
@@ -299,4 +299,40 @@ class GraphAPIClient:
             )
         except Exception as e:
             logger.error(f"POST request failed: {str(e)}")
+            return None
+
+    async def get(
+        self,
+        endpoint: str,
+        access_token: Optional[str] = None
+    ) -> Optional[Dict[str, Any]]:
+        """
+        GET 요청
+
+        Args:
+            endpoint: API 엔드포인트 (예: /me/messages/{id}/attachments/{attachmentId})
+            access_token: 액세스 토큰 (None이면 self.access_token 사용)
+
+        Returns:
+            응답 데이터 또는 None
+        """
+        token = access_token or getattr(self, 'access_token', None)
+        if not token:
+            logger.error("Access token is required for GET requests")
+            return None
+
+        url = f"{self.base_url}{endpoint}"
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json"
+        }
+
+        try:
+            return await self._make_request_with_retry(
+                method="GET",
+                url=url,
+                headers=headers
+            )
+        except Exception as e:
+            logger.error(f"GET request failed: {str(e)}")
             return None

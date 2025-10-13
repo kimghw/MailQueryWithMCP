@@ -6,6 +6,13 @@
         "-e",
         "/home/kimghw/IACSGRAPH/entrypoints/local/run_stdio.sh"
       ]
+    },
+    "subscription-tracker": {
+      "command": "wsl",
+      "args": [
+        "-e",
+        "/home/kimghw/IACSGRAPH/entrypoints/local/run_subscription_stdio.sh"
+      ]
     }
   }
 }
