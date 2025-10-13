@@ -62,6 +62,10 @@ class Config:
         if 'paths' in self._config:
             paths = self._config['paths']
             for key, value in paths.items():
+                # Skip metadata keys (starting with _ or named 'comment')
+                if key.startswith('_') or key in ['comment', 'create_if_not_exists', 'use_absolute_paths']:
+                    continue
+
                 if isinstance(value, str):
                     # Replace environment variables
                     value = self._expand_env_vars(value)
@@ -109,14 +113,15 @@ class Config:
 
     def _get_default_config(self) -> Dict[str, Any]:
         """Get default configuration"""
-        home_dir = Path.home()
-        base_dir = home_dir / "mcp_data"
+        # Use data directory within the module
+        module_dir = Path(__file__).parent.parent
+        base_dir = module_dir / "data"
 
         return {
             "mcp": {
                 "server_name": "mail-query-without-db-server",
                 "command": "python",
-                "args": ["-m", "modules.mail_query_without_db.mcp_server.server"],
+                "args": ["-m", "modules.mail_query_without_db.mcp_server.http_server"],
             },
             "paths": {
                 "base_dir": str(base_dir),

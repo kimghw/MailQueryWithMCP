@@ -4,7 +4,7 @@
       "command": "wsl",
       "args": [
         "-e",
-        "/home/kimghw/IACSGRAPH/modules/mail_query_without_db/scripts/run_mcp_stdio_server.sh"
+        "/home/kimghw/IACSGRAPH/entrypoints/local/run_stdio.sh"
       ]
     }
   }

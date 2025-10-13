@@ -1,12 +1,14 @@
 #!/bin/bash
+# Local Development - STDIO MCP Server Launch Script
+# For Claude Desktop integration
 
-# MCP Stdio Server 실행 스크립트
+set -e
 
 # Get script directory and project root
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 PROJECT_ROOT="$( cd "$SCRIPT_DIR/../.." && pwd )"
 
-# Set Python path and working directory
+# Set Python path
 export PYTHONPATH="$PROJECT_ROOT"
 cd "$PROJECT_ROOT"
 
@@ -18,4 +20,4 @@ else
 fi
 
 # Run the stdio server
-exec $PYTHON -m modules.mail_query_without_db.mcp_server_stdio
+exec $PYTHON "$PROJECT_ROOT/entrypoints/local/run_stdio.py"

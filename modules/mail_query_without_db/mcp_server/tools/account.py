@@ -379,29 +379,53 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
             Formatted list of active accounts
         """
         try:
-            result = await self.db.get_all_user_data()
+            query = """
+                SELECT user_id, user_name, email, status,
+                       oauth_tenant_id, oauth_client_id,
+                       token_expiry, created_at
+                FROM accounts
+                WHERE is_active = 1
+                ORDER BY user_id
+            """
 
-            if not result:
-                return "No active accounts found."
+            accounts = self.db.fetch_all(query)
 
-            account_list = "📊 Active Accounts:\n"
-            account_list += "="*50 + "\n\n"
+            if not accounts:
+                return "활성화된 계정이 없습니다."
 
-            for idx, (user_id, user_data) in enumerate(result.items(), 1):
-                account_list += f"{idx}. {user_id}\n"
+            account_list = ["📊 활성 계정 목록:\n", "="*50 + "\n"]
 
-                # Add account details if available
-                if user_data and isinstance(user_data, dict):
-                    if user_data.get("tenant_id"):
-                        account_list += f"   Tenant: {user_data['tenant_id']}\n"
-                    if user_data.get("client_id"):
-                        account_list += f"   Client: {user_data['client_id'][:8]}...\n"
-                    if user_data.get("created_at"):
-                        account_list += f"   Created: {user_data['created_at']}\n"
+            for idx, account in enumerate(accounts, 1):
+                account_dict = dict(account)
+                user_id = account_dict.get('user_id', 'N/A')
+                email = account_dict.get('email', 'N/A')
+                tenant_id = account_dict.get('oauth_tenant_id', '')
+                client_id = account_dict.get('oauth_client_id', '')
+                created_at = account_dict.get('created_at', 'N/A')
 
-                account_list += "\n"
+                account_list.append(f"\n{idx}. {user_id} ({email})\n")
 
-            return account_list
+                if tenant_id:
+                    account_list.append(f"   Tenant: {tenant_id}\n")
+                if client_id:
+                    account_list.append(f"   Client: {client_id[:8]}...\n")
+                if created_at:
+                    account_list.append(f"   Created: {created_at}\n")
+
+                # Token status
+                token_expiry = account_dict.get('token_expiry')
+                if token_expiry:
+                    from datetime import datetime, timezone
+                    expiry_dt = datetime.fromisoformat(token_expiry)
+                    if expiry_dt.tzinfo is not None:
+                        expiry_dt = expiry_dt.replace(tzinfo=None)
+                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                    token_status = "만료" if expiry_dt < now_utc else "유효"
+                    account_list.append(f"   Token: {token_status}\n")
+                else:
+                    account_list.append(f"   Token: 없음\n")
+
+            return "".join(account_list)
 
         except Exception as e:
             logger.error(f"Error listing active accounts: {str(e)}")

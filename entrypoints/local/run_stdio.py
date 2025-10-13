@@ -1,9 +1,19 @@
-"""Stdio-based MCP Server for Mail Attachments - For Claude Desktop"""
+#!/usr/bin/env python3
+"""Local Development - Stdio-based MCP Server for Claude Desktop
+
+Entry point for running the MCP server in STDIO mode for Claude Desktop integration.
+This is the local development version that connects directly to Claude Desktop app.
+"""
 
 import asyncio
 import logging
 import os
 import sys
+from pathlib import Path
+
+# Add project root to Python path
+PROJECT_ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
 
 # CRITICAL: Disable console logging BEFORE any imports that use logging
 os.environ['ENABLE_CONSOLE_LOGGING'] = 'false'
@@ -23,26 +33,26 @@ auth_logger = get_auth_logger()
 async def main():
     """Main entry point for stdio MCP server"""
 
-    # Get project root dynamically
-    from pathlib import Path
-    project_root = Path(__file__).parent.parent.parent
-    log_dir = project_root / "logs"
-    log_dir.mkdir(exist_ok=True)
-    log_file = log_dir / "mcp_stdio.log"
+    # Setup logging - file only for stdio mode
+    log_dir = PROJECT_ROOT / "logs" / "local"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / "stdio.log"
 
     # Configure logging to file only (not stdout to avoid interfering with stdio communication)
     # Remove all existing handlers first
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
-    
+
     # Add file handler with UTF-8 encoding
     file_handler = logging.FileHandler(log_file, encoding='utf-8')
     file_handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s"))
     root_logger.addHandler(file_handler)
     root_logger.setLevel(logging.INFO)
 
-    logger.info("🚀 Starting stdio MCP Mail Attachment Server")
+    logger.info("🚀 Starting LOCAL stdio MCP Mail Attachment Server")
+    logger.info(f"📁 Project root: {PROJECT_ROOT}")
+    logger.info(f"📝 Log file: {log_file}")
 
     # Initialize database
     db = get_database_manager()

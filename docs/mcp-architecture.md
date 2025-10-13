@@ -4,10 +4,10 @@
 
 ### 1. Stdio 직접 연결 (현재)
 ```
-Claude Desktop <--[stdio]--> mcp_server_stdio.py
+Claude Desktop <--[stdio]--> entrypoints/local/run_stdio.py
                                     |
                                     ↓
-                             logs/mcp_stdio.log (파일만)
+                             logs/local/stdio.log (파일만)
 ```
 
 **제약사항:**
@@ -182,7 +182,7 @@ if __name__ == "__main__":
 ### 1. HTTP 서버 실행 (별도 터미널)
 ```bash
 # HTTP 서버는 자유롭게 로깅 가능
-uv run python -m modules.mail_query_without_db.mcp_server.server
+uv run python -m modules.mail_query_without_db.mcp_server.http_server
 ```
 
 콘솔 출력:
@@ -262,13 +262,13 @@ logger.debug(json.dumps(data, indent=2))  # 구조화된 출력
 ## 🔄 마이그레이션 전략
 
 ### 단계적 접근:
-1. **현재**: `mcp_server_stdio.py` (직접 연결)
-2. **개선**: `server.py` (HTTP) + `http_stdio_bridge.py` (브리지)
+1. **현재**: `entrypoints/local/run_stdio.py` (직접 연결)
+2. **개선**: `entrypoints/local/run_http.py` (HTTP) + `http_stdio_bridge.py` (브리지)
 3. **최종**: 필요에 따라 선택적 사용
 
 ### 호환성 유지:
-- 기존 stdio 서버는 그대로 유지
-- HTTP 서버는 독립적으로 실행
+- 기존 stdio 서버는 그대로 유지 (`entrypoints/local/run_stdio.py`)
+- HTTP 서버는 독립적으로 실행 (`entrypoints/local/run_http.py`)
 - 브리지는 선택적 사용
 
 ## 📝 결론

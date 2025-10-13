@@ -42,7 +42,7 @@ def main():
         asyncio.run(run_stdio_server())
     else:
         # Run HTTP server
-        from .server import HTTPStreamingMailAttachmentServer
+        from .http_server import HTTPStreamingMailAttachmentServer
 
         server = HTTPStreamingMailAttachmentServer(host=args.host, port=args.port)
         server.run()

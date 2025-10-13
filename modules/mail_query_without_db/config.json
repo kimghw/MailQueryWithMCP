@@ -2,18 +2,19 @@
   "mcp": {
     "server_name": "mail-query-without-db-server",
     "command": "python",
-    "args": ["-m", "modules.mail_query_without_db.mcp_server.server"],
+    "args": ["-m", "modules.mail_query_without_db.mcp_server.http_server"],
     "env": {
       "PYTHONPATH": "${PROJECT_ROOT}"
     }
   },
   "paths": {
-    "base_dir": "${HOME}/mcp_data",
-    "attachments_dir": "${HOME}/mcp_data/attachments",
-    "emails_dir": "${HOME}/mcp_data/emails",
-    "exports_dir": "${HOME}/mcp_data/exports",
-    "temp_dir": "${HOME}/mcp_data/temp",
-    "log_file": "${HOME}/mcp_data/logs/mcp_mail_server.log",
+    "_comment": "Environment variable MCP_DATA_DIR can override base_dir. Falls back to PROJECT_ROOT/data for local dev.",
+    "base_dir": "${MCP_DATA_DIR:-${PROJECT_ROOT}/data}",
+    "attachments_dir": "${MCP_DATA_DIR:-${PROJECT_ROOT}/data}/attachments",
+    "emails_dir": "${MCP_DATA_DIR:-${PROJECT_ROOT}/data}/emails",
+    "exports_dir": "${MCP_DATA_DIR:-${PROJECT_ROOT}/data}/exports",
+    "temp_dir": "${MCP_DATA_DIR:-${PROJECT_ROOT}/data}/temp",
+    "log_file": "${MCP_DATA_DIR:-${PROJECT_ROOT}/data}/logs/mcp_mail_server.log",
     "use_absolute_paths": true,
     "create_if_not_exists": true
   },

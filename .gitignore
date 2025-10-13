@@ -188,6 +188,10 @@ Thumbs.db
 /temp/
 /cache/
 enrollment/
+config.user.json
+
+# pyhwp library temp directory
+pyhwp_temp/
 
 # Test result files
 *_test_result_*.json

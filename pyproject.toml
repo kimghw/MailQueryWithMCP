@@ -61,7 +61,7 @@ postgresql = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["modules*", "infra*", "main*"]
+include = ["modules*", "infra*", "entrypoints*"]
 
 [tool.black]
 line-length = 88

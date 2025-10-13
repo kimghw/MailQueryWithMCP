@@ -8,7 +8,7 @@ services:
       curl -LsSf https://astral.sh/uv/install.sh | sh
       . $HOME/.cargo/env
       uv sync
-    startCommand: ./start.sh
+    startCommand: ./entrypoints/production/start.sh
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.3

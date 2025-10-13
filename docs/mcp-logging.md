@@ -10,14 +10,14 @@ Claude Desktop은 MCP 서버와 **stdio**(표준 입출력)를 통해 통신합�
 - **표준 에러(stderr)**: 에러 메시지 출력 가능
 - **파일 로깅**: 모든 로그를 파일에 저장
 
-#### 현재 구현 (`mcp_server_stdio.py`):
+#### 현재 구현 (`entrypoints/local/run_stdio.py`):
 ```python
 # 로그는 파일로만 출력 (stdout 방해 방지)
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[
-        logging.FileHandler("logs/mcp_stdio.log"),  # 파일로만 출력
+        logging.FileHandler("logs/local/stdio.log"),  # 파일로만 출력
     ],
 )
 ```
@@ -68,12 +68,11 @@ Claude Desktop의 MCP 설정 파일 (`~/Library/Application Support/Claude/claud
 {
   "mcpServers": {
     "mail-query": {
-      "command": "uv",
-      "args": ["run", "python", "-m", "modules.mail_query_without_db.mcp_server_stdio"],
-      "cwd": "/home/kimghw/MailQueryWithMCP",
-      "env": {
-        "PYTHONPATH": "/home/kimghw/MailQueryWithMCP"
-      }
+      "command": "wsl",
+      "args": [
+        "-e",
+        "/home/kimghw/IACSGRAPH/entrypoints/local/run_stdio.sh"
+      ]
     }
   }
 }
@@ -105,13 +104,13 @@ Claude Desktop ← [stdio] → MCP Server
 #### MCP 서버가 시작되지 않을 때:
 ```bash
 # 1. 직접 실행하여 에러 확인
-uv run python -m modules.mail_query_without_db.mcp_server_stdio
+./entrypoints/local/run_stdio.sh
 
 # 2. 환경변수 검증
 uv run python scripts/validate_env.py
 
 # 3. 로그 파일 확인
-cat logs/mcp_stdio.log
+cat logs/local/stdio.log
 ```
 
 #### Claude Desktop에서 연결이 안 될 때:
@@ -120,7 +119,7 @@ cat logs/mcp_stdio.log
 tail -f ~/Library/Logs/Claude/claude.log
 
 # 2. MCP 서버 프로세스 확인
-ps aux | grep mcp_server_stdio
+ps aux | grep run_stdio
 
 # 3. 포트 충돌 확인 (HTTP 서버의 경우)
 lsof -i :8002

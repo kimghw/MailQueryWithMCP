@@ -123,6 +123,62 @@ class LoggingConfig:
             print(f"⚠️  알 수 없는 로그 레벨: {level}. INFO로 설정합니다.")
             return LogLevel.INFO.value
 
+    def _get_log_file_path(self, logger_name: str) -> Path:
+        """
+        로거 이름을 기반으로 로그 파일 경로 생성 (모듈별로 하나의 파일)
+
+        Examples:
+            infra.core.database -> logs/infra/core.log
+            infra.core.config -> logs/infra/core.log (같은 파일)
+            modules.account.account_repository -> logs/modules/account.log
+            modules.account.account_orchestrator -> logs/modules/account.log (같은 파일)
+            modules.auth.auth_orchestrator -> logs/modules/auth.log
+            modules.mail_query_without_db.mcp_server.http_server -> logs/modules/mcp_server.log
+            __main__ -> logs/__main__.log
+        """
+        # 특수 케이스: __main__, app 등
+        if logger_name in ['__main__', 'app']:
+            return self.log_dir / f"{logger_name}.log"
+
+        # 로거 이름을 점으로 분리
+        parts = logger_name.split('.')
+
+        # 최소 2개 부분이 있어야 디렉터리 구조 생성
+        if len(parts) < 2:
+            return self.log_dir / f"{logger_name}.log"
+
+        # 디렉터리 구조 매핑
+        # infra.core.* -> logs/infra/core.log (모두 하나의 파일)
+        # modules.account.* -> logs/modules/account.log (모두 하나의 파일)
+        # modules.auth.* -> logs/modules/auth.log (모두 하나의 파일)
+        # modules.mail_query_without_db.mcp_server.* -> logs/modules/mcp_server.log (모두 하나의 파일)
+
+        if parts[0] == 'infra':
+            # infra.core.* -> logs/infra/core.log
+            if len(parts) >= 2:
+                log_dir = self.log_dir / parts[0]
+                log_dir.mkdir(parents=True, exist_ok=True)
+                return log_dir / f"{parts[1]}.log"
+            else:
+                return self.log_dir / 'infra' / 'infra.log'
+
+        elif parts[0] == 'modules':
+            # modules.mail_query_without_db.mcp_server.* -> logs/modules/mcp_server.log
+            if 'mcp_server' in parts:
+                log_dir = self.log_dir / 'modules'
+                log_dir.mkdir(parents=True, exist_ok=True)
+                return log_dir / 'mcp_server.log'
+
+            # modules.account.*, modules.auth.*, modules.mail_query.* 등
+            elif len(parts) >= 2:
+                module_name = parts[1]  # account, auth, mail_query 등
+                log_dir = self.log_dir / 'modules'
+                log_dir.mkdir(parents=True, exist_ok=True)
+                return log_dir / f"{module_name}.log"
+
+        # 기본: 평면 구조로 폴백
+        return self.log_dir / f"{logger_name.replace('.', '_')}.log"
+
     def get_formatter(self, format_type: Optional[LogFormat] = None) -> logging.Formatter:
         """로그 포매터 생성"""
         format_type = format_type or self.format_type
@@ -188,8 +244,8 @@ class LoggingConfig:
         if self.enable_file_logging:
             from logging.handlers import RotatingFileHandler
 
-            # 로거별 파일 생성
-            log_file = self.log_dir / f"{logger_name.replace('.', '_')}.log"
+            # 로거 이름을 디렉터리 구조로 변환
+            log_file = self._get_log_file_path(logger_name)
 
             file_handler = RotatingFileHandler(
                 log_file,

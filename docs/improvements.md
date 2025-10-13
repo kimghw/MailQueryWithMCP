@@ -133,11 +133,14 @@ except Exception as e:
 
 3. **서버 실행**:
    ```bash
-   # HTTP Streaming 서버
-   uv run python -m modules.mail_query_without_db.mcp_server.server
+   # HTTP Streaming 서버 (로컬 개발)
+   ./entrypoints/local/run_http.sh
 
    # Stdio 서버 (Claude Desktop용)
-   uv run python -m modules.mail_query_without_db.mcp_server_stdio
+   ./entrypoints/local/run_stdio.sh
+
+   # Production 서버
+   ./entrypoints/production/start.sh
    ```
 
 ## 📈 개선 효과
