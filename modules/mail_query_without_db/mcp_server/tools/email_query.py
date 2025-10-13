@@ -520,6 +520,37 @@ class EmailQueryTool:
                             result["is_truncated"] = is_truncated
                             result["status"] = "converted"
                             logger.info(f"Successfully converted attachment to text: {att_name} ({len(text_content)} chars, ~{result['token_count']} tokens)")
+
+                            # Delete attachment file after successful conversion if cleanup is enabled
+                            if self.config.cleanup_after_query:
+                                try:
+                                    import os
+                                    file_path = Path(saved_path)
+                                    parent_dir = file_path.parent
+
+                                    # Delete the file
+                                    os.remove(saved_path)
+                                    logger.info(f"Deleted attachment file after conversion: {saved_path}")
+                                    result["file_deleted"] = True
+
+                                    # Try to delete parent directory if empty
+                                    try:
+                                        if parent_dir.exists() and not any(parent_dir.iterdir()):
+                                            parent_dir.rmdir()
+                                            logger.info(f"Deleted empty directory: {parent_dir}")
+
+                                            # Try to delete grandparent directory if empty (user_id folder)
+                                            grandparent_dir = parent_dir.parent
+                                            if grandparent_dir.exists() and not any(grandparent_dir.iterdir()):
+                                                grandparent_dir.rmdir()
+                                                logger.info(f"Deleted empty directory: {grandparent_dir}")
+                                    except Exception as dir_error:
+                                        # Ignore directory deletion errors (not critical)
+                                        logger.debug(f"Could not delete empty directory: {str(dir_error)}")
+
+                                except Exception as delete_error:
+                                    logger.warning(f"Failed to delete attachment file: {saved_path} - {str(delete_error)}")
+                                    result["file_deleted"] = False
                         else:
                             logger.warning(f"Failed to convert attachment: {att_name} - {text_content}")
                     except Exception as e:
