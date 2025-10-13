@@ -209,9 +209,9 @@ class IACSTools:
                 # 4. 클라이언트 측 필터링
                 filtered_mails = []
                 for mail in response.messages:
-                    # 제목 앞 7자 확인
+                    # 제목에 키워드 포함 확인 (어디든 포함되면 매칭)
                     subject = mail.subject or ""
-                    if not subject.startswith(search_keyword):
+                    if search_keyword not in subject:
                         continue
 
                     # send_address 필터링
