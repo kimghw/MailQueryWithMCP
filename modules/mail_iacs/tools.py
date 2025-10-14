@@ -304,24 +304,61 @@ class IACSTools:
         응답 메일 검색 (멤버들이 보낸 메일)
 
         Flow:
-            1. $search 방식 사용 (agenda_code 키워드 검색)
-            2. send_address가 있으면 클라이언트 측에서 필터링
-            3. 제목 앞 7자로 agenda_code 매칭 (클라이언트 측)
+            1. panel_name으로 kr_panel_member 결정 (없으면 기본 패널)
+            2. $search 방식 사용 (agenda_code 키워드 검색)
+            3. send_address가 있으면 클라이언트 측에서 필터링
+            4. 제목에 agenda_code 포함 여부 확인 (클라이언트 측)
         """
         try:
             logger.info("=" * 80)
             logger.info("search_responses 시작")
             logger.info(f"요청 파라미터: agenda_code={request.agenda_code}, "
+                       f"panel_name={request.panel_name}, "
                        f"send_address={request.send_address}")
 
-            # 1. 기본 패널의 kr_panel_member로 인증
-            logger.info("기본 패널의 kr_panel_member 조회")
-            kr_panel_member = self.db_service.get_kr_panel_member_by_default()
+            # 1. panel_name으로 kr_panel_member 결정
+            panel_name = request.panel_name
+            kr_panel_member = None
+
+            if panel_name:
+                # panel_name이 지정된 경우
+                logger.info(f"panel_name 지정됨: {panel_name}")
+                panel_info = self.db_service.get_panel_info_by_name(panel_name)
+                if not panel_info:
+                    logger.error(f"패널 정보 조회 실패: {panel_name}")
+                    return SearchResponsesResponse(
+                        success=False,
+                        message=f"패널 정보를 찾을 수 없습니다: {panel_name}",
+                        total_count=0,
+                        agenda_code=request.agenda_code,
+                        mails=[],
+                    )
+                kr_panel_member = panel_info["kr_panel_member"]
+                logger.info(f"패널에서 kr_panel_member 가져옴: {kr_panel_member}")
+            else:
+                # panel_name이 없으면 기본 패널 사용
+                logger.info("panel_name 미지정, 기본 패널 조회")
+                panel_name = self.db_service.get_default_panel_name()
+                logger.info(f"기본 패널: {panel_name}")
+
+                if not panel_name:
+                    logger.error("기본 패널이 설정되지 않음")
+                    return SearchResponsesResponse(
+                        success=False,
+                        message="panel_name을 지정하거나 기본 패널을 설정해주세요",
+                        total_count=0,
+                        agenda_code=request.agenda_code,
+                        mails=[],
+                    )
+
+                kr_panel_member = self.db_service.get_kr_panel_member_by_default()
+                logger.info(f"기본 패널에서 kr_panel_member 가져옴: {kr_panel_member}")
+
             if not kr_panel_member:
-                logger.error("인증 정보를 찾을 수 없음 (기본 패널 없음)")
+                logger.error("인증 정보를 찾을 수 없음")
                 return SearchResponsesResponse(
                     success=False,
-                    message="인증 정보를 찾을 수 없습니다. 기본 패널을 설정해주세요",
+                    message="인증 정보를 찾을 수 없습니다. 패널 정보를 확인해주세요",
                     total_count=0,
                     agenda_code=request.agenda_code,
                     mails=[],

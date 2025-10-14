@@ -98,6 +98,10 @@ class SearchResponsesRequest(BaseModel):
         ...,
         description="아젠다 코드 키워드 (필수, 제목 검색)"
     )
+    panel_name: Optional[str] = Field(
+        None,
+        description="패널 이름 (옵션, DB에서 조회하여 kr_panel_member 계정 결정)"
+    )
     send_address: Optional[List[EmailStr]] = Field(
         None,
         description="발신자 주소 리스트 (옵션)"

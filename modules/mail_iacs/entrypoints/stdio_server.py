@@ -3,7 +3,30 @@ IACS MCP stdio 서버
 Claude Desktop과 통합 - MCP 표준 구조
 """
 
+# CRITICAL: MCP stdio 모드 - stdout은 JSON-RPC 전용
+# 다른 모든 import 전에 환경 변수 설정
+
+import sys
+import os
+
+# 환경 변수 설정 (다른 모듈 import 전에!)
+os.environ['MCP_STDIO_MODE'] = '1'  # logging_config에서 stderr 사용하도록 지시
+os.environ['NO_COLOR'] = '1'
+os.environ['TERM'] = 'dumb'
+os.environ['PYTHONUNBUFFERED'] = '1'
+
+# 로깅 기본 설정 (stderr로)
+import logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr,
+    force=True
+)
+
+# 이제 다른 모듈 import
 import asyncio
+
 from mcp.server.models import InitializationOptions
 from mcp.server import Server, NotificationOptions
 from mcp.server.stdio import stdio_server

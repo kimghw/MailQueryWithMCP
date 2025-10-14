@@ -11,7 +11,7 @@ from modules.mail_query import (
     MailQueryRequest,
     PaginationOptions
 )
-from ..config import get_subscription_config
+from modules.subscription_tracker.config import get_subscription_config
 
 logger = get_logger(__name__)
 

@@ -7,7 +7,7 @@ from typing import Dict, Any, List
 
 from infra.core.logger import get_logger
 from modules.mail_query_without_db.core.attachment_downloader import AttachmentDownloader
-from ..config import get_subscription_config
+from modules.subscription_tracker.config import get_subscription_config
 
 logger = get_logger(__name__)
 

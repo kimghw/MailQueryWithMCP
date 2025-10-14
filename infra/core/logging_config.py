@@ -229,11 +229,18 @@ class LoggingConfig:
 
         # 콘솔 핸들러 추가
         if self.enable_console_logging:
-            console_handler = logging.StreamHandler(sys.stdout)
+            # MCP_STDIO_MODE 환경 변수가 설정되어 있으면 stderr 사용
+            import os
+            if os.getenv('MCP_STDIO_MODE') == '1':
+                console_stream = sys.stderr
+            else:
+                console_stream = sys.stdout
+
+            console_handler = logging.StreamHandler(console_stream)
             console_handler.setLevel(log_level)
 
             # 콘솔은 컬러 포맷 사용
-            if sys.stdout.isatty():  # TTY인 경우만 컬러 사용
+            if console_stream.isatty() and not os.getenv('NO_COLOR'):  # TTY이고 NO_COLOR가 없는 경우만 컬러 사용
                 console_handler.setFormatter(self.get_formatter(LogFormat.COLORED))
             else:
                 console_handler.setFormatter(self.get_formatter(format_type))
@@ -262,15 +269,29 @@ class LoggingConfig:
 
     def configure_root_logger(self) -> None:
         """루트 로거 설정"""
+        import os
+
         root_logger = logging.getLogger()
         root_logger.setLevel(self.level)
         root_logger.handlers.clear()
 
         # 콘솔 핸들러
         if self.enable_console_logging:
-            console_handler = logging.StreamHandler(sys.stdout)
+            # MCP_STDIO_MODE 환경 변수가 설정되어 있으면 stderr 사용
+            if os.getenv('MCP_STDIO_MODE') == '1':
+                console_stream = sys.stderr
+            else:
+                console_stream = sys.stdout
+
+            console_handler = logging.StreamHandler(console_stream)
             console_handler.setLevel(self.level)
-            console_handler.setFormatter(self.get_formatter(LogFormat.COLORED))
+
+            # NO_COLOR 환경 변수 체크
+            if console_stream.isatty() and not os.getenv('NO_COLOR'):
+                console_handler.setFormatter(self.get_formatter(LogFormat.COLORED))
+            else:
+                console_handler.setFormatter(self.get_formatter(LogFormat.DETAILED))
+
             root_logger.addHandler(console_handler)
 
         # 파일 핸들러
