@@ -73,11 +73,6 @@ class IACSHandlers:
                             "type": "string",
                             "description": "종료 날짜 (ISO 형식, 기본값: 3개월 전)",
                         },
-                        "content_field": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "조회할 필드 목록 (기본값: [\"subject\"])",
-                        },
                         "agenda_code": {
                             "type": "string",
                             "description": "아젠다 코드 키워드 (옵션)",
@@ -96,11 +91,6 @@ class IACSHandlers:
                 inputSchema={
                     "type": "object",
                     "properties": {
-                        "content_field": {
-                            "type": "array",
-                            "items": {"type": "string"},
-                            "description": "조회할 필드 목록 (기본값: [\"subject\"])",
-                        },
                         "agenda_code": {
                             "type": "string",
                             "description": "아젠다 코드 키워드 (필수, 최소 7자)",
@@ -153,18 +143,20 @@ class IACSHandlers:
             elif name == "search_agenda":
                 request = SearchAgendaRequest(**arguments)
                 response = await self.tools.search_agenda(request)
+                # message 필드에 포맷팅된 텍스트가 들어있음
                 return [
                     TextContent(
-                        type="text", text=response.model_dump_json(indent=2)
+                        type="text", text=response.message
                     )
                 ]
 
             elif name == "search_responses":
                 request = SearchResponsesRequest(**arguments)
                 response = await self.tools.search_responses(request)
+                # message 필드에 포맷팅된 텍스트가 들어있음
                 return [
                     TextContent(
-                        type="text", text=response.model_dump_json(indent=2)
+                        type="text", text=response.message
                     )
                 ]
 

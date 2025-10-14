@@ -13,6 +13,7 @@ from modules.mail_query import (
     MailQueryRequest,
     MailQueryFilters,
 )
+from modules.mail_process import AttachmentDownloader, EmailSaver
 
 from .db_service import IACSDBService
 from .schemas import (
@@ -27,6 +28,7 @@ from .schemas import (
     get_default_start_date,
     get_default_end_date,
 )
+from .format_utils import IACSResultFormatter
 
 logger = get_logger(__name__)
 
@@ -36,6 +38,20 @@ class IACSTools:
 
     def __init__(self):
         self.db_service = IACSDBService()
+        config = get_config()
+        # mail_process 헬퍼 초기화
+        # 데이터베이스 경로를 기준으로 저장 디렉토리 설정
+        db_path = Path(config.database_path)
+        base_dir = db_path.parent  # database가 있는 디렉토리
+
+        self.attachment_downloader = AttachmentDownloader(
+            output_dir=str(base_dir / "iacs_attachments")
+        )
+        self.email_saver = EmailSaver(
+            output_dir=str(base_dir / "iacs_emails")
+        )
+        # 결과 포맷터 초기화
+        self.formatter = IACSResultFormatter()
 
     # ========================================================================
     # Tool 1: insert_info
@@ -101,8 +117,7 @@ class IACSTools:
                        f"kr_panel_member={request.kr_panel_member}, "
                        f"agenda_code={request.agenda_code}, "
                        f"start_date={request.start_date}, "
-                       f"end_date={request.end_date}, "
-                       f"content_field={request.content_field}")
+                       f"end_date={request.end_date}")
 
             # 1. sender_address와 kr_panel_member 결정
             chair_address = request.sender_address
@@ -162,8 +177,8 @@ class IACSTools:
             # 3. MailQuery 필터 생성
             filters = MailQueryFilters(
                 sender_address=chair_address,  # 의장 이메일로 필터링
-                date_from=end_date,  # 과거 날짜
-                date_to=start_date,  # 현재 날짜
+                date_from=start_date,  # 시작 날짜 (과거)
+                date_to=end_date,  # 종료 날짜 (현재)
             )
 
             # agenda_code가 있으면 제목 필터 추가
@@ -178,11 +193,13 @@ class IACSTools:
 
             # 4. 메일 조회 (kr_panel_member로 인증)
             logger.info(f"MailQueryOrchestrator 시작 - user_id: {kr_panel_member}")
+            # 항상 본문 포함
+            select_fields = ["subject", "body", "from", "receivedDateTime", "id", "attachments"]
             async with MailQueryOrchestrator() as orchestrator:
                 mail_request = MailQueryRequest(
                     user_id=kr_panel_member,  # 한국 패널 멤버로 조회
                     filters=filters,
-                    select_fields=request.content_field,
+                    select_fields=select_fields,
                 )
 
                 logger.info(f"메일 조회 요청: user_id={mail_request.user_id}, "
@@ -193,15 +210,72 @@ class IACSTools:
                 logger.info(f"메일 조회 완료: total_fetched={response.total_fetched}, "
                            f"messages_count={len(response.messages)}")
 
-                # 5. 응답 생성
-                mails = [mail.model_dump() for mail in response.messages]
+                # 5. 첨부파일 다운로드 및 메일 저장 처리
+                mails = []
+                for mail in response.messages:
+                    mail_dict = mail.model_dump()
+
+                    # 메일 저장
+                    if request.save_email:
+                        try:
+                            email_dict = {
+                                'id': mail.id,
+                                'subject': mail.subject,
+                                'received_date_time': mail.received_date_time,
+                                'from': mail.from_address,
+                                'body': mail.body if hasattr(mail, 'body') else None,
+                                'to_recipients': getattr(mail, 'to_recipients', []),
+                                'cc_recipients': getattr(mail, 'cc_recipients', []),
+                            }
+                            saved_info = await self.email_saver.save_email_as_text(
+                                email_dict, user_id=kr_panel_member
+                            )
+                            mail_dict['saved_email_path'] = saved_info.get('email_path')
+                            logger.info(f"메일 저장 완료: {saved_info.get('email_path')}")
+                        except Exception as e:
+                            logger.error(f"메일 저장 실패: {str(e)}")
+
+                    # 첨부파일 다운로드
+                    if request.download_attachments and mail.has_attachments:
+                        try:
+                            if hasattr(mail, 'attachments') and mail.attachments:
+                                downloaded_attachments = []
+                                for attachment in mail.attachments:
+                                    att_result = await self.attachment_downloader.download_and_save(
+                                        graph_client=orchestrator.graph_client,
+                                        user_id=kr_panel_member,
+                                        message_id=mail.id,
+                                        attachment=attachment
+                                    )
+                                    if att_result:
+                                        downloaded_attachments.append(att_result)
+                                        logger.info(f"첨부파일 다운로드 완료: {att_result.get('file_path')}")
+                                mail_dict['downloaded_attachments'] = downloaded_attachments
+                        except Exception as e:
+                            logger.error(f"첨부파일 다운로드 실패: {str(e)}")
+
+                    mails.append(mail_dict)
 
                 logger.info(f"search_agenda 성공: {len(mails)}개 아젠다 반환")
                 logger.info("=" * 80)
 
+                # 포맷팅된 텍스트 생성 (항상 본문 포함)
+                formatted_text = self.formatter.format_search_results(
+                    mails=mails,
+                    user_id=kr_panel_member,
+                    panel_name=panel_name,
+                    chair_address=chair_address,
+                    start_date=request.start_date,
+                    end_date=request.end_date,
+                    mail_type="agenda",
+                    include_body=True,  # 항상 본문 포함
+                    download_attachments=request.download_attachments,
+                    save_email=request.save_email
+                )
+
                 return SearchAgendaResponse(
                     success=True,
-                    message=f"{response.total_fetched}개의 아젠다를 찾았습니다",
+                    message=formatted_text,  # 포맷팅된 텍스트를 message에 포함
                     total_count=response.total_fetched,
                     panel_name=panel_name,
                     chair_address=chair_address,
@@ -238,8 +312,7 @@ class IACSTools:
             logger.info("=" * 80)
             logger.info("search_responses 시작")
             logger.info(f"요청 파라미터: agenda_code={request.agenda_code}, "
-                       f"send_address={request.send_address}, "
-                       f"content_field={request.content_field}")
+                       f"send_address={request.send_address}")
 
             # 1. 기본 패널의 kr_panel_member로 인증
             logger.info("기본 패널의 kr_panel_member 조회")
@@ -265,11 +338,13 @@ class IACSTools:
 
             # 3. 메일 조회
             logger.info(f"MailQueryOrchestrator 시작 - user_id: {kr_panel_member}")
+            # 항상 본문 포함
+            select_fields = ["subject", "body", "from", "receivedDateTime", "id", "attachments"]
             async with MailQueryOrchestrator() as orchestrator:
                 mail_request = MailQueryRequest(
                     user_id=kr_panel_member,
                     filters=MailQueryFilters(search_query=search_query),
-                    select_fields=request.content_field,
+                    select_fields=select_fields,
                 )
 
                 logger.info(f"메일 조회 요청: user_id={mail_request.user_id}, "
@@ -281,7 +356,7 @@ class IACSTools:
                 logger.info(f"메일 조회 완료: total_fetched={response.total_fetched}, "
                            f"messages_count={len(response.messages)}")
 
-                # 4. 클라이언트 측 필터링
+                # 4. 클라이언트 측 필터링 및 첨부파일 처리
                 logger.info("클라이언트 측 필터링 시작")
                 filtered_mails = []
                 filtered_count = 0
@@ -303,16 +378,77 @@ class IACSTools:
                             filtered_count += 1
                             continue
 
-                    filtered_mails.append(mail.model_dump())
+                    # 필터링 통과한 메일 처리
+                    mail_dict = mail.model_dump()
+
+                    # 메일 저장
+                    if request.save_email:
+                        try:
+                            email_dict = {
+                                'id': mail.id,
+                                'subject': mail.subject,
+                                'received_date_time': mail.received_date_time,
+                                'from': mail.from_address,
+                                'body': mail.body if hasattr(mail, 'body') else None,
+                                'to_recipients': getattr(mail, 'to_recipients', []),
+                                'cc_recipients': getattr(mail, 'cc_recipients', []),
+                            }
+                            saved_info = await self.email_saver.save_email_as_text(
+                                email_dict, user_id=kr_panel_member
+                            )
+                            mail_dict['saved_email_path'] = saved_info.get('email_path')
+                            logger.info(f"메일 저장 완료: {saved_info.get('email_path')}")
+                        except Exception as e:
+                            logger.error(f"메일 저장 실패: {str(e)}")
+
+                    # 첨부파일 다운로드
+                    if request.download_attachments and mail.has_attachments:
+                        try:
+                            if hasattr(mail, 'attachments') and mail.attachments:
+                                downloaded_attachments = []
+                                for attachment in mail.attachments:
+                                    att_result = await self.attachment_downloader.download_and_save(
+                                        graph_client=orchestrator.graph_client,
+                                        user_id=kr_panel_member,
+                                        message_id=mail.id,
+                                        attachment=attachment
+                                    )
+                                    if att_result:
+                                        downloaded_attachments.append(att_result)
+                                        logger.info(f"첨부파일 다운로드 완료: {att_result.get('file_path')}")
+                                mail_dict['downloaded_attachments'] = downloaded_attachments
+                        except Exception as e:
+                            logger.error(f"첨부파일 다운로드 실패: {str(e)}")
+
+                    filtered_mails.append(mail_dict)
 
                 logger.info(f"클라이언트 측 필터링 완료: {filtered_count}개 제외, "
                            f"{len(filtered_mails)}개 포함")
                 logger.info(f"search_responses 성공: {len(filtered_mails)}개 응답 반환")
                 logger.info("=" * 80)
 
+                # 포맷팅된 텍스트 생성 (항상 본문 포함)
+                # search_responses는 날짜 필터가 없으므로 임의값 사용
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+                three_months_ago = now - timedelta(days=90)
+
+                formatted_text = self.formatter.format_search_results(
+                    mails=filtered_mails,
+                    user_id=kr_panel_member,
+                    panel_name="default",  # responses는 패널명이 없음
+                    chair_address="",
+                    start_date=three_months_ago,
+                    end_date=now,
+                    mail_type="responses",
+                    include_body=True,  # 항상 본문 포함
+                    download_attachments=request.download_attachments,
+                    save_email=request.save_email
+                )
+
                 return SearchResponsesResponse(
                     success=True,
-                    message=f"{len(filtered_mails)}개의 응답을 찾았습니다",
+                    message=formatted_text,  # 포맷팅된 텍스트를 message에 포함
                     total_count=len(filtered_mails),
                     agenda_code=request.agenda_code,
                     mails=filtered_mails,

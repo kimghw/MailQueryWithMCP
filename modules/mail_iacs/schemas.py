@@ -62,10 +62,6 @@ class SearchAgendaRequest(BaseModel):
         "agenda",
         description="메일 타입 (의장이 보낸 아젠다)"
     )
-    content_field: List[str] = Field(
-        default=["subject"],
-        description="조회할 필드 (subject, body, attachments)"
-    )
     agenda_code: Optional[str] = Field(
         None,
         description="아젠다 코드 키워드 (옵션)"
@@ -87,21 +83,9 @@ class SearchAgendaRequest(BaseModel):
         description="첨부파일 다운로드 여부 (기본: False)"
     )
     save_email: bool = Field(
-        False,
-        description="메일 본문 저장 여부 (기본: False)"
+        True,
+        description="메일 본문 저장 여부 (기본: True)"
     )
-
-    @field_validator("content_field")
-    @classmethod
-    def validate_content_field(cls, v):
-        allowed = {"subject", "body", "attachments", "id", "from", "receivedDateTime"}
-        for field in v:
-            if field not in allowed:
-                raise ValueError(f"허용되지 않은 필드: {field}")
-        # id는 항상 포함
-        if "id" not in v:
-            v.append("id")
-        return v
 
 
 class SearchResponsesRequest(BaseModel):
@@ -109,10 +93,6 @@ class SearchResponsesRequest(BaseModel):
     mail_type: Literal["responses"] = Field(
         "responses",
         description="메일 타입 (멤버들의 응답)"
-    )
-    content_field: List[str] = Field(
-        default=["subject"],
-        description="조회할 필드 (subject, body, attachments)"
     )
     agenda_code: str = Field(
         ...,
@@ -122,17 +102,14 @@ class SearchResponsesRequest(BaseModel):
         None,
         description="발신자 주소 리스트 (옵션)"
     )
-
-    @field_validator("content_field")
-    @classmethod
-    def validate_content_field(cls, v):
-        allowed = {"subject", "body", "attachments", "id", "from", "receivedDateTime"}
-        for field in v:
-            if field not in allowed:
-                raise ValueError(f"허용되지 않은 필드: {field}")
-        if "id" not in v:
-            v.append("id")
-        return v
+    download_attachments: bool = Field(
+        False,
+        description="첨부파일 다운로드 여부 (기본: False)"
+    )
+    save_email: bool = Field(
+        True,
+        description="메일 본문 저장 여부 (기본: True)"
+    )
 
     @field_validator("agenda_code")
     @classmethod
