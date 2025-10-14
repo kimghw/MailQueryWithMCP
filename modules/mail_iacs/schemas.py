@@ -17,7 +17,7 @@ class PanelChairDB(BaseModel):
     id: Optional[int] = None
     chair_address: EmailStr
     panel_name: str
-    kr_panel_member: EmailStr
+    kr_panel_member: str  # user_id (not email format)
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
@@ -38,7 +38,7 @@ class InsertInfoRequest(BaseModel):
     """패널 정보 삽입 요청"""
     chair_address: EmailStr = Field(..., description="의장 이메일 주소")
     panel_name: str = Field(..., description="패널 이름 (예: sdtp)")
-    kr_panel_member: EmailStr = Field(..., description="한국 패널 멤버 이메일 주소")
+    kr_panel_member: str = Field(..., description="한국 패널 멤버 user_id (예: krsdtp)")
 
     @field_validator("panel_name")
     @classmethod
@@ -73,6 +73,22 @@ class SearchAgendaRequest(BaseModel):
     panel_name: Optional[str] = Field(
         None,
         description="패널 이름 (옵션, DB에서 조회)"
+    )
+    sender_address: Optional[EmailStr] = Field(
+        None,
+        description="발신자 이메일 주소 (옵션, 의장 이메일)"
+    )
+    kr_panel_member: Optional[str] = Field(
+        None,
+        description="한국 패널 멤버 user_id (옵션, 메일 조회 계정, 예: krsdtp)"
+    )
+    download_attachments: bool = Field(
+        False,
+        description="첨부파일 다운로드 여부 (기본: False)"
+    )
+    save_email: bool = Field(
+        False,
+        description="메일 본문 저장 여부 (기본: False)"
     )
 
     @field_validator("content_field")
@@ -183,11 +199,14 @@ class InsertDefaultValueResponse(BaseModel):
 # ============================================================================
 
 def get_default_start_date() -> datetime:
-    """기본 시작 날짜 (현재)"""
-    return datetime.now()
+    """기본 시작 날짜 (오늘 자정)"""
+    from datetime import timezone
+    # 오늘 날짜 00:00:00 UTC
+    return datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
 def get_default_end_date() -> datetime:
-    """기본 종료 날짜 (3개월 전)"""
-    from datetime import timedelta
-    return datetime.now() - timedelta(days=90)
+    """기본 종료 날짜 (3개월 전 자정)"""
+    from datetime import timedelta, timezone
+    # 90일 전 날짜 00:00:00 UTC
+    return (datetime.now(timezone.utc) - timedelta(days=90)).replace(hour=0, minute=0, second=0, microsecond=0)

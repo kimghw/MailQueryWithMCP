@@ -79,21 +79,56 @@ class AccountManagementTool:
             # Check if account already exists
             existing = self.db.fetch_one("SELECT id, user_id FROM accounts WHERE user_id = ?", (user_id,))
 
+            # Create enrollment file first
+            enrollment_file = self.enrollment_dir / f"{user_id}.yaml"
+            default_permissions = ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+
+            enrollment_data = {
+                "account": {
+                    "email": email,
+                    "name": user_name,
+                    "user_id": user_id
+                },
+                "microsoft_graph": {
+                    "client_id": oauth_client_id,
+                    "client_secret": oauth_client_secret,
+                    "tenant_id": oauth_tenant_id
+                },
+                "oauth": {
+                    "auth_type": "Authorization Code Flow",
+                    "redirect_uri": oauth_redirect_uri,
+                    "delegated_permissions": default_permissions
+                }
+            }
+
+            # Save enrollment file
+            self.enrollment_dir.mkdir(parents=True, exist_ok=True)
+            with open(enrollment_file, 'w', encoding='utf-8') as f:
+                yaml.dump(enrollment_data, f, default_flow_style=False, allow_unicode=True)
+
+            logger.info(f"Enrollment file created: {enrollment_file}")
+
             # Encrypt client secret before storing
             from modules.account._account_helpers import AccountCryptoHelpers
             crypto_helper = AccountCryptoHelpers()
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 
+            # Convert permissions list to JSON string
+            default_permissions_json = '["Mail.ReadWrite", "Mail.Send", "offline_access"]'
+
             if existing:
-                # Update existing account
+                # Update existing account with enrollment file path and permissions
                 self.db.execute_query("""
                     UPDATE accounts
                     SET user_name = ?, email = ?,
                         oauth_client_id = ?, oauth_client_secret = ?,
                         oauth_tenant_id = ?, oauth_redirect_uri = ?,
+                        enrollment_file_path = ?,
+                        delegated_permissions = COALESCE(delegated_permissions, ?),
+                        auth_type = COALESCE(auth_type, 'Authorization Code Flow'),
                         updated_at = datetime('now')
                     WHERE user_id = ?
-                """, (user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id, oauth_redirect_uri, user_id))
+                """, (user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id, oauth_redirect_uri, str(enrollment_file), default_permissions_json, user_id))
 
                 logger.info(f"Account updated: {user_id}")
 
@@ -101,19 +136,21 @@ class AccountManagementTool:
 
 사용자 ID: {user_id}
 이메일: {email}
+Enrollment 파일: {enrollment_file}
 상태: 업데이트됨
 
 다음 단계:
 start_authentication 툴로 OAuth 인증을 진행하세요."""
             else:
-                # Insert new account
+                # Insert new account with enrollment file path and permissions
                 self.db.execute_query("""
                     INSERT INTO accounts (
                         user_id, user_name, email,
                         oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri,
+                        enrollment_file_path, delegated_permissions, auth_type,
                         status, is_active, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, datetime('now'), datetime('now'))
-                """, (user_id, user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id, oauth_redirect_uri))
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Authorization Code Flow', 'ACTIVE', 1, datetime('now'), datetime('now'))
+                """, (user_id, user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id, oauth_redirect_uri, str(enrollment_file), default_permissions_json))
 
                 logger.info(f"New account registered: {user_id}")
 
@@ -121,6 +158,8 @@ start_authentication 툴로 OAuth 인증을 진행하세요."""
 
 사용자 ID: {user_id}
 이메일: {email}
+Enrollment 파일: {enrollment_file}
+권한: Mail.ReadWrite, Mail.Send, offline_access
 상태: 새로 생성됨
 
 다음 단계:

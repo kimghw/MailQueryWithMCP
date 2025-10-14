@@ -29,7 +29,3 @@ CREATE INDEX IF NOT EXISTS idx_iacs_kr_panel_member ON iacs_panel_chair(kr_panel
 
 -- 기본 데이터 삽입 (sdtp 패널)
 INSERT OR IGNORE INTO iacs_default_value (panel_name) VALUES ('sdtp');
-
--- 스키마 버전 기록
-INSERT OR REPLACE INTO schema_versions (module_name, version, applied_at)
-VALUES ('mail_iacs', '1.0.0', CURRENT_TIMESTAMP);

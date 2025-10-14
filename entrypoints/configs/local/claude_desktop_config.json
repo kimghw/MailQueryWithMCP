@@ -13,6 +13,13 @@
         "-e",
         "/home/kimghw/IACSGRAPH/entrypoints/local/run_subscription_stdio.sh"
       ]
+    },
+    "iacs-mail-server": {
+      "command": "wsl",
+      "args": [
+        "-e",
+        "/home/kimghw/IACSGRAPH/entrypoints/local/run_mail_iacs_stdio.sh"
+      ]
     }
   }
 }

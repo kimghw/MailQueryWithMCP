@@ -51,9 +51,9 @@ class TokenService:
             계정 ID
         """
         try:
-            # 기존 계정 확인
+            # 기존 계정 확인 (이메일 포함)
             existing_account = self.db.fetch_one(
-                "SELECT id FROM accounts WHERE user_id = ?", (user_id,)
+                "SELECT id, email FROM accounts WHERE user_id = ?", (user_id,)
             )
 
             access_token = token_info.get("access_token")
@@ -62,6 +62,28 @@ class TokenService:
 
             if isinstance(expiry_time, datetime):
                 expiry_time = expiry_time.isoformat()
+
+            # JWT 토큰에서 이메일 추출 및 검증
+            if access_token and existing_account:
+                # sqlite3.Row를 딕셔너리로 변환
+                account_dict = dict(existing_account)
+                registered_email = account_dict.get("email")
+
+                if registered_email:
+                    token_email = self._extract_email_from_jwt(access_token)
+
+                    if token_email and token_email.lower() != registered_email.lower():
+                        error_msg = (
+                            f"❌ 이메일 불일치: 등록된 이메일({registered_email})과 "
+                            f"토큰의 이메일({token_email})이 다릅니다. "
+                            f"올바른 계정으로 재인증하세요."
+                        )
+                        logger.error(error_msg)
+                        raise AuthenticationError(error_msg)
+                    elif token_email:
+                        logger.info(
+                            f"✅ 이메일 검증 성공: user_id={user_id}, email={registered_email}"
+                        )
 
             # 토큰 검증 및 상태 결정
             if access_token:
@@ -894,6 +916,55 @@ class TokenService:
             비활성 계정 목록
         """
         return await self.get_accounts_by_status("INACTIVE")
+
+    def _extract_email_from_jwt(self, access_token: str) -> Optional[str]:
+        """
+        JWT 액세스 토큰에서 이메일을 추출합니다.
+
+        Args:
+            access_token: JWT 액세스 토큰
+
+        Returns:
+            이메일 주소 또는 None
+        """
+        import base64
+        import json
+
+        try:
+            # JWT 토큰은 header.payload.signature 형식
+            parts = access_token.split(".")
+            if len(parts) != 3:
+                logger.warning("유효하지 않은 JWT 형식")
+                return None
+
+            # payload 디코딩 (base64url)
+            payload = parts[1]
+            # base64url padding 추가
+            padding = len(payload) % 4
+            if padding:
+                payload += "=" * (4 - padding)
+
+            decoded_bytes = base64.urlsafe_b64decode(payload)
+            payload_data = json.loads(decoded_bytes.decode("utf-8"))
+
+            # 이메일 추출 (우선순위: upn > unique_name > preferred_username > email)
+            email = (
+                payload_data.get("upn")
+                or payload_data.get("unique_name")
+                or payload_data.get("preferred_username")
+                or payload_data.get("email")
+            )
+
+            if email:
+                logger.debug(f"JWT에서 이메일 추출: {email}")
+            else:
+                logger.warning("JWT에서 이메일을 찾을 수 없음")
+
+            return email
+
+        except Exception as e:
+            logger.error(f"JWT 디코딩 실패: {str(e)}")
+            return None
 
 
 @lru_cache(maxsize=1)

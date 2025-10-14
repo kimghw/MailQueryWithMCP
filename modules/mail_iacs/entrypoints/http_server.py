@@ -1,6 +1,6 @@
 """
 IACS MCP HTTP 서버
-FastAPI 기반 RESTful API
+FastAPI 기반 RESTful API - MCP 표준 구조
 """
 
 import uvicorn
@@ -8,8 +8,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from infra.core.logger import get_logger
+from modules.mail_iacs.handlers import IACSHandlers
 from modules.mail_iacs import (
-    IACSTools,
     InsertInfoRequest,
     SearchAgendaRequest,
     SearchResponsesRequest,
@@ -25,8 +25,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Tools 인스턴스
-tools = IACSTools()
+# Handlers 인스턴스
+handlers = IACSHandlers()
 
 
 @app.get("/")
@@ -47,10 +47,10 @@ async def health_check():
 
 @app.post("/api/insert_info")
 async def insert_info(request: InsertInfoRequest):
-    """패널 의장 및 멤버 정보 삽입"""
+    """패널 의장 및 멤버 정보 삽입 - Handler 위임"""
     try:
-        response = await tools.insert_info(request)
-        return response.model_dump()
+        response = await handlers.call_tool_as_dict("insert_info", request.model_dump())
+        return response
     except Exception as e:
         logger.error(f"insert_info 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -58,10 +58,10 @@ async def insert_info(request: InsertInfoRequest):
 
 @app.post("/api/search_agenda")
 async def search_agenda(request: SearchAgendaRequest):
-    """아젠다 메일 검색"""
+    """아젠다 메일 검색 - Handler 위임"""
     try:
-        response = await tools.search_agenda(request)
-        return response.model_dump()
+        response = await handlers.call_tool_as_dict("search_agenda", request.model_dump())
+        return response
     except Exception as e:
         logger.error(f"search_agenda 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -69,10 +69,10 @@ async def search_agenda(request: SearchAgendaRequest):
 
 @app.post("/api/search_responses")
 async def search_responses(request: SearchResponsesRequest):
-    """응답 메일 검색"""
+    """응답 메일 검색 - Handler 위임"""
     try:
-        response = await tools.search_responses(request)
-        return response.model_dump()
+        response = await handlers.call_tool_as_dict("search_responses", request.model_dump())
+        return response
     except Exception as e:
         logger.error(f"search_responses 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -80,12 +80,53 @@ async def search_responses(request: SearchResponsesRequest):
 
 @app.post("/api/insert_default_value")
 async def insert_default_value(request: InsertDefaultValueRequest):
-    """기본 패널 이름 설정"""
+    """기본 패널 이름 설정 - Handler 위임"""
     try:
-        response = await tools.insert_default_value(request)
-        return response.model_dump()
+        response = await handlers.call_tool_as_dict("insert_default_value", request.model_dump())
+        return response
     except Exception as e:
         logger.error(f"insert_default_value 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/prompts")
+async def list_prompts():
+    """사용 가능한 프롬프트 목록 조회"""
+    try:
+        prompts = await handlers.handle_list_prompts()
+        return {
+            "prompts": [
+                {
+                    "name": p.name,
+                    "description": p.description,
+                    "arguments": [
+                        {
+                            "name": arg.name,
+                            "description": arg.description,
+                            "required": arg.required
+                        }
+                        for arg in (p.arguments or [])
+                    ]
+                }
+                for p in prompts
+            ]
+        }
+    except Exception as e:
+        logger.error(f"list_prompts 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/prompts/{prompt_name}")
+async def get_prompt(prompt_name: str, arguments: dict = {}):
+    """특정 프롬프트 내용 조회"""
+    try:
+        prompt_msg = await handlers.handle_get_prompt(prompt_name, arguments)
+        return {
+            "role": prompt_msg.role,
+            "content": prompt_msg.content.text
+        }
+    except Exception as e:
+        logger.error(f"get_prompt 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

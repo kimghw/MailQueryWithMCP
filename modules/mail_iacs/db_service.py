@@ -6,6 +6,7 @@ IACS DB 서비스
 from typing import List, Optional
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
+from infra.core.config import get_config
 from .schemas import PanelChairDB, DefaultValueDB
 
 logger = get_logger(__name__)
@@ -31,11 +32,19 @@ class IACSDBService:
                 with open(schema_path, "r", encoding="utf-8") as f:
                     schema_sql = f.read()
 
-                # 여러 SQL 문을 개별적으로 실행
-                for statement in schema_sql.split(';'):
-                    statement = statement.strip()
-                    if statement and not statement.startswith('--'):
-                        self.db.execute(statement)
+                # executescript 사용 (한 번에 실행)
+                import sqlite3
+                from pathlib import Path
+
+                # DB 경로 (.env의 DATABASE_PATH 사용)
+                config = get_config()
+                db_path = Path(config.database_path)
+                db_path.parent.mkdir(parents=True, exist_ok=True)
+
+                conn = sqlite3.connect(str(db_path))
+                conn.executescript(schema_sql)
+                conn.commit()
+                conn.close()
 
                 logger.info("IACS 스키마 초기화 완료")
             else:
@@ -63,7 +72,7 @@ class IACSDBService:
         """
         try:
             # 기존 데이터 삭제
-            self.db.execute(
+            self.db.execute_query(
                 """
                 DELETE FROM iacs_panel_chair
                 WHERE panel_name = ? AND chair_address = ?
@@ -104,7 +113,9 @@ class IACSDBService:
             )
 
             if row:
-                return PanelChairDB(**row)
+                # sqlite3.Row를 딕셔너리로 변환
+                row_dict = dict(row)
+                return PanelChairDB(**row_dict)
             return None
 
         except Exception as e:
@@ -132,7 +143,7 @@ class IACSDBService:
         """기본 패널 이름 설정"""
         try:
             # 기존 데이터 삭제
-            self.db.execute(
+            self.db.execute_query(
                 "DELETE FROM iacs_default_value WHERE panel_name = ?",
                 (panel_name,)
             )

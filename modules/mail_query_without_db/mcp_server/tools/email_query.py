@@ -436,9 +436,11 @@ class EmailQueryTool:
                 text_content = text_content.replace("&lt;", "<")
                 text_content = text_content.replace("&gt;", ">")
                 text_content = text_content.replace("&amp;", "&")
-                mail_info["body"] = text_content[:500] if len(text_content) > 500 else text_content
+                # Don't truncate - include full body
+                mail_info["body"] = text_content
             else:
-                mail_info["body"] = content[:500] if len(content) > 500 else content
+                # Don't truncate - include full body
+                mail_info["body"] = content
         elif mail.body_preview:
             mail_info["body_preview"] = mail.body_preview
 
@@ -790,10 +792,10 @@ class EmailQueryTool:
             # Include body preview if available
             if filters.get("include_body"):
                 if mail_info.get("body"):
-                    body_preview = mail_info["body"][:200] + "..." if len(mail_info["body"]) > 200 else mail_info["body"]
-                    result_text += f"   내용: {body_preview}\n"
+                    # Show full body without any truncation
+                    result_text += f"   내용: {mail_info['body']}\n"
                 elif mail_info.get("body_preview"):
-                    result_text += f"   미리보기: {mail_info['body_preview'][:100]}...\n"
+                    result_text += f"   미리보기: {mail_info['body_preview']}\n"
 
             # Show attachment info
             if mail_info.get("attachments"):
