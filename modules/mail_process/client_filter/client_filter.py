@@ -8,11 +8,17 @@ from typing import List, Dict, Any
 
 from .filter_criteria import FilterCriteria
 from .filters import (
+    # Phase 1
     SenderFilter,
     RecipientFilter,
     DateFilter,
     AttachmentFilter,
     KeywordFilter,
+    # Phase 2
+    AttachmentExtensionFilter,
+    ReadStatusFilter,
+    ImportanceFilter,
+    SubjectKeywordFilter,
 )
 
 logger = logging.getLogger(__name__)
@@ -57,8 +63,8 @@ class ClientFilter:
         # Phase 1 필터 순차 적용
         filtered = self._apply_phase1_filters(filtered)
 
-        # TODO: Phase 2 필터 (추후 구현)
-        # filtered = self._apply_phase2_filters(filtered)
+        # Phase 2 필터 순차 적용
+        filtered = self._apply_phase2_filters(filtered)
 
         filtered_count = len(filtered)
         removed_count = original_count - filtered_count
@@ -107,6 +113,40 @@ class ClientFilter:
             before = len(filtered)
             filtered = KeywordFilter.apply(filtered, self.criteria.keywords)
             logger.debug(f"Keyword filter: {before} → {len(filtered)}")
+
+        return filtered
+
+    def _apply_phase2_filters(self, emails: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Phase 2 필터 적용"""
+        filtered = emails
+
+        # 1. Attachment Extension 필터
+        if self.criteria.attachment_extensions:
+            before = len(filtered)
+            filtered = AttachmentExtensionFilter.apply(filtered, self.criteria.attachment_extensions)
+            logger.debug(f"Attachment extension filter: {before} → {len(filtered)}")
+
+        # 2. Read Status 필터
+        if self.criteria.is_read is not None:
+            before = len(filtered)
+            filtered = ReadStatusFilter.apply(filtered, self.criteria.is_read)
+            logger.debug(f"Read status filter: {before} → {len(filtered)}")
+
+        # 3. Importance 필터
+        if self.criteria.importance:
+            before = len(filtered)
+            filtered = ImportanceFilter.apply(filtered, self.criteria.importance)
+            logger.debug(f"Importance filter: {before} → {len(filtered)}")
+
+        # 4. Subject Keywords / Exclude Keywords 필터
+        if self.criteria.subject_keywords or self.criteria.exclude_keywords:
+            before = len(filtered)
+            filtered = SubjectKeywordFilter.apply(
+                filtered,
+                include_keywords=self.criteria.subject_keywords,
+                exclude_keywords=self.criteria.exclude_keywords
+            )
+            logger.debug(f"Subject keyword filter: {before} → {len(filtered)}")
 
         return filtered
 

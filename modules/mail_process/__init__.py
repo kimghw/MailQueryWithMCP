@@ -2,8 +2,8 @@
 Mail Process - 메일 처리 통합 모듈
 
 주요 기능:
-- ClientFilter: 메일 선별 (발신자, 수신자, 키워드, 날짜, 첨부파일 등)
-- EmailProcessor: 메일 저장 + 첨부파일 처리 + 텍스트 변환 파이프라인 (TODO)
+- ClientFilter: 메일 선별 (Phase 1 + Phase 2 필터 지원)
+- EmailProcessor: 메일 저장 + 첨부파일 처리 + 텍스트 변환 파이프라인
 - FileConverter: 다양한 파일 형식을 텍스트로 변환
 
 Legacy 기능:
@@ -24,9 +24,10 @@ from .utils import (
 # 클라이언트 필터
 from .client_filter import ClientFilter, FilterCriteria
 
-# 메일 프로세서 (데이터 클래스만 - 구현은 추후)
+# 메일 프로세서
 from .processor import (
     ProcessOptions,
+    EmailProcessor,
     EmailProcessResult,
     AttachmentResult,
     BatchProcessResult
@@ -55,6 +56,7 @@ __all__ = [
 
     # Email Processor
     'ProcessOptions',
+    'EmailProcessor',
     'EmailProcessResult',
     'AttachmentResult',
     'BatchProcessResult',
