@@ -22,7 +22,8 @@
     "default_port": 8002
   },
   "email": {
-    "blocked_senders": ["block@krs.co.kr"],
+    "comment": "blocked_senders: .env의 BLOCKED_SENDER_PATTERNS 환경변수 사용 권장. 없으면 아래 값 사용",
+    "blocked_senders": ["noreply@", "no-reply@", "donotreply@", "auto-reply@"],
     "default_days_back": 30,
     "default_max_mails": 300,
     "csv_encoding": "utf-8-sig"

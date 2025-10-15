@@ -191,7 +191,14 @@ class Config:
     # Email configuration
     @property
     def blocked_senders(self) -> list:
-        """Get blocked senders list"""
+        """Get blocked senders list from environment variable or config"""
+        # 1순위: 환경변수 BLOCKED_SENDER_PATTERNS
+        env_blocked = os.getenv('BLOCKED_SENDER_PATTERNS', '').strip()
+        if env_blocked:
+            # 쉼표로 구분된 패턴을 리스트로 변환
+            return [pattern.strip() for pattern in env_blocked.split(',') if pattern.strip()]
+
+        # 2순위: config.json의 blocked_senders
         return self._config.get('email', {}).get('blocked_senders', [])
 
     @property
