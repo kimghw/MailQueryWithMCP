@@ -5,10 +5,14 @@ FastAPI 기반 RESTful API - MCP 표준 구조
 
 import uvicorn
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
+from pydantic import BaseModel
+from typing import List
+import os
 
 from infra.core.logger import get_logger
 from modules.mail_iacs.handlers import IACSHandlers
+from modules.mail_iacs.db_service import IACSDBService
 from modules.mail_iacs import (
     InsertInfoRequest,
     SearchAgendaRequest,
@@ -25,8 +29,21 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# Handlers 인스턴스
+# Handlers 및 DB 서비스 인스턴스
 handlers = IACSHandlers()
+db_service = IACSDBService()
+
+
+# Pydantic 모델
+class ToolSchemaParameter(BaseModel):
+    parameter_name: str
+    parameter_type: str
+    is_required: str
+    default_value: str | None = None
+
+
+class UpdateToolSchemaRequest(BaseModel):
+    parameters: List[ToolSchemaParameter]
 
 
 @app.get("/")
@@ -158,6 +175,68 @@ async def get_prompt(prompt_name: str, arguments: dict = {}):
         }
     except Exception as e:
         logger.error(f"get_prompt 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# Tool Schema Management API
+# ============================================================================
+
+@app.get("/schema-manager", response_class=HTMLResponse)
+async def schema_manager_ui():
+    """Tool Schema Manager 웹 UI"""
+    try:
+        template_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "templates",
+            "schema_manager.html"
+        )
+        with open(template_path, "r", encoding="utf-8") as f:
+            return HTMLResponse(content=f.read())
+    except Exception as e:
+        logger.error(f"schema_manager_ui 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/schema/{tool_name}")
+async def get_tool_schema(tool_name: str):
+    """특정 도구의 스키마 조회"""
+    try:
+        parameters = db_service.get_tool_schema(tool_name)
+        return {"tool_name": tool_name, "parameters": parameters}
+    except Exception as e:
+        logger.error(f"get_tool_schema 오류 ({tool_name}): {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.put("/api/schema/{tool_name}")
+async def update_tool_schema(tool_name: str, request: UpdateToolSchemaRequest):
+    """특정 도구의 스키마 업데이트"""
+    try:
+        parameters = [p.model_dump() for p in request.parameters]
+        success = db_service.update_tool_schema(tool_name, parameters)
+
+        if success:
+            return {
+                "status": "success",
+                "tool_name": tool_name,
+                "message": f"{tool_name} schema updated successfully"
+            }
+        else:
+            raise HTTPException(status_code=500, detail="Failed to update schema")
+    except Exception as e:
+        logger.error(f"update_tool_schema 오류 ({tool_name}): {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/schema")
+async def get_all_schemas():
+    """모든 도구의 스키마 조회"""
+    try:
+        schemas = db_service.get_all_tool_schemas()
+        return {"schemas": schemas}
+    except Exception as e:
+        logger.error(f"get_all_schemas 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 

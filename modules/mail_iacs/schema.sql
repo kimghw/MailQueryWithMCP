@@ -14,13 +14,6 @@ CREATE TABLE IF NOT EXISTS iacs_panel_chair (
     CONSTRAINT uq_panel_chair UNIQUE (panel_name, chair_address)
 );
 
--- 기본값 설정 테이블
-CREATE TABLE IF NOT EXISTS iacs_default_value (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    panel_name TEXT NOT NULL UNIQUE,          -- 기본 패널 이름
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
 
 -- 인덱스 생성
 CREATE INDEX IF NOT EXISTS idx_iacs_panel_name ON iacs_panel_chair(panel_name);
@@ -35,56 +28,57 @@ CREATE INDEX IF NOT EXISTS idx_iacs_kr_panel_member ON iacs_panel_chair(kr_panel
 CREATE TABLE IF NOT EXISTS iacs_tool_search_agenda (
     parameter_name TEXT PRIMARY KEY,              -- 파라미터 이름
     parameter_type TEXT NOT NULL,                 -- 파라미터 타입 (string, array, object 등)
-    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional'))  -- 필수/옵션
+    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional')),  -- 필수/옵션
+    default_value TEXT                            -- 기본값
 );
 
 -- search_responses 도구 스키마 테이블
 CREATE TABLE IF NOT EXISTS iacs_tool_search_responses (
     parameter_name TEXT PRIMARY KEY,              -- 파라미터 이름
     parameter_type TEXT NOT NULL,                 -- 파라미터 타입
-    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional'))
+    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional')),
+    default_value TEXT                            -- 기본값
 );
 
 -- insert_info 도구 스키마 테이블
 CREATE TABLE IF NOT EXISTS iacs_tool_insert_info (
     parameter_name TEXT PRIMARY KEY,              -- 파라미터 이름
     parameter_type TEXT NOT NULL,                 -- 파라미터 타입
-    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional'))
+    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional')),
+    default_value TEXT                            -- 기본값
 );
 
 -- insert_default_value 도구 스키마 테이블
 CREATE TABLE IF NOT EXISTS iacs_tool_insert_default_value (
     parameter_name TEXT PRIMARY KEY,              -- 파라미터 이름
     parameter_type TEXT NOT NULL,                 -- 파라미터 타입
-    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional'))
+    is_required TEXT NOT NULL CHECK(is_required IN ('required', 'optional')),
+    default_value TEXT                            -- 기본값
 );
-
--- 기본 데이터 삽입 (sdtp 패널)
-INSERT OR IGNORE INTO iacs_default_value (panel_name) VALUES ('sdtp');
 
 -- ============================================================================
 -- 초기 스키마 데이터 삽입
 -- ============================================================================
 
 -- search_agenda 초기 데이터
-INSERT OR IGNORE INTO iacs_tool_search_agenda (parameter_name, parameter_type, is_required) VALUES
-('start_date', 'string', 'optional'),
-('end_date', 'string', 'optional'),
-('agenda_code', 'string', 'optional'),
-('panel_name', 'string', 'required');
+INSERT OR IGNORE INTO iacs_tool_search_agenda (parameter_name, parameter_type, is_required, default_value) VALUES
+('start_date', 'string', 'optional', 'now'),
+('end_date', 'string', 'optional', 'now-90d'),
+('agenda_code', 'string', 'optional', NULL),
+('panel_name', 'string', 'required', NULL);
 
 -- search_responses 초기 데이터
-INSERT OR IGNORE INTO iacs_tool_search_responses (parameter_name, parameter_type, is_required) VALUES
-('agenda_code', 'string', 'required'),
-('panel_name', 'string', 'optional'),
-('send_address', 'array', 'optional');
+INSERT OR IGNORE INTO iacs_tool_search_responses (parameter_name, parameter_type, is_required, default_value) VALUES
+('agenda_code', 'string', 'required', NULL),
+('panel_name', 'string', 'optional', 'sdtp'),
+('send_address', 'array', 'optional', NULL);
 
 -- insert_info 초기 데이터
-INSERT OR IGNORE INTO iacs_tool_insert_info (parameter_name, parameter_type, is_required) VALUES
-('chair_address', 'string', 'required'),
-('panel_name', 'string', 'required'),
-('kr_panel_member', 'string', 'required');
+INSERT OR IGNORE INTO iacs_tool_insert_info (parameter_name, parameter_type, is_required, default_value) VALUES
+('chair_address', 'string', 'required', NULL),
+('panel_name', 'string', 'required', NULL),
+('kr_panel_member', 'string', 'required', NULL);
 
 -- insert_default_value 초기 데이터
-INSERT OR IGNORE INTO iacs_tool_insert_default_value (parameter_name, parameter_type, is_required) VALUES
-('panel_name', 'string', 'required');
+INSERT OR IGNORE INTO iacs_tool_insert_default_value (parameter_name, parameter_type, is_required, default_value) VALUES
+('panel_name', 'string', 'required', NULL);

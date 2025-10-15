@@ -247,7 +247,7 @@ class IACSDBService:
             return None
 
     # ========================================================================
-    # Tool Schema 관련 메서드
+    # Tool Schema 관련 메서드 (새로운 per-tool 테이블 구조)
     # ========================================================================
 
     def get_tool_schema(self, tool_name: str) -> List[dict]:
@@ -255,7 +255,7 @@ class IACSDBService:
         도구의 스키마 정보 조회
 
         Args:
-            tool_name: 도구 이름
+            tool_name: 도구 이름 (search_agenda, search_responses, insert_info, insert_default_value)
 
         Returns:
             [
@@ -263,27 +263,72 @@ class IACSDBService:
                     'parameter_name': str,
                     'parameter_type': str,
                     'is_required': str,  # 'required' or 'optional'
-                    'description': str
+                    'default_value': str or None
                 },
                 ...
             ]
         """
         try:
+            table_name = f"iacs_tool_{tool_name}"
             rows = self.db.fetch_all(
+                f"""
+                SELECT parameter_name, parameter_type, is_required, default_value
+                FROM {table_name}
                 """
-                SELECT parameter_name, parameter_type, is_required, description
-                FROM iacs_tool_schema
-                WHERE tool_name = ?
-                ORDER BY id
-                """,
-                (tool_name,)
             )
 
             return [dict(row) for row in rows]
 
         except Exception as e:
-            logger.error(f"도구 스키마 조회 실패: {str(e)}")
+            logger.error(f"도구 스키마 조회 실패 ({tool_name}): {str(e)}")
             return []
+
+    def update_tool_schema(self, tool_name: str, parameters: List[dict]) -> bool:
+        """
+        도구의 스키마 정보 업데이트
+
+        Args:
+            tool_name: 도구 이름
+            parameters: [
+                {
+                    'parameter_name': str,
+                    'parameter_type': str,
+                    'is_required': str,
+                    'default_value': str or None
+                },
+                ...
+            ]
+
+        Returns:
+            성공 여부
+        """
+        try:
+            table_name = f"iacs_tool_{tool_name}"
+
+            # 각 파라미터 업데이트
+            for param in parameters:
+                self.db.execute_query(
+                    f"""
+                    UPDATE {table_name}
+                    SET parameter_type = ?,
+                        is_required = ?,
+                        default_value = ?
+                    WHERE parameter_name = ?
+                    """,
+                    (
+                        param['parameter_type'],
+                        param['is_required'],
+                        param['default_value'],
+                        param['parameter_name']
+                    )
+                )
+
+            logger.info(f"도구 스키마 업데이트 완료: {tool_name}")
+            return True
+
+        except Exception as e:
+            logger.error(f"도구 스키마 업데이트 실패 ({tool_name}): {str(e)}")
+            return False
 
     def get_all_tool_schemas(self) -> dict:
         """
@@ -292,30 +337,20 @@ class IACSDBService:
         Returns:
             {
                 'search_agenda': [
-                    {'parameter_name': 'start_date', 'parameter_type': 'string', 'is_required': 'optional', ...},
+                    {'parameter_name': 'start_date', 'parameter_type': 'string', 'is_required': 'optional', 'default_value': 'now'},
                     ...
                 ],
-                ...
+                'search_responses': [...],
+                'insert_info': [...],
+                'insert_default_value': [...]
             }
         """
         try:
-            rows = self.db.fetch_all(
-                """
-                SELECT tool_name, parameter_name, parameter_type, is_required, description
-                FROM iacs_tool_schema
-                ORDER BY tool_name, id
-                """
-            )
-
+            tool_names = ['search_agenda', 'search_responses', 'insert_info', 'insert_default_value']
             result = {}
-            for row in rows:
-                row_dict = dict(row)
-                tool_name = row_dict.pop('tool_name')
 
-                if tool_name not in result:
-                    result[tool_name] = []
-
-                result[tool_name].append(row_dict)
+            for tool_name in tool_names:
+                result[tool_name] = self.get_tool_schema(tool_name)
 
             return result
 
