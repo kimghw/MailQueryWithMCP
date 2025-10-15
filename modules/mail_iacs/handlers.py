@@ -85,10 +85,10 @@ class IACSHandlers(AuthHandlers):
                         },
                         "panel_name": {
                             "type": "string",
-                            "description": "패널 이름 (옵션, 없으면 기본 패널 사용)",
+                            "description": "패널 이름 (필수, 예: sdtp)",
                         },
                     },
-                    "required": [],
+                    "required": ["panel_name"],
                 },
             ),
             Tool(

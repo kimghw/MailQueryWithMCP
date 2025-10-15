@@ -66,9 +66,9 @@ class SearchAgendaRequest(BaseModel):
         None,
         description="아젠다 코드 키워드 (옵션)"
     )
-    panel_name: Optional[str] = Field(
-        None,
-        description="패널 이름 (옵션, DB에서 조회)"
+    panel_name: str = Field(
+        ...,
+        description="패널 이름 (필수, 예: sdtp)"
     )
     sender_address: Optional[EmailStr] = Field(
         None,
