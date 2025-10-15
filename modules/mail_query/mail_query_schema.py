@@ -39,7 +39,7 @@ class KeywordFilter(BaseModel):
             raise ValueError("최소 하나 이상의 키워드 조건(and_keywords, or_keywords, not_keywords)이 필요합니다")
 
 
-class MailQueryFilters(BaseModel):
+class MailQuerySeverFilters(BaseModel):
     """메일 필터 조건"""
 
     date_from: Optional[datetime] = Field(None, description="시작 날짜")
@@ -90,9 +90,10 @@ class MailQueryRequest(BaseModel):
     """메일 조회 요청"""
 
     user_id: str = Field(..., description="사용자 ID")
-    filters: Optional[MailQueryFilters] = Field(None, description="필터 조건")
+    filters: Optional[MailQuerySeverFilters] = Field(None, description="필터 조건")
     pagination: Optional[PaginationOptions] = Field(None, description="페이징 옵션")
     select_fields: Optional[List[str]] = Field(None, description="선택할 필드")
+    blocked_senders: Optional[List[str]] = Field(None, description="차단할 발신자 패턴 (예: noreply@, @spam.com)")
 
     @field_validator("select_fields")
     @classmethod

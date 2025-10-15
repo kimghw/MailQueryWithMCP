@@ -12,6 +12,7 @@ from infra.core.exceptions import AuthenticationError
 from infra.core.logger import get_logger
 from infra.core.token_service import get_token_service
 
+from .clientblock import ClientBlocker
 from .graph_api_client import GraphAPIClient
 from .mail_query_helpers import (
     format_query_summary,
@@ -19,7 +20,7 @@ from .mail_query_helpers import (
     validate_pagination_params,
 )
 from .mail_query_schema import (
-    MailQueryFilters,
+    MailQuerySeverFilters,
     MailQueryRequest,
     MailQueryResponse,
     PaginationOptions,
@@ -105,21 +106,18 @@ class MailQueryOrchestrator:
 
             messages = page_data.get("messages", [])
 
-            # 7. 응답 생성
-            execution_time = int((time.time() - start_time) * 1000)
-
-            response = MailQueryResponse(
-                user_id=request.user_id,
-                total_fetched=len(messages),
+            # 7. 공통 응답 생성 (blocking + 포맷팅)
+            response = self._build_query_response(
+                request=request,
                 messages=messages,
-                has_more=page_data.get("has_more", False),
-                next_link=page_data.get("next_link"),
-                execution_time_ms=execution_time,
+                start_time=start_time,
                 query_info={
                     "search_query": search_query,
                     "select_fields": select_fields,
                     "query_type": "$search",
-                },
+                    "has_more": page_data.get("has_more", False),
+                    "next_link": page_data.get("next_link"),
+                }
             )
 
             # 8. 로그 기록
@@ -224,16 +222,11 @@ class MailQueryOrchestrator:
 
                 current_skip += pagination.top
 
-            # 6. 응답 생성
-            execution_time = int((time.time() - start_time) * 1000)
-
-            response = MailQueryResponse(
-                user_id=request.user_id,
-                total_fetched=len(messages),
+            # 6. 공통 응답 생성 (blocking + 포맷팅)
+            response = self._build_query_response(
+                request=request,
                 messages=messages,
-                has_more=bool(next_link),
-                next_link=next_link,
-                execution_time_ms=execution_time,
+                start_time=start_time,
                 query_info={
                     "odata_filter": odata_filter,
                     "select_fields": select_fields,
@@ -241,12 +234,14 @@ class MailQueryOrchestrator:
                     "pagination": pagination.model_dump(),
                     "performance_estimate": (
                         self.filter_builder.estimate_query_performance(
-                            request.filters or MailQueryFilters(), pagination.top
+                            request.filters or MailQuerySeverFilters(), pagination.top
                         )
                         if request.filters
                         else "FAST"
                     ),
-                },
+                    "has_more": bool(next_link),
+                    "next_link": next_link,
+                }
             )
 
             # 7. infra.database를 통한 로그 기록 (동기 함수이므로 await 제거)
@@ -268,6 +263,49 @@ class MailQueryOrchestrator:
                 format_query_summary(request.user_id, 0, execution_time, has_error=True)
             )
             raise
+
+    def _build_query_response(
+        self,
+        request: MailQueryRequest,
+        messages: list,
+        start_time: float,
+        query_info: dict
+    ) -> MailQueryResponse:
+        """
+        공통 응답 생성 메서드 (blocking + 포맷팅)
+
+        Args:
+            request: MailQueryRequest
+            messages: 조회된 메일 리스트
+            start_time: 시작 시간
+            query_info: 쿼리 정보 (odata_filter, search_query 등)
+
+        Returns:
+            MailQueryResponse (blocking 적용됨)
+        """
+        # ⭐ Client-side blocking (응답 포맷팅 전 차단)
+        if request.blocked_senders:
+            blocker = ClientBlocker(request.blocked_senders)
+            original_count = len(messages)
+            messages = blocker.filter_messages(messages)
+            blocked_count = original_count - len(messages)
+            if blocked_count > 0:
+                logger.info(f"차단된 메일: {blocked_count}개 (전체 {original_count}개 중)")
+
+        # 응답 생성
+        execution_time = int((time.time() - start_time) * 1000)
+
+        response = MailQueryResponse(
+            user_id=request.user_id,
+            total_fetched=len(messages),
+            messages=messages,
+            has_more=query_info.get("has_more", False),
+            next_link=query_info.get("next_link"),
+            execution_time_ms=execution_time,
+            query_info=query_info,
+        )
+
+        return response
 
     async def _validate_request(self, request: MailQueryRequest):
         """요청 유효성 검사"""

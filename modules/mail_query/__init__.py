@@ -3,11 +3,12 @@ Mail Query 모듈
 Microsoft Graph API를 통한 메일 조회 기능 제공
 """
 
+from .clientblock import ClientBlocker
 from .mail_query_orchestrator import MailQueryOrchestrator
 from .mail_query_schema import (
     MailQueryRequest,
     MailQueryResponse,
-    MailQueryFilters,
+    MailQuerySeverFilters,
     PaginationOptions,
     GraphMailItem,
     KeywordFilter,
@@ -24,10 +25,11 @@ from .mail_query_schema import (
 )
 
 __all__ = [
+    "ClientBlocker",
     "MailQueryOrchestrator",
     "MailQueryRequest",
     "MailQueryResponse",
-    "MailQueryFilters",
+    "MailQuerySeverFilters",
     "PaginationOptions",
     "GraphMailItem",
     "KeywordFilter",

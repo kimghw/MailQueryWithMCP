@@ -8,14 +8,13 @@ from typing import Any, Dict, List, Optional
 
 from infra.core import get_database_manager, get_logger
 from modules.mail_query import (
-    MailQueryFilters,
+    MailQuerySeverFilters,
     MailQueryOrchestrator,
     MailQueryRequest,
     PaginationOptions
 )
 from mail_process import AttachmentDownloader, EmailSaver, FileConverterOrchestrator
 from mail_process.filters import KeywordFilter, ConversationFilter
-from mail_query_without_db.filters import SenderBlocker
 from modules.mail_query_without_db.mcp_server.prompts import get_format_email_results_prompt
 
 logger = get_logger(__name__)
@@ -39,8 +38,6 @@ class EmailQueryTool:
         self.file_converter = FileConverterOrchestrator()
         # Define KST timezone (UTC+9)
         self.KST = timezone(timedelta(hours=9))
-        # Initialize sender blocker
-        self.blocker = SenderBlocker(self.config.blocked_senders)
 
     def parse_datetime_kst_to_utc(self, date_str: str) -> datetime:
         """
@@ -165,7 +162,7 @@ class EmailQueryTool:
 
     def filter_messages(self, messages: List, user_id: str, filters: Dict) -> List:
         """
-        Filter messages: 1) Block → 2) Keyword → 3) Conversation
+        Filter messages: Keyword → Conversation (blocking은 mail_query에서 처리됨)
 
         Args:
             messages: List of email messages
@@ -175,14 +172,11 @@ class EmailQueryTool:
         Returns:
             Filtered list of messages
         """
-        # ⭐ 1순위: 차단 발신자 필터링 (맨 먼저!)
-        messages = self.blocker.filter_messages(messages)
-
         conversation_with = filters.get("conversation_with", [])
         recipient_address = filters.get("recipient_address")
         keyword_filter = filters.get("keyword_filter")
 
-        # 2순위: 키워드 필터
+        # 1순위: 키워드 필터
         if keyword_filter:
             messages = KeywordFilter.filter_by_keywords(messages, keyword_filter)
 
@@ -479,7 +473,7 @@ class EmailQueryTool:
                 keyword_filter = KeywordFilter(and_keywords=[keyword])
 
             # Traditional filtering with date range
-            filters = MailQueryFilters(date_from=start_date, date_to=end_date)
+            filters = MailQuerySeverFilters(date_from=start_date, date_to=end_date)
 
             if arguments.get("sender_address"):
                 filters.sender_address = arguments["sender_address"]
@@ -511,12 +505,13 @@ class EmailQueryTool:
             else:
                 query_max_mails = max_mails
 
-            # Create request
+            # Create request (blocked_senders를 mail_query에 전달)
             request = MailQueryRequest(
                 user_id=user_id,
                 filters=filters,
                 pagination=PaginationOptions(top=query_max_mails, skip=0, max_pages=1),
                 select_fields=select_fields,
+                blocked_senders=self.config.blocked_senders,  # ⭐ mail_query에서 blocking 처리
             )
 
             # Execute query
