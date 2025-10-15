@@ -169,7 +169,8 @@ class IACSDBService:
             )
 
             if row:
-                return row.get("panel_name")
+                # sqlite3.Row를 딕셔너리로 변환하거나 인덱스로 접근
+                return dict(row)["panel_name"]
             return None
 
         except Exception as e:

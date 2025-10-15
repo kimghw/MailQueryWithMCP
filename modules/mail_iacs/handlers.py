@@ -87,13 +87,17 @@ class IACSHandlers:
             ),
             Tool(
                 name="search_responses",
-                description="멤버들이 보낸 응답 메일 검색. 아젠다 코드로 제목 검색 (앞 7자 매칭). $search 방식 사용.",
+                description="멤버들이 보낸 응답 메일 검색. 아젠다 코드 전체로 제목 검색. $search 방식 사용. panel_name 생략 시 기본 패널 사용.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "agenda_code": {
                             "type": "string",
-                            "description": "아젠다 코드 키워드 (필수, 최소 7자)",
+                            "description": "아젠다 코드 전체 (필수, 예: PL24016a)",
+                        },
+                        "panel_name": {
+                            "type": "string",
+                            "description": "패널 이름 (옵션, 없으면 기본 패널 사용)",
                         },
                         "send_address": {
                             "type": "array",

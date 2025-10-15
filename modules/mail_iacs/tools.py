@@ -13,7 +13,7 @@ from modules.mail_query import (
     MailQueryRequest,
     MailQuerySeverFilters,
 )
-from modules.mail_process import AttachmentDownloader, EmailSaver
+from modules.mail_process import AttachmentDownloader
 
 from .db_service import IACSDBService
 from .schemas import (
@@ -46,9 +46,6 @@ class IACSTools:
 
         self.attachment_downloader = AttachmentDownloader(
             output_dir=str(base_dir / "iacs_attachments")
-        )
-        self.email_saver = EmailSaver(
-            output_dir=str(base_dir / "iacs_emails")
         )
         # 결과 포맷터 초기화
         self.formatter = IACSResultFormatter()
@@ -215,25 +212,9 @@ class IACSTools:
                 for mail in response.messages:
                     mail_dict = mail.model_dump()
 
-                    # 메일 저장
-                    if request.save_email:
-                        try:
-                            email_dict = {
-                                'id': mail.id,
-                                'subject': mail.subject,
-                                'received_date_time': mail.received_date_time,
-                                'from': mail.from_address,
-                                'body': mail.body if hasattr(mail, 'body') else None,
-                                'to_recipients': getattr(mail, 'to_recipients', []),
-                                'cc_recipients': getattr(mail, 'cc_recipients', []),
-                            }
-                            saved_info = await self.email_saver.save_email_as_text(
-                                email_dict, user_id=kr_panel_member
-                            )
-                            mail_dict['saved_email_path'] = saved_info.get('email_path')
-                            logger.info(f"메일 저장 완료: {saved_info.get('email_path')}")
-                        except Exception as e:
-                            logger.error(f"메일 저장 실패: {str(e)}")
+                    # 메일 저장 (legacy feature - 현재 미사용)
+                    # if request.save_email:
+                    #     logger.info("save_email 기능은 현재 미사용 (EmailProcessor로 통합 예정)")
 
                     # 첨부파일 다운로드
                     if request.download_attachments and mail.has_attachments:
@@ -367,8 +348,8 @@ class IACSTools:
             logger.info(f"kr_panel_member: {kr_panel_member}")
 
             # 2. $search 쿼리 생성
-            # agenda_code 앞 7자 검색
-            search_keyword = request.agenda_code[:7]
+            # agenda_code 전체 검색
+            search_keyword = request.agenda_code
             search_query = f"subject:{search_keyword}"
             logger.info(f"검색 쿼리 생성: search_keyword={search_keyword}, "
                        f"search_query={search_query}")
@@ -418,25 +399,9 @@ class IACSTools:
                     # 필터링 통과한 메일 처리
                     mail_dict = mail.model_dump()
 
-                    # 메일 저장
-                    if request.save_email:
-                        try:
-                            email_dict = {
-                                'id': mail.id,
-                                'subject': mail.subject,
-                                'received_date_time': mail.received_date_time,
-                                'from': mail.from_address,
-                                'body': mail.body if hasattr(mail, 'body') else None,
-                                'to_recipients': getattr(mail, 'to_recipients', []),
-                                'cc_recipients': getattr(mail, 'cc_recipients', []),
-                            }
-                            saved_info = await self.email_saver.save_email_as_text(
-                                email_dict, user_id=kr_panel_member
-                            )
-                            mail_dict['saved_email_path'] = saved_info.get('email_path')
-                            logger.info(f"메일 저장 완료: {saved_info.get('email_path')}")
-                        except Exception as e:
-                            logger.error(f"메일 저장 실패: {str(e)}")
+                    # 메일 저장 (legacy feature - 현재 미사용)
+                    # if request.save_email:
+                    #     logger.info("save_email 기능은 현재 미사용 (EmailProcessor로 통합 예정)")
 
                     # 첨부파일 다운로드
                     if request.download_attachments and mail.has_attachments:

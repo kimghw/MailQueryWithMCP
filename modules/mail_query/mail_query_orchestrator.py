@@ -127,7 +127,7 @@ class MailQueryOrchestrator:
 
             logger.info(
                 f"$search 검색 완료: user_id={request.user_id}, "
-                f"결과={len(messages)}개, 시간={execution_time}ms"
+                f"결과={len(messages)}개, 시간={response.execution_time_ms}ms"
             )
 
             return response
@@ -250,7 +250,7 @@ class MailQueryOrchestrator:
             )
 
             logger.info(
-                format_query_summary(request.user_id, len(messages), execution_time)
+                format_query_summary(request.user_id, len(messages), response.execution_time_ms)
             )
 
             return response
