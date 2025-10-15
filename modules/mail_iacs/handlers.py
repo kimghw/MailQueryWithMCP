@@ -73,15 +73,15 @@ class IACSHandlers(AuthHandlers):
                     "properties": {
                         "start_date": {
                             "type": "string",
-                            "description": "시작 날짜 (ISO 형식, 기본값: 현재)",
+                            "description": "_S 시작 날짜 (ISO 형식, 기본값: 현재)",
                         },
                         "end_date": {
                             "type": "string",
-                            "description": "종료 날짜 (ISO 형식, 기본값: 3개월 전)",
+                            "description": "_S 종료 날짜 (ISO 형식, 기본값: 3개월 전)",
                         },
                         "agenda_code": {
                             "type": "string",
-                            "description": "아젠다 코드 키워드 (옵션)",
+                            "description": "_S 아젠다 코드 키워드 (옵션)",
                         },
                         "panel_name": {
                             "type": "string",
@@ -99,7 +99,7 @@ class IACSHandlers(AuthHandlers):
                     "properties": {
                         "agenda_code": {
                             "type": "string",
-                            "description": "아젠다 코드 전체 (필수, 예: PL24016a)",
+                            "description": "_S 아젠다 코드 전체 (필수, 예: PL24016a)",
                         },
                         "panel_name": {
                             "type": "string",
@@ -108,7 +108,7 @@ class IACSHandlers(AuthHandlers):
                         "send_address": {
                             "type": "array",
                             "items": {"type": "string"},
-                            "description": "발신자 주소 리스트 (옵션)",
+                            "description": "_C 발신자 주소 리스트 (옵션)",
                         },
                     },
                     "required": ["agenda_code"],
