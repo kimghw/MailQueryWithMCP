@@ -46,12 +46,12 @@ class FilterCriteria:
         - ["@important-group.com"] (도메인 매칭)
     """
 
-    # 날짜 필터
-    date_from: Optional[datetime] = None
-    """시작 날짜 (이 날짜 이후)"""
+    # 날짜 필터 (start_date/end_date 별칭 지원)
+    start_date: Optional[datetime] = None
+    """시작 날짜 (이 날짜 이후) - date_from 별칭"""
 
-    date_to: Optional[datetime] = None
-    """종료 날짜 (이 날짜 이전)"""
+    end_date: Optional[datetime] = None
+    """종료 날짜 (이 날짜 이전) - date_to 별칭"""
 
     # 첨부파일 필터
     has_attachments: Optional[bool] = None
@@ -95,8 +95,8 @@ class FilterCriteria:
         return any([
             self.sender,
             self.recipients,
-            self.date_from,
-            self.date_to,
+            self.start_date,
+            self.end_date,
             self.has_attachments is not None,
             self.keywords,
             self.attachment_extensions,
@@ -114,10 +114,10 @@ class FilterCriteria:
             active.append(f"sender({len(self.sender)})")
         if self.recipients:
             active.append(f"recipients({len(self.recipients)})")
-        if self.date_from:
-            active.append("date_from")
-        if self.date_to:
-            active.append("date_to")
+        if self.start_date:
+            active.append("start_date")
+        if self.end_date:
+            active.append("end_date")
         if self.has_attachments is not None:
             active.append(f"has_attachments={self.has_attachments}")
         if self.keywords:

@@ -93,12 +93,12 @@ class ClientFilter:
             logger.debug(f"Recipients filter: {before} → {len(filtered)}")
 
         # 3. Date 필터
-        if self.criteria.date_from or self.criteria.date_to:
+        if self.criteria.start_date or self.criteria.end_date:
             before = len(filtered)
             filtered = DateFilter.apply(
                 filtered,
-                self.criteria.date_from,
-                self.criteria.date_to
+                date_from=self.criteria.start_date,
+                date_to=self.criteria.end_date
             )
             logger.debug(f"Date filter: {before} → {len(filtered)}")
 
