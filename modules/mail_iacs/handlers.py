@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 from mcp.types import Tool, TextContent, Prompt, PromptArgument, PromptMessage
 
 from infra.core.logger import get_logger
+from infra.auth import AuthHandlers
 from .tools import IACSTools
 from .prompts import get_prompt
 from .schemas import (
@@ -20,23 +21,28 @@ from .schemas import (
 logger = get_logger(__name__)
 
 
-class IACSHandlers:
-    """IACS MCP Protocol Handlers"""
+class IACSHandlers(AuthHandlers):
+    """IACS MCP Protocol Handlers with Authentication Support"""
 
     def __init__(self):
-        """Initialize handlers with tools instance"""
+        """Initialize handlers with tools instance and authentication support"""
+        super().__init__()  # Initialize AuthHandlers
         self.tools = IACSTools()
-        logger.info("✅ IACSHandlers initialized")
+        logger.info("✅ IACSHandlers initialized (with AuthHandlers)")
 
     # ========================================================================
     # MCP Protocol: list_tools
     # ========================================================================
 
     async def handle_list_tools(self) -> List[Tool]:
-        """List available MCP tools"""
+        """List available MCP tools (Authentication + IACS)"""
         logger.info("🔧 [MCP Handler] list_tools() called")
 
-        return [
+        # Get authentication tools from parent class
+        auth_tools = self.get_auth_tools()
+
+        # Define IACS-specific tools
+        iacs_tools = [
             Tool(
                 name="insert_info",
                 description="패널 의장 및 멤버 정보 삽입. 패널 이름과 의장 주소가 중복되면 기존 데이터를 삭제하고 새 데이터를 삽입합니다.",
@@ -124,6 +130,9 @@ class IACSHandlers:
             ),
         ]
 
+        # Return combined list: auth tools first, then IACS tools
+        return auth_tools + iacs_tools
+
     # ========================================================================
     # MCP Protocol: call_tool
     # ========================================================================
@@ -131,10 +140,15 @@ class IACSHandlers:
     async def handle_call_tool(
         self, name: str, arguments: Dict[str, Any]
     ) -> List[TextContent]:
-        """Handle MCP tool calls"""
+        """Handle MCP tool calls (Authentication + IACS)"""
         logger.info(f"🔨 [MCP Handler] call_tool({name}) with args: {arguments}")
 
         try:
+            # Check if it's an authentication tool
+            if self.is_auth_tool(name):
+                return await self.handle_auth_tool(name, arguments)
+
+            # Handle IACS-specific tools
             if name == "insert_info":
                 request = InsertInfoRequest(**arguments)
                 response = await self.tools.insert_info(request)
@@ -206,6 +220,13 @@ class IACSHandlers:
         HTTP API는 JSON dict를 반환해야 하므로 변환 헬퍼 제공
         """
         try:
+            # Check if it's an authentication tool
+            if self.is_auth_tool(name):
+                text_contents = await self.handle_auth_tool(name, arguments)
+                # Auth tools return TextContent, convert to dict
+                return {"text": text_contents[0].text if text_contents else ""}
+
+            # Handle IACS-specific tools
             if name == "insert_info":
                 request = InsertInfoRequest(**arguments)
                 response = await self.tools.insert_info(request)

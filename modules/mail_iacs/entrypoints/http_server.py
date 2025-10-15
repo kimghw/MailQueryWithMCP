@@ -45,6 +45,26 @@ async def health_check():
     return {"status": "healthy"}
 
 
+@app.get("/api/tools")
+async def list_tools():
+    """사용 가능한 도구 목록 조회 (인증 + IACS)"""
+    try:
+        tools = await handlers.handle_list_tools()
+        return {
+            "tools": [
+                {
+                    "name": tool.name,
+                    "description": tool.description,
+                    "inputSchema": tool.inputSchema
+                }
+                for tool in tools
+            ]
+        }
+    except Exception as e:
+        logger.error(f"list_tools 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/insert_info")
 async def insert_info(request: InsertInfoRequest):
     """패널 의장 및 멤버 정보 삽입 - Handler 위임"""
@@ -86,6 +106,17 @@ async def insert_default_value(request: InsertDefaultValueRequest):
         return response
     except Exception as e:
         logger.error(f"insert_default_value 오류: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/tool/{tool_name}")
+async def call_tool(tool_name: str, arguments: dict):
+    """범용 도구 호출 엔드포인트 (인증 도구 등)"""
+    try:
+        response = await handlers.call_tool_as_dict(tool_name, arguments)
+        return response
+    except Exception as e:
+        logger.error(f"{tool_name} 오류: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
