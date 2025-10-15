@@ -1,13 +1,15 @@
 """
-Mail Process - 공통 메일 처리 헬퍼 모듈
+Mail Process - 메일 처리 통합 모듈
 
-이 모듈은 다양한 메일 처리 기능을 제공합니다:
+주요 기능:
+- ClientFilter: 메일 선별 (발신자, 수신자, 키워드, 날짜, 첨부파일 등)
+- EmailProcessor: 메일 저장 + 첨부파일 처리 + 텍스트 변환 파이프라인 (TODO)
+- FileConverter: 다양한 파일 형식을 텍스트로 변환
+
+Legacy 기능:
 - 첨부파일 다운로드 (AttachmentDownloader)
 - 메일 저장 (EmailSaver)
-- 파일 변환 (FileConverterOrchestrator)
-- 구독 메일 스캔 (SubscriptionEmailScanner)
-- 구독 파일 수집 (SubscriptionFileCollector)
-- 유틸리티 (utils)
+- 구독 메일 스캔 (SubscriptionEmailScanner, SubscriptionFileCollector)
 """
 
 # 유틸리티
@@ -19,19 +21,24 @@ from .utils import (
     is_valid_email
 )
 
-# 첨부파일 다운로드
-from .attachment_downloader import AttachmentDownloader
+# 클라이언트 필터
+from .client_filter import ClientFilter, FilterCriteria
 
-# 메일 저장
-from .email_saver import EmailSaver
+# 메일 프로세서 (데이터 클래스만 - 구현은 추후)
+from .processor import (
+    ProcessOptions,
+    EmailProcessResult,
+    AttachmentResult,
+    BatchProcessResult
+)
 
 # 파일 변환
 from .converters import FileConverterOrchestrator
 
-# 구독 메일 스캔
+# Legacy: 기존 기능 (호환성 유지)
+from .attachment_downloader import AttachmentDownloader
+from .email_saver import EmailSaver
 from .email_scanner import SubscriptionEmailScanner
-
-# 구독 파일 수집
 from .file_collector import SubscriptionFileCollector
 
 __all__ = [
@@ -41,11 +48,23 @@ __all__ = [
     'truncate_text',
     'format_file_size',
     'is_valid_email',
-    # Core processors
+
+    # Client Filter
+    'ClientFilter',
+    'FilterCriteria',
+
+    # Email Processor
+    'ProcessOptions',
+    'EmailProcessResult',
+    'AttachmentResult',
+    'BatchProcessResult',
+
+    # File Converter
+    'FileConverterOrchestrator',
+
+    # Legacy (호환성 유지)
     'AttachmentDownloader',
     'EmailSaver',
-    'FileConverterOrchestrator',
-    # Subscription helpers
     'SubscriptionEmailScanner',
     'SubscriptionFileCollector',
 ]
