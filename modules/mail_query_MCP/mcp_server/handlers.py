@@ -8,6 +8,7 @@ from mcp.types import Prompt, PromptArgument, PromptMessage, TextContent, Tool
 
 from infra.core.logger import get_logger
 from infra.core.error_messages import ErrorCode, MCPError
+from infra.auth import AuthHandlers
 from .prompts import get_prompt
 from .tools import MailAttachmentTools  # This now imports from tools/__init__.py
 from .utils import preprocess_arguments
@@ -15,59 +16,23 @@ from .utils import preprocess_arguments
 logger = get_logger(__name__)
 
 
-class MCPHandlers:
-    """MCP Protocol handlers"""
-    
+class MCPHandlers(AuthHandlers):
+    """MCP Protocol handlers with Authentication Support"""
+
     def __init__(self):
+        super().__init__()  # Initialize AuthHandlers
         self.tools = MailAttachmentTools()
+        logger.info("✅ MCPHandlers initialized (with AuthHandlers)")
     
     async def handle_list_tools(self) -> List[Tool]:
-        """List available tools"""
+        """List available tools (Authentication + Mail Query)"""
         logger.info("🔧 [MCP Handler] list_tools() called")
 
-        return [
-            Tool(
-                name="register_account",
-                title="📝 Register Account",
-                description="Register a new email account with OAuth credentials and save to database",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "string", "description": "User ID (e.g., 'kimghw')"},
-                        "email": {"type": "string", "description": "Email address (e.g., 'kimghw@krs.co.kr')"},
-                        "user_name": {"type": "string", "description": "User display name (optional, defaults to user_id)"},
-                        "oauth_client_id": {"type": "string", "description": "Microsoft Azure App OAuth Client ID"},
-                        "oauth_client_secret": {"type": "string", "description": "Microsoft Azure App OAuth Client Secret"},
-                        "oauth_tenant_id": {"type": "string", "description": "Microsoft Azure AD Tenant ID"},
-                        "oauth_redirect_uri": {"type": "string", "description": "OAuth redirect URI (optional, defaults to http://localhost:5000/auth/callback)"},
-                    },
-                    "required": ["user_id", "email", "oauth_client_id", "oauth_client_secret", "oauth_tenant_id"]
-                }
-            ),
-            Tool(
-                name="get_account_status",
-                title="📊 Get Account Status",
-                description="Get detailed status and authentication information for a specific account",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "string", "description": "User ID to query"}
-                    },
-                    "required": ["user_id"]
-                }
-            ),
-            Tool(
-                name="start_authentication",
-                title="🔐 Start OAuth Authentication",
-                description="Start OAuth authentication flow for a registered account. Returns an authentication URL that you MUST open in a browser to complete Microsoft login. The URL will be provided as a clickable link - please click it to authorize access to the email account.",
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "user_id": {"type": "string", "description": "User ID (must be already registered)"}
-                    },
-                    "required": ["user_id"]
-                }
-            ),
+        # Get authentication tools from parent class
+        auth_tools = self.get_auth_tools()
+
+        # Define mail query specific tools
+        mail_query_tools = [
             Tool(
                 name="query_email",
                 title="📧 Query Email",
@@ -202,6 +167,7 @@ class MCPHandlers:
                                 "register_account",
                                 "get_account_status",
                                 "start_authentication",
+                                "list_active_accounts",
                                 "query_email",
                                 "help"
                             ]
@@ -210,30 +176,25 @@ class MCPHandlers:
                 }
             ),
         ]
+
+        # Return combined list: auth tools first, then mail query tools
+        return auth_tools + mail_query_tools
     
     async def handle_call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Handle tool calls"""
+        """Handle tool calls (Authentication + Mail Query)"""
         logger.info(f"🛠️ [MCP Handler] call_tool() called with tool: {name}")
         logger.info(f"📝 [MCP Handler] Raw arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
 
-        # Preprocess arguments
+        # Check if it's an authentication tool
+        if self.is_auth_tool(name):
+            return await self.handle_auth_tool(name, arguments)
+
+        # Preprocess arguments for mail query tools
         arguments = preprocess_arguments(arguments)
         logger.info(f"🔄 [MCP Handler] Preprocessed arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
 
         try:
-            if name == "register_account":
-                result = await self.tools.register_account(arguments)
-                return [TextContent(type="text", text=result)]
-
-            elif name == "get_account_status":
-                result = await self.tools.get_account_status(arguments)
-                return [TextContent(type="text", text=result)]
-
-            elif name == "start_authentication":
-                result = await self.tools.start_authentication(arguments)
-                return [TextContent(type="text", text=result)]
-
-            elif name == "query_email":
+            if name == "query_email":
                 result = await self.tools.query_email(arguments)
                 return [TextContent(type="text", text=result)]
 
