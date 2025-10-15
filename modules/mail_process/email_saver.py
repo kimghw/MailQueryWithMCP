@@ -307,7 +307,7 @@ class EmailSaver:
         """안전한 파일명 생성"""
         # Use common utility function
         try:
-            from .core.utils import sanitize_filename
+            from .utils import sanitize_filename
             return sanitize_filename(filename)
         except ImportError:
             # Fallback to inline implementation if import fails

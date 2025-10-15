@@ -11,7 +11,13 @@ Mail Process - 공통 메일 처리 헬퍼 모듈
 """
 
 # 유틸리티
-from .utils import sanitize_filename, ensure_directory_exists
+from .utils import (
+    sanitize_filename,
+    ensure_directory_exists,
+    truncate_text,
+    format_file_size,
+    is_valid_email
+)
 
 # 첨부파일 다운로드
 from .attachment_downloader import AttachmentDownloader
@@ -32,6 +38,9 @@ __all__ = [
     # Utils
     'sanitize_filename',
     'ensure_directory_exists',
+    'truncate_text',
+    'format_file_size',
+    'is_valid_email',
     # Core processors
     'AttachmentDownloader',
     'EmailSaver',

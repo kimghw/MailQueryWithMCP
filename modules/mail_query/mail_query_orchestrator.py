@@ -353,3 +353,178 @@ class MailQueryOrchestrator:
 
         except Exception as e:
             logger.error(f"오류 로그 기록 실패: {str(e)}")
+
+    async def get_single_email(
+        self, request: "SingleEmailRequest"
+    ) -> "SingleEmailResponse":
+        """
+        단일 메일 상세 조회
+
+        Args:
+            request: SingleEmailRequest
+
+        Returns:
+            SingleEmailResponse
+        """
+        start_time = time.time()
+
+        try:
+            # 1. 토큰 확보
+            access_token = await self.token_service.get_valid_access_token(
+                request.user_id
+            )
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {request.user_id}")
+
+            # 2. select_fields 처리
+            select_fields = None
+            if request.select_fields:
+                select_fields = self.filter_builder.build_select_clause(
+                    request.select_fields
+                )
+
+            # 3. Graph API 호출
+            result = await self.graph_client.get_single_message(
+                access_token=access_token,
+                message_id=request.message_id,
+                select_fields=select_fields
+            )
+
+            # 4. 응답 생성
+            execution_time = int((time.time() - start_time) * 1000)
+
+            from .mail_query_schema import SingleEmailResponse
+            response = SingleEmailResponse(
+                user_id=request.user_id,
+                message=result["message"],
+                execution_time_ms=execution_time
+            )
+
+            logger.info(
+                f"단일 메일 조회 완료: user_id={request.user_id}, "
+                f"message_id={request.message_id}, 시간={execution_time}ms"
+            )
+
+            return response
+
+        except Exception as e:
+            execution_time = int((time.time() - start_time) * 1000)
+            logger.error(f"단일 메일 조회 실패: {str(e)}")
+            raise
+
+    async def get_email_attachments(
+        self, request: "EmailAttachmentsRequest"
+    ) -> "EmailAttachmentsResponse":
+        """
+        메일의 첨부파일 목록 조회
+
+        Args:
+            request: EmailAttachmentsRequest
+
+        Returns:
+            EmailAttachmentsResponse
+        """
+        start_time = time.time()
+
+        try:
+            # 1. 토큰 확보
+            access_token = await self.token_service.get_valid_access_token(
+                request.user_id
+            )
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {request.user_id}")
+
+            # 2. Graph API 호출
+            result = await self.graph_client.get_message_attachments(
+                access_token=access_token,
+                message_id=request.message_id
+            )
+
+            # 3. 응답 생성
+            execution_time = int((time.time() - start_time) * 1000)
+
+            from .mail_query_schema import EmailAttachmentsResponse, AttachmentItem
+            attachments = [AttachmentItem(**att) for att in result["attachments"]]
+
+            response = EmailAttachmentsResponse(
+                user_id=request.user_id,
+                message_id=request.message_id,
+                attachments=attachments,
+                total_count=result["total_count"],
+                total_size=result["total_size"],
+                execution_time_ms=execution_time
+            )
+
+            logger.info(
+                f"첨부파일 목록 조회 완료: user_id={request.user_id}, "
+                f"message_id={request.message_id}, 개수={result['total_count']}, "
+                f"시간={execution_time}ms"
+            )
+
+            return response
+
+        except Exception as e:
+            execution_time = int((time.time() - start_time) * 1000)
+            logger.error(f"첨부파일 목록 조회 실패: {str(e)}")
+            raise
+
+    async def download_attachment(
+        self, request: "AttachmentDownloadRequest"
+    ) -> "AttachmentDownloadResponse":
+        """
+        첨부파일 다운로드
+
+        Args:
+            request: AttachmentDownloadRequest
+
+        Returns:
+            AttachmentDownloadResponse
+        """
+        start_time = time.time()
+
+        try:
+            # 1. 토큰 확보
+            access_token = await self.token_service.get_valid_access_token(
+                request.user_id
+            )
+            if not access_token:
+                raise AuthenticationError(f"유효한 토큰이 없습니다: {request.user_id}")
+
+            # 2. Graph API 호출
+            result = await self.graph_client.download_attachment(
+                access_token=access_token,
+                message_id=request.message_id,
+                attachment_id=request.attachment_id
+            )
+
+            # 3. base64 디코딩
+            import base64
+            content_bytes = base64.b64decode(result["contentBytes"])
+
+            # 4. 응답 생성
+            execution_time = int((time.time() - start_time) * 1000)
+
+            from .mail_query_schema import AttachmentDownloadResponse
+            response = AttachmentDownloadResponse(
+                user_id=request.user_id,
+                message_id=request.message_id,
+                attachment_id=request.attachment_id,
+                name=result["name"],
+                content_type=result["contentType"],
+                size=result["size"],
+                content_bytes=content_bytes,
+                execution_time_ms=execution_time
+            )
+
+            logger.info(
+                f"첨부파일 다운로드 완료: user_id={request.user_id}, "
+                f"message_id={request.message_id}, attachment_id={request.attachment_id}, "
+                f"size={result['size']} bytes, 시간={execution_time}ms"
+            )
+
+            return response
+
+        except Exception as e:
+            execution_time = int((time.time() - start_time) * 1000)
+            logger.error(f"첨부파일 다운로드 실패: {str(e)}")
+            raise

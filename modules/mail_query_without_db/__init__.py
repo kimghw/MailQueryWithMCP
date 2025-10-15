@@ -1,8 +1,6 @@
-"""Mail query without database - Attachment processing and email saving module"""
+"""Mail query without database - MCP Server and Filters"""
 
-# Import from core directory
-from .core.attachment_downloader import AttachmentDownloader
-from .core.email_saver import EmailSaver
-from .core.converters import FileConverterOrchestrator as FileConverter
+# This module now focuses on MCP server and client-side filtering
+# Email processing components have been moved to mail_process module
 
-__all__ = ['AttachmentDownloader', 'FileConverter', 'EmailSaver']
+__all__ = []

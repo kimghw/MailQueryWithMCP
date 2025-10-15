@@ -404,3 +404,144 @@ class GraphAPIClient:
         except Exception as e:
             logger.error(f"GET request failed: {str(e)}")
             return None
+
+    async def get_single_message(
+        self,
+        access_token: str,
+        message_id: str,
+        select_fields: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        단일 메일 상세 조회
+
+        Args:
+            access_token: 액세스 토큰
+            message_id: 메일 ID
+            select_fields: 선택 필드 (콤마로 구분)
+
+        Returns:
+            메일 상세 정보
+        """
+        endpoint = f"/me/messages/{message_id}"
+
+        # select_fields가 있으면 쿼리 파라미터 추가
+        if select_fields:
+            endpoint += f"?$select={select_fields}"
+            if "attachments" in select_fields:
+                endpoint += "&$expand=attachments"
+
+        logger.info(f"단일 메일 조회: message_id={message_id}")
+
+        try:
+            response_data = await self.get(endpoint, access_token)
+
+            if not response_data:
+                raise APIConnectionError(f"메일을 찾을 수 없습니다: {message_id}")
+
+            # GraphMailItem으로 변환
+            graph_item = parse_graph_mail_item(response_data)
+
+            return {
+                "message": graph_item,
+                "raw_data": response_data
+            }
+
+        except Exception as e:
+            logger.error(f"단일 메일 조회 실패: {str(e)}")
+            raise
+
+    async def get_message_attachments(
+        self,
+        access_token: str,
+        message_id: str
+    ) -> Dict[str, Any]:
+        """
+        메일의 첨부파일 목록 조회
+
+        Args:
+            access_token: 액세스 토큰
+            message_id: 메일 ID
+
+        Returns:
+            첨부파일 목록
+        """
+        endpoint = f"/me/messages/{message_id}/attachments"
+
+        logger.info(f"첨부파일 목록 조회: message_id={message_id}")
+
+        try:
+            response_data = await self.get(endpoint, access_token)
+
+            if not response_data:
+                raise APIConnectionError(f"첨부파일 목록을 가져올 수 없습니다: {message_id}")
+
+            attachments = response_data.get("value", [])
+
+            # 첨부파일 정보 파싱
+            attachment_items = []
+            total_size = 0
+
+            for att in attachments:
+                att_info = {
+                    "id": att.get("id"),
+                    "name": att.get("name"),
+                    "contentType": att.get("contentType"),
+                    "size": att.get("size", 0),
+                    "isInline": att.get("isInline", False),
+                    "lastModifiedDateTime": att.get("lastModifiedDateTime")
+                }
+                attachment_items.append(att_info)
+                total_size += att.get("size", 0)
+
+            return {
+                "attachments": attachment_items,
+                "total_count": len(attachment_items),
+                "total_size": total_size
+            }
+
+        except Exception as e:
+            logger.error(f"첨부파일 목록 조회 실패: {str(e)}")
+            raise
+
+    async def download_attachment(
+        self,
+        access_token: str,
+        message_id: str,
+        attachment_id: str
+    ) -> Dict[str, Any]:
+        """
+        첨부파일 다운로드
+
+        Args:
+            access_token: 액세스 토큰
+            message_id: 메일 ID
+            attachment_id: 첨부파일 ID
+
+        Returns:
+            첨부파일 데이터 (base64 인코딩된 contentBytes 포함)
+        """
+        endpoint = f"/me/messages/{message_id}/attachments/{attachment_id}"
+
+        logger.info(f"첨부파일 다운로드: message_id={message_id}, attachment_id={attachment_id}")
+
+        try:
+            response_data = await self.get(endpoint, access_token)
+
+            if not response_data:
+                raise APIConnectionError(
+                    f"첨부파일을 찾을 수 없습니다: message_id={message_id}, attachment_id={attachment_id}"
+                )
+
+            # contentBytes는 base64로 인코딩되어 있음
+            return {
+                "id": response_data.get("id"),
+                "name": response_data.get("name"),
+                "contentType": response_data.get("contentType"),
+                "size": response_data.get("size"),
+                "contentBytes": response_data.get("contentBytes"),  # base64 문자열
+                "isInline": response_data.get("isInline", False)
+            }
+
+        except Exception as e:
+            logger.error(f"첨부파일 다운로드 실패: {str(e)}")
+            raise

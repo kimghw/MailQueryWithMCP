@@ -125,7 +125,7 @@ class AttachmentDownloader:
         """
         # Use common utility function
         try:
-            from .core.utils import sanitize_filename
+            from .utils import sanitize_filename
             return sanitize_filename(filename, max_length=200)
         except ImportError:
             # Fallback to inline implementation if import fails

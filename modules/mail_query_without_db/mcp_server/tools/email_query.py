@@ -13,8 +13,9 @@ from modules.mail_query import (
     MailQueryRequest,
     PaginationOptions
 )
-from modules.mail_query_without_db import AttachmentDownloader, EmailSaver
-from modules.mail_query_without_db.core.converters import FileConverterOrchestrator
+from mail_process import AttachmentDownloader, EmailSaver, FileConverterOrchestrator
+from mail_process.filters import KeywordFilter, ConversationFilter
+from mail_query_without_db.filters import SenderBlocker
 from modules.mail_query_without_db.mcp_server.prompts import get_format_email_results_prompt
 
 logger = get_logger(__name__)
@@ -38,6 +39,8 @@ class EmailQueryTool:
         self.file_converter = FileConverterOrchestrator()
         # Define KST timezone (UTC+9)
         self.KST = timezone(timedelta(hours=9))
+        # Initialize sender blocker
+        self.blocker = SenderBlocker(self.config.blocked_senders)
 
     def parse_datetime_kst_to_utc(self, date_str: str) -> datetime:
         """
@@ -159,127 +162,10 @@ class EmailQueryTool:
 
         return None
 
-    def filter_by_keyword(self, messages: List, keyword_filter) -> List:
-        """
-        Filter messages by structured keyword filter
-
-        Args:
-            messages: List of email messages
-            keyword_filter: KeywordFilter object with and_keywords, or_keywords, not_keywords
-
-        Returns:
-            Filtered list of messages
-        """
-        if not keyword_filter:
-            return messages
-
-        filtered_messages = []
-
-        for mail in messages:
-            mail_text = self._get_searchable_text(mail).lower()
-            include_mail = True
-
-            # AND condition: all keywords must be present
-            if keyword_filter.and_keywords:
-                and_keywords = [kw.lower() for kw in keyword_filter.and_keywords]
-                if not all(kw in mail_text for kw in and_keywords):
-                    include_mail = False
-
-            # OR condition: at least one keyword must be present
-            if include_mail and keyword_filter.or_keywords:
-                or_keywords = [kw.lower() for kw in keyword_filter.or_keywords]
-                if not any(kw in mail_text for kw in or_keywords):
-                    include_mail = False
-
-            # NOT condition: none of these keywords should be present
-            if include_mail and keyword_filter.not_keywords:
-                not_keywords = [kw.lower() for kw in keyword_filter.not_keywords]
-                if any(kw in mail_text for kw in not_keywords):
-                    include_mail = False
-
-            if include_mail:
-                filtered_messages.append(mail)
-
-        return filtered_messages
-
-    def _get_searchable_text(self, mail) -> str:
-        """
-        Extract all searchable text from an email
-
-        Args:
-            mail: Email message object
-
-        Returns:
-            Combined text from all searchable fields
-        """
-        text_parts = []
-
-        # Add subject
-        if hasattr(mail, 'subject') and mail.subject:
-            text_parts.append(str(mail.subject))
-
-        # Add body preview or body
-        if hasattr(mail, 'body_preview') and mail.body_preview:
-            text_parts.append(str(mail.body_preview))
-        elif hasattr(mail, 'body') and mail.body:
-            if isinstance(mail.body, dict):
-                content = mail.body.get('content', '')
-                if content:
-                    # Remove HTML tags if present
-                    import re
-                    content = re.sub('<[^<]+?>', '', content)
-                    text_parts.append(content[:1000])  # Limit to first 1000 chars
-            else:
-                text_parts.append(str(mail.body)[:1000])
-
-        # Add sender information
-        if hasattr(mail, 'from_address') and mail.from_address:
-            if isinstance(mail.from_address, dict):
-                email_addr = mail.from_address.get('emailAddress', {})
-                if isinstance(email_addr, dict):
-                    sender_email = email_addr.get('address', '')
-                    sender_name = email_addr.get('name', '')
-                    text_parts.append(sender_email)
-                    text_parts.append(sender_name)
-
-        # Add recipient information (for sent emails)
-        if hasattr(mail, 'to_recipients') and mail.to_recipients:
-            for recipient in mail.to_recipients:
-                if isinstance(recipient, dict):
-                    email_addr = recipient.get('emailAddress', {})
-                    if isinstance(email_addr, dict):
-                        text_parts.append(email_addr.get('address', ''))
-                        text_parts.append(email_addr.get('name', ''))
-
-        # Add attachment names
-        if hasattr(mail, 'attachments') and mail.attachments:
-            for attachment in mail.attachments:
-                if isinstance(attachment, dict):
-                    text_parts.append(attachment.get('name', ''))
-
-        return ' '.join(text_parts)
-
-    def _simple_keyword_filter(self, messages: List, keyword: str) -> List:
-        """
-        Simple keyword filtering without boolean operators
-
-        Args:
-            messages: List of email messages
-            keyword: Search keyword (lowercase)
-
-        Returns:
-            Filtered list of messages
-        """
-        filtered_messages = []
-        for mail in messages:
-            mail_text = self._get_searchable_text(mail).lower()
-            if keyword in mail_text:
-                filtered_messages.append(mail)
-        return filtered_messages
 
     def filter_messages(self, messages: List, user_id: str, filters: Dict) -> List:
         """
-        Filter messages based on conversation_with, recipient_address, or keyword
+        Filter messages: 1) Block → 2) Keyword → 3) Conversation
 
         Args:
             messages: List of email messages
@@ -289,51 +175,32 @@ class EmailQueryTool:
         Returns:
             Filtered list of messages
         """
+        # ⭐ 1순위: 차단 발신자 필터링 (맨 먼저!)
+        messages = self.blocker.filter_messages(messages)
+
         conversation_with = filters.get("conversation_with", [])
         recipient_address = filters.get("recipient_address")
         keyword_filter = filters.get("keyword_filter")
 
-        # First, apply keyword filter if provided
+        # 2순위: 키워드 필터
         if keyword_filter:
-            messages = self.filter_by_keyword(messages, keyword_filter)
+            messages = KeywordFilter.filter_by_keywords(messages, keyword_filter)
 
-        # If no other filters, return keyword-filtered results
-        if not conversation_with and not recipient_address:
+        # Apply conversation filter
+        if conversation_with:
+            messages = ConversationFilter.filter_conversation(messages, user_id, conversation_with)
             return messages
 
-        filtered_messages = []
-        conversation_emails = [email.lower() for email in conversation_with]
+        # Apply recipient filter
+        if recipient_address:
+            # Filter for sent mails to specific recipient
+            filtered_messages = []
+            for mail in messages:
+                sender_email = ""
+                if mail.from_address and isinstance(mail.from_address, dict):
+                    email_addr = mail.from_address.get("emailAddress", {})
+                    sender_email = email_addr.get("address", "").lower()
 
-        for mail in messages:
-            include_mail = False
-
-            # Get sender email
-            sender_email = ""
-            if mail.from_address and isinstance(mail.from_address, dict):
-                email_addr = mail.from_address.get("emailAddress", {})
-                sender_email = email_addr.get("address", "").lower()
-
-            # For conversation_with filter
-            if conversation_with:
-                # Check if sender is in conversation_with
-                if sender_email in conversation_emails:
-                    include_mail = True
-
-                # Check if this is a sent mail (from the user)
-                elif sender_email and f"{user_id}@" in sender_email:
-                    # This is a sent mail, check recipients
-                    if hasattr(mail, "to_recipients") and mail.to_recipients:
-                        for recipient in mail.to_recipients:
-                            if isinstance(recipient, dict):
-                                recip_addr = recipient.get("emailAddress", {})
-                                if isinstance(recip_addr, dict):
-                                    recip_email = recip_addr.get("address", "").lower()
-                                    if recip_email in conversation_emails:
-                                        include_mail = True
-                                        break
-
-            # For recipient_address filter (only sent mails)
-            elif recipient_address:
                 # Only include if this is a sent mail from the user
                 if sender_email and f"{user_id}@" in sender_email:
                     # Check recipients
@@ -344,13 +211,11 @@ class EmailQueryTool:
                                 if isinstance(recip_addr, dict):
                                     recip_email = recip_addr.get("address", "").lower()
                                     if recip_email == recipient_address.lower():
-                                        include_mail = True
+                                        filtered_messages.append(mail)
                                         break
+            return filtered_messages
 
-            if include_mail:
-                filtered_messages.append(mail)
-
-        return filtered_messages
+        return messages
 
     async def format_email_info(self, mail, index: int, user_id: str, save_emails: bool,
                           download_attachments: bool, graph_client=None) -> Dict[str, Any]:
@@ -378,12 +243,6 @@ class EmailQueryTool:
             sender_name = email_addr.get("name", "")
             if sender_name:
                 sender = f"{sender_name} <{sender_email}>"
-
-        # Check if sender should be blocked
-        blocked_senders = self.config.blocked_senders
-        if sender_email and any(blocked in sender_email.lower() for blocked in blocked_senders):
-            logger.info(f"Skipping email from blocked sender: {sender_email}")
-            return None
 
         # Save email if requested
         mail_saved_path = None
@@ -665,19 +524,18 @@ class EmailQueryTool:
                 response = await orchestrator.mail_query_user_emails(request)
                 graph_client = orchestrator.graph_client if download_attachments else None
 
-            # Filter messages if needed (client-side filtering)
-            if keyword_filter or conversation_with or recipient_address:
-                response.messages = self.filter_messages(
-                    response.messages,
-                    user_id,
-                    {
-                        "keyword_filter": keyword_filter,
-                        "conversation_with": conversation_with,
-                        "recipient_address": recipient_address
-                    }
-                )
-                # Limit to max_mails after filtering
-                response.messages = response.messages[:max_mails]
+            # ⭐ Always apply blocking + optional filters (client-side filtering)
+            response.messages = self.filter_messages(
+                response.messages,
+                user_id,
+                {
+                    "keyword_filter": keyword_filter,
+                    "conversation_with": conversation_with,
+                    "recipient_address": recipient_address
+                }
+            )
+            # Limit to max_mails after filtering
+            response.messages = response.messages[:max_mails]
 
             # Format results
             result_text = await self.format_results(

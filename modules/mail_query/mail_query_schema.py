@@ -200,3 +200,77 @@ class GraphAPIError(BaseModel):
     timestamp: datetime = Field(
         default_factory=datetime.utcnow, description="오류 발생 시간"
     )
+
+
+# ===== 단일 메일 조회 =====
+class SingleEmailRequest(BaseModel):
+    """단일 메일 조회 요청"""
+
+    user_id: str = Field(..., description="사용자 ID")
+    message_id: str = Field(..., description="메일 ID")
+    select_fields: Optional[List[str]] = Field(None, description="선택할 필드")
+
+
+class SingleEmailResponse(BaseModel):
+    """단일 메일 조회 응답"""
+
+    user_id: str = Field(..., description="사용자 ID")
+    message: GraphMailItem = Field(..., description="메일 상세")
+    execution_time_ms: int = Field(..., description="실행 시간(밀리초)")
+
+
+# ===== 첨부파일 조회 =====
+class AttachmentItem(BaseModel):
+    """첨부파일 아이템"""
+
+    id: str = Field(..., description="첨부파일 ID")
+    name: str = Field(..., description="파일명")
+    content_type: str = Field(..., alias="contentType", description="MIME 타입")
+    size: int = Field(..., description="파일 크기(바이트)")
+    is_inline: bool = Field(default=False, alias="isInline", description="인라인 여부")
+    last_modified_date_time: Optional[datetime] = Field(
+        None, alias="lastModifiedDateTime", description="마지막 수정 시간"
+    )
+
+    class Config:
+        populate_by_name = True
+
+
+class EmailAttachmentsRequest(BaseModel):
+    """메일 첨부파일 목록 조회 요청"""
+
+    user_id: str = Field(..., description="사용자 ID")
+    message_id: str = Field(..., description="메일 ID")
+
+
+class EmailAttachmentsResponse(BaseModel):
+    """메일 첨부파일 목록 조회 응답"""
+
+    user_id: str = Field(..., description="사용자 ID")
+    message_id: str = Field(..., description="메일 ID")
+    attachments: List[AttachmentItem] = Field(..., description="첨부파일 목록")
+    total_count: int = Field(..., description="전체 첨부파일 수")
+    total_size: int = Field(..., description="전체 크기(바이트)")
+    execution_time_ms: int = Field(..., description="실행 시간(밀리초)")
+
+
+# ===== 첨부파일 다운로드 =====
+class AttachmentDownloadRequest(BaseModel):
+    """첨부파일 다운로드 요청"""
+
+    user_id: str = Field(..., description="사용자 ID")
+    message_id: str = Field(..., description="메일 ID")
+    attachment_id: str = Field(..., description="첨부파일 ID")
+
+
+class AttachmentDownloadResponse(BaseModel):
+    """첨부파일 다운로드 응답"""
+
+    user_id: str = Field(..., description="사용자 ID")
+    message_id: str = Field(..., description="메일 ID")
+    attachment_id: str = Field(..., description="첨부파일 ID")
+    name: str = Field(..., description="파일명")
+    content_type: str = Field(..., description="MIME 타입")
+    size: int = Field(..., description="파일 크기(바이트)")
+    content_bytes: bytes = Field(..., description="파일 내용(바이트)")
+    execution_time_ms: int = Field(..., description="실행 시간(밀리초)")
