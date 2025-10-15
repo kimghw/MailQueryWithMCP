@@ -17,16 +17,18 @@ sys.path.insert(0, str(PROJECT_ROOT))
 os.environ.pop('MCP_STDIO_MODE', None)
 
 from infra.core.logger import get_logger
+from infra.core.database import get_database_manager
 from modules.mail_iacs.db_service import IACSDBService
 
 logger = get_logger(__name__)
 
 
 def initialize_database():
-    """Initialize IACS database schema"""
-    logger.info("📦 Initializing IACS database...")
+    """Initialize IACS database schema and register accounts"""
+    logger.info("📦 Initializing IACS database and accounts...")
 
     try:
+        # Initialize IACS database
         db_service = IACSDBService()
         logger.info("✅ IACS database initialized successfully")
 
@@ -46,10 +48,71 @@ def initialize_database():
         else:
             logger.warning("⚠️  No default panel set")
 
+        # Register accounts from environment variables
+        logger.info("📝 Checking for account configurations...")
+        db = get_database_manager()
+        account_num = 1
+        while True:
+            prefix = f"ACCOUNT_{account_num}_"
+            user_id = os.getenv(f"{prefix}USER_ID")
+
+            if not user_id:
+                break
+
+            user_name = os.getenv(f"{prefix}USER_NAME")
+            email = os.getenv(f"{prefix}EMAIL")
+            tenant_id = os.getenv(f"{prefix}TENANT_ID")
+            client_id = os.getenv(f"{prefix}CLIENT_ID")
+            client_secret = os.getenv(f"{prefix}CLIENT_SECRET")
+
+            # Render.com automatically sets RENDER environment variable
+            default_redirect = (
+                "https://iacs-mail-server.onrender.com/auth/callback"
+                if os.getenv("RENDER")
+                else "http://localhost:5000/auth/callback"
+            )
+            redirect_uri = os.getenv(f"{prefix}REDIRECT_URI", default_redirect)
+
+            if all([user_name, email, tenant_id, client_id, client_secret]):
+                logger.info(f"📝 Registering account {account_num}: {user_id} ({email})")
+
+                # Check if account already exists
+                existing = db.fetch_one("SELECT id FROM accounts WHERE user_id = ?", (user_id,))
+
+                if existing:
+                    logger.info(f"  ℹ️  Account already exists, updating...")
+                    db.execute_query("""
+                        UPDATE accounts
+                        SET user_name = ?, email = ?,
+                            oauth_client_id = ?, oauth_client_secret = ?,
+                            oauth_tenant_id = ?, oauth_redirect_uri = ?,
+                            updated_at = datetime('now')
+                        WHERE user_id = ?
+                    """, (user_name, email, client_id, client_secret, tenant_id, redirect_uri, user_id))
+                    logger.info(f"  ✅ Account updated successfully")
+                else:
+                    db.execute_query("""
+                        INSERT INTO accounts (
+                            user_id, user_name, email,
+                            oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri,
+                            status, is_active, created_at, updated_at
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 'ACTIVE', 1, datetime('now'), datetime('now'))
+                    """, (user_id, user_name, email, client_id, client_secret, tenant_id, redirect_uri))
+                    logger.info(f"  ✅ Account registered successfully")
+            else:
+                logger.warning(f"  ⚠️  Incomplete account configuration for {prefix}, skipping...")
+
+            account_num += 1
+
+        if account_num == 1:
+            logger.warning("⚠️  No accounts found in environment variables")
+            logger.info("   💡 To register accounts, set ACCOUNT_1_USER_ID, ACCOUNT_1_USER_NAME, etc.")
+        else:
+            logger.info(f"✅ Processed {account_num - 1} account(s)")
+
     except Exception as e:
         logger.error(f"❌ Failed to initialize database: {e}")
         # Don't exit - let the server start anyway
-        # Database will be created on first use
 
 
 def main():
