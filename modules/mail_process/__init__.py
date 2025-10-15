@@ -29,6 +29,8 @@ from .client_filter import ClientFilter, FilterCriteria
 # 메일 프로세서
 from .processor import (
     ProcessOptions,
+    TempFileCleanupPolicy,
+    AttachmentPathMode,
     EmailProcessor,
     EmailProcessResult,
     AttachmentResult,
@@ -59,6 +61,8 @@ __all__ = [
 
     # Email Processor
     'ProcessOptions',
+    'TempFileCleanupPolicy',
+    'AttachmentPathMode',
     'EmailProcessor',
     'EmailProcessResult',
     'AttachmentResult',
