@@ -245,3 +245,80 @@ class IACSDBService:
         except Exception as e:
             logger.error(f"패널 정보 조회 실패: {str(e)}")
             return None
+
+    # ========================================================================
+    # Tool Schema 관련 메서드
+    # ========================================================================
+
+    def get_tool_schema(self, tool_name: str) -> List[dict]:
+        """
+        도구의 스키마 정보 조회
+
+        Args:
+            tool_name: 도구 이름
+
+        Returns:
+            [
+                {
+                    'parameter_name': str,
+                    'parameter_type': str,
+                    'is_required': str,  # 'required' or 'optional'
+                    'description': str
+                },
+                ...
+            ]
+        """
+        try:
+            rows = self.db.fetch_all(
+                """
+                SELECT parameter_name, parameter_type, is_required, description
+                FROM iacs_tool_schema
+                WHERE tool_name = ?
+                ORDER BY id
+                """,
+                (tool_name,)
+            )
+
+            return [dict(row) for row in rows]
+
+        except Exception as e:
+            logger.error(f"도구 스키마 조회 실패: {str(e)}")
+            return []
+
+    def get_all_tool_schemas(self) -> dict:
+        """
+        모든 도구의 스키마 정보 조회
+
+        Returns:
+            {
+                'search_agenda': [
+                    {'parameter_name': 'start_date', 'parameter_type': 'string', 'is_required': 'optional', ...},
+                    ...
+                ],
+                ...
+            }
+        """
+        try:
+            rows = self.db.fetch_all(
+                """
+                SELECT tool_name, parameter_name, parameter_type, is_required, description
+                FROM iacs_tool_schema
+                ORDER BY tool_name, id
+                """
+            )
+
+            result = {}
+            for row in rows:
+                row_dict = dict(row)
+                tool_name = row_dict.pop('tool_name')
+
+                if tool_name not in result:
+                    result[tool_name] = []
+
+                result[tool_name].append(row_dict)
+
+            return result
+
+        except Exception as e:
+            logger.error(f"모든 도구 스키마 조회 실패: {str(e)}")
+            return {}
