@@ -1,32 +1,75 @@
-"""키워드 필터"""
+"""키워드 필터 (AND/OR/NOT 조건 지원)"""
 
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
 
 class KeywordFilter:
-    """키워드 기반 필터 (제목 + 본문)"""
+    """키워드 기반 필터 (제목 + 본문 + 발신자)"""
 
     @staticmethod
-    def apply(emails: List[Dict[str, Any]], keywords: List[str]) -> List[Dict[str, Any]]:
+    def apply(
+        emails: List[Dict[str, Any]],
+        keywords: Optional[List[str]] = None,  # OR 조건 (기존 호환성)
+        and_keywords: Optional[List[str]] = None,  # AND 조건 (모두 포함)
+        or_keywords: Optional[List[str]] = None,  # OR 조건 (하나라도 포함)
+        not_keywords: Optional[List[str]] = None   # NOT 조건 (하나도 포함 안됨)
+    ) -> List[Dict[str, Any]]:
         """
-        키워드 필터링 (OR 조건)
+        키워드 필터링 (AND/OR/NOT 조건 지원)
 
         Args:
             emails: 메일 리스트
-            keywords: 키워드 리스트 (하나라도 포함되면 매칭)
+            keywords: OR 키워드 리스트 (하나라도 포함되면 매칭) - 하위 호환성
+            and_keywords: AND 키워드 리스트 (모두 포함되어야 매칭)
+            or_keywords: OR 키워드 리스트 (하나라도 포함되면 매칭)
+            not_keywords: NOT 키워드 리스트 (하나도 포함되지 않아야 매칭)
 
         Returns:
             필터링된 메일 리스트
+
+        Examples:
+            # OR 조건 (기존 방식)
+            apply(emails, keywords=['invoice', 'receipt'])
+
+            # AND 조건 (모든 키워드 포함)
+            apply(emails, and_keywords=['github', 'PR'])
+
+            # 복합 조건
+            apply(emails, and_keywords=['payment'], not_keywords=['spam', 'ad'])
         """
-        if not keywords:
+        # 하위 호환성: keywords 파라미터를 or_keywords로 변환
+        if keywords:
+            or_keywords = (or_keywords or []) + keywords
+
+        # 조건이 없으면 그대로 반환
+        if not (and_keywords or or_keywords or not_keywords):
             return emails
 
         filtered = []
-        keywords_lower = [k.lower() for k in keywords]
 
         for email in emails:
             searchable_text = KeywordFilter._get_searchable_text(email)
-            if KeywordFilter._contains_any_keyword(searchable_text, keywords_lower):
+            include_email = True
+
+            # AND 조건: 모든 키워드가 포함되어야 함
+            if and_keywords:
+                and_keywords_lower = [k.lower() for k in and_keywords]
+                if not all(keyword in searchable_text for keyword in and_keywords_lower):
+                    include_email = False
+
+            # OR 조건: 하나라도 포함되어야 함
+            if include_email and or_keywords:
+                or_keywords_lower = [k.lower() for k in or_keywords]
+                if not any(keyword in searchable_text for keyword in or_keywords_lower):
+                    include_email = False
+
+            # NOT 조건: 하나도 포함되지 않아야 함
+            if include_email and not_keywords:
+                not_keywords_lower = [k.lower() for k in not_keywords]
+                if any(keyword in searchable_text for keyword in not_keywords_lower):
+                    include_email = False
+
+            if include_email:
                 filtered.append(email)
 
         return filtered
