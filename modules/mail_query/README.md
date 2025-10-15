@@ -83,13 +83,13 @@ asyncio.run(basic_mail_query())
 
 ### 2. 필터링된 조회
 ```python
-from modules.mail_query import MailQueryFilters, PaginationOptions
+from modules.mail_query import MailQuerySeverFilters, PaginationOptions
 from datetime import datetime, timedelta
 
 async def filtered_query():
     async with MailQueryOrchestrator() as orchestrator:
         # 필터 설정
-        filters = MailQueryFilters(
+        filters = MailQuerySeverFilters(
             date_from=datetime.now() - timedelta(days=7),  # 최근 7일
             is_read=False,                                 # 읽지 않은 메일
             has_attachments=True,                          # 첨부파일 있음
@@ -158,7 +158,7 @@ async def save_mails_as_json():
         # 메일 조회
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(date_from=datetime(2025, 6, 1))
+            filters=MailQuerySeverFilters(date_from=datetime(2025, 6, 1))
         )
         response = await orchestrator.mail_query_user_emails(request)
         
@@ -187,7 +187,7 @@ async def save_mails_as_json():
 ### 필터 조합 예시
 ```python
 # 복잡한 필터 조합
-filters = MailQueryFilters(
+filters = MailQuerySeverFilters(
     date_from=datetime(2025, 6, 1),
     date_to=datetime(2025, 6, 30),
     sender_address="manager@company.com",
@@ -311,7 +311,7 @@ except APIConnectionError as e:
 ### 1. 일일 보고서용 메일 수집
 ```python
 # 어제 받은 모든 보고서 메일 조회
-filters = MailQueryFilters(
+filters = MailQuerySeverFilters(
     date_from=datetime.now().date() - timedelta(days=1),
     date_to=datetime.now().date(),
     subject_contains="일일보고"
@@ -321,7 +321,7 @@ filters = MailQueryFilters(
 ### 2. 첨부파일 관리
 ```python
 # 대용량 첨부파일이 있는 메일 찾기
-filters = MailQueryFilters(
+filters = MailQuerySeverFilters(
     has_attachments=True,
     date_from=datetime.now() - timedelta(days=30)
 )
@@ -330,7 +330,7 @@ filters = MailQueryFilters(
 ### 3. 중요 메일 알림
 ```python
 # 읽지 않은 중요 메일 확인
-filters = MailQueryFilters(
+filters = MailQuerySeverFilters(
     is_read=False,
     importance="high"
 )

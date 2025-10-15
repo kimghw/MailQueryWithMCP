@@ -7,13 +7,13 @@ from datetime import datetime
 from typing import Optional
 
 from .mail_query_helpers import escape_odata_string  # 언더스코어 제거됨
-from .mail_query_schema import MailQueryFilters
+from .mail_query_schema import MailQuerySeverFilters
 
 
 class ODataFilterBuilder:
     """OData 필터 문자열 생성기"""
 
-    def build_filter(self, filters: MailQueryFilters) -> Optional[str]:
+    def build_filter(self, filters: MailQuerySeverFilters) -> Optional[str]:
         """필터 조건을 OData 필터 문자열로 변환"""
         conditions = []
 
@@ -77,7 +77,7 @@ class ODataFilterBuilder:
         # ISO 8601 형식으로 변환 (Z suffix 추가)
         return dt.strftime("%Y-%m-%dT%H:%M:%S.000Z")
 
-    def validate_filter_complexity(self, filters: MailQueryFilters) -> bool:
+    def validate_filter_complexity(self, filters: MailQuerySeverFilters) -> bool:
         """필터 복잡성 검증 (InefficientFilter 오류 방지)"""
         condition_count = 0
 
@@ -133,7 +133,7 @@ class ODataFilterBuilder:
         return ",".join(valid_fields) if valid_fields else None
 
     def estimate_query_performance(
-        self, filters: MailQueryFilters, pagination_top: int
+        self, filters: MailQuerySeverFilters, pagination_top: int
     ) -> str:
         """쿼리 성능 예상 등급 반환"""
         score = 0

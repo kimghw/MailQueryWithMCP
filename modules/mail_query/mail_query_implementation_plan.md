@@ -60,11 +60,11 @@ from pydantic import BaseModel, Field, validator
 class MailQueryRequest(BaseModel):
     """메일 조회 요청"""
     user_id: str = Field(..., description="사용자 ID")
-    filters: Optional["MailQueryFilters"] = Field(None, description="필터 조건")
+    filters: Optional["MailQuerySeverFilters"] = Field(None, description="필터 조건")
     pagination: Optional["PaginationOptions"] = Field(None, description="페이징 옵션")
     select_fields: Optional[List[str]] = Field(None, description="선택할 필드")
 
-class MailQueryFilters(BaseModel):
+class MailQuerySeverFilters(BaseModel):
     """메일 필터 조건"""
     date_from: Optional[datetime] = Field(None, description="시작 날짜")
     date_to: Optional[datetime] = Field(None, description="종료 날짜")
@@ -413,13 +413,13 @@ class GraphAPIClient:
 from typing import Optional
 from datetime import datetime
 
-from .mail_query_schema import MailQueryFilters
+from .mail_query_schema import MailQuerySeverFilters
 from ._mail_query_helpers import escape_odata_string
 
 class ODataFilterBuilder:
     """OData 필터 문자열 생성기 (모듈 내부)"""
     
-    def build_filter(self, filters: MailQueryFilters) -> Optional[str]:
+    def build_filter(self, filters: MailQuerySeverFilters) -> Optional[str]:
         """필터 조건을 OData 필터 문자열로 변환"""
         conditions = []
         
@@ -662,7 +662,7 @@ async def mail_query_user_emails(self, request: MailQueryRequest) -> MailQueryRe
 # odata_filter_builder.py에 추가
 def build_full_query_params(
     self, 
-    filters: Optional[MailQueryFilters] = None,
+    filters: Optional[MailQuerySeverFilters] = None,
     select_fields: Optional[List[str]] = None,
     orderby: Optional[str] = None,
     top: int = 50,
@@ -789,7 +789,7 @@ async def query_messages_with_headers(
 
 ```python
 # _mail_query_helpers.py에 추가
-def estimate_query_performance(filters: MailQueryFilters, expected_count: int) -> str:
+def estimate_query_performance(filters: MailQuerySeverFilters, expected_count: int) -> str:
     """쿼리 성능 예상"""
     score = 0
     

@@ -6,7 +6,7 @@ from typing import List, Dict, Any
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from modules.mail_query import (
-    MailQueryFilters,
+    MailQuerySeverFilters,
     MailQueryOrchestrator,
     MailQueryRequest,
     PaginationOptions
@@ -52,7 +52,7 @@ class SubscriptionEmailScanner:
                 orchestrator = MailQueryOrchestrator()
 
                 # Create filters for this sender
-                filters = MailQueryFilters(
+                filters = MailQuerySeverFilters(
                     date_from=start_date,
                     date_to=end_date,
                     sender_address=sender_email

@@ -29,7 +29,7 @@ sys.path.insert(0, str(project_root))
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from modules.mail_query import (
-    MailQueryFilters,
+    MailQuerySeverFilters,
     MailQueryOrchestrator,
     MailQueryRequest,
     PaginationOptions,
@@ -74,7 +74,7 @@ class MailQueryRunner:
             # MailQueryRequest 생성
             request = MailQueryRequest(
                 user_id=user_id,
-                filters=MailQueryFilters(
+                filters=MailQuerySeverFilters(
                     date_from=datetime.now() - timedelta(days=days_back)
                 ),
                 pagination=PaginationOptions(top=max_mails, skip=0, max_pages=1),

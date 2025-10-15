@@ -13,7 +13,7 @@ sys.path.insert(0, str(project_root))
 from modules.mail_query import (
     MailQueryOrchestrator,
     MailQueryRequest,
-    MailQueryFilters,
+    MailQuerySeverFilters,
     PaginationOptions,
 )
 
@@ -27,7 +27,7 @@ async def test_search_basic():
     async with MailQueryOrchestrator() as orchestrator:
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(search_query="계약서"),
+            filters=MailQuerySeverFilters(search_query="계약서"),
             select_fields=["id", "subject", "from", "receivedDateTime"],
         )
 
@@ -53,7 +53,7 @@ async def test_search_from():
     async with MailQueryOrchestrator() as orchestrator:
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(search_query="from:홍길동"),
+            filters=MailQuerySeverFilters(search_query="from:홍길동"),
             select_fields=["id", "subject", "from", "receivedDateTime"],
         )
 
@@ -73,7 +73,7 @@ async def test_search_and():
     async with MailQueryOrchestrator() as orchestrator:
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(search_query="프로젝트 AND 승인"),
+            filters=MailQuerySeverFilters(search_query="프로젝트 AND 승인"),
             select_fields=["id", "subject", "from", "receivedDateTime"],
         )
 
@@ -93,7 +93,7 @@ async def test_search_or():
     async with MailQueryOrchestrator() as orchestrator:
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(search_query="보고서 OR 리포트"),
+            filters=MailQuerySeverFilters(search_query="보고서 OR 리포트"),
             select_fields=["id", "subject", "from", "receivedDateTime"],
         )
 

@@ -22,14 +22,14 @@ Microsoft Graph API의 `$search` 기능을 사용하여 발신자명과 키워�
 from modules.mail_query import (
     MailQueryOrchestrator,
     MailQueryRequest,
-    MailQueryFilters,
+    MailQuerySeverFilters,
 )
 
 async with MailQueryOrchestrator() as orchestrator:
     # search_query가 있으면 자동으로 $search 방식 사용
     request = MailQueryRequest(
         user_id="kimghw",
-        filters=MailQueryFilters(search_query="계약서"),
+        filters=MailQuerySeverFilters(search_query="계약서"),
         select_fields=["id", "subject", "from", "receivedDateTime"],
     )
 
@@ -46,19 +46,19 @@ async with MailQueryOrchestrator() as orchestrator:
 특정 발신자로부터 받은 메일을 검색합니다.
 
 ```python
-filters = MailQueryFilters(search_query="from:홍길동")
+filters = MailQuerySeverFilters(search_query="from:홍길동")
 ```
 
 또는 이메일 주소로 검색:
 ```python
-filters = MailQueryFilters(search_query="from:hong@company.com")
+filters = MailQuerySeverFilters(search_query="from:hong@company.com")
 ```
 
 ### 3. AND 조건 검색
 여러 키워드가 모두 포함된 메일을 검색합니다.
 
 ```python
-filters = MailQueryFilters(search_query="프로젝트 AND 승인")
+filters = MailQuerySeverFilters(search_query="프로젝트 AND 승인")
 ```
 
 결과: "프로젝트"와 "승인" 모두 포함된 메일
@@ -67,7 +67,7 @@ filters = MailQueryFilters(search_query="프로젝트 AND 승인")
 여러 키워드 중 하나 이상 포함된 메일을 검색합니다.
 
 ```python
-filters = MailQueryFilters(search_query="보고서 OR 리포트")
+filters = MailQuerySeverFilters(search_query="보고서 OR 리포트")
 ```
 
 결과: "보고서" 또는 "리포트"가 포함된 메일
@@ -77,10 +77,10 @@ filters = MailQueryFilters(search_query="보고서 OR 리포트")
 
 ```python
 # 홍길동이 보낸 메일 중 "계약서"가 포함된 메일
-filters = MailQueryFilters(search_query="from:홍길동 계약서")
+filters = MailQuerySeverFilters(search_query="from:홍길동 계약서")
 
 # "프로젝트"와 ("승인" 또는 "검토")가 포함된 메일
-filters = MailQueryFilters(search_query="프로젝트 AND (승인 OR 검토)")
+filters = MailQuerySeverFilters(search_query="프로젝트 AND (승인 OR 검토)")
 ```
 
 ## 지원되는 검색 키워드
@@ -113,7 +113,7 @@ import asyncio
 from modules.mail_query import (
     MailQueryOrchestrator,
     MailQueryRequest,
-    MailQueryFilters,
+    MailQuerySeverFilters,
     PaginationOptions,
 )
 
@@ -122,7 +122,7 @@ async def search_emails():
         # search_query가 있으면 자동으로 $search 방식
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(
+            filters=MailQuerySeverFilters(
                 search_query="from:홍길동 프로젝트"  # 👈 이것만 있으면 $search
             ),
             select_fields=[
@@ -159,7 +159,7 @@ async def filter_emails():
         # search_query가 없으면 자동으로 $filter 방식
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(
+            filters=MailQuerySeverFilters(
                 date_from=datetime.now() - timedelta(days=7),
                 sender_address="hong@company.com",  # 👈 정확한 이메일 주소
                 has_attachments=True
@@ -183,7 +183,7 @@ async def explicit_search():
     async with MailQueryOrchestrator() as orchestrator:
         request = MailQueryRequest(
             user_id="kimghw",
-            filters=MailQueryFilters(search_query="계약서"),
+            filters=MailQuerySeverFilters(search_query="계약서"),
         )
 
         # 직접 호출 (자동 전환 없이)

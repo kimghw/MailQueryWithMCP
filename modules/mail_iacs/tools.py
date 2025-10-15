@@ -11,7 +11,7 @@ from infra.core.config import get_config
 from modules.mail_query import (
     MailQueryOrchestrator,
     MailQueryRequest,
-    MailQueryFilters,
+    MailQuerySeverFilters,
 )
 from modules.mail_process import AttachmentDownloader, EmailSaver
 
@@ -175,7 +175,7 @@ class IACSTools:
             logger.info(f"날짜 범위 설정: start_date={start_date}, end_date={end_date}")
 
             # 3. MailQuery 필터 생성
-            filters = MailQueryFilters(
+            filters = MailQuerySeverFilters(
                 sender_address=chair_address,  # 의장 이메일로 필터링
                 date_from=start_date,  # 시작 날짜 (과거)
                 date_to=end_date,  # 종료 날짜 (현재)
@@ -380,7 +380,7 @@ class IACSTools:
             async with MailQueryOrchestrator() as orchestrator:
                 mail_request = MailQueryRequest(
                     user_id=kr_panel_member,
-                    filters=MailQueryFilters(search_query=search_query),
+                    filters=MailQuerySeverFilters(search_query=search_query),
                     select_fields=select_fields,
                 )
 
