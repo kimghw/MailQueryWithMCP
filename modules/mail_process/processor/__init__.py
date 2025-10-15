@@ -2,7 +2,11 @@
 Email Processor Module
 """
 
-from .process_options import ProcessOptions
+from .process_options import (
+    ProcessOptions,
+    TempFileCleanupPolicy,
+    AttachmentPathMode
+)
 from .email_processor import EmailProcessor
 from .result import (
     EmailProcessResult,
@@ -12,6 +16,8 @@ from .result import (
 
 __all__ = [
     'ProcessOptions',
+    'TempFileCleanupPolicy',
+    'AttachmentPathMode',
     'EmailProcessor',
     'EmailProcessResult',
     'AttachmentResult',

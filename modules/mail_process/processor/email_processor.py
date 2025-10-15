@@ -1,11 +1,12 @@
 """메일 처리 파이프라인 메인 클래스"""
 
 import logging
+import shutil
 from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
 
-from .process_options import ProcessOptions
+from .process_options import ProcessOptions, TempFileCleanupPolicy
 from .result import EmailProcessResult, AttachmentResult, BatchProcessResult
 from .handlers.email_saver import EmailSaver
 from .handlers.attachment_handler import AttachmentHandler
@@ -31,6 +32,10 @@ class EmailProcessor:
         self.attachment_handler = AttachmentHandler(options.output_dir) if options.save_attachments else None
         self.text_converter = TextConverter() if options.convert_to_text else None
 
+        # 임시 파일 추적 (현재 세션의 임시 파일들)
+        self.temp_files: List[Path] = []
+        self.temp_dirs: List[Path] = []
+
     async def process_email(
         self,
         graph_client,
@@ -46,6 +51,10 @@ class EmailProcessor:
         Returns:
             처리 결과
         """
+        # DELETE_ON_NEW_QUERY 정책: 새 쿼리 시작 시 이전 임시 파일 삭제
+        if self.options.temp_cleanup_policy == TempFileCleanupPolicy.DELETE_ON_NEW_QUERY:
+            self._cleanup_previous_temp_files()
+
         # 기본 정보 추출
         email_id = self._get_field(email_data, 'id', 'unknown')
         subject = self._get_field(email_data, 'subject', 'No Subject')
@@ -83,6 +92,10 @@ class EmailProcessor:
                 )
 
             logger.info(f"✅ Successfully processed email: {subject[:50]}")
+
+            # DELETE_ON_RETURN 정책: 함수 반환 직전에 임시 파일 삭제
+            if self.options.temp_cleanup_policy == TempFileCleanupPolicy.DELETE_ON_RETURN:
+                self.cleanup_temp_files(result)
 
         except Exception as e:
             error_msg = f"Error processing email {email_id}: {str(e)}"
@@ -131,6 +144,10 @@ class EmailProcessor:
             results=results
         )
 
+        # DELETE_ON_RETURN 정책: 배치 완료 시 모든 임시 파일 삭제
+        if self.options.temp_cleanup_policy == TempFileCleanupPolicy.DELETE_ON_RETURN:
+            self.cleanup_batch_temp_files(batch_result)
+
         logger.info(f"✅ Batch processing complete: {successful}/{total} successful")
         return batch_result
 
@@ -140,11 +157,20 @@ class EmailProcessor:
         sender_info: Dict[str, str],
         received_time
     ) -> Path:
-        """메일별 디렉토리 생성"""
-        user_dir = self.options.output_dir / self.options.user_id
+        """메일별 디렉토리 생성 (임시 저장소 옵션 지원)"""
+        # 임시 저장소 사용 시
+        if self.options.should_use_temp_storage():
+            base_dir = self.options.temp_dir
+        else:
+            base_dir = self.options.output_dir
+
+        user_dir = base_dir / self.options.user_id
 
         if not self.options.create_subfolder_per_email:
             user_dir.mkdir(parents=True, exist_ok=True)
+            # 임시 디렉토리인 경우 추적
+            if self.options.should_use_temp_storage():
+                self._register_temp_dir(user_dir)
             return user_dir
 
         # 폴더명 생성
@@ -159,6 +185,10 @@ class EmailProcessor:
 
         email_dir = user_dir / folder_name
         email_dir.mkdir(parents=True, exist_ok=True)
+
+        # 임시 디렉토리인 경우 추적
+        if self.options.should_use_temp_storage():
+            self._register_temp_dir(email_dir)
 
         return email_dir
 
@@ -193,18 +223,26 @@ class EmailProcessor:
         email_dir: Path,
         result: EmailProcessResult
     ):
-        """첨부파일 처리"""
+        """첨부파일 처리 (유연한 경로 옵션 지원)"""
         attachments = self._get_field(email_data, 'attachments', [])
         if not attachments:
             return
 
         try:
+            # 첨부파일 저장 경로 결정
+            attachment_dir = self.options.get_attachment_base_dir(email_dir)
+            attachment_dir.mkdir(parents=True, exist_ok=True)
+
+            # 임시 저장소 사용 시 디렉토리 추적
+            if self.options.should_use_temp_storage():
+                self._register_temp_dir(attachment_dir)
+
             # 첨부파일 다운로드 및 저장
             saved_files = await self.attachment_handler.download_and_save_attachments(
                 graph_client,
                 self._get_field(email_data, 'id'),
                 attachments,
-                email_dir
+                attachment_dir
             )
 
             # 텍스트 변환 (옵션)
@@ -217,6 +255,10 @@ class EmailProcessor:
 
                 if saved_file['error']:
                     result.errors.append(f"Attachment error: {saved_file['error']}")
+
+                # 저장된 파일을 임시 파일로 추적
+                if self.options.should_use_temp_storage() and saved_file['path']:
+                    self._register_temp_file(saved_file['path'])
 
                 # 텍스트 변환
                 if self.options.convert_to_text and saved_file['path']:
@@ -302,3 +344,98 @@ class EmailProcessor:
                 return email_data.get(camel_case, default)
 
         return default
+
+    # ===== 임시 파일 관리 메서드 =====
+
+    def _register_temp_file(self, file_path: Path):
+        """임시 파일 등록"""
+        if file_path and file_path not in self.temp_files:
+            self.temp_files.append(file_path)
+            logger.debug(f"Registered temp file: {file_path}")
+
+    def _register_temp_dir(self, dir_path: Path):
+        """임시 디렉토리 등록"""
+        if dir_path and dir_path not in self.temp_dirs:
+            self.temp_dirs.append(dir_path)
+            logger.debug(f"Registered temp dir: {dir_path}")
+
+    def cleanup_temp_files(self, result: EmailProcessResult):
+        """
+        단일 메일 처리 결과의 임시 파일 삭제
+
+        Args:
+            result: 메일 처리 결과
+        """
+        if not self.options.should_use_temp_storage():
+            return
+
+        deleted_count = 0
+
+        # 결과에 포함된 파일 삭제
+        if result.email_dir and result.email_dir.exists():
+            try:
+                shutil.rmtree(result.email_dir)
+                deleted_count += 1
+                logger.info(f"🗑️ Deleted temp directory: {result.email_dir}")
+            except Exception as e:
+                logger.error(f"Failed to delete temp directory {result.email_dir}: {e}")
+
+        logger.info(f"🗑️ Cleanup complete: {deleted_count} items deleted")
+
+    def cleanup_batch_temp_files(self, batch_result: BatchProcessResult):
+        """
+        배치 처리 결과의 모든 임시 파일 삭제
+
+        Args:
+            batch_result: 배치 처리 결과
+        """
+        if not self.options.should_use_temp_storage():
+            return
+
+        deleted_count = 0
+
+        # 각 결과의 디렉토리 삭제
+        for result in batch_result.results:
+            if result.email_dir and result.email_dir.exists():
+                try:
+                    shutil.rmtree(result.email_dir)
+                    deleted_count += 1
+                except Exception as e:
+                    logger.error(f"Failed to delete temp directory {result.email_dir}: {e}")
+
+        logger.info(f"🗑️ Batch cleanup complete: {deleted_count} items deleted")
+
+    def _cleanup_previous_temp_files(self):
+        """
+        이전 쿼리의 임시 파일 삭제 (DELETE_ON_NEW_QUERY 정책)
+        """
+        if not self.options.should_use_temp_storage():
+            return
+
+        deleted_files = 0
+        deleted_dirs = 0
+
+        # 이전에 등록된 임시 파일 삭제
+        for temp_file in self.temp_files:
+            if temp_file.exists():
+                try:
+                    temp_file.unlink()
+                    deleted_files += 1
+                except Exception as e:
+                    logger.error(f"Failed to delete temp file {temp_file}: {e}")
+
+        # 이전에 등록된 임시 디렉토리 삭제
+        for temp_dir in self.temp_dirs:
+            if temp_dir.exists():
+                try:
+                    shutil.rmtree(temp_dir)
+                    deleted_dirs += 1
+                except Exception as e:
+                    logger.error(f"Failed to delete temp directory {temp_dir}: {e}")
+
+        # 추적 리스트 초기화
+        self.temp_files.clear()
+        self.temp_dirs.clear()
+
+        if deleted_files > 0 or deleted_dirs > 0:
+            logger.info(f"🗑️ Cleaned up previous session: {deleted_files} files, {deleted_dirs} dirs")
