@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 from mcp.types import Tool, TextContent, Prompt, PromptArgument, PromptMessage
 
 from infra.core.logger import get_logger
-from infra.auth import AuthHandlers
+from infra.handlers import AuthHandlers
 from .tools import IACSTools
 from .prompts import get_prompt
 from .schemas import (

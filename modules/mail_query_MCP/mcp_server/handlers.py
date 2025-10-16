@@ -8,7 +8,7 @@ from mcp.types import Prompt, PromptArgument, PromptMessage, TextContent, Tool
 
 from infra.core.logger import get_logger
 from infra.core.error_messages import ErrorCode, MCPError
-from infra.auth import AuthHandlers
+from infra.handlers import AuthHandlers
 from .prompts import get_prompt
 from .tools import MailAttachmentTools  # This now imports from tools/__init__.py
 from .utils import preprocess_arguments
