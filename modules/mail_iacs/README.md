@@ -290,7 +290,7 @@ curl -X POST http://localhost:8002/api/search_responses \
 
 ## DB 스키마
 
-### iacs_panel_chair 테이블
+### iacs_panel_info 테이블
 
 | 컬럼 | 타입 | 설명 |
 |------|------|------|

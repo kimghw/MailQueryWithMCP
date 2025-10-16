@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 from mcp.types import Tool, TextContent, Prompt, PromptArgument, PromptMessage
 
 from infra.core.logger import get_logger
-from infra.handlers import AuthHandlers
+from infra.handlers import AuthHandlers, AttachmentFilterHandlers
 from .tools import IACSTools
 from .prompts import get_prompt
 from .schemas import (
@@ -21,25 +21,28 @@ from .schemas import (
 logger = get_logger(__name__)
 
 
-class IACSHandlers(AuthHandlers):
-    """IACS MCP Protocol Handlers with Authentication Support"""
+class IACSHandlers(AuthHandlers, AttachmentFilterHandlers):
+    """IACS MCP Protocol Handlers with Authentication + Attachment Filter Support"""
 
     def __init__(self):
-        """Initialize handlers with tools instance and authentication support"""
-        super().__init__()  # Initialize AuthHandlers
+        """Initialize handlers with tools instance, authentication, and attachment filter support"""
+        super().__init__()  # Initialize AuthHandlers + AttachmentFilterHandlers
         self.tools = IACSTools()
-        logger.info("✅ IACSHandlers initialized (with AuthHandlers)")
+        logger.info("✅ IACSHandlers initialized (with AuthHandlers + AttachmentFilterHandlers)")
 
     # ========================================================================
     # MCP Protocol: list_tools
     # ========================================================================
 
     async def handle_list_tools(self) -> List[Tool]:
-        """List available MCP tools (Authentication + IACS)"""
+        """List available MCP tools (Authentication + Attachment Filter + IACS)"""
         logger.info("🔧 [MCP Handler] list_tools() called")
 
         # Get authentication tools from parent class
         auth_tools = self.get_auth_tools()
+
+        # Get attachment filter tools from parent class
+        attachment_filter_tools = self.get_attachment_filter_tools()
 
         # Define IACS-specific tools
         iacs_tools = [
@@ -130,8 +133,8 @@ class IACSHandlers(AuthHandlers):
             ),
         ]
 
-        # Return combined list: auth tools first, then IACS tools
-        return auth_tools + iacs_tools
+        # Return combined list: auth tools + attachment filter tools + IACS tools
+        return auth_tools + attachment_filter_tools + iacs_tools
 
     # ========================================================================
     # MCP Protocol: call_tool
@@ -140,13 +143,17 @@ class IACSHandlers(AuthHandlers):
     async def handle_call_tool(
         self, name: str, arguments: Dict[str, Any]
     ) -> List[TextContent]:
-        """Handle MCP tool calls (Authentication + IACS)"""
+        """Handle MCP tool calls (Authentication + Attachment Filter + IACS)"""
         logger.info(f"🔨 [MCP Handler] call_tool({name}) with args: {arguments}")
 
         try:
             # Check if it's an authentication tool
             if self.is_auth_tool(name):
                 return await self.handle_auth_tool(name, arguments)
+
+            # Check if it's an attachment filter tool
+            elif self.is_attachment_filter_tool(name):
+                return await self.handle_attachment_filter_tool(name, arguments)
 
             # Handle IACS-specific tools
             if name == "insert_info":
@@ -224,6 +231,12 @@ class IACSHandlers(AuthHandlers):
             if self.is_auth_tool(name):
                 text_contents = await self.handle_auth_tool(name, arguments)
                 # Auth tools return TextContent, convert to dict
+                return {"text": text_contents[0].text if text_contents else ""}
+
+            # Check if it's an attachment filter tool
+            elif self.is_attachment_filter_tool(name):
+                text_contents = await self.handle_attachment_filter_tool(name, arguments)
+                # Attachment filter tools return TextContent, convert to dict
                 return {"text": text_contents[0].text if text_contents else ""}
 
             # Handle IACS-specific tools

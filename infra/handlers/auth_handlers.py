@@ -329,33 +329,69 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
             account = self.db.fetch_one(
                 """
                 SELECT user_id, user_name, email, status, is_active,
-                       token_expiry, last_sync_time, created_at, updated_at
+                       access_token, refresh_token, token_expiry,
+                       oauth_client_id, oauth_tenant_id, enrollment_file_path,
+                       last_sync_time, created_at, updated_at
                 FROM accounts
                 WHERE user_id = ?
                 """,
                 (user_id,)
             )
 
+            # 폴백 1: 계정이 없음
             if not account:
-                return f"❌ 계정을 찾을 수 없습니다: {user_id}"
+                return self._format_enrollment_template(
+                    user_id,
+                    reason="계정을 찾을 수 없습니다"
+                )
 
             account_dict = dict(account)
 
-            # Token status
+            # 토큰 상태 상세 진단
+            has_access_token = bool(account_dict.get('access_token'))
+            has_refresh_token = bool(account_dict.get('refresh_token'))
             token_expiry = account_dict.get('token_expiry')
-            if token_expiry:
-                expiry_dt = datetime.fromisoformat(token_expiry)
-                if expiry_dt.tzinfo is not None:
-                    expiry_dt = expiry_dt.replace(tzinfo=None)
-                now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
-                if expiry_dt < now_utc:
-                    token_status = f"❌ 만료됨 ({token_expiry})"
-                else:
-                    token_status = f"✅ 유효 (만료: {token_expiry})"
-            else:
-                token_status = "❌ 토큰 없음"
 
-            # Active status
+            token_status = "❌ 토큰 없음"
+            token_detail = ""
+            if has_access_token or has_refresh_token:
+                if token_expiry:
+                    expiry_dt = datetime.fromisoformat(token_expiry)
+                    if expiry_dt.tzinfo is not None:
+                        expiry_dt = expiry_dt.replace(tzinfo=None)
+                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                    if expiry_dt < now_utc:
+                        token_status = f"❌ 만료됨"
+                        token_detail = f"만료 시간: {token_expiry}"
+                    else:
+                        remaining = expiry_dt - now_utc
+                        hours = remaining.total_seconds() / 3600
+                        token_status = f"✅ 유효"
+                        token_detail = f"만료까지: {hours:.1f}시간 ({token_expiry})"
+                else:
+                    token_status = "⚠️  토큰 있으나 만료시간 없음"
+                    token_detail = ""
+            else:
+                token_detail = "start_authentication 도구로 인증하세요"
+
+            # OAuth 설정 상태
+            has_oauth = all([
+                account_dict.get('oauth_client_id'),
+                account_dict.get('oauth_tenant_id')
+            ])
+            oauth_status = "✅ 설정됨" if has_oauth else "❌ 설정 안됨"
+
+            # enrollment 파일 상태
+            enrollment_path = account_dict.get('enrollment_file_path')
+            if enrollment_path and Path(enrollment_path).exists():
+                enrollment_status = "✅ 존재함"
+            elif enrollment_path:
+                enrollment_status = f"⚠️  경로 있으나 파일 없음"
+            else:
+                enrollment_status = "❌ 경로 없음"
+
+            # 활성 상태
             is_active = account_dict.get('is_active', False)
             active_status = "✅ 활성" if is_active else "❌ 비활성"
 
@@ -367,11 +403,33 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
 
 상태: {account_dict.get('status', 'N/A')}
 활성 상태: {active_status}
-토큰 상태: {token_status}
+
+🔐 토큰 정보:
+  Access Token: {'✅ 있음' if has_access_token else '❌ 없음'}
+  Refresh Token: {'✅ 있음' if has_refresh_token else '❌ 없음'}
+  토큰 유효성: {token_status}
+  {token_detail}
+
+⚙️  OAuth 설정: {oauth_status}
+📁 Enrollment 파일: {enrollment_status}
 
 마지막 동기화: {account_dict.get('last_sync_time', 'N/A')}
 생성일: {account_dict.get('created_at', 'N/A')}
 수정일: {account_dict.get('updated_at', 'N/A')}"""
+
+            # 권장 사항 추가
+            recommendations = []
+            if not has_oauth:
+                recommendations.append("⚠️  OAuth 설정이 없습니다 → register_account 도구로 등록하세요")
+            if not (has_access_token or has_refresh_token):
+                recommendations.append("⚠️  토큰이 없습니다 → start_authentication 도구로 인증하세요")
+            elif token_status.startswith("❌ 만료"):
+                recommendations.append("⚠️  토큰이 만료되었습니다 → start_authentication 도구로 재인증하세요")
+            if not is_active:
+                recommendations.append("⚠️  계정이 비활성화되었습니다 → 활성화 필요")
+
+            if recommendations:
+                result += "\n\n📌 권장 사항:\n  " + "\n  ".join(recommendations)
 
             return result
 
@@ -397,12 +455,28 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
 
             # Check if account is registered
             account = self.db.fetch_one(
-                "SELECT user_id, email FROM accounts WHERE user_id = ?",
+                """SELECT user_id, email, oauth_client_id, oauth_client_secret,
+                          oauth_tenant_id, oauth_redirect_uri, enrollment_file_path
+                   FROM accounts WHERE user_id = ?""",
                 (user_id,)
             )
 
+            # 폴백 1: 데이터베이스에 계정이 없음 → enrollment 파일 양식 반환
             if not account:
-                return f"❌ Error: 계정이 등록되지 않았습니다: {user_id}\n\nregister_account 도구를 먼저 사용하세요."
+                return self._format_enrollment_template(user_id)
+
+            # 폴백 2: OAuth 설정이 불완전함 → enrollment 파일 양식 반환
+            account_dict = dict(account)
+            if not all([
+                account_dict.get('oauth_client_id'),
+                account_dict.get('oauth_client_secret'),
+                account_dict.get('oauth_tenant_id')
+            ]):
+                return self._format_enrollment_template(
+                    user_id,
+                    email=account_dict.get('email'),
+                    reason="OAuth 설정이 불완전합니다 (client_id, client_secret, tenant_id 필요)"
+                )
 
             # Use AuthOrchestrator
             orchestrator = get_auth_orchestrator()
@@ -426,7 +500,9 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
         except Exception as e:
             error_msg = f"인증 시작 실패: {str(e)}"
             logger.error(error_msg)
-            return f"❌ Error: {error_msg}"
+
+            # 폴백 3: 인증 시작 실패 → 상세 진단 정보 반환
+            return self._format_auth_failure_diagnosis(user_id, str(e))
 
     async def _list_active_accounts(self) -> str:
         """
@@ -486,3 +562,194 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
         except Exception as e:
             logger.error(f"Error listing active accounts: {str(e)}")
             return f"❌ Error: Failed to list accounts - {str(e)}"
+
+    # ========================================================================
+    # Fallback helper methods
+    # ========================================================================
+
+    def _format_enrollment_template(
+        self,
+        user_id: str,
+        email: str = "",
+        reason: str = "계정이 등록되지 않았습니다"
+    ) -> str:
+        """
+        enrollment 파일 양식을 텍스트로 반환
+
+        Args:
+            user_id: 사용자 ID
+            email: 이메일 주소 (선택)
+            reason: 양식 반환 이유
+
+        Returns:
+            enrollment 파일 양식 텍스트
+        """
+        email_placeholder = email if email else "your-email@example.com"
+
+        return f"""❌ {reason}: {user_id}
+
+📝 올바른 enrollment 파일 양식:
+
+파일 경로: enrollment/{user_id}.yaml
+
+---
+account:
+  email: {email_placeholder}
+  name: YOUR NAME
+  user_id: {user_id}
+microsoft_graph:
+  client_id: YOUR_AZURE_APP_CLIENT_ID
+  client_secret: YOUR_AZURE_APP_CLIENT_SECRET
+  tenant_id: YOUR_AZURE_TENANT_ID
+oauth:
+  auth_type: Authorization Code Flow
+  delegated_permissions:
+  - Mail.ReadWrite
+  - Mail.Send
+  - offline_access
+  redirect_uri: http://localhost:5000/auth/callback
+---
+
+📌 다음 단계:
+1. 위 양식대로 enrollment/{user_id}.yaml 파일을 생성하세요
+2. Azure Portal에서 App 등록 후 client_id, client_secret, tenant_id를 입력하세요
+3. register_account 도구를 사용하여 계정을 등록하세요
+4. start_authentication 도구로 OAuth 인증을 진행하세요
+
+💡 또는 register_account 도구에 직접 OAuth 정보를 입력하여 등록할 수도 있습니다."""
+
+    def _format_auth_failure_diagnosis(self, user_id: str, error_message: str) -> str:
+        """
+        인증 실패 시 상세 진단 정보 반환
+
+        Args:
+            user_id: 사용자 ID
+            error_message: 에러 메시지
+
+        Returns:
+            상세 진단 정보 텍스트
+        """
+        try:
+            # 계정 정보 조회
+            account = self.db.fetch_one(
+                """SELECT user_id, email, status, is_active,
+                          access_token, refresh_token, token_expiry,
+                          oauth_client_id, oauth_tenant_id,
+                          enrollment_file_path
+                   FROM accounts WHERE user_id = ?""",
+                (user_id,)
+            )
+
+            if not account:
+                return f"""❌ 인증 실패: 계정을 찾을 수 없습니다
+
+사용자 ID: {user_id}
+에러: {error_message}
+
+📌 해결 방법:
+1. 입력한 user_id가 올바른지 확인하세요
+2. register_account 도구로 계정을 먼저 등록하세요"""
+
+            account_dict = dict(account)
+
+            # 토큰 상태 진단
+            has_access_token = bool(account_dict.get('access_token'))
+            has_refresh_token = bool(account_dict.get('refresh_token'))
+            token_expiry = account_dict.get('token_expiry')
+
+            token_status = "❌ 토큰 없음"
+            if has_access_token or has_refresh_token:
+                if token_expiry:
+                    expiry_dt = datetime.fromisoformat(token_expiry)
+                    if expiry_dt.tzinfo is not None:
+                        expiry_dt = expiry_dt.replace(tzinfo=None)
+                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                    if expiry_dt < now_utc:
+                        token_status = f"⚠️  토큰 만료됨 ({token_expiry})"
+                    else:
+                        token_status = f"✅ 토큰 유효 (만료: {token_expiry})"
+                else:
+                    token_status = "⚠️  토큰 있으나 만료시간 없음"
+
+            # OAuth 설정 진단
+            has_oauth_config = all([
+                account_dict.get('oauth_client_id'),
+                account_dict.get('oauth_tenant_id')
+            ])
+            oauth_status = "✅ 설정됨" if has_oauth_config else "❌ 설정 안됨"
+
+            # enrollment 파일 진단
+            enrollment_path = account_dict.get('enrollment_file_path')
+            enrollment_status = "❌ 경로 없음"
+            if enrollment_path:
+                file_path = Path(enrollment_path)
+                if file_path.exists():
+                    enrollment_status = f"✅ 존재함 ({enrollment_path})"
+                else:
+                    enrollment_status = f"⚠️  경로 있으나 파일 없음 ({enrollment_path})"
+
+            return f"""❌ 인증 실패 진단 리포트
+
+📋 입력 정보:
+  사용자 ID: {user_id}
+
+📊 데이터베이스 계정 상태:
+  이메일: {account_dict.get('email', 'N/A')}
+  상태: {account_dict.get('status', 'N/A')}
+  활성화: {'✅ 예' if account_dict.get('is_active') else '❌ 아니오'}
+
+🔐 토큰 상태:
+  Access Token: {'✅ 있음' if has_access_token else '❌ 없음'}
+  Refresh Token: {'✅ 있음' if has_refresh_token else '❌ 없음'}
+  토큰 유효성: {token_status}
+
+⚙️  OAuth 설정:
+  Client ID: {'✅ 설정됨' if account_dict.get('oauth_client_id') else '❌ 없음'}
+  Tenant ID: {'✅ 설정됨' if account_dict.get('oauth_tenant_id') else '❌ 없음'}
+  전체 OAuth 설정: {oauth_status}
+
+📁 Enrollment 파일:
+  {enrollment_status}
+
+🔍 에러 메시지:
+  {error_message}
+
+📌 권장 해결 방법:
+"""
+            # 문제별 해결 방법 제시
+            solutions = []
+
+            if not has_oauth_config:
+                solutions.append("1. OAuth 설정이 없습니다 → register_account 도구로 OAuth 정보를 등록하세요")
+
+            if not (has_access_token or has_refresh_token):
+                solutions.append("2. 토큰이 없습니다 → start_authentication 도구로 인증을 진행하세요")
+            elif token_status.startswith("⚠️"):
+                solutions.append("2. 토큰이 만료되었습니다 → start_authentication 도구로 재인증하세요")
+
+            if not account_dict.get('is_active'):
+                solutions.append("3. 계정이 비활성화되었습니다 → 데이터베이스에서 is_active를 1로 변경하세요")
+
+            if not enrollment_path or not Path(enrollment_path).exists():
+                solutions.append(f"4. enrollment 파일이 없습니다 → enrollment/{user_id}.yaml 파일을 생성하세요")
+
+            if not solutions:
+                solutions.append("• 로그를 확인하여 추가 정보를 확인하세요")
+                solutions.append("• Microsoft 로그인 시 올바른 계정으로 로그인했는지 확인하세요")
+
+            return f"{f'  ' + chr(10) + '  '.join(solutions)}"
+
+        except Exception as e:
+            logger.error(f"진단 정보 생성 실패: {str(e)}")
+            return f"""❌ 인증 실패
+
+사용자 ID: {user_id}
+에러: {error_message}
+
+⚠️  상세 진단 정보를 생성하는데 실패했습니다: {str(e)}
+
+📌 기본 해결 방법:
+1. get_account_status 도구로 계정 상태를 확인하세요
+2. list_active_accounts 도구로 등록된 계정 목록을 확인하세요
+3. 필요시 register_account 도구로 계정을 다시 등록하세요"""

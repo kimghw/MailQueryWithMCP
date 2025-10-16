@@ -100,7 +100,7 @@ def get_agenda_search_data_guide(panel_name: str = "sdtp") -> str:
 
 ```
 1. panel_name으로 DB에서 chair_address 조회
-   └─> iacs_panel_chair 테이블
+   └─> iacs_panel_info 테이블
        └─> panel_name="{panel_name}" → chair_address
 
 2. kr_panel_member로 Microsoft Graph API 인증
@@ -395,13 +395,13 @@ def get_data_management_guide() -> str:
 
 ## 데이터베이스 구조
 
-### 테이블 1: iacs_panel_chair
+### 테이블 1: iacs_panel_info
 
 **목적:** 패널별 의장 및 한국 멤버 정보 저장
 
 **스키마:**
 ```sql
-CREATE TABLE iacs_panel_chair (
+CREATE TABLE iacs_panel_info (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     chair_address TEXT NOT NULL,
     panel_name TEXT NOT NULL,
@@ -487,7 +487,7 @@ CREATE TABLE iacs_default_value (
 ```sql
 -- panel_name으로 조회
 SELECT chair_address, kr_panel_member
-FROM iacs_panel_chair
+FROM iacs_panel_info
 WHERE panel_name = ?;
 
 -- 기본 패널 조회
@@ -499,7 +499,7 @@ LIMIT 1;
 ## 데이터 일관성 유지
 
 ### 외래키 없는 설계
-- iacs_default_value.panel_name은 iacs_panel_chair.panel_name 참조
+- iacs_default_value.panel_name은 iacs_panel_info.panel_name 참조
 - **하지만 외래키 제약 없음** (유연성 위해)
 
 ### 데이터 정합성 체크
@@ -507,7 +507,7 @@ LIMIT 1;
 **주의할 시나리오:**
 ```
 1. default_value에 "sdtp" 설정
-2. iacs_panel_chair에서 "sdtp" 레코드 삭제
+2. iacs_panel_info에서 "sdtp" 레코드 삭제
    → default_value는 남아있음 (고아 데이터)
 3. search_agenda 호출 시 패널 정보 없음 오류
 ```
@@ -524,7 +524,7 @@ LIMIT 1;
 sqlite3 mail_query.db ".backup backup_$(date +%Y%m%d).db"
 
 # 테이블별 백업 (CSV)
-sqlite3 -header -csv mail_query.db "SELECT * FROM iacs_panel_chair" > panel_chair.csv
+sqlite3 -header -csv mail_query.db "SELECT * FROM iacs_panel_info" > panel_chair.csv
 ```
 
 ### 복구
@@ -535,7 +535,7 @@ cp backup_20251014.db mail_query.db
 # CSV에서 복구
 sqlite3 mail_query.db <<EOF
 .mode csv
-.import panel_chair.csv iacs_panel_chair
+.import panel_chair.csv iacs_panel_info
 EOF
 ```
 
@@ -544,18 +544,18 @@ EOF
 ### 스키마 변경 시
 ```sql
 -- 1. 새 테이블 생성
-CREATE TABLE iacs_panel_chair_new (...);
+CREATE TABLE iacs_panel_info_new (...);
 
 -- 2. 데이터 복사
-INSERT INTO iacs_panel_chair_new
-SELECT * FROM iacs_panel_chair;
+INSERT INTO iacs_panel_info_new
+SELECT * FROM iacs_panel_info;
 
 -- 3. 기존 테이블 삭제
-DROP TABLE iacs_panel_chair;
+DROP TABLE iacs_panel_info;
 
 -- 4. 테이블 이름 변경
-ALTER TABLE iacs_panel_chair_new
-RENAME TO iacs_panel_chair;
+ALTER TABLE iacs_panel_info_new
+RENAME TO iacs_panel_info;
 ```
 
 ## 데이터 모니터링

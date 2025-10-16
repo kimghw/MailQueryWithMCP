@@ -115,6 +115,16 @@ class TokenService:
             if existing_account:
                 # 기존 계정 업데이트
                 account_id = existing_account["id"]
+
+                # 디버깅: 토큰 데이터 로그 (처음 8자만)
+                logger.debug(
+                    f"[DEBUG] 토큰 저장 데이터: user_id={user_id}, "
+                    f"access_token={'YES' if access_token else 'NO'}, "
+                    f"refresh_token={'YES' if refresh_token else 'NO'}, "
+                    f"token_expiry={expiry_time}, "
+                    f"access_token_prefix={access_token[:8] if access_token else 'None'}"
+                )
+
                 self.db.update(
                     table="accounts",
                     data=account_data,

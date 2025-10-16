@@ -5,11 +5,12 @@ different MCP servers using multiple inheritance (Mixin pattern).
 
 Available Handlers:
 - AuthHandlers: Authentication and account management tools
+- AttachmentFilterHandlers: Attachment filtering and saving tools
 
 Usage:
-    from infra.handlers import AuthHandlers
+    from infra.handlers import AuthHandlers, AttachmentFilterHandlers
 
-    class MyMCPHandlers(AuthHandlers):
+    class MyMCPHandlers(AuthHandlers, AttachmentFilterHandlers):
         def __init__(self):
             super().__init__()
             # Add your custom tools here
@@ -17,8 +18,11 @@ Usage:
 
 from .base import HandlerProtocol
 from .auth_handlers import AuthHandlers
+from .attachment_filter_handlers import AttachmentFilterHandlers, AttachmentFilterConfig
 
 __all__ = [
     "HandlerProtocol",
     "AuthHandlers",
+    "AttachmentFilterHandlers",
+    "AttachmentFilterConfig",
 ]

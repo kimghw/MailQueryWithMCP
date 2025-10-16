@@ -55,17 +55,17 @@ class IACSDBService:
             raise
 
     # ========================================================================
-    # Panel Chair 관련 메서드
+    # Panel Info 관련 메서드
     # ========================================================================
 
-    def insert_panel_chair(
+    def insert_panel_info(
         self,
         chair_address: str,
         panel_name: str,
         kr_panel_member: str
     ) -> bool:
         """
-        패널 의장 정보 삽입
+        패널 정보 삽입
 
         Note:
             - panel_name과 chair_address가 중복되면 기존 데이터 삭제 후 삽입
@@ -74,7 +74,7 @@ class IACSDBService:
             # 기존 데이터 삭제
             self.db.execute_query(
                 """
-                DELETE FROM iacs_panel_chair
+                DELETE FROM iacs_panel_info
                 WHERE panel_name = ? AND chair_address = ?
                 """,
                 (panel_name, chair_address)
@@ -82,7 +82,7 @@ class IACSDBService:
 
             # 새 데이터 삽입
             self.db.insert(
-                "iacs_panel_chair",
+                "iacs_panel_info",
                 {
                     "chair_address": chair_address,
                     "panel_name": panel_name,
@@ -91,21 +91,21 @@ class IACSDBService:
             )
 
             logger.info(
-                f"패널 의장 정보 삽입 완료: "
+                f"패널 정보 삽입 완료: "
                 f"panel={panel_name}, chair={chair_address}"
             )
             return True
 
         except Exception as e:
-            logger.error(f"패널 의장 정보 삽입 실패: {str(e)}")
+            logger.error(f"패널 정보 삽입 실패: {str(e)}")
             raise
 
-    def get_panel_chair_by_name(self, panel_name: str) -> Optional[PanelChairDB]:
-        """패널 이름으로 의장 정보 조회"""
+    def get_panel_info_by_name(self, panel_name: str) -> Optional[PanelChairDB]:
+        """패널 이름으로 정보 조회"""
         try:
             row = self.db.fetch_one(
                 """
-                SELECT * FROM iacs_panel_chair
+                SELECT * FROM iacs_panel_info
                 WHERE panel_name = ?
                 LIMIT 1
                 """,
@@ -119,20 +119,20 @@ class IACSDBService:
             return None
 
         except Exception as e:
-            logger.error(f"패널 의장 정보 조회 실패: {str(e)}")
+            logger.error(f"패널 정보 조회 실패: {str(e)}")
             return None
 
-    def get_all_panel_chairs(self) -> List[PanelChairDB]:
-        """모든 패널 의장 정보 조회"""
+    def get_all_panel_info(self) -> List[PanelChairDB]:
+        """모든 패널 정보 조회"""
         try:
             rows = self.db.fetch_all(
-                "SELECT * FROM iacs_panel_chair ORDER BY panel_name"
+                "SELECT * FROM iacs_panel_info ORDER BY panel_name"
             )
 
             return [PanelChairDB(**row) for row in rows]
 
         except Exception as e:
-            logger.error(f"패널 의장 정보 전체 조회 실패: {str(e)}")
+            logger.error(f"패널 정보 전체 조회 실패: {str(e)}")
             return []
 
     # ========================================================================
@@ -196,10 +196,10 @@ class IACSDBService:
 
     def get_kr_panel_member_by_default(self) -> Optional[str]:
         """
-        기본 패널의 한국 멤버 이메일 조회
+        기본 패널의 한국 멤버 user_id 조회
 
         Returns:
-            한국 패널 멤버 이메일 주소
+            한국 패널 멤버 user_id
         """
         try:
             # 1. 기본 패널 이름 조회
@@ -209,20 +209,20 @@ class IACSDBService:
                 return None
 
             # 2. 해당 패널의 멤버 조회
-            panel_chair = self.get_panel_chair_by_name(default_panel)
-            if not panel_chair:
+            panel_info = self.get_panel_info_by_name(default_panel)
+            if not panel_info:
                 logger.warning(f"패널 정보를 찾을 수 없습니다: {default_panel}")
                 return None
 
-            return panel_chair.kr_panel_member
+            return panel_info.kr_panel_member
 
         except Exception as e:
             logger.error(f"한국 패널 멤버 조회 실패: {str(e)}")
             return None
 
-    def get_panel_info_by_name(self, panel_name: str) -> Optional[dict]:
+    def get_panel_info_dict(self, panel_name: str) -> Optional[dict]:
         """
-        패널 이름으로 전체 정보 조회
+        패널 이름으로 전체 정보 조회 (dict 반환)
 
         Returns:
             {
@@ -232,14 +232,14 @@ class IACSDBService:
             }
         """
         try:
-            panel_chair = self.get_panel_chair_by_name(panel_name)
-            if not panel_chair:
+            panel_info = self.get_panel_info_by_name(panel_name)
+            if not panel_info:
                 return None
 
             return {
-                "chair_address": panel_chair.chair_address,
-                "panel_name": panel_chair.panel_name,
-                "kr_panel_member": panel_chair.kr_panel_member,
+                "chair_address": panel_info.chair_address,
+                "panel_name": panel_info.panel_name,
+                "kr_panel_member": panel_info.kr_panel_member,
             }
 
         except Exception as e:

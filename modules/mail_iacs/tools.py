@@ -51,6 +51,79 @@ class IACSTools:
         self.formatter = IACSResultFormatter()
 
     # ========================================================================
+    # Fallback helper methods
+    # ========================================================================
+
+    def _format_panel_info_guide(self, panel_name: Optional[str] = None) -> str:
+        """
+        패널 정보가 없을 때 현재 테이블 정보와 입력 안내 반환
+
+        Args:
+            panel_name: 조회하려던 패널 이름 (선택)
+
+        Returns:
+            안내 메시지 텍스트
+        """
+        try:
+            # 현재 저장된 패널 정보 조회
+            all_panels = self.db_service.get_all_panel_info()
+
+            message = f"""❌ 패널 정보를 찾을 수 없습니다"""
+
+            if panel_name:
+                message += f": {panel_name}"
+
+            message += "\n\n📊 현재 등록된 패널 정보:\n"
+
+            if all_panels:
+                message += "=" * 60 + "\n"
+                for idx, panel in enumerate(all_panels, 1):
+                    message += f"{idx}. panel_name: {panel.panel_name}\n"
+                    message += f"   chair_address: {panel.chair_address}\n"
+                    message += f"   kr_panel_member: {panel.kr_panel_member}\n"
+                    message += f"   등록일: {panel.created_at}\n"
+                    message += "-" * 60 + "\n"
+            else:
+                message += "  (등록된 패널 정보가 없습니다)\n\n"
+
+            message += """
+📝 패널 정보 등록 방법:
+
+insert_info 도구를 사용하여 패널 정보를 등록하세요:
+
+{
+  "chair_address": "chair@example.com",     # 패널 의장 이메일 주소
+  "panel_name": "panel_name",               # 패널 이름 (예: sdtp, bop)
+  "kr_panel_member": "user_id"              # 한국 패널 멤버 user_id (accounts 테이블의 user_id와 일치해야 함)
+}
+
+⚠️  중요:
+- kr_panel_member는 accounts 테이블에 등록된 user_id여야 합니다
+- user_id는 이메일 주소가 아닌 계정 ID입니다 (예: 'kimghw', 'krsdtp')
+- 해당 계정은 유효한 토큰을 가지고 있어야 메일 조회가 가능합니다
+
+📌 다음 단계:
+1. insert_info 도구로 패널 정보를 등록하세요
+2. insert_default_value 도구로 기본 패널을 설정하세요 (선택)
+3. search_agenda 또는 search_responses 도구로 메일을 검색하세요
+"""
+
+            return message
+
+        except Exception as e:
+            logger.error(f"패널 정보 안내 생성 실패: {str(e)}")
+            return f"""❌ 패널 정보를 찾을 수 없습니다
+
+⚠️  오류가 발생했습니다: {str(e)}
+
+📝 패널 정보 등록:
+insert_info 도구를 사용하여 다음 정보를 등록하세요:
+- chair_address: 패널 의장 이메일 주소
+- panel_name: 패널 이름
+- kr_panel_member: 한국 패널 멤버 user_id
+"""
+
+    # ========================================================================
     # Tool 1: insert_info
     # ========================================================================
 
@@ -65,7 +138,7 @@ class IACSTools:
             InsertInfoResponse
         """
         try:
-            success = self.db_service.insert_panel_chair(
+            success = self.db_service.insert_panel_info(
                 chair_address=request.chair_address,
                 panel_name=request.panel_name,
                 kr_panel_member=request.kr_panel_member,
@@ -139,7 +212,7 @@ class IACSTools:
                     logger.error("패널 정보를 찾을 수 없음 (기본 패널 없음)")
                     return SearchAgendaResponse(
                         success=False,
-                        message="패널 정보 또는 sender_address/kr_panel_member를 지정해주세요",
+                        message=self._format_panel_info_guide(),
                         total_count=0,
                         mails=[],
                     )
@@ -151,7 +224,7 @@ class IACSTools:
                     logger.error(f"패널 정보 조회 실패: {panel_name}")
                     return SearchAgendaResponse(
                         success=False,
-                        message=f"패널 정보를 찾을 수 없습니다: {panel_name}",
+                        message=self._format_panel_info_guide(panel_name),
                         total_count=0,
                         mails=[],
                     )
@@ -160,10 +233,10 @@ class IACSTools:
 
                 # 패널 정보에서 가져오기 (직접 지정되지 않은 경우만)
                 if not chair_address:
-                    chair_address = panel_info["chair_address"]
+                    chair_address = panel_info.chair_address
                     logger.info(f"패널에서 chair_address 가져옴: {chair_address}")
                 if not kr_panel_member:
-                    kr_panel_member = panel_info["kr_panel_member"]
+                    kr_panel_member = panel_info.kr_panel_member
                     logger.info(f"패널에서 kr_panel_member 가져옴: {kr_panel_member}")
 
             # 2. 날짜 범위 설정
@@ -309,12 +382,12 @@ class IACSTools:
                     logger.error(f"패널 정보 조회 실패: {panel_name}")
                     return SearchResponsesResponse(
                         success=False,
-                        message=f"패널 정보를 찾을 수 없습니다: {panel_name}",
+                        message=self._format_panel_info_guide(panel_name),
                         total_count=0,
                         agenda_code=request.agenda_code,
                         mails=[],
                     )
-                kr_panel_member = panel_info["kr_panel_member"]
+                kr_panel_member = panel_info.kr_panel_member
                 logger.info(f"패널에서 kr_panel_member 가져옴: {kr_panel_member}")
             else:
                 # panel_name이 없으면 기본 패널 사용
@@ -326,7 +399,7 @@ class IACSTools:
                     logger.error("기본 패널이 설정되지 않음")
                     return SearchResponsesResponse(
                         success=False,
-                        message="panel_name을 지정하거나 기본 패널을 설정해주세요",
+                        message=self._format_panel_info_guide(),
                         total_count=0,
                         agenda_code=request.agenda_code,
                         mails=[],

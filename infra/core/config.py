@@ -286,6 +286,35 @@ class Config:
             "on",
         )
 
+    # Attachment Manager 설정
+    @property
+    def attachment_default_save_path(self) -> str:
+        """첨부파일 기본 저장 경로"""
+        default_path = os.getenv("ATTACHMENT_DEFAULT_SAVE_PATH", "/mnt/c/Users/GEOHWA KIM/attachment")
+        # 디렉터리가 없으면 생성
+        Path(default_path).mkdir(parents=True, exist_ok=True)
+        return default_path
+
+    @property
+    def attachment_save_enabled(self) -> bool:
+        """첨부파일 저장 활성화 여부"""
+        return os.getenv("ATTACHMENT_SAVE_ENABLED", "true").lower() in (
+            "true",
+            "1",
+            "yes",
+            "on",
+        )
+
+    @property
+    def attachment_text_extraction_enabled(self) -> bool:
+        """첨부파일 텍스트 추출 후 LLM 전달 활성화 여부"""
+        return os.getenv("ATTACHMENT_TEXT_EXTRACTION_ENABLED", "false").lower() in (
+            "true",
+            "1",
+            "yes",
+            "on",
+        )
+
     def to_dict(self) -> dict:
         """설정을 딕셔너리로 반환 (민감한 정보 제외)"""
         return {
