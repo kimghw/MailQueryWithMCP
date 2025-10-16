@@ -1,0 +1,3 @@
+"""
+OneNote MCP Entrypoints
+"""
