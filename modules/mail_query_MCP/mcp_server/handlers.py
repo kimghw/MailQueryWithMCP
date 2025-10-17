@@ -8,7 +8,6 @@ from mcp.types import Prompt, PromptArgument, PromptMessage, TextContent, Tool
 
 from infra.core.logger import get_logger
 from infra.core.error_messages import ErrorCode, MCPError
-from infra.handlers import AuthHandlers
 from .prompts import get_prompt
 from .tools import MailAttachmentTools  # This now imports from tools/__init__.py
 from .utils import preprocess_arguments
@@ -16,22 +15,18 @@ from .utils import preprocess_arguments
 logger = get_logger(__name__)
 
 
-class MCPHandlers(AuthHandlers):
-    """MCP Protocol handlers with Authentication Support"""
+class MCPHandlers:
+    """MCP Protocol handlers for Mail Query"""
 
     def __init__(self):
-        super().__init__()  # Initialize AuthHandlers
         self.tools = MailAttachmentTools()
-        logger.info("✅ MCPHandlers initialized (with AuthHandlers)")
+        logger.info("✅ MCPHandlers initialized")
     
     async def handle_list_tools(self) -> List[Tool]:
-        """List available tools (Authentication + Mail Query)"""
+        """List available tools"""
         logger.info("🔧 [MCP Handler] list_tools() called")
 
-        # Get authentication tools from parent class
-        auth_tools = self.get_auth_tools()
-
-        # Define mail query specific tools
+        # Define mail query tools
         mail_query_tools = [
             Tool(
                 name="query_email",
@@ -164,10 +159,6 @@ class MCPHandlers(AuthHandlers):
                             "type": "string",
                             "description": "Name of the tool to get help for (optional). If not specified, shows list of all available tools",
                             "enum": [
-                                "register_account",
-                                "get_account_status",
-                                "start_authentication",
-                                "list_active_accounts",
                                 "query_email",
                                 "help"
                             ]
@@ -177,19 +168,14 @@ class MCPHandlers(AuthHandlers):
             ),
         ]
 
-        # Return combined list: auth tools first, then mail query tools
-        return auth_tools + mail_query_tools
+        return mail_query_tools
     
     async def handle_call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
-        """Handle tool calls (Authentication + Mail Query)"""
+        """Handle tool calls"""
         logger.info(f"🛠️ [MCP Handler] call_tool() called with tool: {name}")
         logger.info(f"📝 [MCP Handler] Raw arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
 
-        # Check if it's an authentication tool
-        if self.is_auth_tool(name):
-            return await self.handle_auth_tool(name, arguments)
-
-        # Preprocess arguments for mail query tools
+        # Preprocess arguments
         arguments = preprocess_arguments(arguments)
         logger.info(f"🔄 [MCP Handler] Preprocessed arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
 
