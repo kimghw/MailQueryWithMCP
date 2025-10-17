@@ -310,9 +310,12 @@ class Config:
     @property
     def attachment_default_save_path(self) -> str:
         """첨부파일 기본 저장 경로"""
-        default_path = os.getenv("ATTACHMENT_DEFAULT_SAVE_PATH", "/mnt/c/Users/GEOHWA KIM/attachment")
-        # 디렉터리가 없으면 생성
-        Path(default_path).mkdir(parents=True, exist_ok=True)
+        default_path = os.getenv("ATTACHMENT_DEFAULT_SAVE_PATH", "./filtered_attachments")
+        # 디렉터리가 없으면 생성 (안전하게 처리)
+        try:
+            Path(default_path).mkdir(parents=True, exist_ok=True)
+        except (PermissionError, OSError) as e:
+            logger.warning(f"첨부파일 저장 경로 생성 실패 ({default_path}): {e}")
         return default_path
 
     @property

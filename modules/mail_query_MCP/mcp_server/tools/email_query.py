@@ -13,9 +13,9 @@ from modules.mail_query import (
     MailQueryRequest,
     PaginationOptions
 )
-from mail_process import AttachmentDownloader, EmailSaver, FileConverterOrchestrator
-from mail_process.filters import KeywordFilter, ConversationFilter
-from modules.mail_query_without_db.mcp_server.prompts import get_format_email_results_prompt
+from modules.mail_process import AttachmentDownloader, FileConverterOrchestrator, EmailSaver
+from modules.mail_process.client_filter import ClientFilter
+from modules.mail_query_MCP.mcp_server.prompts import get_format_email_results_prompt
 
 logger = get_logger(__name__)
 
@@ -31,7 +31,7 @@ class EmailQueryTool:
             config: Configuration object
         """
         self.config = config
-        self.email_saver = EmailSaver(output_dir=str(self.config.emails_dir))
+        self.email_saver = EmailSaver(output_dir=Path(self.config.emails_dir))
         self.attachment_downloader = AttachmentDownloader(
             output_dir=str(self.config.attachments_dir)
         )

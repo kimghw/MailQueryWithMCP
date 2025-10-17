@@ -2,12 +2,14 @@
 
 import json
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from mcp.types import Prompt, PromptArgument, PromptMessage, TextContent, Tool
 
 from infra.core.logger import get_logger
 from infra.core.error_messages import ErrorCode, MCPError
+from infra.core.database import get_database_manager
+from infra.handlers.attachment_filter_handlers import AttachmentFilterHandlers
 from .prompts import get_prompt
 from .tools import MailAttachmentTools  # This now imports from tools/__init__.py
 from .utils import preprocess_arguments
@@ -15,12 +17,103 @@ from .utils import preprocess_arguments
 logger = get_logger(__name__)
 
 
-class MCPHandlers:
-    """MCP Protocol handlers for Mail Query"""
+def get_default_user_id() -> Optional[str]:
+    """
+    Get default user_id from database based on token validity
+
+    우선순위:
+    1. access_token이 유효한 계정 (만료 시간이 현재보다 미래)
+    2. 계정이 1개만 있는 경우 해당 계정
+    3. 다중 계정이지만 유효한 토큰이 1개만 있는 경우
+
+    Returns:
+        user_id if valid account found, None otherwise
+    """
+    try:
+        from datetime import datetime, timezone
+
+        db = get_database_manager()
+
+        # 활성화된 계정 조회
+        query = """
+            SELECT user_id, token_expiry, access_token
+            FROM accounts
+            WHERE is_active = 1
+            ORDER BY token_expiry DESC NULLS LAST
+        """
+        rows = db.fetch_all(query)
+
+        if len(rows) == 0:
+            logger.warning("⚠️ 등록된 계정이 없습니다")
+            return None
+
+        # 유효한 토큰을 가진 계정 필터링
+        now = datetime.now(timezone.utc)
+        valid_accounts = []
+
+        for row in rows:
+            user_id = row['user_id']
+            token_expiry = row['token_expiry']
+            access_token = row['access_token']
+
+            # access_token과 token_expiry가 모두 있고, 만료되지 않은 경우
+            if access_token and token_expiry:
+                try:
+                    # Parse token_expiry (ISO format string to datetime)
+                    if isinstance(token_expiry, str):
+                        # Remove microseconds if present for cleaner parsing
+                        if '.' in token_expiry:
+                            token_expiry = token_expiry.split('.')[0]
+                        expiry_dt = datetime.fromisoformat(token_expiry.replace('Z', '+00:00'))
+                    else:
+                        expiry_dt = token_expiry
+
+                    # Make timezone-aware if naive
+                    if expiry_dt.tzinfo is None:
+                        expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+
+                    if expiry_dt > now:
+                        valid_accounts.append({
+                            'user_id': user_id,
+                            'token_expiry': expiry_dt
+                        })
+                        logger.info(f"✅ 유효한 토큰 발견: {user_id} (만료: {expiry_dt})")
+                except Exception as e:
+                    logger.warning(f"⚠️ {user_id}의 토큰 만료 시간 파싱 실패: {e}")
+                    continue
+
+        # 우선순위 1: 유효한 토큰이 있는 계정 중 가장 최근 것
+        if valid_accounts:
+            # 만료 시간이 가장 먼 계정 선택
+            selected = max(valid_accounts, key=lambda x: x['token_expiry'])
+            user_id = selected['user_id']
+            logger.info(f"✅ 유효한 토큰 계정 자동 선택: {user_id}")
+            return user_id
+
+        # 우선순위 2: 계정이 1개만 있는 경우
+        if len(rows) == 1:
+            user_id = rows[0]['user_id']
+            logger.info(f"✅ 단일 계정 발견, 자동 선택: {user_id} (토큰 만료됨)")
+            return user_id
+
+        # 다중 계정이지만 모두 토큰이 만료된 경우
+        logger.warning(f"⚠️ 다중 계정 존재 ({len(rows)}개), 모두 토큰 만료됨 - user_id 명시 필요")
+        return None
+
+    except Exception as e:
+        logger.error(f"❌ 기본 user_id 조회 실패: {e}")
+        return None
+
+
+class MCPHandlers(AttachmentFilterHandlers):
+    """MCP Protocol handlers for Mail Query (상속: AttachmentFilterHandlers)"""
 
     def __init__(self):
+        # AttachmentFilterHandlers 초기화
+        super().__init__()
+
         self.tools = MailAttachmentTools()
-        logger.info("✅ MCPHandlers initialized")
+        logger.info("✅ MCPHandlers initialized with AttachmentFilterHandlers")
     
     async def handle_list_tools(self) -> List[Tool]:
         """List available tools"""
@@ -37,7 +130,7 @@ class MCPHandlers:
                     "properties": {
                         "user_id": {
                             "type": "string",
-                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr)",
+                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr). 생략 시 계정이 1개만 등록되어 있으면 자동 선택됨.",
                         },
                         "days_back": {
                             "type": "integer",
@@ -52,7 +145,6 @@ class MCPHandlers:
                         "include_body": {
                             "type": "boolean",
                             "description": "Include full email body content in the response. When true, returns complete HTML/text content of each email. When false, only returns email preview (first ~255 chars). Useful for detailed content analysis",
-                            "default": True,
                         },
                         "download_attachments": {
                             "type": "boolean",
@@ -141,12 +233,21 @@ class MCPHandlers:
                         },
                     },
                     "required": [
-                        "user_id",
                         "start_date",
                         "end_date",
+                        "include_body",
                         "query_context"
                     ],
                 },
+            ),
+            Tool(
+                name="query_email_help",
+                title="📘 Query Email Help",
+                description="Get detailed usage guide for query_email tool with examples for all parameter combinations",
+                inputSchema={
+                    "type": "object",
+                    "properties": {}
+                }
             ),
             Tool(
                 name="help",
@@ -160,6 +261,7 @@ class MCPHandlers:
                             "description": "Name of the tool to get help for (optional). If not specified, shows list of all available tools",
                             "enum": [
                                 "query_email",
+                                "query_email_help",
                                 "help"
                             ]
                         }
@@ -167,6 +269,10 @@ class MCPHandlers:
                 }
             ),
         ]
+
+        # AttachmentFilterHandlers에서 attachmentManager 툴 추가
+        attachment_tools = self.get_attachment_filter_tools()
+        mail_query_tools.extend(attachment_tools)
 
         return mail_query_tools
     
@@ -179,9 +285,32 @@ class MCPHandlers:
         arguments = preprocess_arguments(arguments)
         logger.info(f"🔄 [MCP Handler] Preprocessed arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
 
+        # user_id 자동 선택 (단일 계정인 경우)
+        if not arguments.get("user_id"):
+            default_user_id = get_default_user_id()
+            if default_user_id:
+                arguments["user_id"] = default_user_id
+                logger.info(f"✅ user_id 자동 선택: {default_user_id}")
+            else:
+                # user_id가 필요한 툴인데 없는 경우
+                if name in ["query_email", "attachmentManager"]:
+                    return [TextContent(
+                        type="text",
+                        text="❌ Error: user_id가 필요합니다. 다중 계정이 등록되어 있으므로 user_id를 명시해주세요."
+                    )]
+
         try:
+            # AttachmentFilterHandlers 툴 체크
+            if self.is_attachment_filter_tool(name):
+                return await self.handle_attachment_filter_tool(name, arguments)
+
+            # Mail Query 툴 처리
             if name == "query_email":
                 result = await self.tools.query_email(arguments)
+                return [TextContent(type="text", text=result)]
+
+            elif name == "query_email_help":
+                result = await self.tools.query_email_help(arguments)
                 return [TextContent(type="text", text=result)]
 
             elif name == "help":

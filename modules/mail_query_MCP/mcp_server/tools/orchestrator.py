@@ -6,7 +6,7 @@ from typing import Any, Dict
 from .email_query import EmailQueryTool
 from .export import ExportTool
 from .account import AccountManagementTool
-from .help_content import get_tool_help
+from .help_content import get_tool_help, get_query_email_help
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +52,10 @@ class ToolOrchestrator:
         tool_name = arguments.get("tool_name")
         return get_tool_help(tool_name)
 
+    async def query_email_help(self, arguments: Dict[str, Any]) -> str:
+        """Get detailed help for query_email tool"""
+        return get_query_email_help()
+
     # Internal utility methods (not exposed as tools)
     def save_emails_to_csv(self, emails: list[Dict[str, Any]], user_id: str):
         """Internal: Save email data to CSV file"""
@@ -96,5 +100,6 @@ class ToolOrchestrator:
             "get_account_status",
             "start_authentication",
             "query_email",
+            "query_email_help",
             "help"
         ]

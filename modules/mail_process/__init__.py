@@ -36,6 +36,7 @@ from .processor import (
     AttachmentResult,
     BatchProcessResult
 )
+from .processor.handlers.email_saver import EmailSaver
 
 # 파일 변환
 from .converters import FileConverterOrchestrator
@@ -67,6 +68,7 @@ __all__ = [
     'EmailProcessResult',
     'AttachmentResult',
     'BatchProcessResult',
+    'EmailSaver',
 
     # File Converter
     'FileConverterOrchestrator',

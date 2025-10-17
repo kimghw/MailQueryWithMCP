@@ -3,6 +3,7 @@
 from ._auth_helpers import (
     auth_calculate_session_timeout,
     auth_create_session_expiry,
+    auth_decode_state_token,
     auth_format_error_message,
     auth_generate_callback_error_html,
     auth_generate_callback_success_html,
@@ -60,6 +61,7 @@ __all__ = [
     # Helpers
     "auth_generate_session_id",
     "auth_generate_state_token",
+    "auth_decode_state_token",
     "auth_validate_callback_url",
     "auth_parse_callback_params",
     "auth_sanitize_user_id",
