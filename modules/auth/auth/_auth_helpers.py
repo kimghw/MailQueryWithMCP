@@ -6,10 +6,14 @@ OAuth 플로우 관리를 위한 유틸리티 함수들을 제공합니다.
 """
 
 import hashlib
+import platform
+import re
 import secrets
+import socket
+import subprocess
 import uuid
 from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
 from infra.core.logger import get_logger
@@ -387,3 +391,242 @@ def auth_log_session_activity(
             "details": masked_details,
         },
     )
+
+
+def auth_check_port_accessibility(port: int, host: str = "0.0.0.0") -> Tuple[bool, str]:
+    """
+    포트 접근성 확인 (관리자 권한 불필요)
+
+    Args:
+        port: 확인할 포트 번호
+        host: 바인딩 호스트 (기본값: "0.0.0.0")
+
+    Returns:
+        (접근 가능 여부, 상태 메시지) 튜플
+    """
+    try:
+        # 포트가 이미 사용 중인지 확인
+        result = subprocess.run(
+            ["ss", "-tuln"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+
+        if result.returncode == 0:
+            # 해당 포트가 리스닝 중인지 확인
+            for line in result.stdout.splitlines():
+                if f":{port}" in line and "LISTEN" in line:
+                    # 127.0.0.1로만 바인딩되어 있는지 확인
+                    if "127.0.0.1" in line and host == "0.0.0.0":
+                        return False, f"⚠️  포트 {port}이(가) localhost(127.0.0.1)로만 바인딩되어 외부 접근 불가"
+                    elif "0.0.0.0" in line or "::" in line:
+                        return True, f"✅ 포트 {port} 사용 가능 (모든 인터페이스에서 접근 가능)"
+                    else:
+                        return True, f"✅ 포트 {port} 리스닝 중"
+
+            # 포트가 리스닝 중이 아님
+            return True, f"✅ 포트 {port} 사용 가능"
+
+        # ss 명령 실패 시 socket으로 재시도
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(2)
+        result = sock.connect_ex((host if host != "0.0.0.0" else "127.0.0.1", port))
+        sock.close()
+
+        if result == 0:
+            return True, f"✅ 포트 {port} 사용 가능"
+        else:
+            return False, f"❌ 포트 {port} 접근 불가"
+
+    except subprocess.TimeoutExpired:
+        logger.warning(f"포트 {port} 확인 시간 초과")
+        return False, f"⚠️  포트 {port} 확인 시간 초과"
+    except Exception as e:
+        logger.warning(f"포트 {port} 확인 실패: {str(e)}")
+        return False, f"⚠️  포트 {port} 확인 실패: {str(e)}"
+
+
+def auth_check_firewall_status() -> Dict[str, Any]:
+    """
+    OS별 방화벽 상태 확인 (관리자 권한 불필요)
+
+    Returns:
+        방화벽 상태 정보 딕셔너리
+    """
+    status = {
+        "os": platform.system(),
+        "firewall_enabled": None,
+        "firewall_status": "unknown",
+        "requires_sudo": False,
+        "message": ""
+    }
+
+    os_type = platform.system()
+
+    try:
+        if os_type == "Linux":
+            # Linux: UFW 우선 체크, 없으면 iptables 체크
+            try:
+                result = subprocess.run(
+                    ["ufw", "status"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if "Status: active" in result.stdout:
+                    status["firewall_enabled"] = True
+                    status["firewall_status"] = "active"
+                    status["message"] = "⚠️  UFW 방화벽이 활성화되어 있습니다"
+                elif "Status: inactive" in result.stdout:
+                    status["firewall_enabled"] = False
+                    status["firewall_status"] = "inactive"
+                    status["message"] = "✅ UFW 방화벽 비활성화 상태"
+                elif "must be run as root" in result.stderr or "permission denied" in result.stderr.lower():
+                    status["requires_sudo"] = True
+                    status["message"] = "⚠️  방화벽 상태 확인에 관리자 권한 필요"
+                else:
+                    status["message"] = "ℹ️  UFW 방화벽 미설치 또는 비활성"
+            except FileNotFoundError:
+                # UFW 없으면 iptables 체크
+                try:
+                    result = subprocess.run(
+                        ["iptables", "-L", "-n"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5
+                    )
+                    if result.returncode == 0:
+                        # 기본 정책이 ACCEPT가 아니거나 규칙이 있으면 활성화로 간주
+                        if "DROP" in result.stdout or "REJECT" in result.stdout:
+                            status["firewall_enabled"] = True
+                            status["message"] = "⚠️  iptables 방화벽 규칙이 설정되어 있습니다"
+                        else:
+                            status["firewall_enabled"] = False
+                            status["message"] = "✅ iptables 방화벽 기본 정책 (제한 없음)"
+                    else:
+                        status["requires_sudo"] = True
+                        status["message"] = "⚠️  iptables 확인에 관리자 권한 필요"
+                except FileNotFoundError:
+                    status["message"] = "ℹ️  방화벽 도구 미설치 (UFW, iptables 없음)"
+
+        elif os_type == "Darwin":  # macOS
+            # macOS: Application Firewall 상태 체크
+            try:
+                result = subprocess.run(
+                    ["/usr/libexec/ApplicationFirewall/socketfilterfw", "--getglobalstate"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if "enabled" in result.stdout.lower():
+                    status["firewall_enabled"] = True
+                    status["firewall_status"] = "active"
+                    status["message"] = "⚠️  macOS 방화벽이 활성화되어 있습니다"
+                elif "disabled" in result.stdout.lower():
+                    status["firewall_enabled"] = False
+                    status["firewall_status"] = "inactive"
+                    status["message"] = "✅ macOS 방화벽 비활성화 상태"
+                else:
+                    status["message"] = "ℹ️  macOS 방화벽 상태 확인 실패"
+            except FileNotFoundError:
+                status["message"] = "ℹ️  macOS 방화벽 도구를 찾을 수 없음"
+            except Exception as e:
+                if "operation not permitted" in str(e).lower():
+                    status["requires_sudo"] = True
+                    status["message"] = "⚠️  macOS 방화벽 확인에 관리자 권한 필요"
+                else:
+                    status["message"] = f"ℹ️  macOS 방화벽 확인 실패: {str(e)}"
+
+        elif os_type == "Windows":
+            # Windows: netsh 명령으로 방화벽 상태 체크
+            try:
+                result = subprocess.run(
+                    ["netsh", "advfirewall", "show", "allprofiles", "state"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5
+                )
+
+                if "ON" in result.stdout:
+                    status["firewall_enabled"] = True
+                    status["firewall_status"] = "active"
+                    status["message"] = "⚠️  Windows 방화벽이 활성화되어 있습니다"
+                elif "OFF" in result.stdout:
+                    status["firewall_enabled"] = False
+                    status["firewall_status"] = "inactive"
+                    status["message"] = "✅ Windows 방화벽 비활성화 상태"
+                else:
+                    status["message"] = "ℹ️  Windows 방화벽 상태 확인 실패"
+            except FileNotFoundError:
+                status["message"] = "ℹ️  Windows netsh 명령을 찾을 수 없음"
+            except Exception as e:
+                if "access denied" in str(e).lower():
+                    status["requires_sudo"] = True
+                    status["message"] = "⚠️  Windows 방화벽 확인에 관리자 권한 필요"
+                else:
+                    status["message"] = f"ℹ️  Windows 방화벽 확인 실패: {str(e)}"
+
+        else:
+            status["message"] = f"ℹ️  지원하지 않는 OS: {os_type}"
+
+    except subprocess.TimeoutExpired:
+        status["message"] = "⚠️  방화벽 상태 확인 시간 초과"
+    except Exception as e:
+        status["message"] = f"⚠️  방화벽 상태 확인 실패: {str(e)}"
+
+    return status
+
+
+def auth_validate_oauth_credentials(
+    client_id: Optional[str],
+    client_secret: Optional[str],
+    tenant_id: Optional[str]
+) -> Tuple[bool, Optional[str]]:
+    """
+    Microsoft Azure OAuth 자격 증명 포맷 검증
+
+    Args:
+        client_id: Azure App Client ID (Application ID)
+        client_secret: Azure App Client Secret
+        tenant_id: Azure AD Tenant ID (Directory ID)
+
+    Returns:
+        (검증 성공 여부, 에러 메시지) 튜플
+    """
+    # UUID 포맷 (8-4-4-4-12 형식)
+    uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', re.IGNORECASE)
+
+    # 1. Client ID 검증 (UUID 포맷)
+    if not client_id:
+        return False, "❌ client_id가 비어있습니다"
+
+    if not uuid_pattern.match(client_id):
+        return False, f"❌ client_id 포맷이 올바르지 않습니다: {client_id[:20]}...\n   예상 포맷: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (UUID)"
+
+    # 2. Client Secret 검증
+    # client_id와 client_secret을 헷갈리지 않도록만 검증
+    if not client_secret:
+        return False, "❌ client_secret이 비어있습니다"
+
+    # ⚠️ client_secret에 UUID를 입력한 경우 (client_id와 혼동)
+    if uuid_pattern.match(client_secret):
+        return False, (
+            f"❌ client_secret에 UUID가 입력되었습니다\n"
+            f"   입력값: {client_secret}\n"
+            f"   → client_id와 client_secret을 바꿔서 입력하신 것 같습니다\n"
+            f"   → client_secret은 UUID가 아닌 영숫자+특수문자 조합입니다"
+        )
+
+    # 3. Tenant ID 검증 (UUID 포맷)
+    if not tenant_id:
+        return False, "❌ tenant_id가 비어있습니다"
+
+    if not uuid_pattern.match(tenant_id):
+        return False, f"❌ tenant_id 포맷이 올바르지 않습니다: {tenant_id[:20]}...\n   예상 포맷: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx (UUID)"
+
+    # 모든 검증 통과
+    logger.info(f"OAuth 자격 증명 검증 성공: client_id={client_id[:8]}..., tenant_id={tenant_id[:8]}...")
+    return True, None

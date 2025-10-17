@@ -1,9 +1,7 @@
-"""Authentication MCP Handlers
+"""Authentication and Account MCP Handlers
 
-This module provides reusable MCP authentication handlers that can be inherited
-by different MCP servers (IACS, mail_query, etc.)
-
-Integrates both MCP tool definitions and authentication business logic.
+This module provides MCP handlers for authentication and account management.
+Integrates both MCP tool definitions and business logic.
 """
 
 import os
@@ -16,27 +14,28 @@ from mcp.types import Tool, TextContent
 
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
-from modules.auth import get_auth_orchestrator, AuthStartRequest
+from modules.auth.auth import get_auth_orchestrator, AuthStartRequest
+from modules.auth.auth._auth_helpers import auth_validate_oauth_credentials
 
 logger = get_logger(__name__)
 
 
-class AuthHandlers:
-    """Authentication handlers for MCP servers (Mixin pattern)"""
+class AuthAccountHandlers:
+    """Authentication and Account handlers for MCP server"""
 
     def __init__(self):
-        """Initialize authentication handlers"""
+        """Initialize authentication and account handlers"""
         self.db = get_database_manager()
-        self.project_root = Path(__file__).parent.parent.parent
+        self.project_root = Path(__file__).parent.parent
         self.enrollment_dir = self.project_root / "enrollment"
-        logger.info("✅ AuthHandlers initialized")
+        logger.info("✅ AuthAccountHandlers initialized")
 
-    def get_auth_tools(self) -> List[Tool]:
+    async def handle_list_tools(self) -> List[Tool]:
         """
-        Get list of authentication MCP tools
+        List all available tools (authentication + account)
 
         Returns:
-            List of authentication Tool objects
+            List of Tool objects
         """
         return [
             Tool(
@@ -116,9 +115,9 @@ class AuthHandlers:
             ),
         ]
 
-    async def handle_auth_tool(self, name: str, arguments: dict) -> List[TextContent]:
+    async def handle_call_tool(self, name: str, arguments: dict) -> List[TextContent]:
         """
-        Handle authentication tool calls
+        Handle tool calls
 
         Args:
             name: Tool name
@@ -127,7 +126,7 @@ class AuthHandlers:
         Returns:
             List of TextContent with tool results
         """
-        logger.info(f"🔐 [Auth Handler] Handling tool: {name}")
+        logger.info(f"🔐 [Auth/Account Handler] Handling tool: {name}")
 
         try:
             if name == "register_account":
@@ -147,32 +146,14 @@ class AuthHandlers:
                 return [TextContent(type="text", text=result)]
 
             else:
-                error_msg = f"Unknown authentication tool: {name}"
+                error_msg = f"Unknown tool: {name}"
                 logger.error(error_msg)
                 return [TextContent(type="text", text=f"❌ Error: {error_msg}")]
 
         except Exception as e:
-            error_msg = f"Authentication tool '{name}' failed: {str(e)}"
+            error_msg = f"Tool '{name}' failed: {str(e)}"
             logger.error(error_msg)
             return [TextContent(type="text", text=f"❌ Error: {error_msg}")]
-
-    def is_auth_tool(self, tool_name: str) -> bool:
-        """
-        Check if tool name is an authentication tool
-
-        Args:
-            tool_name: Tool name to check
-
-        Returns:
-            True if authentication tool
-        """
-        auth_tool_names = [
-            "register_account",
-            "get_account_status",
-            "start_authentication",
-            "list_active_accounts"
-        ]
-        return tool_name in auth_tool_names
 
     # ========================================================================
     # Private implementation methods
@@ -208,6 +189,16 @@ class AuthHandlers:
             # Validate required fields
             if not all([user_id, email, oauth_client_id, oauth_client_secret, oauth_tenant_id]):
                 return "❌ Error: Missing required fields (user_id, email, oauth_client_id, oauth_client_secret, oauth_tenant_id)"
+
+            # Validate OAuth credentials format
+            is_valid, error_msg = auth_validate_oauth_credentials(
+                oauth_client_id,
+                oauth_client_secret,
+                oauth_tenant_id
+            )
+            if not is_valid:
+                logger.error(f"OAuth 자격 증명 검증 실패: {error_msg}")
+                return f"❌ OAuth 자격 증명 포맷 오류:\n{error_msg}"
 
             logger.info(f"Registering account: {user_id} ({email})")
 
@@ -247,7 +238,7 @@ class AuthHandlers:
             logger.info(f"Enrollment file created: {enrollment_file}")
 
             # Encrypt client secret
-            from modules.auth._account_helpers import AccountCryptoHelpers
+            from modules.auth.account import AccountCryptoHelpers
             crypto_helper = AccountCryptoHelpers()
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 

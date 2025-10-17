@@ -14,10 +14,12 @@ from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from infra.core.oauth_client import get_oauth_client
 from infra.core.token_service import get_token_service
-from modules.account._account_helpers import AccountCryptoHelpers
+from modules.auth.account import AccountCryptoHelpers
 
 from ._auth_helpers import (
     auth_calculate_session_timeout,
+    auth_check_firewall_status,
+    auth_check_port_accessibility,
     auth_create_session_expiry,
     auth_generate_session_id,
     auth_generate_state_token,
@@ -70,6 +72,42 @@ class AuthOrchestrator:
         try:
             # 사용자 ID 검증 및 정리
             user_id = auth_sanitize_user_id(request.user_id)
+
+            # ========================================================================
+            # 인증 시작 전 환경 확인 (방화벽 및 포트 접근성)
+            # ========================================================================
+            # 계정별 OAuth 설정에서 redirect_uri 가져오기
+            oauth_config = await self._get_account_oauth_config(user_id)
+
+            if oauth_config and oauth_config.get("oauth_redirect_uri"):
+                from urllib.parse import urlparse
+                parsed_uri = urlparse(oauth_config["oauth_redirect_uri"])
+                redirect_port = parsed_uri.port or (443 if parsed_uri.scheme == "https" else 80)
+            else:
+                redirect_port = 5000  # 기본 포트
+
+            # 방화벽 상태 확인
+            firewall_status = auth_check_firewall_status()
+            logger.info(f"방화벽 상태: {firewall_status['message']}")
+
+            # 포트 접근성 확인
+            port_accessible, port_message = auth_check_port_accessibility(redirect_port, host="0.0.0.0")
+            logger.info(f"포트 {redirect_port} 상태: {port_message}")
+
+            # 경고 메시지 수집
+            warnings = []
+            if not port_accessible:
+                warnings.append(port_message)
+            if firewall_status.get("firewall_enabled"):
+                os_name = firewall_status.get("os", "Unknown")
+                warnings.append(f"⚠️  {os_name} 방화벽 활성화됨 - 포트 {redirect_port} 접근 제한 가능")
+
+            if warnings:
+                warning_text = "\n".join(warnings)
+                logger.warning(
+                    f"인증 환경 경고:\n{warning_text}\n"
+                    f"💡 로컬 환경에서는 redirect_uri를 http://localhost:{redirect_port}/auth/callback로 설정하세요"
+                )
 
             # 기존 진행 중인 세션 확인
             existing_session = self._find_pending_session_by_user(user_id)

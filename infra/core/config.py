@@ -91,7 +91,18 @@ class Config:
     @property
     def database_path(self) -> str:
         """SQLite 데이터베이스 파일 경로"""
-        path = os.getenv("DATABASE_PATH", "./data/iacsgraph.db")
+        path = os.getenv("DATABASE_PATH")
+        if not path:
+            default_path = "./data/iacsgraph.db"
+            logger.warning(
+                f"\n{'='*60}\n"
+                f"⚠️  DATABASE_PATH 환경변수가 설정되지 않았습니다.\n"
+                f"    기본값을 사용합니다: {default_path}\n"
+                f"    .env 파일에 DATABASE_PATH를 설정하려면:\n"
+                f"    DATABASE_PATH=./data/your_database.db\n"
+                f"{'='*60}"
+            )
+            path = default_path
         # 디렉터리가 없으면 생성
         db_dir = Path(path).parent
         db_dir.mkdir(parents=True, exist_ok=True)

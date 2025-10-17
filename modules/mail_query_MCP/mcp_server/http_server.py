@@ -431,7 +431,7 @@ class HTTPStreamingMailAttachmentServer:
             from infra.core.database import get_database_manager
             from infra.core.oauth_client import get_oauth_client
             from infra.core.token_service import get_token_service
-            from modules.account._account_helpers import AccountCryptoHelpers
+            from modules.auth.account import AccountCryptoHelpers
             from modules.auth import get_auth_orchestrator
 
             # Get query parameters
@@ -468,7 +468,7 @@ class HTTPStreamingMailAttachmentServer:
                 # Exchange code for tokens
                 try:
                     # Find user_id from state token (user_id is encoded in state)
-                    from modules.auth._auth_helpers import auth_decode_state_token
+                    from modules.auth.auth import auth_decode_state_token
 
                     orchestrator = get_auth_orchestrator()
                     user_id = None
@@ -556,7 +556,7 @@ class HTTPStreamingMailAttachmentServer:
                     # Update session status if exists
                     if state and state in orchestrator.auth_sessions:
                         session = orchestrator.auth_sessions[state]
-                        from modules.auth.auth_schema import AuthState
+                        from modules.auth.auth import AuthState
                         session.status = AuthState.COMPLETED
                         logger.info(f"✅ Session status updated to COMPLETED")
 
