@@ -214,6 +214,15 @@ class Config:
         """데이터 암호화 키 (Fernet 키)"""
         key = os.getenv("ENCRYPTION_KEY")
         if not key:
+            # 자동으로 키 생성하여 사용자에게 제공
+            generated_key = Fernet.generate_key().decode()
+            logger.warning(
+                f"\n{'='*60}\n"
+                f"⚠️  ENCRYPTION_KEY가 설정되지 않았습니다.\n"
+                f"    .env 파일에 아래 라인을 추가하세요:\n\n"
+                f"    ENCRYPTION_KEY={generated_key}\n"
+                f"{'='*60}"
+            )
             raise ConfigurationError("ENCRYPTION_KEY가 설정되지 않았습니다")
         return key
 
