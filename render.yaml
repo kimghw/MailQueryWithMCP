@@ -3,7 +3,7 @@ services:
     name: mailquery-mcp-server
     runtime: python
     plan: free
-    buildCommand: uv pip install --system -e .
+    buildCommand: uv pip install --system -e . && echo "Build completed"
     startCommand: bash entrypoints/production/run_unified_http.sh --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
