@@ -1,17 +1,23 @@
-"""HTTP Streaming-based MCP Server for Mail Attachments"""
+"""HTTP Streaming-based MCP Server for Mail Attachments
+
+This server uses Starlette for MCP protocol implementation and FastAPI for OpenAPI documentation.
+"""
 
 import asyncio
 import json
 import logging
 import secrets
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import uvicorn
+from fastapi import FastAPI, Request as FastAPIRequest
+from fastapi.responses import JSONResponse as FastAPIJSONResponse
 from mcp.server import NotificationOptions, Server
 from starlette.applications import Starlette
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response, StreamingResponse
-from starlette.routing import Route
+from starlette.routing import Route, Mount
 
 from infra.core.auth_logger import get_auth_logger
 from infra.core.database import get_database_manager
@@ -44,8 +50,11 @@ class HTTPStreamingMailAttachmentServer:
         # Active sessions
         self.sessions: Dict[str, Dict[str, Any]] = {}
 
-        # Create Starlette app
-        self.app = self._create_app()
+        # Create Starlette app (actual MCP server)
+        self.starlette_app = self._create_app()
+
+        # Create FastAPI wrapper (for OpenAPI documentation)
+        self.app = self._create_fastapi_wrapper()
 
         logger.info(f"🚀 HTTP Streaming Mail Attachment Server initialized on port {port}")
     
@@ -654,13 +663,160 @@ class HTTPStreamingMailAttachmentServer:
         ]
         
         return Starlette(routes=routes)
-    
+
+    def _create_fastapi_wrapper(self):
+        """Create FastAPI wrapper for OpenAPI documentation
+
+        This wraps the Starlette MCP server with FastAPI to provide:
+        - /docs - Swagger UI documentation
+        - /redoc - ReDoc documentation
+        - /openapi.json - OpenAPI schema
+
+        The actual MCP protocol is still handled by Starlette.
+        """
+        from pydantic import BaseModel, Field
+
+        # Create FastAPI app
+        fastapi_app = FastAPI(
+            title="📧 Mail Query MCP Server",
+            description="""
+## Mail Query MCP Server
+
+MCP (Model Context Protocol) server for email and attachment management.
+
+### Features
+- 📧 Email query and filtering
+- 📎 Attachment download and conversion
+- 🔍 Full-text search in emails
+- 📄 Document format conversion (PDF, DOCX, etc.)
+
+### MCP Protocol
+This server implements the MCP protocol (JSON-RPC 2.0).
+All MCP requests should be sent to the root endpoint `/` as POST requests.
+
+### Tools Available
+1. **query_email** - Query emails with filters
+2. **attachmentManager** - Download and manage attachments
+3. **help** - Get detailed help for all tools
+4. **query_email_help** - Get help for email query syntax
+            """,
+            version="2.0.0",
+            docs_url="/docs",
+            redoc_url="/redoc",
+            openapi_url="/openapi.json",
+        )
+
+        # Pydantic models for documentation
+        class MCPRequest(BaseModel):
+            jsonrpc: str = Field("2.0", description="JSON-RPC version")
+            method: str = Field(..., description="MCP method name (e.g., 'tools/list', 'tools/call')")
+            params: Optional[Dict[str, Any]] = Field(default={}, description="Method parameters")
+            id: Optional[int] = Field(None, description="Request ID for correlation")
+
+            class Config:
+                json_schema_extra = {
+                    "examples": [
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 1,
+                            "method": "tools/list",
+                            "params": {}
+                        },
+                        {
+                            "jsonrpc": "2.0",
+                            "id": 2,
+                            "method": "tools/call",
+                            "params": {
+                                "name": "query_email",
+                                "arguments": {
+                                    "user_id": "kimghw",
+                                    "days_back": 7,
+                                    "max_results": 10
+                                }
+                            }
+                        }
+                    ]
+                }
+
+        class MCPResponse(BaseModel):
+            jsonrpc: str = Field("2.0", description="JSON-RPC version")
+            result: Optional[Dict[str, Any]] = Field(None, description="Result data")
+            error: Optional[Dict[str, Any]] = Field(None, description="Error information")
+            id: Optional[int] = Field(None, description="Request ID for correlation")
+
+        # Mount Starlette MCP app
+        fastapi_app.mount("/mcp", self.starlette_app)
+
+        # Add documentation endpoints
+        @fastapi_app.post(
+            "/",
+            response_model=MCPResponse,
+            summary="MCP Protocol Endpoint",
+            description="""
+Send MCP (Model Context Protocol) requests using JSON-RPC 2.0 format.
+
+**Common Methods:**
+- `initialize` - Initialize MCP session
+- `tools/list` - List available tools
+- `tools/call` - Call a specific tool
+- `prompts/list` - List available prompts
+- `prompts/get` - Get a specific prompt
+
+**Example Request:**
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/list",
+  "params": {}
+}
+```
+            """,
+            tags=["MCP Protocol"],
+        )
+        async def mcp_endpoint(request: FastAPIRequest):
+            """MCP Protocol endpoint - delegates to Starlette app"""
+            # Forward to Starlette MCP server
+            from starlette.datastructures import Headers
+            starlette_request = Request(request.scope, request.receive)
+            response = await self.starlette_app._handle_streaming_request(starlette_request)
+            return response
+
+        @fastapi_app.get(
+            "/health",
+            tags=["Health"],
+            summary="Health Check",
+            description="Check if the server is running and healthy"
+        )
+        async def health_check():
+            return {"status": "healthy", "server": "mail-query-mcp"}
+
+        @fastapi_app.get(
+            "/info",
+            tags=["Info"],
+            summary="Server Information",
+            description="Get server information and capabilities"
+        )
+        async def server_info():
+            return {
+                "name": "mail-query-mcp-server",
+                "version": "2.0.0",
+                "protocol": "mcp",
+                "transport": "http",
+                "tools_count": 4,
+                "documentation": f"http://{self.host}:{self.port}/docs"
+            }
+
+        logger.info("📚 FastAPI wrapper created - OpenAPI available at /docs")
+        return fastapi_app
+
     def run(self):
         """Run the HTTP streaming MCP server"""
         logger.info(f"🚀 Starting HTTP Streaming Mail Attachment Server on http://{self.host}:{self.port}")
-        logger.info(f"📧 Streaming endpoint: http://{self.host}:{self.port}/stream")
+        logger.info(f"📧 MCP endpoint: http://{self.host}:{self.port}/")
+        logger.info(f"📚 OpenAPI docs: http://{self.host}:{self.port}/docs")
         logger.info(f"💚 Health check: http://{self.host}:{self.port}/health")
         logger.info(f"ℹ️  Server info: http://{self.host}:{self.port}/info")
-        
-        # Run uvicorn
+
+        # Run uvicorn with FastAPI app (which wraps Starlette)
         uvicorn.run(self.app, host=self.host, port=self.port, log_level="info")
