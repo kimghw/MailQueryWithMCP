@@ -73,7 +73,9 @@ class MailQuerySeverFilters(BaseModel):
             if v.tzinfo is None:
                 v = v.replace(tzinfo=timezone.utc)
 
-            if v > now:
+            # 날짜만 비교 (시간은 무시) - 내일 이후는 불허
+            # UTC 기준으로 오늘 + 로컬 타임존 고려하여 +1일까지 허용
+            if v.date() > (now.date() + __import__('datetime').timedelta(days=1)):
                 raise ValueError("미래 날짜는 설정할 수 없습니다")
         return v
 

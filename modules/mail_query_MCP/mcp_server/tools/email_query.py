@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from infra.core import get_database_manager, get_logger
+from infra.utils.datetime_parser import parse_date_range as util_parse_date_range, Timezone
 from modules.mail_query import (
     MailQuerySeverFilters,
     MailQueryOrchestrator,
@@ -36,40 +37,22 @@ class EmailQueryTool:
             output_dir=str(self.config.attachments_dir)
         )
         self.file_converter = FileConverterOrchestrator()
-        # Define KST timezone (UTC+9)
+        # Define KST timezone (UTC+9) - for backward compatibility
         self.KST = timezone(timedelta(hours=9))
 
     def parse_datetime_kst_to_utc(self, date_str: str) -> datetime:
         """
-        Parse datetime string in KST and convert to UTC
+        DEPRECATED: Use infra.utils.datetime_parser instead
 
-        Supports formats:
-        - YYYY-MM-DD HH:MM (assumes KST)
-        - YYYY-MM-DD (assumes 00:00:00 KST)
-
-        Args:
-            date_str: Date string to parse
-
-        Returns:
-            UTC datetime without timezone info
+        Kept for backward compatibility only.
         """
-        # Try parsing with time (minutes only)
-        try:
-            dt_kst = datetime.strptime(date_str, "%Y-%m-%d %H:%M").replace(tzinfo=self.KST)
-            return dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
-        except ValueError:
-            pass
-
-        # Try parsing date only (assumes 00:00:00 KST)
-        try:
-            dt_kst = datetime.strptime(date_str, "%Y-%m-%d").replace(tzinfo=self.KST)
-            return dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
-        except ValueError:
-            raise ValueError(f"Invalid date format. Expected 'YYYY-MM-DD [HH:MM]', got '{date_str}'")
+        from infra.utils.datetime_parser import parse_start_date
+        # Return timezone-naive for backward compatibility
+        return parse_start_date(date_str, input_tz=Timezone.KST, output_tz=Timezone.UTC).replace(tzinfo=None)
 
     def parse_date_range(self, arguments: Dict[str, Any]) -> tuple:
         """
-        Parse date range from arguments
+        Parse date range from arguments using new datetime_parser utility
 
         Args:
             arguments: Tool arguments containing date parameters
@@ -81,55 +64,24 @@ class EmailQueryTool:
         end_date_str = arguments.get("end_date")
         days_back = arguments.get("days_back", self.config.default_days_back)
 
-        start_date = None
-        end_date = None
+        # Use new datetime parser utility
+        start_date, end_date, calculated_days = util_parse_date_range(
+            start_date_str=start_date_str,
+            end_date_str=end_date_str,
+            days_back=days_back,
+            input_tz=Timezone.KST,
+            output_tz=Timezone.UTC
+        )
 
-        # Both dates specified
-        if start_date_str and end_date_str:
-            start_date = self.parse_datetime_kst_to_utc(start_date_str)
+        # Convert to timezone-naive for backward compatibility with MailQuerySeverFilters
+        start_date = start_date.replace(tzinfo=None)
+        end_date = end_date.replace(tzinfo=None)
 
-            # For end_date, if only date is provided, use current time on that date
-            if len(end_date_str) == 10:  # YYYY-MM-DD format
-                # Get current time in KST
-                now_kst = datetime.now(self.KST)
-                # Parse the end_date and use current time
-                end_date_only = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-                dt_kst = datetime.combine(end_date_only, now_kst.time()).replace(tzinfo=self.KST)
-                end_date = dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
-            else:
-                end_date = self.parse_datetime_kst_to_utc(end_date_str)
+        logger.info(f"📅 Date range parsed: {start_date_str} ~ {end_date_str} ({calculated_days} days)")
+        logger.info(f"   Start (UTC): {start_date}")
+        logger.info(f"   End (UTC):   {end_date}")
 
-            if start_date >= end_date:
-                raise ValueError("start_date is later than or equal to end_date")
-
-            days_back = (end_date - start_date).days
-
-        # Only start date specified
-        elif start_date_str:
-            start_date = self.parse_datetime_kst_to_utc(start_date_str)
-            end_date = datetime.now(timezone.utc).replace(tzinfo=None)
-            days_back = (end_date - start_date).days + 1
-
-        # Only end date specified
-        elif end_date_str:
-            if len(end_date_str) == 10:  # YYYY-MM-DD format
-                # Get current time in KST
-                now_kst = datetime.now(self.KST)
-                # Parse the end_date and use current time
-                end_date_only = datetime.strptime(end_date_str, "%Y-%m-%d").date()
-                dt_kst = datetime.combine(end_date_only, now_kst.time()).replace(tzinfo=self.KST)
-                end_date = dt_kst.astimezone(timezone.utc).replace(tzinfo=None)
-            else:
-                end_date = self.parse_datetime_kst_to_utc(end_date_str)
-
-            start_date = end_date - timedelta(days=days_back)
-
-        # No dates specified, use days_back from now
-        else:
-            end_date = datetime.now(timezone.utc).replace(tzinfo=None)
-            start_date = end_date - timedelta(days=days_back - 1)
-
-        return start_date, end_date, days_back
+        return start_date, end_date, calculated_days
 
     def validate_parameters(self, arguments: Dict[str, Any]) -> Optional[str]:
         """

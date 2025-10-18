@@ -145,8 +145,10 @@ class GraphAPIClient:
             # attachments가 select 필드에 포함되면 expand도 추가
             # select_fields는 콤마로 구분된 문자열이므로 확인
             if "attachments" in select_fields:
-                params["$expand"] = "attachments"
-                logger.info(f"Attachments expand 추가됨: select_fields={select_fields}")
+                # contentBytes를 명시적으로 제외하여 Graph API 버그 방지
+                # (특정 메일에서 contentBytes가 잘못 포함되어 JSON이 거대해지는 문제)
+                params["$expand"] = "attachments($select=id,name,contentType,size,isInline,lastModifiedDateTime)"
+                logger.info(f"Attachments expand 추가됨 (contentBytes 제외): select_fields={select_fields}")
 
         # 디버그 로그 추가
         logger.info(f"Graph API 쿼리 파라미터: {params}")

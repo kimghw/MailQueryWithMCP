@@ -15,6 +15,7 @@ from mcp.types import Tool, TextContent
 
 from infra.core.config import get_config
 from infra.core.logger import get_logger
+from infra.utils.datetime_parser import parse_date_range, Timezone
 from modules.mail_query import (
     MailQueryOrchestrator,
     MailQueryRequest,
@@ -354,10 +355,22 @@ class AttachmentFilterHandlers:
             if subject_filter:
                 logger.info(f"제목 필터: {subject_filter}")
 
-            # 2. 날짜 파싱
-            from datetime import datetime, timezone
-            start_date = datetime.fromisoformat(start_date_str).replace(tzinfo=timezone.utc)
-            end_date = datetime.fromisoformat(end_date_str).replace(tzinfo=timezone.utc)
+            # 2. 날짜 파싱 - datetime_parser 유틸리티 사용
+            start_date, end_date, calculated_days = parse_date_range(
+                start_date_str=start_date_str,
+                end_date_str=end_date_str,
+                days_back=None,
+                input_tz=Timezone.KST,
+                output_tz=Timezone.UTC
+            )
+
+            # Convert to timezone-naive for backward compatibility
+            start_date = start_date.replace(tzinfo=None)
+            end_date = end_date.replace(tzinfo=None)
+
+            logger.info(f"📅 Date range parsed: {start_date_str} ~ {end_date_str} ({calculated_days} days)")
+            logger.info(f"   Start (UTC): {start_date}")
+            logger.info(f"   End (UTC):   {end_date}")
 
             # 3. 필터링 설정 생성
             filter_config = AttachmentFilterConfig(
