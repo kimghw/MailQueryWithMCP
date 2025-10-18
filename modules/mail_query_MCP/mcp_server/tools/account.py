@@ -8,8 +8,8 @@ from typing import Any, Dict, List, Optional
 
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
-from modules.auth import AccountOrchestrator
-from modules.auth import get_auth_orchestrator, AuthStartRequest
+from modules.enrollment import AccountOrchestrator
+from modules.enrollment import get_auth_orchestrator, AuthStartRequest
 from .account_validator import AccountValidator
 
 logger = get_logger(__name__)
@@ -109,7 +109,7 @@ class AccountManagementTool:
             logger.info(f"Enrollment file created: {enrollment_file}")
 
             # Encrypt client secret before storing
-            from modules.auth.account import AccountCryptoHelpers
+            from modules.enrollment.account import AccountCryptoHelpers
             crypto_helper = AccountCryptoHelpers()
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 

@@ -37,8 +37,10 @@ def main():
     args = parser.parse_args()
 
     if args.mode == "stdio":
-        # Run STDIO server
+        # Run STDIO server (library function - no initialization)
         from .stdio_server import run_stdio_server
+        print("⚠️  Warning: Running stdio server without initialization.", file=sys.stderr)
+        print("   Recommended: Use entrypoints/run_stdio.py for proper setup.", file=sys.stderr)
         asyncio.run(run_stdio_server())
     else:
         # Run HTTP server

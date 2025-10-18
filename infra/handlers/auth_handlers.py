@@ -16,7 +16,7 @@ from mcp.types import Tool, TextContent
 
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
-from modules.auth import get_auth_orchestrator, AuthStartRequest
+from modules.enrollment import get_auth_orchestrator, AuthStartRequest
 
 logger = get_logger(__name__)
 
@@ -247,7 +247,7 @@ class AuthHandlers:
             logger.info(f"Enrollment file created: {enrollment_file}")
 
             # Encrypt client secret
-            from modules.auth._account_helpers import AccountCryptoHelpers
+            from modules.enrollment._account_helpers import AccountCryptoHelpers
             crypto_helper = AccountCryptoHelpers()
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 

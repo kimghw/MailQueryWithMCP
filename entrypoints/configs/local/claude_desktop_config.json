@@ -1,25 +1,28 @@
 {
   "mcpServers": {
-    "mail-attachment-server": {
+    "mail-query-server": {
       "command": "wsl",
       "args": [
         "-e",
-        "/home/kimghw/IACSGRAPH/entrypoints/local/run_stdio.sh"
-      ]
+        "/home/kimghw/MailQueryWithMCP/entrypoints/local/run_mail_query_stdio.sh"
+      ],
+      "description": "Mail Query MCP Server - Email and attachment management"
     },
-    "subscription-tracker": {
+    "enrollment-server": {
       "command": "wsl",
       "args": [
         "-e",
-        "/home/kimghw/IACSGRAPH/entrypoints/local/run_subscription_stdio.sh"
-      ]
+        "/home/kimghw/MailQueryWithMCP/entrypoints/local/run_enrollment_stdio.sh"
+      ],
+      "description": "Enrollment MCP Server - Account registration and authentication"
     },
-    "iacs-mail-server": {
+    "onenote-server": {
       "command": "wsl",
       "args": [
         "-e",
-        "/home/kimghw/IACSGRAPH/entrypoints/local/run_mail_iacs_stdio.sh"
-      ]
+        "/home/kimghw/MailQueryWithMCP/entrypoints/local/run_onenote_stdio.sh"
+      ],
+      "description": "OneNote MCP Server - OneNote notebooks, sections, and pages management"
     }
   }
 }
