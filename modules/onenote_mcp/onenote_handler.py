@@ -7,6 +7,7 @@ import httpx
 from typing import Optional, List, Dict, Any
 from infra.core.logger import get_logger
 from infra.core.database import get_database_manager
+from infra.core.token_service import TokenService
 
 logger = get_logger(__name__)
 
@@ -16,30 +17,52 @@ class OneNoteHandler:
 
     def __init__(self):
         self.db = get_database_manager()
+        self.token_service = TokenService()
         # Beta API 사용 (5,000개 제한 완화 시도)
         self.graph_base_url = "https://graph.microsoft.com/beta"
         # self.graph_base_url = "https://graph.microsoft.com/v1.0"
 
+    def _normalize_onenote_id(self, entity_id: str) -> str:
+        """
+        OneNote Entity ID를 Graph API 형식으로 정규화
+        SharePoint URL의 GUID는 1- 접두사가 없지만, Graph API는 필요함
+
+        Args:
+            entity_id: Notebook/Section/Page ID
+
+        Returns:
+            정규화된 ID (1- 접두사 포함)
+        """
+        if not entity_id:
+            return entity_id
+
+        # 이미 1- 접두사가 있으면 그대로 반환
+        if entity_id.startswith("1-"):
+            return entity_id
+
+        # GUID 형식인지 확인 (8-4-4-4-12 형식)
+        import re
+        guid_pattern = r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+        if re.match(guid_pattern, entity_id):
+            logger.info(f"🔧 OneNote ID 정규화: {entity_id} → 1-{entity_id}")
+            return f"1-{entity_id}"
+
+        # 다른 형식이면 그대로 반환
+        return entity_id
+
     async def _get_access_token(self, user_id: str) -> Optional[str]:
         """
-        사용자 ID로 액세스 토큰 조회
+        사용자 ID로 유효한 액세스 토큰 조회 (자동 갱신 포함)
 
         Args:
             user_id: 사용자 ID
 
         Returns:
-            액세스 토큰 또는 None
+            유효한 액세스 토큰 또는 None
         """
         try:
-            account = self.db.fetch_one(
-                "SELECT access_token FROM accounts WHERE user_id = ? AND is_active = 1",
-                (user_id,)
-            )
-            if account:
-                return account["access_token"]
-            else:
-                logger.error(f"❌ 활성 계정을 찾을 수 없음: {user_id}")
-                return None
+            # TokenService를 사용하여 토큰 유효성 확인 및 자동 갱신
+            return await self.token_service.get_valid_access_token(user_id)
         except Exception as e:
             logger.error(f"❌ 토큰 조회 실패: {str(e)}")
             return None
@@ -148,6 +171,9 @@ class OneNoteHandler:
             생성된 섹션 정보
         """
         try:
+            # ID 정규화
+            notebook_id = self._normalize_onenote_id(notebook_id)
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
@@ -198,6 +224,9 @@ class OneNoteHandler:
             섹션 목록
         """
         try:
+            # ID 정규화
+            notebook_id = self._normalize_onenote_id(notebook_id)
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
@@ -244,6 +273,9 @@ class OneNoteHandler:
             페이지 목록
         """
         try:
+            # ID 정규화
+            section_id = self._normalize_onenote_id(section_id)
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
@@ -290,6 +322,9 @@ class OneNoteHandler:
             페이지 내용 (HTML)
         """
         try:
+            # ID 정규화
+            page_id = self._normalize_onenote_id(page_id)
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
@@ -363,6 +398,9 @@ class OneNoteHandler:
             생성된 페이지 정보
         """
         try:
+            # ID 정규화
+            section_id = self._normalize_onenote_id(section_id)
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
@@ -430,6 +468,9 @@ class OneNoteHandler:
             업데이트 결과
         """
         try:
+            # ID 정규화
+            page_id = self._normalize_onenote_id(page_id)
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
