@@ -24,6 +24,7 @@ dependencies = [
     "httpx>=0.27.0",
     "uvicorn>=0.30.0",
     "starlette>=0.37.0",
+    "fastapi>=0.110.0",
 
     # Configuration & Utils
     "python-dotenv>=1.0.1",
