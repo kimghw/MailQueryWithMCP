@@ -187,6 +187,7 @@ Thumbs.db
 /logs/
 /temp/
 /cache/
+enrollment/
 config.user.json
 
 # pyhwp library temp directory

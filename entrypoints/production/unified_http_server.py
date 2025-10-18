@@ -25,7 +25,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from modules.mail_query_MCP.mcp_server.http_server import HTTPStreamingMailAttachmentServer
 from modules.enrollment.mcp_server.http_server import HTTPStreamingAuthServer
-from modules.onenote_mcp.entrypoints.http_server import app as onenote_app
+from modules.onenote_mcp.mcp_server.http_server import HTTPStreamingOneNoteServer
 from infra.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -48,7 +48,7 @@ class UnifiedMCPServer:
         self.enrollment_server = HTTPStreamingAuthServer(host=host, port=port)
 
         logger.info("📝 Initializing OneNote MCP Server...")
-        self.onenote_app = onenote_app
+        self.onenote_server = HTTPStreamingOneNoteServer(host=host, port=port)
 
         # Create unified Starlette app
         self.app = self._create_unified_app()
@@ -162,7 +162,7 @@ class UnifiedMCPServer:
             # Mount MCP servers on different paths
             Mount("/mail-query", app=self.mail_query_server.app),
             Mount("/enrollment", app=self.enrollment_server.app),
-            Mount("/onenote", app=self.onenote_app),
+            Mount("/onenote", app=self.onenote_server.app),
         ]
 
         return Starlette(routes=routes)

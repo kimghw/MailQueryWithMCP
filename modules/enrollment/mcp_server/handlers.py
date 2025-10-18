@@ -26,9 +26,60 @@ class AuthAccountHandlers:
     def __init__(self):
         """Initialize authentication and account handlers"""
         self.db = get_database_manager()
-        self.project_root = Path(__file__).parent.parent
-        self.enrollment_dir = self.project_root / "enrollment"
+        self.project_root = Path(__file__).parent.parent.parent.parent  # MailQueryWithMCP root
+        self.enrollment_dir = self.project_root / "data" / "enrollment"
+
+        # Initialize database tables
+        self._initialize_tables()
+
         logger.info("✅ AuthAccountHandlers initialized")
+
+    def _initialize_tables(self):
+        """Create database tables if they don't exist"""
+        try:
+            # accounts 테이블 생성
+            self.db.execute_query("""
+                CREATE TABLE IF NOT EXISTS accounts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id TEXT NOT NULL UNIQUE,
+                    user_name TEXT,
+                    email TEXT NOT NULL,
+                    oauth_client_id TEXT NOT NULL,
+                    oauth_client_secret TEXT NOT NULL,
+                    oauth_tenant_id TEXT NOT NULL,
+                    oauth_redirect_uri TEXT,
+                    enrollment_file_path TEXT,
+                    delegated_permissions TEXT,
+                    auth_type TEXT DEFAULT 'Authorization Code Flow',
+                    status TEXT NOT NULL DEFAULT 'ACTIVE',
+                    access_token TEXT,
+                    refresh_token TEXT,
+                    token_expiry TEXT,
+                    is_active INTEGER NOT NULL DEFAULT 1,
+                    last_sync_time TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                )
+            """)
+
+            # account_audit_logs 테이블 생성
+            self.db.execute_query("""
+                CREATE TABLE IF NOT EXISTS account_audit_logs (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER,
+                    user_id TEXT NOT NULL,
+                    action TEXT NOT NULL,
+                    details TEXT,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    FOREIGN KEY (account_id) REFERENCES accounts(id)
+                )
+            """)
+
+            logger.info("✅ Database tables initialized (accounts, account_audit_logs)")
+
+        except Exception as e:
+            logger.error(f"Failed to initialize tables: {str(e)}")
+            raise
 
     async def handle_list_tools(self) -> List[Tool]:
         """
@@ -307,15 +358,23 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
         Get detailed status of specific account
 
         Args:
-            arguments: Dict containing user_id
+            arguments: Dict containing user_id (optional - auto-selects if empty)
 
         Returns:
             Account status information
         """
         try:
-            user_id = arguments.get("user_id")
+            user_id = arguments.get("user_id", "").strip()
+
+            # user_id가 없으면 데이터베이스에서 활성 계정 자동 선택
             if not user_id:
-                return "❌ Error: user_id is required"
+                active_account = self.db.fetch_one(
+                    "SELECT user_id FROM accounts WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1"
+                )
+                if not active_account:
+                    return "❌ Error: 활성 계정이 없습니다. 계정을 먼저 등록하세요."
+                user_id = active_account['user_id']
+                logger.info(f"Auto-selected user_id: {user_id}")
 
             account = self.db.fetch_one(
                 """
@@ -434,15 +493,23 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
         Start OAuth authentication process
 
         Args:
-            arguments: Dict containing user_id
+            arguments: Dict containing user_id (optional - auto-selects if empty)
 
         Returns:
             Authentication URL or error message
         """
         try:
-            user_id = arguments.get("user_id")
+            user_id = arguments.get("user_id", "").strip()
+
+            # user_id가 없으면 데이터베이스에서 활성 계정 자동 선택
             if not user_id:
-                return "❌ Error: user_id is required"
+                active_account = self.db.fetch_one(
+                    "SELECT user_id FROM accounts WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1"
+                )
+                if not active_account:
+                    return "❌ Error: 활성 계정이 없습니다. 계정을 먼저 등록하세요."
+                user_id = active_account['user_id']
+                logger.info(f"Auto-selected user_id: {user_id}")
 
             # Check if account is registered
             account = self.db.fetch_one(

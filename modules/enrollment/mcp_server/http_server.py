@@ -410,7 +410,7 @@ Send MCP (Model Context Protocol) requests using JSON-RPC 2.0 format.
             """MCP Protocol endpoint - delegates to Starlette app"""
             from starlette.datastructures import Headers
             starlette_request = Request(request.scope, request.receive)
-            response = await self.starlette_app._handle_streaming_request(starlette_request)
+            response = await self._handle_streaming_request(starlette_request)
             return response
 
         @fastapi_app.get(

@@ -247,7 +247,7 @@ class AuthHandlers:
             logger.info(f"Enrollment file created: {enrollment_file}")
 
             # Encrypt client secret
-            from modules.enrollment._account_helpers import AccountCryptoHelpers
+            from modules.enrollment.account._account_helpers import AccountCryptoHelpers
             crypto_helper = AccountCryptoHelpers()
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 

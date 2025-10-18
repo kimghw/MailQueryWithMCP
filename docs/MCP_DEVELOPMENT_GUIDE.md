@@ -575,8 +575,8 @@ class MCPHandlers:
             },
             "serverInfo": {
                 "name": "my-mcp-server",
-                "version": "1.0.0",
-                "description": "My MCP Server"
+                "title": "My MCP Server",
+                "version": "1.0.0"
             }
         }
 
@@ -751,9 +751,9 @@ class MCPHTTPServer:
 
             # 2. JSON-RPC 필드 검증
             if rpc_request.get("jsonrpc") != "2.0":
-                return self._error_response(
-                    -32600,
-                    "Invalid Request: jsonrpc must be 2.0",
+                error = InvalidRequestError("jsonrpc field must be 2.0")
+                return self._jsonrpc_error_response(
+                    error,
                     rpc_request.get("id")
                 )
 
@@ -776,11 +776,18 @@ class MCPHTTPServer:
                 "result": result
             })
 
+        except json.JSONDecodeError as e:
+            # JSON 파싱 에러 → -32700 Parse error
+            logger.error(f"JSON parse error: {e}")
+            error = ParseError(f"Invalid JSON: {str(e)}")
+            return self._jsonrpc_error_response(error, None)
+
         except Exception as e:
+            # 내부 에러 → -32603 Internal error
             logger.error(f"Request handling error: {e}")
-            return self._error_response(
-                -32603,
-                f"Internal error: {str(e)}",
+            error = InternalError(f"Internal error: {str(e)}")
+            return self._jsonrpc_error_response(
+                error,
                 request_id if 'request_id' in locals() else None
             )
 
@@ -796,33 +803,74 @@ class MCPHTTPServer:
             return {"tools": [t.model_dump() for t in tools]}
 
         elif method == "tools/call":
-            results = await self.handlers.handle_call_tool(
-                params.get("name"),
-                params.get("arguments", {})
-            )
-            return {"content": [r.model_dump() for r in results]}
+            tool_name = params.get("name")
+            tool_args = params.get("arguments", {})
+
+            # Input schema validation (권장)
+            await self._validate_tool_arguments(tool_name, tool_args)
+
+            results = await self.handlers.handle_call_tool(tool_name, tool_args)
+
+            # isError 필드 포함 (MCP 베스트 프랙티스)
+            return {
+                "content": [r.model_dump() for r in results],
+                "isError": False  # 성공 시 False, 에러 시 True
+            }
 
         elif method == "resources/list":
             resources = await self.handlers.handle_list_resources()
             return {"resources": [r.model_dump() for r in resources]}
 
         elif method == "resources/read":
-            content = await self.handlers.handle_read_resource(params.get("uri"))
-            return {"content": content}
+            contents = await self.handlers.handle_read_resource(params.get("uri"))
+            return {"contents": contents}
 
         else:
-            raise ValueError(f"Method not found: {method}")
+            # JSON-RPC -32601: Method not found
+            raise MethodNotFoundError(f"Method not found: {method}")
 
-    def _error_response(self, code: int, message: str, id: Any) -> JSONResponse:
-        """JSON-RPC 2.0 에러 응답"""
-        return JSONResponse({
-            "jsonrpc": "2.0",
-            "error": {
-                "code": code,
-                "message": message
+    def _jsonrpc_error_response(self, error: JSONRPCError, id: Any) -> JSONResponse:
+        """JSON-RPC 2.0 에러 응답 생성"""
+        return JSONResponse(
+            {
+                "jsonrpc": "2.0",
+                "error": error.to_dict(),
+                "id": id
             },
-            "id": id
-        })
+            status_code=200  # JSON-RPC always returns 200 with error in body
+        )
+
+    async def _validate_tool_arguments(self, tool_name: str, arguments: Dict[str, Any]):
+        """
+        Tool 입력 스키마 검증 (JSON Schema)
+
+        Raises:
+            InvalidParamsError: 스키마 검증 실패 시
+        """
+        try:
+            import jsonschema
+        except ImportError:
+            logger.warning("jsonschema not installed, skipping validation")
+            return
+
+        # Tool 정의에서 inputSchema 가져오기
+        tools = await self.handlers.handle_list_tools()
+        tool = next((t for t in tools if t.name == tool_name), None)
+
+        if not tool or not tool.inputSchema:
+            return
+
+        # JSON Schema 검증
+        try:
+            jsonschema.validate(instance=arguments, schema=tool.inputSchema)
+        except jsonschema.ValidationError as e:
+            raise InvalidParamsError(
+                f"Invalid arguments for tool '{tool_name}': {e.message}",
+                data={"path": list(e.path), "schema_path": list(e.schema_path)}
+            )
+        except jsonschema.SchemaError as e:
+            logger.error(f"Invalid schema for tool '{tool_name}': {e}")
+            raise InternalError(f"Invalid tool schema: {e.message}")
 
     def _create_app(self) -> Starlette:
         """Starlette 앱 생성"""
@@ -844,6 +892,221 @@ class MCPHTTPServer:
         """서버 실행"""
         logger.info(f"🚀 MCP Server starting on http://{self.host}:{self.port}")
         uvicorn.run(self.app, host=self.host, port=self.port)
+```
+
+### 5.3 Streamable HTTP Transport (SSE)
+
+**MCP 스펙 요구사항**: HTTP+SSE 전송 방식 지원
+
+#### 필수 헤더
+
+```python
+# 클라이언트 → 서버 요청 헤더
+{
+    "Content-Type": "application/json",
+    "MCP-Protocol-Version": "2025-06-18"  # 프로토콜 버전 명시
+}
+
+# 서버 → 클라이언트 응답 헤더 (initialize 응답)
+{
+    "MCP-Protocol-Version": "2025-06-18",
+    "Mcp-Session-Id": "<session_id>",  # 세션 식별자
+    "Access-Control-Expose-Headers": "Mcp-Session-Id, MCP-Protocol-Version"
+}
+```
+
+#### SSE 엔드포인트 구현
+
+서버에서 클라이언트로 비동기 알림을 보내기 위한 SSE 엔드포인트:
+
+```python
+from starlette.responses import StreamingResponse
+import asyncio
+import json
+
+class MCPHTTPServer:
+    """MCP HTTP Server with SSE support"""
+
+    def __init__(self, host: str = "0.0.0.0", port: int = 8000):
+        self.host = host
+        self.port = port
+        self.handlers = MCPHandlers()
+        self.sessions: Dict[str, Dict[str, Any]] = {}
+        self.notification_queues: Dict[str, asyncio.Queue] = {}
+        self.app = self._create_app()
+
+    async def _sse_endpoint(self, request: Request) -> StreamingResponse:
+        """
+        Server-Sent Events (SSE) 엔드포인트
+
+        서버가 클라이언트에게 비동기 알림을 보내기 위한 엔드포인트.
+        클라이언트는 이 엔드포인트에 연결하여 서버 알림을 수신.
+        """
+        # 세션 ID 확인
+        session_id = request.headers.get("Mcp-Session-Id")
+        if not session_id or session_id not in self.sessions:
+            return JSONResponse(
+                {"error": "Invalid or missing session ID"},
+                status_code=401
+            )
+
+        # 프로토콜 버전 확인
+        protocol_version = request.headers.get("MCP-Protocol-Version")
+        if protocol_version != "2025-06-18":
+            return JSONResponse(
+                {"error": "Unsupported protocol version"},
+                status_code=400
+            )
+
+        # 알림 큐 생성
+        if session_id not in self.notification_queues:
+            self.notification_queues[session_id] = asyncio.Queue()
+
+        async def event_generator():
+            """SSE 이벤트 생성기"""
+            queue = self.notification_queues[session_id]
+
+            try:
+                # Keep-alive 및 알림 전송
+                while True:
+                    try:
+                        # 30초 타임아웃으로 알림 대기
+                        notification = await asyncio.wait_for(
+                            queue.get(),
+                            timeout=30.0
+                        )
+
+                        # SSE 포맷으로 전송
+                        yield f"data: {json.dumps(notification)}\n\n"
+
+                    except asyncio.TimeoutError:
+                        # Keep-alive comment
+                        yield ": keepalive\n\n"
+
+            except asyncio.CancelledError:
+                logger.info(f"SSE connection closed for session {session_id}")
+            finally:
+                # 큐 정리
+                if session_id in self.notification_queues:
+                    del self.notification_queues[session_id]
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # Nginx buffering 비활성화
+                "Access-Control-Allow-Origin": "*",
+                "MCP-Protocol-Version": "2025-06-18"
+            }
+        )
+
+    async def _send_notification(
+        self,
+        session_id: str,
+        method: str,
+        params: Dict[str, Any]
+    ):
+        """
+        클라이언트에게 알림 전송
+
+        Args:
+            session_id: 세션 ID
+            method: 알림 메서드 (예: "notifications/resources/updated")
+            params: 알림 파라미터
+        """
+        if session_id in self.notification_queues:
+            notification = {
+                "jsonrpc": "2.0",
+                "method": method,
+                "params": params
+            }
+            await self.notification_queues[session_id].put(notification)
+
+    def _create_app(self) -> Starlette:
+        """Starlette 앱 생성 (SSE 엔드포인트 포함)"""
+
+        async def jsonrpc_endpoint(request):
+            # 프로토콜 버전 검증
+            protocol_version = request.headers.get("MCP-Protocol-Version")
+            if protocol_version and protocol_version != "2025-06-18":
+                return JSONResponse(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {
+                            "code": -32600,
+                            "message": f"Unsupported protocol version: {protocol_version}"
+                        }
+                    },
+                    status_code=400
+                )
+
+            return await self.handle_jsonrpc(request)
+
+        async def sse_endpoint(request):
+            return await self._sse_endpoint(request)
+
+        async def health_check(request):
+            return JSONResponse({"status": "healthy"})
+
+        routes = [
+            Route("/", endpoint=jsonrpc_endpoint, methods=["POST"]),
+            Route("/sse", endpoint=sse_endpoint, methods=["GET"]),
+            Route("/health", endpoint=health_check, methods=["GET"]),
+        ]
+
+        return Starlette(routes=routes)
+```
+
+#### Origin 검증 (보안)
+
+프로덕션 환경에서는 Origin 헤더 검증 필수:
+
+```python
+class OriginValidator:
+    """Origin 헤더 검증"""
+
+    def __init__(self, allowed_origins: List[str]):
+        self.allowed_origins = allowed_origins
+
+    def validate(self, request: Request) -> bool:
+        """Origin 헤더 검증"""
+        origin = request.headers.get("Origin")
+
+        # Origin이 없으면 허용 (same-origin)
+        if not origin:
+            return True
+
+        # Allowed origins 체크
+        if origin in self.allowed_origins:
+            return True
+
+        # 와일드카드 지원
+        for allowed in self.allowed_origins:
+            if allowed.endswith("*"):
+                prefix = allowed[:-1]
+                if origin.startswith(prefix):
+                    return True
+
+        return False
+
+# 사용 예시
+origin_validator = OriginValidator([
+    "https://myapp.com",
+    "https://*.myapp.com",  # 서브도메인 허용
+    "http://localhost:*",  # 개발 환경
+])
+
+async def jsonrpc_endpoint(request):
+    # Origin 검증
+    if not origin_validator.validate(request):
+        return JSONResponse(
+            {"error": "Origin not allowed"},
+            status_code=403
+        )
+
+    return await server.handle_jsonrpc(request)
 ```
 
 ---
@@ -990,11 +1253,11 @@ MCP는 JSON-RPC 2.0 표준 에러 코드를 사용합니다:
 
 | 코드 | 의미 | 사용 시점 |
 |------|------|-----------|
-| -32700 | Parse error | JSON 파싱 실패 |
-| -32600 | Invalid Request | 잘못된 요청 구조 |
-| -32601 | Method not found | 메서드가 존재하지 않음 |
-| -32602 | Invalid params | 잘못된 파라미터 |
-| -32603 | Internal error | 서버 내부 오류 |
+| -32700 | Parse error | JSON 파싱 실패 (invalid JSON received) |
+| -32600 | Invalid Request | 잘못된 요청 구조 (not a valid JSON-RPC request) |
+| -32601 | Method not found | 메서드가 존재하지 않음 (requested method does not exist) |
+| -32602 | Invalid params | 잘못된 파라미터 (invalid method parameters) |
+| -32603 | Internal error | 서버 내부 오류 (internal JSON-RPC error) |
 
 ### 7.2 구조화된 에러 처리
 
@@ -1002,8 +1265,57 @@ MCP는 JSON-RPC 2.0 표준 에러 코드를 사용합니다:
 from enum import Enum
 from typing import Optional, Dict, Any
 
+# JSON-RPC 2.0 표준 에러 클래스
+class JSONRPCError(Exception):
+    """JSON-RPC 2.0 에러 기본 클래스"""
+
+    def __init__(self, code: int, message: str, data: Optional[Dict[str, Any]] = None):
+        self.code = code
+        self.message = message
+        self.data = data
+        super().__init__(self.message)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """JSON-RPC 에러 응답 형식으로 변환"""
+        error = {"code": self.code, "message": self.message}
+        if self.data:
+            error["data"] = self.data
+        return error
+
+
+class ParseError(JSONRPCError):
+    """JSON-RPC -32700: Parse error"""
+    def __init__(self, message: str = "Parse error", data: Optional[Dict[str, Any]] = None):
+        super().__init__(-32700, message, data)
+
+
+class InvalidRequestError(JSONRPCError):
+    """JSON-RPC -32600: Invalid Request"""
+    def __init__(self, message: str = "Invalid Request", data: Optional[Dict[str, Any]] = None):
+        super().__init__(-32600, message, data)
+
+
+class MethodNotFoundError(JSONRPCError):
+    """JSON-RPC -32601: Method not found"""
+    def __init__(self, message: str = "Method not found", data: Optional[Dict[str, Any]] = None):
+        super().__init__(-32601, message, data)
+
+
+class InvalidParamsError(JSONRPCError):
+    """JSON-RPC -32602: Invalid params"""
+    def __init__(self, message: str = "Invalid params", data: Optional[Dict[str, Any]] = None):
+        super().__init__(-32602, message, data)
+
+
+class InternalError(JSONRPCError):
+    """JSON-RPC -32603: Internal error"""
+    def __init__(self, message: str = "Internal error", data: Optional[Dict[str, Any]] = None):
+        super().__init__(-32603, message, data)
+
+
+# 애플리케이션 레벨 에러 코드
 class ErrorCode(Enum):
-    """애플리케이션 에러 코드"""
+    """애플리케이션 에러 코드 (JSON-RPC -32603 Internal error의 data에 포함)"""
     # 인증/권한
     UNAUTHORIZED = 1001
     FORBIDDEN = 1002
@@ -1020,8 +1332,9 @@ class ErrorCode(Enum):
     INTERNAL_ERROR = 5001
     SERVICE_UNAVAILABLE = 5002
 
+
 class MCPError(Exception):
-    """MCP 에러 클래스"""
+    """MCP 애플리케이션 에러 클래스"""
 
     def __init__(
         self,
@@ -1035,7 +1348,7 @@ class MCPError(Exception):
         super().__init__(self.message)
 
     def to_jsonrpc_error(self) -> Dict[str, Any]:
-        """JSON-RPC 에러 형식으로 변환"""
+        """JSON-RPC 에러 형식으로 변환 (항상 -32603 Internal error)"""
         return {
             "code": -32603,  # Internal error
             "message": self.message,
@@ -1054,36 +1367,40 @@ class ErrorHandler:
     async def handle_error(self, error: Exception) -> Dict[str, Any]:
         """에러 처리 및 응답 생성"""
 
-        if isinstance(error, MCPError):
-            # 애플리케이션 에러
+        # JSON-RPC 표준 에러
+        if isinstance(error, JSONRPCError):
+            self.logger.warning(f"JSON-RPC error: {error.code} - {error.message}")
+            return error.to_dict()
+
+        # 애플리케이션 에러 → -32603 Internal error
+        elif isinstance(error, MCPError):
             self.logger.warning(f"Application error: {error.code} - {error.message}")
             return error.to_jsonrpc_error()
 
+        # 검증 에러 → -32602 Invalid params
         elif isinstance(error, ValidationError):
-            # 검증 에러
             self.logger.warning(f"Validation error: {str(error)}")
-            return {
-                "code": -32602,  # Invalid params
-                "message": str(error)
-            }
+            return InvalidParamsError(str(error)).to_dict()
 
+        # 권한 에러 → -32603 Internal error with details
         elif isinstance(error, PermissionError):
-            # 권한 에러
             self.logger.warning(f"Permission denied: {str(error)}")
-            return {
-                "code": -32603,
-                "message": "Permission denied",
-                "data": {"error": str(error)}
-            }
+            return InternalError(
+                "Permission denied",
+                data={"error": str(error)}
+            ).to_dict()
 
+        # 예상치 못한 에러 → -32603 Internal error
         else:
-            # 예상치 못한 에러
-            self.logger.error(f"Unexpected error: {str(error)}", exc_info=True)
-            return {
-                "code": -32603,
-                "message": "Internal server error",
-                "data": {"error_id": self._generate_error_id()}
-            }
+            error_id = self._generate_error_id()
+            self.logger.error(
+                f"Unexpected error [{error_id}]: {str(error)}",
+                exc_info=True
+            )
+            return InternalError(
+                "Internal server error",
+                data={"error_id": error_id}
+            ).to_dict()
 
     def _generate_error_id(self) -> str:
         """에러 추적용 ID 생성"""
@@ -1773,8 +2090,38 @@ project_root/
 ### 예제 구현
 - **MCP Servers**: https://github.com/modelcontextprotocol/servers
 
+### 필수 Python 패키지
+
+```txt
+# MCP Core
+mcp>=0.9.0
+
+# HTTP Server
+starlette>=0.27.0
+uvicorn>=0.23.0
+
+# Input Validation (권장)
+jsonschema>=4.17.0
+
+# Monitoring (선택)
+prometheus-client>=0.17.0
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+httpx>=0.24.0  # For testing HTTP endpoints
+```
+
 ---
 
-**작성일**: 2025-10-18
-**버전**: 3.0.0 (MCP 공식 스펙 기반)
+**작성일**: 2025-10-19
+**버전**: 4.0.0 (MCP 스펙 완전 준수 버전)
 **기반 스펙**: MCP Specification 2025-06-18
+
+**주요 변경사항 (v4.0.0)**:
+- ✅ serverInfo에서 `description` → `title` 사용
+- ✅ resources/read 응답 구조 수정 (`content` → `contents`)
+- ✅ JSON-RPC 에러 코드 정확한 매핑 (-32601, -32602, -32700 등)
+- ✅ Streamable HTTP Transport 구현 (MCP-Protocol-Version, Mcp-Session-Id, SSE)
+- ✅ tools/call 응답에 `isError` 필드 추가
+- ✅ jsonschema를 사용한 입력 스키마 검증
