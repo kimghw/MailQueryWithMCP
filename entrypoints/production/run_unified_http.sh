@@ -58,6 +58,10 @@ echo "✅ Data directory: $PROJECT_ROOT/data"
 # Verify environment
 echo "✅ Python path: $PYTHONPATH"
 echo "✅ Working directory: $(pwd)"
+echo "🐍 Python executable: $(which python)"
+echo "🐍 Python version: $(python --version)"
+echo "📦 Python site-packages:"
+python -c "import sys; print('\n'.join(sys.path))"
 echo ""
 
 # Check if required environment variables are set
