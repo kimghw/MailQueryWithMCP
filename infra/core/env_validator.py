@@ -69,18 +69,6 @@ class EnvValidator:
             default="localhost:9092",
             example="localhost:9092"
         ),
-        EnvVarDefinition(
-            "OPENAI_API_KEY",
-            EnvVarCategory.RECOMMENDED,
-            "OpenAI API 키 (키워드 추출 기능)",
-            example="sk-..."
-        ),
-        EnvVarDefinition(
-            "OPENROUTER_API_KEY",
-            EnvVarCategory.RECOMMENDED,
-            "OpenRouter API 키 (메일 처리 기능)",
-            example="sk-or-..."
-        ),
 
         # 선택적 환경변수
         EnvVarDefinition(

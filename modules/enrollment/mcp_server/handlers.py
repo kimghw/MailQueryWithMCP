@@ -511,32 +511,8 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
                 user_id = active_account['user_id']
                 logger.info(f"Auto-selected user_id: {user_id}")
 
-            # Check if account is registered
-            account = self.db.fetch_one(
-                """SELECT user_id, email, oauth_client_id, oauth_client_secret,
-                          oauth_tenant_id, oauth_redirect_uri, enrollment_file_path
-                   FROM accounts WHERE user_id = ?""",
-                (user_id,)
-            )
-
-            # 폴백 1: 데이터베이스에 계정이 없음 → enrollment 파일 양식 반환
-            if not account:
-                return self._format_enrollment_template(user_id)
-
-            # 폴백 2: OAuth 설정이 불완전함 → enrollment 파일 양식 반환
-            account_dict = dict(account)
-            if not all([
-                account_dict.get('oauth_client_id'),
-                account_dict.get('oauth_client_secret'),
-                account_dict.get('oauth_tenant_id')
-            ]):
-                return self._format_enrollment_template(
-                    user_id,
-                    email=account_dict.get('email'),
-                    reason="OAuth 설정이 불완전합니다 (client_id, client_secret, tenant_id 필요)"
-                )
-
-            # Use AuthOrchestrator
+            # Use AuthOrchestrator (환경변수 기반 자동 등록 포함)
+            # AuthOrchestrator가 계정 존재 확인 및 자동 등록을 처리
             orchestrator = get_auth_orchestrator()
             request = AuthStartRequest(user_id=user_id)
             response = await orchestrator.auth_orchestrator_start_authentication(request)
