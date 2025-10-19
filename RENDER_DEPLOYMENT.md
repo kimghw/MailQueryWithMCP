@@ -64,9 +64,13 @@ OPENROUTER_API_KEY=<OpenRouter API 키>  # AI 기능 사용 시
    Name: mailquery-mcp-server
    Runtime: Python 3
    Branch: main
-   Build Command: pip install uv && uv pip install -r requirements.txt
-   Start Command: bash entrypoints/production/start_server.sh
+   Build Command: pip install uv && uv pip install -e .
+   Start Command: bash entrypoints/production/run_unified_http.sh --host 0.0.0.0 --port $PORT
    ```
+
+   **⚠️ 중요**: `uv pip install -e .` 사용 (--system 플래그 없이!)
+   - Render.com은 자동으로 `.venv` 가상환경을 생성합니다
+   - `--system` 플래그를 사용하면 패키지가 시스템에 설치되어 런타임에 찾을 수 없습니다
 
 4. **환경 변수 설정**
    - "Advanced" → "Add Environment Variable" 클릭
@@ -174,15 +178,43 @@ RENDER_DEPLOYMENT.md          # 이 문서
 
 **문제**: `uv not found`
 ```bash
-# 해결방법: start_server.sh가 자동으로 uv 설치
-# 수동 설치가 필요한 경우:
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# 해결방법: render.yaml의 buildCommand에서 uv 자동 설치
+# buildCommand: pip install uv && uv pip install -e .
 ```
 
 **문제**: Python 버전 불일치
 ```bash
 # 해결방법: render.yaml에서 PYTHON_VERSION 확인
 # Python 3.11 권장
+```
+
+**문제**: `ModuleNotFoundError: No module named 'uvicorn'` (중요!)
+
+이 문제는 Render.com의 가상환경과 관련된 일반적인 문제입니다.
+
+**원인**:
+- Render.com이 자동으로 `/opt/render/project/src/.venv` 가상환경을 생성
+- `uv pip install --system` 사용 시 시스템에 패키지 설치
+- 런타임에는 `.venv`를 사용하여 패키지를 찾지 못함
+
+**해결방법**:
+```yaml
+# render.yaml에서 --system 플래그 제거
+buildCommand: pip install uv && uv pip install -e .  # ✅ 올바름
+# buildCommand: pip install uv && uv pip install --system -e .  # ❌ 잘못됨
+```
+
+**디버깅 방법**:
+```bash
+# Render.com Shell에서 확인
+which python
+# 출력: /opt/render/project/src/.venv/bin/python (가상환경 사용 중)
+
+python -c "import sys; print('\n'.join(sys.path))"
+# .venv/lib/python3.11/site-packages가 포함되어야 함
+
+python -c "import uvicorn; print(uvicorn.__file__)"
+# uvicorn 설치 위치 확인
 ```
 
 ### 2. 실행 실패
