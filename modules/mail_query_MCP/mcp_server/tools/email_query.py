@@ -195,6 +195,7 @@ class EmailQueryTool:
         if save_emails:
             try:
                 # Convert mail object to dictionary for EmailSaver
+                from pathlib import Path
                 email_dict = {
                     'id': mail.id,
                     'subject': mail.subject,
@@ -204,8 +205,10 @@ class EmailQueryTool:
                     'to_recipients': getattr(mail, 'to_recipients', []),
                     'cc_recipients': getattr(mail, 'cc_recipients', []),
                 }
-                saved_info = await self.email_saver.save_email_as_text(email_dict, user_id=user_id)
-                mail_saved_path = saved_info.get('email_path')
+                # Create email directory based on user_id and date
+                email_dir = Path(f"./data/emails/{user_id}/{mail.received_date_time.strftime('%Y%m%d')}")
+                saved_info = await self.email_saver.save_email(email_dict, email_dir=email_dir)
+                mail_saved_path = saved_info.get('text_path')
                 logger.info(f"Email saved: {mail_saved_path}")
             except Exception as e:
                 logger.error(f"Failed to save email: {str(e)}")
