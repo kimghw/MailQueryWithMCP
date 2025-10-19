@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 import uvicorn
+from dotenv import load_dotenv
 from starlette.applications import Starlette
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
@@ -22,6 +23,12 @@ from starlette.routing import Mount, Route
 # Add project root to Python path
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
+
+# Load .env file
+env_file = PROJECT_ROOT / ".env"
+if env_file.exists():
+    load_dotenv(env_file)
+    print(f"✅ Loaded environment variables from {env_file}")
 
 from modules.mail_query_MCP.mcp_server.http_server import HTTPStreamingMailAttachmentServer
 from modules.enrollment.mcp_server.http_server import HTTPStreamingAuthServer
