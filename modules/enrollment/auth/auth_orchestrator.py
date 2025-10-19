@@ -14,7 +14,7 @@ from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from infra.core.oauth_client import get_oauth_client
 from infra.core.token_service import get_token_service
-from modules.enrollment.account import AccountCryptoHelpers
+from modules.enrollment.account import AccountCryptoHelpers, AccountOrchestrator
 
 from ._auth_helpers import (
     auth_calculate_session_timeout,
@@ -53,6 +53,7 @@ class AuthOrchestrator:
         self.token_service = get_token_service()
         self.oauth_client = get_oauth_client()
         self.web_server_manager = get_auth_web_server_manager()
+        self.account_orchestrator = AccountOrchestrator()
 
         # 메모리 기반 세션 저장소 (state를 키로 사용)
         self.auth_sessions: Dict[str, AuthSession] = {}
@@ -74,10 +75,32 @@ class AuthOrchestrator:
             user_id = auth_sanitize_user_id(request.user_id)
 
             # ========================================================================
+            # 환경변수 기반 자동 등록 확인 (계정이 없는 경우)
+            # ========================================================================
+            # 먼저 계정이 존재하는지 확인
+            oauth_config = await self._get_account_oauth_config(user_id)
+
+            if not oauth_config:
+                logger.info(f"계정이 없음 - 환경변수 기반 자동 등록 시도: user_id={user_id}")
+
+                # 환경변수에서 계정 자동 등록 시도
+                registered_account = self.account_orchestrator.account_register_from_env()
+
+                if registered_account:
+                    logger.info(
+                        f"✅ 환경변수 기반 계정 자동 등록 완료: user_id={registered_account.user_id}"
+                    )
+                    # 등록된 계정의 OAuth 설정 다시 가져오기
+                    oauth_config = await self._get_account_oauth_config(user_id)
+                else:
+                    logger.debug("환경변수에 계정 정보가 없거나 등록 실패")
+
+            # ========================================================================
             # 인증 시작 전 환경 확인 (방화벽 및 포트 접근성)
             # ========================================================================
             # 계정별 OAuth 설정에서 redirect_uri 가져오기
-            oauth_config = await self._get_account_oauth_config(user_id)
+            if not oauth_config:
+                oauth_config = await self._get_account_oauth_config(user_id)
 
             if oauth_config and oauth_config.get("oauth_redirect_uri"):
                 from urllib.parse import urlparse

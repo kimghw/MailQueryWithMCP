@@ -6,18 +6,84 @@ services:
     buildCommand: uv sync && echo "Build completed"
     startCommand: bash entrypoints/production/run_unified_http.sh --host 0.0.0.0 --port $PORT
     envVars:
+      # ===========================
+      # Python & Build Tools
+      # ===========================
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: UV_VERSION
         value: "0.7.12"
+
+      # ===========================
+      # 🔧 INFRA/CORE - 인프라 핵심 설정
+      # ===========================
+
+      # Database
+      - key: DATABASE_PATH
+        value: "./data/graphapi.db"
+
+      # Security
       - key: ENCRYPTION_KEY
-        generateValue: true
-      - key: OAUTH_CLIENT_ID
         sync: false
-      - key: OAUTH_CLIENT_SECRET
+
+      # Logging
+      - key: LOG_LEVEL
+        value: "INFO"
+
+      # Network
+      - key: HTTP_TIMEOUT
+        value: "30"
+
+      # Token
+      - key: TOKEN_REFRESH_BUFFER_MINUTES
+        value: "10"
+
+      # Environment
+      - key: ENVIRONMENT
+        value: "production"
+
+      # ===========================
+      # 📩 MODULES/ACCOUNT - 계정 관리 모듈
+      # ===========================
+
+      - key: ENROLLMENT_DIRECTORY
+        value: "./enrollment"
+
+      # 자동 계정 등록 (환경변수 기반)
+      - key: AUTO_REGISTER_USER_ID
         sync: false
-      - key: OAUTH_TENANT_ID
+      - key: AUTO_REGISTER_USER_NAME
         sync: false
-      - key: OAUTH_REDIRECT_URI
-        value: "https://mailquery-mcp-server.onrender.com/auth/callback"
+      - key: AUTO_REGISTER_EMAIL
+        sync: false
+      - key: AUTO_REGISTER_OAUTH_CLIENT_ID
+        sync: false
+      - key: AUTO_REGISTER_OAUTH_CLIENT_SECRET
+        sync: false
+      - key: AUTO_REGISTER_OAUTH_TENANT_ID
+        sync: false
+      - key: AUTO_REGISTER_OAUTH_REDIRECT_URI
+        sync: false
+      - key: AUTO_REGISTER_DELEGATED_PERMISSIONS
+        value: "Mail.ReadWrite,Mail.Send,Notes.ReadWrite,Notes.Create,offline_access"
+
+      # ===========================
+      # ⚙️ MODULES/MAIL_PROCESS - 메일 처리 모듈
+      # ===========================
+
+      # Processing Limits
+      - key: MAX_KEYWORDS_PER_MAIL
+        value: "5"
+      - key: MAX_MAILS_PER_ACCOUNT
+        value: "200"
+      - key: MAIL_BATCH_SIZE
+        value: "100"
+
+      # Filtering Rules
+      - key: BLOCKED_DOMAINS
+        value: "noreply.com,no-reply.com,donotreply.com,notifications.com,alerts.com"
+      - key: BLOCKED_KEYWORDS
+        value: "스팸,광고,홍보,마케팅,unsubscribe,newsletter,promotion"
+      - key: BLOCKED_SENDER_PATTERNS
+        value: "noreply@,no-reply@,donotreply@,auto-reply@,block@"
     healthCheckPath: /health

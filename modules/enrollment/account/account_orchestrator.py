@@ -11,8 +11,10 @@ from typing import Any, Dict, List, Optional
 from infra.core.exceptions import BusinessLogicError, DatabaseError, ValidationError
 from infra.core.logger import get_logger
 
+from ._env_account_loader import env_load_account_from_env
 from .account_repository import AccountRepository
 from .account_schema import (
+    AccountCreate,
     AccountListFilter,
     AccountResponse,
     AccountStatus,
@@ -371,6 +373,61 @@ class AccountOrchestrator:
         # 향후 토큰 무효화, 세션 정리 등의 기능 구현 가능
         logger.debug(f"계정 비활성화 정리 작업: user_id={account.user_id}")
         pass
+
+    def account_register_from_env(self) -> Optional[AccountResponse]:
+        """
+        환경변수로부터 계정을 자동 등록
+
+        Returns:
+            Optional[AccountResponse]: 등록된 계정 정보 또는 None
+        """
+        try:
+            logger.info("환경변수 기반 계정 자동 등록 시도")
+
+            # 환경변수에서 계정 정보 로드
+            account_data = env_load_account_from_env()
+
+            if not account_data:
+                logger.debug("환경변수에 계정 정보가 없거나 검증 실패")
+                return None
+
+            # 이미 등록된 계정인지 확인
+            existing_account = self.account_get_by_user_id(account_data.user_id)
+
+            if existing_account:
+                logger.info(
+                    f"환경변수 계정이 이미 등록되어 있음: user_id={account_data.user_id}"
+                )
+                logger.debug(
+                    f"기존 계정 상태: status={existing_account.status}, "
+                    f"has_valid_token={existing_account.has_valid_token}"
+                )
+                return existing_account
+
+            # 새 계정 등록
+            account_id = self.repository.account_create_from_enrollment(account_data)
+
+            # 등록된 계정 조회
+            new_account = self.repository.account_get_by_id(account_id)
+
+            logger.info(
+                f"✅ 환경변수 기반 계정 등록 완료: user_id={account_data.user_id}, "
+                f"account_id={account_id}"
+            )
+
+            return new_account
+
+        except ValidationError as e:
+            logger.error(f"환경변수 계정 등록 검증 오류: {str(e)}")
+            return None
+        except DatabaseError as e:
+            logger.error(f"환경변수 계정 등록 DB 오류: {str(e)}")
+            return None
+        except Exception as e:
+            logger.error(f"환경변수 계정 등록 오류: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
 
     def account_get_health_status(self) -> Dict[str, Any]:
         """
