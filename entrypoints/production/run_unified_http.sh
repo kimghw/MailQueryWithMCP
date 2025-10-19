@@ -67,6 +67,6 @@ fi
 
 # Run the unified server
 echo "🔥 Starting HTTP server..."
-exec python3 "$PROJECT_ROOT/entrypoints/production/unified_http_server.py" \
+exec python "$PROJECT_ROOT/entrypoints/production/unified_http_server.py" \
     --host "$HOST" \
     --port "$PORT"
