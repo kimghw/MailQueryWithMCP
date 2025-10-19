@@ -3,7 +3,7 @@ services:
     name: mailquery-mcp-server
     runtime: python
     plan: free
-    buildCommand: uv pip install --system -e . && echo "Build completed"
+    buildCommand: pip install uv && uv pip install --system -e . && echo "Build completed"
     startCommand: bash entrypoints/production/run_unified_http.sh --host 0.0.0.0 --port $PORT
     envVars:
       - key: PYTHON_VERSION
@@ -11,8 +11,11 @@ services:
       - key: ENCRYPTION_KEY
         generateValue: true
       - key: OAUTH_CLIENT_ID
+        sync: false
       - key: OAUTH_CLIENT_SECRET
+        sync: false
       - key: OAUTH_TENANT_ID
+        sync: false
       - key: OAUTH_REDIRECT_URI
         value: "https://mailquerywithmcp.onrender.com/auth/callback"
     healthCheckPath: /health
