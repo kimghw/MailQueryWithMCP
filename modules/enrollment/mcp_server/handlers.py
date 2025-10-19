@@ -121,7 +121,7 @@ class AuthAccountHandlers:
                         },
                         "oauth_redirect_uri": {
                             "type": "string",
-                            "description": "OAuth redirect URI (optional, defaults to http://localhost:5000/auth/callback)"
+                            "description": "OAuth redirect URI (optional, defaults to http://localhost:9999/enrollment/callback for local, https://mailquery-mcp-server.onrender.com/enrollment/callback for production)"
                         },
                     },
                     "required": ["user_id", "email", "oauth_client_id", "oauth_client_secret", "oauth_tenant_id"]
@@ -231,9 +231,9 @@ class AuthAccountHandlers:
 
             # Set default redirect URI
             default_redirect = (
-                "https://iacs-mail-server.onrender.com/auth/callback"
+                "https://mailquery-mcp-server.onrender.com/enrollment/callback"
                 if os.getenv("RENDER")
-                else "http://localhost:5000/auth/callback"
+                else "http://localhost:9999/enrollment/callback"
             )
             oauth_redirect_uri = arguments.get("oauth_redirect_uri", default_redirect)
 
@@ -665,7 +665,7 @@ oauth:
   - Mail.ReadWrite
   - Mail.Send
   - offline_access
-  redirect_uri: http://localhost:5000/auth/callback
+  redirect_uri: http://localhost:9999/enrollment/callback
 ---
 
 📌 다음 단계:

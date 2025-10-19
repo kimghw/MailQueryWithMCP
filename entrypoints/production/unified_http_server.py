@@ -204,8 +204,8 @@ class UnifiedMCPServer:
             Route("/", endpoint=options_handler, methods=["OPTIONS"]),
             Route("/health", endpoint=unified_health, methods=["GET"]),
             Route("/info", endpoint=unified_info, methods=["GET"]),
-            # OAuth callback
-            Route("/auth/callback", endpoint=auth_callback_handler, methods=["GET"]),
+            # OAuth callback (enrollment service)
+            Route("/enrollment/callback", endpoint=auth_callback_handler, methods=["GET"]),
             # Mount MCP servers on different paths
             Mount("/mail-query", app=self.mail_query_server.app),
             Mount("/enrollment", app=self.enrollment_server.app),

@@ -19,5 +19,5 @@ services:
       - key: OAUTH_TENANT_ID
         sync: false
       - key: OAUTH_REDIRECT_URI
-        value: "https://mailquerywithmcp.onrender.com/auth/callback"
+        value: "https://mailquery-mcp-server.onrender.com/auth/callback"
     healthCheckPath: /health
