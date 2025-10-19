@@ -26,6 +26,8 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from modules.mail_query_MCP.mcp_server.http_server import HTTPStreamingMailAttachmentServer
 from modules.enrollment.mcp_server.http_server import HTTPStreamingAuthServer
 from modules.onenote_mcp.mcp_server.http_server import HTTPStreamingOneNoteServer
+from modules.enrollment.auth import get_auth_orchestrator
+from modules.enrollment.auth.auth_web_server import AuthWebServer
 from infra.core.logger import get_logger
 
 logger = get_logger(__name__)
@@ -49,6 +51,13 @@ class UnifiedMCPServer:
 
         logger.info("📝 Initializing OneNote MCP Server...")
         self.onenote_server = HTTPStreamingOneNoteServer(host=host, port=port)
+
+        # Initialize Auth Web Server for OAuth callback handling
+        logger.info("🔐 Initializing Auth Web Server for OAuth callbacks...")
+        self.auth_web_server = AuthWebServer()
+        # Set session store from auth orchestrator
+        orchestrator = get_auth_orchestrator()
+        self.auth_web_server.set_session_store(orchestrator.auth_sessions)
 
         # Create unified Starlette app
         self.app = self._create_unified_app()
@@ -152,6 +161,42 @@ class UnifiedMCPServer:
                 },
             )
 
+        # OAuth callback handler
+        async def auth_callback_handler(request):
+            """Handle OAuth callback from Microsoft"""
+            try:
+                # Get query parameters
+                params = dict(request.query_params)
+
+                # Process callback using auth_web_server
+                html_response = self.auth_web_server._process_callback(params)
+
+                return Response(
+                    html_response,
+                    media_type="text/html",
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                    }
+                )
+            except Exception as e:
+                logger.error(f"OAuth callback failed: {str(e)}")
+                error_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head><title>Authentication Error</title></head>
+                <body>
+                    <h1>❌ Authentication Failed</h1>
+                    <p>Error: {str(e)}</p>
+                    <p>You can close this window.</p>
+                </body>
+                </html>
+                """
+                return Response(
+                    error_html,
+                    media_type="text/html",
+                    status_code=500
+                )
+
         # Create routes
         routes = [
             # Root endpoints
@@ -159,6 +204,8 @@ class UnifiedMCPServer:
             Route("/", endpoint=options_handler, methods=["OPTIONS"]),
             Route("/health", endpoint=unified_health, methods=["GET"]),
             Route("/info", endpoint=unified_info, methods=["GET"]),
+            # OAuth callback
+            Route("/auth/callback", endpoint=auth_callback_handler, methods=["GET"]),
             # Mount MCP servers on different paths
             Mount("/mail-query", app=self.mail_query_server.app),
             Mount("/enrollment", app=self.enrollment_server.app),
