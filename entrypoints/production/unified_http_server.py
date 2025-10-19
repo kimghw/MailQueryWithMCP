@@ -164,12 +164,18 @@ class UnifiedMCPServer:
         # OAuth callback handler
         async def auth_callback_handler(request):
             """Handle OAuth callback from Microsoft"""
+            import asyncio
             try:
                 # Get query parameters
                 params = dict(request.query_params)
 
-                # Process callback using auth_web_server
-                html_response = self.auth_web_server._process_callback(params)
+                # Run synchronous callback in executor to avoid event loop conflicts
+                loop = asyncio.get_running_loop()
+                html_response = await loop.run_in_executor(
+                    None,
+                    self.auth_web_server._process_callback,
+                    params
+                )
 
                 return Response(
                     html_response,
@@ -180,6 +186,8 @@ class UnifiedMCPServer:
                 )
             except Exception as e:
                 logger.error(f"OAuth callback failed: {str(e)}")
+                import traceback
+                logger.error(traceback.format_exc())
                 error_html = f"""
                 <!DOCTYPE html>
                 <html>
