@@ -211,6 +211,12 @@ class MCPHandlers(AttachmentFilterHandlers):
                             "items": {"type": "string"},
                             "description": "대화 전체 조회: 특정 사람과 주고받은 모든 메일. 이메일 주소 배열로 입력. 예: ['kim@company.com', 'lee@company.com'] → ①이 사람들이 나에게 보낸 메일 + ②내가 이 사람들에게 보낸 메일 모두 포함. 완전한 대화 내역을 보려면 이것을 사용하세요.",
                         },
+                        "output_format": {
+                            "type": "string",
+                            "description": "Output format for the response. 'json' for structured JSON data (optimized for programmatic access), 'text' for human-readable formatted text (default, easier to read)",
+                            "enum": ["text", "json"],
+                            "default": "text"
+                        },
                         "query_context": {
                             "type": "object",
                             "description": "Query context information for handling multi-turn conversations",

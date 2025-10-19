@@ -401,6 +401,7 @@ class EmailQueryTool:
             download_attachments = arguments.get("download_attachments", False)
             save_emails = arguments.get("save_emails", True)
             save_csv = arguments.get("save_csv", False)
+            output_format = arguments.get("output_format", "text")
 
             # Parse date range
             try:
@@ -637,7 +638,7 @@ class EmailQueryTool:
         result_text += f"\n\n{'='*80}\n"
         result_text += "📋 **결과 포맷팅 요청**\n"
         result_text += f"{'='*80}\n\n"
-        result_text += self._get_format_instructions(user_id)
+        result_text += self._get_format_instructions(user_id, output_format)
 
         return result_text
 
@@ -691,10 +692,12 @@ class EmailQueryTool:
 
         return summary
 
-    def _get_format_instructions(self, user_id: str) -> str:
+    def _get_format_instructions(self, user_id: str, output_format: str = "text") -> str:
         """Get email formatting instructions from prompts.py"""
+        # Map output_format to format_style
+        format_style = "table" if output_format == "text" else "json"
         return get_format_email_results_prompt(
-            format_style="table",
+            format_style=format_style,
             include_attachments=True,
             user_id=user_id
         )
