@@ -576,15 +576,16 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
         Start OAuth authentication process for user
 
         Args:
-            arguments: Tool arguments containing optional user_id
-                - user_id 입력: 해당 계정 인증
-                - user_id 미입력: 미인증 계정 자동 선택 또는 환경변수로 자동 등록 후 인증
+            arguments: Tool arguments containing:
+                - user_id (optional): 특정 계정 지정
+                - use_auto_select (bool): True이면 DB에서 미인증 계정 찾거나 환경변수로 자동 등록
 
         Returns:
             Authentication URL or error message
         """
         try:
             user_id = arguments.get("user_id")
+            use_auto_select = arguments.get("use_auto_select", False)
 
             # Case 1: user_id가 제공된 경우
             if user_id:
@@ -596,9 +597,11 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
                 if not account:
                     return f"❌ Error: 계정이 등록되지 않았습니다: {user_id}\n\nregister_account tool을 먼저 사용하세요."
 
-            # Case 2: user_id가 없는 경우 - 미인증 계정 찾기
-            else:
-                # 토큰이 없거나 만료된 계정 찾기
+                logger.info(f"✅ 지정된 계정으로 인증 시작: {user_id}")
+
+            # Case 2: user_id 없고 use_auto_select=True인 경우
+            elif use_auto_select:
+                # Step 1: DB에서 미인증 계정 찾기
                 unauthenticated_accounts = self.db.fetch_all("""
                     SELECT user_id, email, token_expiry
                     FROM accounts
@@ -616,7 +619,7 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
                     email = account_dict['email']
                     logger.info(f"✅ 미인증 계정 자동 선택: {user_id} ({email})")
 
-                # Case 3: 미인증 계정도 없는 경우 - 환경변수로 자동 등록
+                # Step 2: 미인증 계정도 없으면 환경변수로 자동 등록
                 else:
                     logger.info("DB에 미인증 계정이 없음 - 환경변수 기반 자동 등록 시도")
 
@@ -625,11 +628,12 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
                     account_create = env_load_account_from_env()
 
                     if not account_create:
-                        return """❌ Error: 인증할 계정이 없습니다.
+                        return """❌ Error: use_auto_select=true이지만 인증할 계정이 없습니다.
 
 다음 중 하나를 선택하세요:
-1. register_account tool로 계정을 먼저 등록
-2. 환경변수 AUTO_REGISTER_* 설정 (자동 등록)
+1. user_id를 지정하여 특정 계정 인증
+2. register_account tool로 계정을 먼저 등록
+3. 환경변수 AUTO_REGISTER_* 설정하여 자동 등록 활성화:
    - AUTO_REGISTER_USER_ID
    - AUTO_REGISTER_USER_NAME
    - AUTO_REGISTER_EMAIL
@@ -651,6 +655,14 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
 
                     user_id = account_create.user_id
                     logger.info(f"✅ 환경변수 기반 계정 자동 등록 완료: {user_id}")
+
+            # Case 3: user_id도 없고 use_auto_select=False인 경우
+            else:
+                return """❌ Error: user_id 또는 use_auto_select=true가 필요합니다.
+
+다음 중 하나를 선택하세요:
+1. user_id를 제공하여 특정 계정 인증
+2. use_auto_select=true로 설정하여 자동 계정 선택"""
 
             # 인증 시작
             orchestrator = get_auth_orchestrator()
