@@ -371,8 +371,8 @@ class AuthAccountHandlers:
             default_permissions_json = '["Mail.ReadWrite", "Mail.Send", "offline_access"]'
 
             # Prepare source information message
-            if use_env_mode:
-                source_info = f"\n데이터 소스: 환경변수 사용 ({', '.join(used_env_for_required)})"
+            if use_env_vars:
+                source_info = "\n데이터 소스: 환경변수 사용"
             else:
                 source_info = "\n데이터 소스: 직접 입력"
 
