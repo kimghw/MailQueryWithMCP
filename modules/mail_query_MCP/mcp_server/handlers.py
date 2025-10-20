@@ -329,20 +329,6 @@ class MCPHandlers(AttachmentFilterHandlers):
         arguments = preprocess_arguments(arguments)
         logger.info(f"🔄 [MCP Handler] Preprocessed arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
 
-        # user_id 자동 선택 (단일 계정인 경우)
-        if not arguments.get("user_id"):
-            default_user_id = get_default_user_id()
-            if default_user_id:
-                arguments["user_id"] = default_user_id
-                logger.info(f"✅ user_id 자동 선택: {default_user_id}")
-            else:
-                # user_id가 필요한 툴인데 없는 경우
-                if name in ["query_email", "attachmentManager"]:
-                    return [TextContent(
-                        type="text",
-                        text="❌ Error: user_id가 필요합니다. 다중 계정이 등록되어 있으므로 user_id를 명시해주세요."
-                    )]
-
         try:
             # AttachmentFilterHandlers 툴 체크
             if self.is_attachment_filter_tool(name):
