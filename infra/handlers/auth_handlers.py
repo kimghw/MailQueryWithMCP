@@ -489,14 +489,13 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
 세션 ID: {response.session_id}
 만료 시간: {response.expires_at}
 
-🌐 **인증 URL (클릭하여 브라우저에서 열기):**
+🌐 **인증 URL:**
 
-[Microsoft 로그인 페이지 열기]({response.auth_url})
-
-또는 아래 URL을 직접 복사하세요:
 ```
 {response.auth_url}
 ```
+
+[Microsoft 로그인 페이지 열기]({response.auth_url})
 
 ⚠️  **중요:** 위 링크를 클릭하거나 URL을 브라우저에 붙여넣어 Microsoft 로그인을 완료해야 합니다.
 브라우저에서 로그인 후 권한 승인을 완료하면 자동으로 인증이 완료됩니다.
