@@ -165,10 +165,14 @@ class AuthAccountHandlers:
                     "properties": {
                         "user_id": {
                             "type": "string",
-                            "description": "User ID (must be already registered)"
+                            "description": "User ID (must be already registered). Required if use_auto_select is false."
+                        },
+                        "use_auto_select": {
+                            "type": "boolean",
+                            "description": "If true, automatically selects the most recently created active account from the database. Set to true when you don't have a specific user_id. If false (default), user_id is required."
                         }
                     },
-                    "required": ["user_id"]
+                    "required": []
                 }
             ),
             Tool(
@@ -569,23 +573,44 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
         Start OAuth authentication process
 
         Args:
-            arguments: Dict containing user_id (optional - auto-selects if empty)
+            arguments: Dict containing:
+                - user_id (optional): 특정 계정 지정
+                - use_auto_select (bool): True이면 최신 활성 계정 자동 선택
 
         Returns:
             Authentication URL or error message
         """
         try:
             user_id = arguments.get("user_id", "").strip()
+            use_auto_select = arguments.get("use_auto_select", False)
 
-            # user_id가 없으면 데이터베이스에서 활성 계정 자동 선택
-            if not user_id:
+            # Case 1: user_id 제공
+            if user_id:
+                logger.info(f"✅ 지정된 user_id 사용: {user_id}")
+
+            # Case 2: use_auto_select=True
+            elif use_auto_select:
+                logger.info("use_auto_select=true - 최신 활성 계정 자동 선택")
                 active_account = self.db.fetch_one(
                     "SELECT user_id FROM accounts WHERE is_active = 1 ORDER BY created_at DESC LIMIT 1"
                 )
                 if not active_account:
-                    return "❌ Error: 활성 계정이 없습니다. 계정을 먼저 등록하세요."
+                    return """❌ Error: use_auto_select=true이지만 활성 계정이 없습니다.
+
+다음 중 하나를 선택하세요:
+1. user_id를 제공하여 특정 계정 인증
+2. register_account로 계정을 먼저 등록"""
+
                 user_id = active_account['user_id']
-                logger.info(f"Auto-selected user_id: {user_id}")
+                logger.info(f"✅ 자동 선택된 계정: {user_id}")
+
+            # Case 3: 둘 다 없음
+            else:
+                return """❌ Error: user_id 또는 use_auto_select=true가 필요합니다.
+
+다음 중 하나를 선택하세요:
+1. user_id를 제공하여 특정 계정 인증
+2. use_auto_select=true로 설정하여 자동 계정 선택"""
 
             # Use AuthOrchestrator (환경변수 기반 자동 등록 포함)
             # AuthOrchestrator가 계정 존재 확인 및 자동 등록을 처리
