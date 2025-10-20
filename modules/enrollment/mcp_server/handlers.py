@@ -281,15 +281,16 @@ class AuthAccountHandlers:
             if missing_fields:
                 return f"❌ Error: Missing required fields: {', '.join(missing_fields)}"
 
-            # Validate OAuth credentials format
-            is_valid, error_msg = auth_validate_oauth_credentials(
-                oauth_client_id,
-                oauth_client_secret,
-                oauth_tenant_id
-            )
-            if not is_valid:
-                logger.error(f"OAuth 자격 증명 검증 실패: {error_msg}")
-                return f"❌ OAuth 자격 증명 포맷 오류:\n{error_msg}"
+            # Validate OAuth credentials format (only if values are present)
+            if oauth_client_id and oauth_client_secret and oauth_tenant_id:
+                is_valid, error_msg = auth_validate_oauth_credentials(
+                    oauth_client_id,
+                    oauth_client_secret,
+                    oauth_tenant_id
+                )
+                if not is_valid:
+                    logger.error(f"OAuth 자격 증명 검증 실패: {error_msg}")
+                    return f"❌ OAuth 자격 증명 포맷 오류:\n{error_msg}"
 
             # Log registration source
             if use_env_mode:
