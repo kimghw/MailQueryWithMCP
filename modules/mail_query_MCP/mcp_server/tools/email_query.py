@@ -139,8 +139,10 @@ class EmailQueryTool:
         if not account:
             return None, f"❌ Error: 계정을 찾을 수 없습니다: {user_id}"
 
-        access_token = account.get('access_token')
-        token_expiry = account.get('token_expiry')
+        # Convert sqlite3.Row to dict for .get() method
+        account_dict = dict(account)
+        access_token = account_dict.get('access_token')
+        token_expiry = account_dict.get('token_expiry')
 
         # Check if authentication is required
         requires_auth = False
