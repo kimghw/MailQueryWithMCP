@@ -281,7 +281,21 @@ class AuthAccountHandlers:
             if missing_fields:
                 return f"❌ Error: Missing required fields: {', '.join(missing_fields)}"
 
-            # Validate OAuth credentials format (only if values are present)
+            # Validate OAuth credentials format (only if all values are present)
+            oauth_fields_present = [oauth_client_id, oauth_client_secret, oauth_tenant_id]
+            oauth_fields_count = sum(1 for field in oauth_fields_present if field)
+
+            if oauth_fields_count > 0 and oauth_fields_count < 3:
+                # 일부만 있는 경우 - 명확한 에러 메시지
+                partial_fields = []
+                if not oauth_client_id:
+                    partial_fields.append("oauth_client_id")
+                if not oauth_client_secret:
+                    partial_fields.append("oauth_client_secret")
+                if not oauth_tenant_id:
+                    partial_fields.append("oauth_tenant_id")
+                return f"❌ Error: OAuth 자격 증명이 불완전합니다. 누락된 필드: {', '.join(partial_fields)}\n모든 OAuth 필드를 입력하거나, 모두 환경변수에 설정해야 합니다."
+
             if oauth_client_id and oauth_client_secret and oauth_tenant_id:
                 is_valid, error_msg = auth_validate_oauth_credentials(
                     oauth_client_id,
