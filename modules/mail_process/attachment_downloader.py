@@ -28,27 +28,29 @@ class AttachmentDownloader:
             self.onedrive_uploader = OneDriveUploader()
     
     async def download_attachment(
-        self, 
-        graph_client, 
-        message_id: str, 
-        attachment_id: str
+        self,
+        graph_client,
+        message_id: str,
+        attachment_id: str,
+        access_token: Optional[str] = None
     ) -> Optional[bytes]:
         """
         Download attachment from Microsoft Graph API
-        
+
         Args:
             graph_client: Microsoft Graph client instance
             message_id: Email message ID
             attachment_id: Attachment ID
-            
+            access_token: Access token for Graph API
+
         Returns:
             Attachment content as bytes or None if failed
         """
         try:
             # Microsoft Graph API를 통한 첨부파일 다운로드
             url = f"/me/messages/{message_id}/attachments/{attachment_id}"
-            response = await graph_client.get(url)
-            
+            response = await graph_client.get(url, access_token=access_token)
+
             if response and 'contentBytes' in response:
                 # Base64로 인코딩된 컨텐츠 디코드
                 content = base64.b64decode(response['contentBytes'])
@@ -57,7 +59,7 @@ class AttachmentDownloader:
             else:
                 logger.warning(f"No content found for attachment {attachment_id}")
                 return None
-                
+
         except Exception as e:
             logger.error(f"Failed to download attachment {attachment_id}: {str(e)}")
             return None
@@ -206,7 +208,8 @@ class AttachmentDownloader:
             content = await self.download_attachment(
                 graph_client,
                 message_id,
-                attachment_id
+                attachment_id,
+                access_token=access_token
             )
             
             if not content:

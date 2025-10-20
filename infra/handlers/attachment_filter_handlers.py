@@ -447,6 +447,9 @@ class AttachmentFilterHandlers:
 
                         # 첨부파일 다운로드
                         try:
+                            # 토큰 확보
+                            access_token = await orchestrator.token_service.get_valid_access_token(user_id)
+
                             att_result = await self.attachment_downloader.download_and_save(
                                 graph_client=orchestrator.graph_client,
                                 user_id=user_id,
@@ -454,7 +457,8 @@ class AttachmentFilterHandlers:
                                 attachment=attachment,
                                 email_date=mail.received_date_time,
                                 sender_email=mail.from_address.get("emailAddress", {}).get("address") if mail.from_address else None,
-                                email_subject=mail.subject
+                                email_subject=mail.subject,
+                                access_token=access_token
                             )
 
                             if att_result:

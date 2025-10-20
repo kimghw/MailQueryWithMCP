@@ -1,0 +1,121 @@
+{
+  "module": "onenote",
+  "description": "OneNote MCP 핸들러 테스트 케이스",
+  "test_cases": [
+    {
+      "name": "save_section_info",
+      "enabled": true,
+      "tool": "save_section_info",
+      "arguments": {
+        "user_id": "kimghw",
+        "notebook_id": "1-test-notebook",
+        "section_id": "1-test-section",
+        "section_name": "Test Section"
+      },
+      "expect": {
+        "contains": ["success", "true"]
+      }
+    },
+    {
+      "name": "save_page_info",
+      "enabled": true,
+      "tool": "save_page_info",
+      "arguments": {
+        "user_id": "kimghw",
+        "section_id": "1-test-section",
+        "page_id": "1-test-page",
+        "page_title": "Test Page"
+      },
+      "expect": {
+        "contains": ["success", "true"]
+      }
+    },
+    {
+      "name": "list_notebooks",
+      "enabled": true,
+      "tool": "list_notebooks",
+      "arguments": {
+        "user_id": "kimghw"
+      },
+      "expect": {
+        "contains": ["notebooks", "액세스 토큰이 없습니다"]
+      }
+    },
+    {
+      "name": "list_sections",
+      "enabled": true,
+      "tool": "list_sections",
+      "arguments": {
+        "user_id": "kimghw",
+        "notebook_id": "1-test-notebook"
+      },
+      "expect": {
+        "contains": ["sections", "액세스 토큰이 없습니다"]
+      }
+    },
+    {
+      "name": "list_pages",
+      "enabled": true,
+      "tool": "list_pages",
+      "arguments": {
+        "user_id": "kimghw",
+        "section_id": "1-test-section"
+      },
+      "expect": {
+        "contains": ["pages", "액세스 토큰이 없습니다"]
+      }
+    },
+    {
+      "name": "create_section",
+      "enabled": false,
+      "tool": "create_section",
+      "arguments": {
+        "user_id": "kimghw",
+        "notebook_id": "1-your-notebook-id",
+        "section_name": "My Test Section"
+      },
+      "expect": {
+        "contains": ["success", "true"]
+      }
+    },
+    {
+      "name": "create_page",
+      "enabled": false,
+      "tool": "create_page",
+      "arguments": {
+        "user_id": "kimghw",
+        "section_id": "1-your-section-id",
+        "title": "My Test Page",
+        "content": "<h1>Test</h1><p>Hello World</p>"
+      },
+      "expect": {
+        "contains": ["success", "true"]
+      }
+    },
+    {
+      "name": "get_page_content",
+      "enabled": false,
+      "tool": "get_page_content",
+      "arguments": {
+        "user_id": "kimghw",
+        "page_id": "1-your-page-id"
+      },
+      "expect": {
+        "contains": ["success", "content"]
+      }
+    },
+    {
+      "name": "update_page",
+      "enabled": false,
+      "tool": "update_page",
+      "arguments": {
+        "user_id": "kimghw",
+        "page_id": "1-your-page-id",
+        "content": "<h1>Updated</h1><p>Content updated</p>"
+      },
+      "expect": {
+        "contains": ["success", "true"]
+      }
+    }
+  ]
+}

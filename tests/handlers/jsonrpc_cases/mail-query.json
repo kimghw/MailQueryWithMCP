@@ -1,0 +1,124 @@
+{
+  "module": "mail-query",
+  "description": "Mail Query MCP 핸들러 테스트 케이스",
+  "test_cases": [
+    {
+      "name": "help",
+      "enabled": true,
+      "tool": "help",
+      "arguments": {},
+      "expect": {
+        "contains": ["MCP Mail Query Server", "Available Tools"]
+      }
+    },
+    {
+      "name": "query_email_help",
+      "enabled": true,
+      "tool": "query_email_help",
+      "arguments": {},
+      "expect": {
+        "contains": ["query_email 툴 사용 가이드"]
+      }
+    },
+    {
+      "name": "query_email (days_back)",
+      "enabled": true,
+      "tool": "query_email",
+      "arguments": {
+        "user_id": "kimghw",
+        "days_back": 3,
+        "include_body": false
+      },
+      "expect": {
+        "contains": ["메일 조회 결과", "인증이 필요합니다"]
+      }
+    },
+    {
+      "name": "query_email (날짜 지정)",
+      "enabled": true,
+      "tool": "query_email",
+      "arguments": {
+        "user_id": "kimghw",
+        "start_date": "2025-10-18",
+        "end_date": "2025-10-20",
+        "include_body": false
+      },
+      "expect": {
+        "contains": ["메일 조회 결과", "인증이 필요합니다"]
+      }
+    },
+    {
+      "name": "query_email (user_id null - 자동 선택)",
+      "enabled": true,
+      "tool": "query_email",
+      "arguments": {
+        "user_id": null,
+        "days_back": 3,
+        "include_body": false
+      },
+      "expect": {
+        "contains": ["메일 조회 결과", "자동 선택", "인증이 필요합니다", "계정이 없습니다"]
+      }
+    },
+    {
+      "name": "query_email (subject_keywords)",
+      "enabled": true,
+      "tool": "query_email",
+      "arguments": {
+        "user_id": "kimghw",
+        "days_back": 7,
+        "subject_keywords": ["중요", "긴급"],
+        "include_body": false
+      },
+      "expect": {
+        "contains": ["메일 조회 결과", "인증이 필요합니다"]
+      }
+    },
+    {
+      "name": "attachmentManager (PDF 검색)",
+      "enabled": true,
+      "tool": "attachmentManager",
+      "arguments": {
+        "user_id": "kimghw",
+        "start_date": "2025-10-18",
+        "end_date": "2025-10-20",
+        "filename_keywords": ["pdf"],
+        "save_enabled": false
+      },
+      "expect": {
+        "contains": ["첨부파일 관리 결과", "첨부파일 관리 완료", "인증이 필요합니다"]
+      }
+    },
+    {
+      "name": "attachmentManager (여러 키워드)",
+      "enabled": true,
+      "tool": "attachmentManager",
+      "arguments": {
+        "user_id": "kimghw",
+        "start_date": "2025-10-01",
+        "end_date": "2025-10-20",
+        "filename_keywords": ["디지털트윈", "pdf", "xlsx"],
+        "case_sensitive": false,
+        "save_enabled": false
+      },
+      "expect": {
+        "contains": ["첨부파일 관리 결과", "첨부파일 관리 완료", "인증이 필요합니다"]
+      }
+    },
+    {
+      "name": "attachmentManager (파일 다운로드 - 운항설계영역)",
+      "enabled": true,
+      "tool": "attachmentManager",
+      "arguments": {
+        "user_id": "kimghw",
+        "start_date": "2025-09-01",
+        "end_date": "2025-10-18",
+        "filename_keywords": ["운항설계영역"],
+        "save_enabled": true
+      },
+      "expect": {
+        "contains": ["첨부파일 관리 결과", "저장된 파일", "인증이 필요합니다"]
+      }
+    }
+  ]
+}
