@@ -640,7 +640,8 @@ class EmailQueryTool:
                 save_emails,
                 download_attachments,
                 graph_client,
-                save_csv
+                save_csv,
+                output_format
             )
 
             return result_text
@@ -653,7 +654,8 @@ class EmailQueryTool:
 
     async def format_results(self, messages: List, user_id: str, start_date, end_date,
                        days_back: int, filters: Dict, save_emails: bool,
-                       download_attachments: bool, graph_client, save_csv: bool) -> str:
+                       download_attachments: bool, graph_client, save_csv: bool,
+                       output_format: str = "text") -> str:
         """
         Format query results for display
 
@@ -668,6 +670,7 @@ class EmailQueryTool:
             download_attachments: Whether attachments were downloaded
             graph_client: Graph API client
             save_csv: Whether to save as CSV
+            output_format: Output format style (text or json)
 
         Returns:
             Formatted result string
