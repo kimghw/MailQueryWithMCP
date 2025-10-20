@@ -212,21 +212,17 @@ class OneNoteHandler:
             logger.error(error_msg)
             return {"success": False, "message": error_msg}
 
-    async def list_sections(self, user_id: str, notebook_id: str) -> Dict[str, Any]:
+    async def list_sections(self, user_id: str) -> Dict[str, Any]:
         """
-        노트북의 섹션 목록 조회
+        모든 섹션 목록 조회 (notebook 거치지 않고 직접 조회)
 
         Args:
             user_id: 사용자 ID
-            notebook_id: 노트북 ID
 
         Returns:
             섹션 목록
         """
         try:
-            # ID 정규화
-            notebook_id = self._normalize_onenote_id(notebook_id)
-
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
@@ -237,8 +233,9 @@ class OneNoteHandler:
             }
 
             async with httpx.AsyncClient() as client:
+                # notebook 없이 모든 섹션 직접 조회
                 response = await client.get(
-                    f"{self.graph_base_url}/me/onenote/notebooks/{notebook_id}/sections",
+                    f"{self.graph_base_url}/me/onenote/sections",
                     headers=headers,
                     timeout=30.0
                 )
@@ -261,21 +258,18 @@ class OneNoteHandler:
             logger.error(error_msg)
             return {"success": False, "message": error_msg}
 
-    async def list_pages(self, user_id: str, section_id: str) -> Dict[str, Any]:
+    async def list_pages(self, user_id: str, section_id: str = None) -> Dict[str, Any]:
         """
-        섹션의 페이지 목록 조회
+        페이지 목록 조회 (모든 페이지 또는 특정 섹션의 페이지)
 
         Args:
             user_id: 사용자 ID
-            section_id: 섹션 ID
+            section_id: 섹션 ID (선택, 없으면 모든 페이지 조회)
 
         Returns:
             페이지 목록
         """
         try:
-            # ID 정규화
-            section_id = self._normalize_onenote_id(section_id)
-
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
@@ -285,9 +279,17 @@ class OneNoteHandler:
                 "Content-Type": "application/json"
             }
 
+            # 섹션 ID가 있으면 특정 섹션의 페이지, 없으면 모든 페이지 조회
+            if section_id:
+                # ID 정규화
+                section_id = self._normalize_onenote_id(section_id)
+                url = f"{self.graph_base_url}/me/onenote/sections/{section_id}/pages"
+            else:
+                url = f"{self.graph_base_url}/me/onenote/pages"
+
             async with httpx.AsyncClient() as client:
                 response = await client.get(
-                    f"{self.graph_base_url}/me/onenote/sections/{section_id}/pages",
+                    url,
                     headers=headers,
                     timeout=30.0
                 )
