@@ -12,7 +12,8 @@ from modules.mail_query import (
     MailQuerySeverFilters,
     MailQueryOrchestrator,
     MailQueryRequest,
-    PaginationOptions
+    PaginationOptions,
+    KeywordFilter
 )
 from modules.mail_process import AttachmentDownloader, FileConverterOrchestrator, EmailSaver
 from modules.mail_process.client_filter import ClientFilter
@@ -545,13 +546,11 @@ class EmailQueryTool:
             # Handle keyword_filter parameter (structured)
             keyword_filter_dict = arguments.get("keyword_filter")
             if keyword_filter_dict:
-                from modules.mail_query import KeywordFilter
                 keyword_filter = KeywordFilter(**keyword_filter_dict)
 
             # Handle legacy keyword parameter (simple string)
             keyword = arguments.get("keyword")
             if keyword and not keyword_filter:
-                from modules.mail_query import KeywordFilter
                 # Convert simple keyword to and_keywords for backward compatibility
                 keyword_filter = KeywordFilter(and_keywords=[keyword])
 
