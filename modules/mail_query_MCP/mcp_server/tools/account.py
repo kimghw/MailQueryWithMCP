@@ -576,26 +576,83 @@ start_authentication tool을 사용하여 OAuth 인증을 진행하세요."""
         Start OAuth authentication process for user
 
         Args:
-            arguments: Tool arguments containing user_id
+            arguments: Tool arguments containing optional user_id
+                - user_id 입력: 해당 계정 인증
+                - user_id 미입력: 미인증 계정 자동 선택 또는 환경변수로 자동 등록 후 인증
 
         Returns:
             Authentication URL or error message
         """
         try:
             user_id = arguments.get("user_id")
-            if not user_id:
-                return "Error: user_id is required"
 
-            # Check if account is registered
-            account = self.db.fetch_one(
-                "SELECT user_id, email FROM accounts WHERE user_id = ?",
-                (user_id,)
-            )
+            # Case 1: user_id가 제공된 경우
+            if user_id:
+                account = self.db.fetch_one(
+                    "SELECT user_id, email FROM accounts WHERE user_id = ?",
+                    (user_id,)
+                )
 
-            if not account:
-                return f"Error: 계정이 등록되지 않았습니다: {user_id}\n\nenroll_account tool을 먼저 사용하세요."
+                if not account:
+                    return f"❌ Error: 계정이 등록되지 않았습니다: {user_id}\n\nregister_account tool을 먼저 사용하세요."
 
-            # Use AuthOrchestrator
+            # Case 2: user_id가 없는 경우 - 미인증 계정 찾기
+            else:
+                # 토큰이 없거나 만료된 계정 찾기
+                unauthenticated_accounts = self.db.fetch_all("""
+                    SELECT user_id, email, token_expiry
+                    FROM accounts
+                    WHERE is_active = 1
+                    AND (access_token IS NULL OR access_token = ''
+                         OR token_expiry IS NULL
+                         OR datetime(token_expiry) < datetime('now'))
+                    ORDER BY created_at DESC
+                """)
+
+                if unauthenticated_accounts:
+                    # 첫 번째 미인증 계정 선택
+                    account_dict = dict(unauthenticated_accounts[0])
+                    user_id = account_dict['user_id']
+                    email = account_dict['email']
+                    logger.info(f"✅ 미인증 계정 자동 선택: {user_id} ({email})")
+
+                # Case 3: 미인증 계정도 없는 경우 - 환경변수로 자동 등록
+                else:
+                    logger.info("DB에 미인증 계정이 없음 - 환경변수 기반 자동 등록 시도")
+
+                    # 환경변수에서 계정 정보 로드
+                    from modules.enrollment.account import env_load_account_from_env
+                    account_create = env_load_account_from_env()
+
+                    if not account_create:
+                        return """❌ Error: 인증할 계정이 없습니다.
+
+다음 중 하나를 선택하세요:
+1. register_account tool로 계정을 먼저 등록
+2. 환경변수 AUTO_REGISTER_* 설정 (자동 등록)
+   - AUTO_REGISTER_USER_ID
+   - AUTO_REGISTER_USER_NAME
+   - AUTO_REGISTER_EMAIL
+   - AUTO_REGISTER_OAUTH_CLIENT_ID
+   - AUTO_REGISTER_OAUTH_CLIENT_SECRET
+   - AUTO_REGISTER_OAUTH_TENANT_ID
+   - AUTO_REGISTER_OAUTH_REDIRECT_URI"""
+
+                    # 계정 자동 등록
+                    from modules.enrollment import AccountOrchestrator
+                    orchestrator = AccountOrchestrator()
+
+                    # 계정 생성
+                    result = orchestrator.account_create_or_update(account_create)
+
+                    if not result.get("success"):
+                        error = result.get("error", "알 수 없는 오류")
+                        return f"❌ Error: 환경변수 기반 계정 등록 실패 - {error}"
+
+                    user_id = account_create.user_id
+                    logger.info(f"✅ 환경변수 기반 계정 자동 등록 완료: {user_id}")
+
+            # 인증 시작
             orchestrator = get_auth_orchestrator()
             request = AuthStartRequest(user_id=user_id)
             response = await orchestrator.auth_orchestrator_start_authentication(request)
