@@ -88,26 +88,46 @@ class EmailQueryTool:
         Validate query parameters and prepare user_id with auto-authentication if needed
 
         Args:
-            arguments: Tool arguments
+            arguments: Tool arguments containing:
+                - user_id (optional): 특정 계정 지정
+                - use_recent_account (bool): True이면 최근 사용 계정 자동 선택
 
         Returns:
             Tuple of (user_id, error_message). If error_message is not None, user_id should be ignored.
         """
         from datetime import datetime, timezone
 
-        # Auto-select user_id if not provided
         user_id = arguments.get("user_id")
-        if not user_id:
-            logger.info("user_id가 없음 - 최근 사용 계정 자동 선택 시도")
+        use_recent_account = arguments.get("use_recent_account", False)
+
+        # Case 1: user_id 제공
+        if user_id:
+            logger.info(f"✅ 지정된 user_id 사용: {user_id}")
+
+        # Case 2: use_recent_account=True
+        elif use_recent_account:
+            logger.info("use_recent_account=true - 최근 사용 계정 자동 선택")
             from ..handlers import get_default_user_id
             user_id = get_default_user_id()
 
             if not user_id:
-                return None, "❌ Error: user_id가 제공되지 않았고, 사용 가능한 계정이 없습니다. register_account로 계정을 먼저 등록하세요."
+                return None, """❌ Error: use_recent_account=true이지만 사용 가능한 계정이 없습니다.
 
-            logger.info(f"✅ 자동 선택된 user_id: {user_id}")
+다음 중 하나를 선택하세요:
+1. user_id를 제공하여 특정 계정 조회
+2. register_account로 계정을 먼저 등록"""
+
+            logger.info(f"✅ 최근 사용 계정 선택: {user_id}")
             # Update arguments with auto-selected user_id
             arguments["user_id"] = user_id
+
+        # Case 3: 둘 다 없음
+        else:
+            return None, """❌ Error: user_id 또는 use_recent_account=true가 필요합니다.
+
+다음 중 하나를 선택하세요:
+1. user_id를 제공하여 특정 계정 조회
+2. use_recent_account=true로 설정하여 최근 사용 계정 사용"""
 
         # Check token validity
         db = get_database_manager()

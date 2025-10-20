@@ -163,8 +163,12 @@ class MCPHandlers(AttachmentFilterHandlers):
                     "type": "object",
                     "properties": {
                         "user_id": {
-                            "type": ["string", "null"],
-                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr). 생략 시 최근 사용 계정 자동 선택 (last_used_at 기준). 인증이 필요한 경우 자동으로 OAuth 인증이 시작됩니다.",
+                            "type": "string",
+                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr). Required if use_recent_account is false.",
+                        },
+                        "use_recent_account": {
+                            "type": "boolean",
+                            "description": "If true, automatically selects the most recently used account (based on last_used_at field). Set to true when you don't have a specific user_id and want to use the last active account. If false (default), user_id is required.",
                         },
                         "days_back": {
                             "type": "integer",
