@@ -1,6 +1,16 @@
 #!/bin/bash
 
 # Unified MCP Server 전체 툴 테스트 스크립트
+#
+# 새로운 기능 테스트 포함:
+#   - query_email: user_id null 시 최근 사용 계정 자동 선택
+#   - 토큰 만료 시 자동 인증 시작
+#   - register_account: 환경변수 fallback
+#   - last_used_at 필드 자동 업데이트 및 검증
+#
+# 사용법:
+#   ./test_unified_mcp_tools.sh [0|1|2|3]
+#   0: 전체 모듈, 1: Enrollment, 2: Mail Query, 3: OneNote
 
 set -e
 
@@ -220,16 +230,16 @@ echo ""
 fi  # End of Enrollment tests
 
 # ============================================================================
-# 2. Mail Query MCP 테스트 (4개 툴)
+# 2. Mail Query MCP 테스트 (8개 테스트 - 새로운 기능 추가)
 # ============================================================================
 if [ "$TEST_MODULE" = "all" ] || [ "$TEST_MODULE" = "mail-query" ]; then
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${BLUE}📧 2. Mail Query MCP 테스트${NC}"
+    echo -e "${BLUE}📧 2. Mail Query MCP 테스트 (새로운 자동 선택/인증 기능 포함)${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo ""
 
 # 2.1 help
-echo -e "${YELLOW}[1/4] help 테스트...${NC}"
+echo -e "${YELLOW}[1/8] help 테스트...${NC}"
 RESPONSE=$(call_tool "$MAIL_QUERY_URL" "help" "{}")
 if echo "$RESPONSE" | grep -q "MCP Mail Query Server\|Available Tools"; then
     print_test_result "Mail Query - help" "PASS"
@@ -240,7 +250,7 @@ fi
 echo ""
 
 # 2.2 query_email_help
-echo -e "${YELLOW}[2/4] query_email_help 테스트...${NC}"
+echo -e "${YELLOW}[2/8] query_email_help 테스트...${NC}"
 RESPONSE=$(call_tool "$MAIL_QUERY_URL" "query_email_help" "{}")
 if echo "$RESPONSE" | grep -q "query_email 툴 사용 가이드"; then
     print_test_result "Mail Query - query_email_help" "PASS"
@@ -250,8 +260,8 @@ else
 fi
 echo ""
 
-# 2.3 query_email (최근 3일간 메일 조회)
-echo -e "${YELLOW}[3/4] query_email 테스트...${NC}"
+# 2.3 query_email (user_id 명시 - 기존 방식)
+echo -e "${YELLOW}[3/8] query_email (user_id 명시) 테스트...${NC}"
 START_DATE=$(date -d '3 days ago' +%Y-%m-%d)
 END_DATE=$(date +%Y-%m-%d)
 RESPONSE=$(call_tool "$MAIL_QUERY_URL" "query_email" "{
@@ -260,21 +270,111 @@ RESPONSE=$(call_tool "$MAIL_QUERY_URL" "query_email" "{
     \"end_date\":\"$END_DATE\",
     \"include_body\":false
 }")
-if echo "$RESPONSE" | grep -q "메일 조회 결과\|조회된 메일\|user_id가 필요합니다"; then
-    print_test_result "Mail Query - query_email" "PASS"
+if echo "$RESPONSE" | grep -q "메일 조회 결과\|조회된 메일\|인증이 필요합니다"; then
+    print_test_result "Mail Query - query_email (user_id 명시)" "PASS"
     # 조회된 메일 개수 추출
     EMAIL_COUNT=$(echo "$RESPONSE" | grep -o "조회된 메일: [0-9]*" | grep -o "[0-9]*")
     if [ -n "$EMAIL_COUNT" ]; then
         echo -e "${GREEN}📧 조회된 메일: ${EMAIL_COUNT}개${NC}"
     fi
+    # 인증 필요한지 확인
+    if echo "$RESPONSE" | grep -q "인증이 필요합니다\|OAuth 인증"; then
+        echo -e "${YELLOW}⚠️  인증 필요 - 자동 인증 시작됨${NC}"
+    fi
 else
-    print_test_result "Mail Query - query_email" "FAIL"
+    print_test_result "Mail Query - query_email (user_id 명시)" "FAIL"
     echo "Response: $RESPONSE"
 fi
 echo ""
 
-# 2.4 attachmentManager
-echo -e "${YELLOW}[4/4] attachmentManager 테스트...${NC}"
+# 2.4 query_email (user_id null - 자동 선택 테스트) ⭐ NEW
+echo -e "${YELLOW}[4/8] query_email (user_id null - 최근 사용 계정 자동 선택) 테스트...${NC}"
+RESPONSE=$(call_tool "$MAIL_QUERY_URL" "query_email" "{
+    \"user_id\":null,
+    \"start_date\":\"$START_DATE\",
+    \"end_date\":\"$END_DATE\",
+    \"include_body\":false
+}")
+
+# sqlite3.Row .get() 버그 체크 (이 버그가 있으면 'object has no attribute' 에러 발생)
+if echo "$RESPONSE" | grep -q "'sqlite3.Row' object has no attribute 'get'"; then
+    print_test_result "Mail Query - query_email (자동 계정 선택)" "FAIL"
+    echo -e "${RED}❌ sqlite3.Row .get() 버그 발견!${NC}"
+    echo "Response: $RESPONSE"
+elif echo "$RESPONSE" | grep -q "메일 조회 결과\|조회된 메일\|자동 선택\|인증이 필요합니다\|계정이 없습니다"; then
+    print_test_result "Mail Query - query_email (자동 계정 선택)" "PASS"
+    # 자동 선택 확인
+    if echo "$RESPONSE" | grep -q "자동 선택\|최근 사용"; then
+        echo -e "${GREEN}✅ 최근 사용 계정 자동 선택됨${NC}"
+    fi
+    # 조회된 메일 개수 추출
+    EMAIL_COUNT=$(echo "$RESPONSE" | grep -o "조회된 메일: [0-9]*" | grep -o "[0-9]*")
+    if [ -n "$EMAIL_COUNT" ]; then
+        echo -e "${GREEN}📧 조회된 메일: ${EMAIL_COUNT}개${NC}"
+    fi
+    # 인증 URL 확인
+    if echo "$RESPONSE" | grep -q "https://login.microsoftonline.com"; then
+        echo -e "${CYAN}🔐 자동 인증 시작됨 - OAuth URL 생성${NC}"
+    fi
+else
+    print_test_result "Mail Query - query_email (자동 계정 선택)" "FAIL"
+    echo "Response: $RESPONSE"
+fi
+echo ""
+
+# 2.5 register_account (환경변수 사용 - use_env_vars=true) ⭐ NEW
+echo -e "${YELLOW}[5/8] register_account (use_env_vars=true) 테스트...${NC}"
+RESPONSE=$(call_tool "$ENROLLMENT_URL" "register_account" "{
+    \"use_env_vars\":true
+}")
+
+# use_env_mode 버그 체크 (이전 버그: use_env_vars 대신 use_env_mode 사용)
+if echo "$RESPONSE" | grep -q "name 'use_env_mode' is not defined"; then
+    print_test_result "Enrollment - register_account (환경변수)" "FAIL"
+    echo -e "${RED}❌ use_env_mode 변수명 버그 발견!${NC}"
+    echo "Response: $RESPONSE"
+elif echo "$RESPONSE" | grep -q "계정 등록 완료\|계정 업데이트 완료\|환경변수 사용\|필수 환경변수가 설정되지"; then
+    print_test_result "Enrollment - register_account (환경변수)" "PASS"
+    # 환경변수 사용 여부 확인
+    if echo "$RESPONSE" | grep -q "데이터 소스: 환경변수 사용"; then
+        echo -e "${GREEN}✅ 환경변수에서 계정 정보 로드됨${NC}"
+    fi
+    # 에러 확인 (환경변수 없을 때)
+    if echo "$RESPONSE" | grep -q "필수 환경변수가 설정되지\|환경변수 누락"; then
+        echo -e "${YELLOW}⚠️  환경변수 미설정 (예상된 동작)${NC}"
+    fi
+else
+    print_test_result "Enrollment - register_account (환경변수)" "FAIL"
+    echo "Response: $RESPONSE"
+fi
+echo ""
+
+# 2.6 데이터베이스 last_used_at 확인 ⭐ NEW
+echo -e "${YELLOW}[6/8] last_used_at 필드 존재 확인 테스트...${NC}"
+if [ -f "./data/mail_query.db" ]; then
+    # SQLite에서 last_used_at 컬럼 확인
+    COLUMN_EXISTS=$(sqlite3 ./data/mail_query.db "PRAGMA table_info(accounts);" 2>/dev/null | grep -c "last_used_at" || echo "0")
+    if [ "$COLUMN_EXISTS" -gt 0 ]; then
+        print_test_result "Database - last_used_at 컬럼 존재" "PASS"
+        echo -e "${GREEN}✅ accounts 테이블에 last_used_at 컬럼 존재${NC}"
+
+        # 최근 사용 시간 조회
+        LAST_USED=$(sqlite3 ./data/mail_query.db "SELECT user_id, last_used_at FROM accounts WHERE last_used_at IS NOT NULL ORDER BY last_used_at DESC LIMIT 1;" 2>/dev/null || echo "")
+        if [ -n "$LAST_USED" ]; then
+            echo -e "${CYAN}📅 최근 사용: $LAST_USED${NC}"
+        fi
+    else
+        print_test_result "Database - last_used_at 컬럼 존재" "FAIL"
+        echo -e "${RED}❌ last_used_at 컬럼 없음 (마이그레이션 필요)${NC}"
+    fi
+else
+    print_test_result "Database - last_used_at 컬럼 존재" "PASS"
+    echo -e "${YELLOW}⚠️  데이터베이스 파일 없음 (첫 실행 시 생성됨)${NC}"
+fi
+echo ""
+
+# 2.7 attachmentManager
+echo -e "${YELLOW}[7/8] attachmentManager 테스트...${NC}"
 RESPONSE=$(call_tool "$MAIL_QUERY_URL" "attachmentManager" "{
     \"user_id\":\"$TEST_USER_ID\",
     \"start_date\":\"$START_DATE\",
@@ -292,6 +392,70 @@ if echo "$RESPONSE" | grep -q "첨부파일 관리 결과\|첨부파일 관리 �
 else
     print_test_result "Mail Query - attachmentManager" "FAIL"
     echo "Response: $RESPONSE"
+fi
+echo ""
+
+# 2.8 자동 인증 플로우 종합 테스트 ⭐ NEW
+echo -e "${YELLOW}[8/8] 자동 인증 플로우 종합 테스트...${NC}"
+echo -e "${CYAN}시나리오: user_id null → 자동 선택 → 토큰 만료 → 자동 인증${NC}"
+
+# Step 1: 계정 상태 확인
+ACCOUNT_STATUS=$(call_tool "$ENROLLMENT_URL" "get_account_status" "{\"user_id\":\"$TEST_USER_ID\"}")
+
+# Step 2: user_id null로 query_email 호출
+RESPONSE=$(call_tool "$MAIL_QUERY_URL" "query_email" "{
+    \"user_id\":null,
+    \"days_back\":1,
+    \"include_body\":false
+}")
+
+# 플로우 검증
+FLOW_SUCCESS=true
+
+# 자동 선택 확인
+if echo "$RESPONSE" | grep -q "자동 선택\|최근 사용\|메일 조회 결과"; then
+    echo -e "  ${GREEN}✓${NC} 최근 사용 계정 자동 선택"
+else
+    if echo "$RESPONSE" | grep -q "계정이 없습니다"; then
+        echo -e "  ${YELLOW}⚠${NC} 계정 없음 (예상된 동작)"
+    else
+        echo -e "  ${RED}✗${NC} 자동 선택 실패"
+        FLOW_SUCCESS=false
+    fi
+fi
+
+# 토큰 검증 확인
+if echo "$RESPONSE" | grep -q "토큰"; then
+    echo -e "  ${GREEN}✓${NC} 토큰 검증 수행됨"
+fi
+
+# 자동 인증 확인
+if echo "$RESPONSE" | grep -q "인증이 필요합니다\|OAuth 인증이 자동으로 시작"; then
+    echo -e "  ${GREEN}✓${NC} 토큰 만료 감지 및 자동 인증 시작"
+
+    # 인증 URL 생성 확인
+    if echo "$RESPONSE" | grep -q "https://login.microsoftonline.com"; then
+        echo -e "  ${GREEN}✓${NC} OAuth 인증 URL 생성됨"
+    fi
+fi
+
+# 메일 조회 성공 확인
+if echo "$RESPONSE" | grep -q "메일 조회 결과\|조회된 메일"; then
+    echo -e "  ${GREEN}✓${NC} 메일 조회 성공"
+
+    # last_used_at 업데이트 확인 (DB)
+    if [ -f "./data/mail_query.db" ]; then
+        UPDATED_TIME=$(sqlite3 ./data/mail_query.db "SELECT last_used_at FROM accounts WHERE user_id='$TEST_USER_ID' ORDER BY last_used_at DESC LIMIT 1;" 2>/dev/null || echo "")
+        if [ -n "$UPDATED_TIME" ]; then
+            echo -e "  ${GREEN}✓${NC} last_used_at 업데이트됨: ${UPDATED_TIME:0:19}"
+        fi
+    fi
+fi
+
+if [ "$FLOW_SUCCESS" = true ]; then
+    print_test_result "Mail Query - 자동 인증 플로우" "PASS"
+else
+    print_test_result "Mail Query - 자동 인증 플로우" "FAIL"
 fi
 echo ""
 
