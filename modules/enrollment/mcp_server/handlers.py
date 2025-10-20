@@ -109,7 +109,7 @@ class AuthAccountHandlers:
                     "properties": {
                         "use_env_vars": {
                             "type": "boolean",
-                            "description": "If true, loads all account information from AUTO_REGISTER_* environment variables. If false, uses the provided parameters. Default: false"
+                            "description": "If true, loads all account information from AUTO_REGISTER_* environment variables. Set to true when you don't have user_id, oauth_client_id, oauth_client_secret, or oauth_tenant_id readily available and want to use environment variables instead. If false (default), you must provide all required parameters directly."
                         },
                         "user_id": {
                             "type": "string",
