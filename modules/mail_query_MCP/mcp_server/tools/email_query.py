@@ -83,9 +83,108 @@ class EmailQueryTool:
 
         return start_date, end_date, calculated_days
 
+    async def validate_and_prepare_user(self, arguments: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+        """
+        Validate query parameters and prepare user_id with auto-authentication if needed
+
+        Args:
+            arguments: Tool arguments
+
+        Returns:
+            Tuple of (user_id, error_message). If error_message is not None, user_id should be ignored.
+        """
+        from datetime import datetime, timezone
+
+        # Auto-select user_id if not provided
+        user_id = arguments.get("user_id")
+        if not user_id:
+            logger.info("user_id가 없음 - 최근 사용 계정 자동 선택 시도")
+            from ..handlers import get_default_user_id
+            user_id = get_default_user_id()
+
+            if not user_id:
+                return None, "❌ Error: user_id가 제공되지 않았고, 사용 가능한 계정이 없습니다. register_account로 계정을 먼저 등록하세요."
+
+            logger.info(f"✅ 자동 선택된 user_id: {user_id}")
+            # Update arguments with auto-selected user_id
+            arguments["user_id"] = user_id
+
+        # Check token validity
+        db = get_database_manager()
+        account = db.fetch_one(
+            "SELECT access_token, token_expiry FROM accounts WHERE user_id = ? AND is_active = 1",
+            (user_id,)
+        )
+
+        if not account:
+            return None, f"❌ Error: 계정을 찾을 수 없습니다: {user_id}"
+
+        access_token = account.get('access_token')
+        token_expiry = account.get('token_expiry')
+
+        # Check if authentication is required
+        requires_auth = False
+        if not access_token or not token_expiry:
+            requires_auth = True
+            logger.warning(f"⚠️  토큰이 없음: {user_id}")
+        else:
+            # Check token expiry
+            try:
+                if isinstance(token_expiry, str):
+                    if '.' in token_expiry:
+                        token_expiry = token_expiry.split('.')[0]
+                    expiry_dt = datetime.fromisoformat(token_expiry.replace('Z', '+00:00'))
+                else:
+                    expiry_dt = token_expiry
+
+                if expiry_dt.tzinfo is None:
+                    expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+
+                now = datetime.now(timezone.utc)
+                if expiry_dt <= now:
+                    requires_auth = True
+                    logger.warning(f"⚠️  토큰 만료됨: {user_id} (만료: {expiry_dt})")
+            except Exception as e:
+                requires_auth = True
+                logger.error(f"⚠️  토큰 만료 시간 파싱 실패: {e}")
+
+        # If authentication required, start authentication automatically
+        if requires_auth:
+            logger.info(f"🔐 인증 필요 - 자동으로 start_authentication 시작: {user_id}")
+
+            try:
+                # Import here to avoid circular dependency
+                from modules.enrollment.auth import get_auth_orchestrator, AuthStartRequest
+
+                orchestrator = get_auth_orchestrator()
+                request = AuthStartRequest(user_id=user_id)
+                response = await orchestrator.auth_orchestrator_start_authentication(request)
+
+                error_msg = f"""⚠️  계정 인증이 필요합니다: {user_id}
+
+🔐 OAuth 인증이 자동으로 시작되었습니다.
+
+세션 ID: {response.session_id}
+만료 시간: {response.expires_at}
+
+🌐 인증 URL (아래 링크를 클릭하여 Microsoft 로그인을 완료하세요):
+{response.auth_url}
+
+✅ 브라우저에서 로그인 후 권한 승인을 완료하면 자동으로 인증이 완료됩니다.
+   인증 완료 후 다시 query_email을 실행하세요."""
+
+                return None, error_msg
+
+            except Exception as e:
+                logger.error(f"❌ 자동 인증 시작 실패: {str(e)}")
+                return None, f"❌ Error: 인증 필요하지만 자동 인증 시작 실패: {str(e)}\n수동으로 start_authentication을 실행하세요."
+
+        # Validation successful - token is valid
+        return user_id, None
+
     def validate_parameters(self, arguments: Dict[str, Any]) -> Optional[str]:
         """
-        Validate query parameters
+        Validate query parameters (called after validate_and_prepare_user)
 
         Args:
             arguments: Tool arguments
@@ -93,10 +192,6 @@ class EmailQueryTool:
         Returns:
             Error message if validation fails, None otherwise
         """
-        # Check required parameters
-        if not arguments.get("user_id"):
-            return "Error: user_id is required"
-
         # Check for conflicting parameters
         conversation_with = arguments.get("conversation_with", [])
         sender_address = arguments.get("sender_address")
@@ -389,13 +484,18 @@ class EmailQueryTool:
             Query result as formatted string
         """
         try:
+            # Validate and prepare user (auto-select, auto-authenticate)
+            user_id, error = await self.validate_and_prepare_user(arguments)
+            if error:
+                return error
+
             # Validate parameters
             error = self.validate_parameters(arguments)
             if error:
                 return error
 
-            # Extract parameters
-            user_id = arguments.get("user_id")
+            # Extract parameters (user_id is already set by validate_and_prepare_user)
+            # user_id = arguments.get("user_id")  # Already validated above
             max_mails = arguments.get("max_mails", self.config.default_max_mails)
             include_body = arguments.get("include_body", True)
             download_attachments = arguments.get("download_attachments", False)
@@ -487,6 +587,19 @@ class EmailQueryTool:
             )
             # Limit to max_mails after filtering
             response.messages = response.messages[:max_mails]
+
+            # Update last_used_at for the account
+            try:
+                from datetime import datetime, timezone
+                db = get_database_manager()
+                now_utc = datetime.now(timezone.utc).isoformat()
+                db.execute_query(
+                    "UPDATE accounts SET last_used_at = ? WHERE user_id = ?",
+                    (now_utc, user_id)
+                )
+                logger.info(f"✅ last_used_at 업데이트 완료: {user_id}")
+            except Exception as e:
+                logger.warning(f"⚠️  last_used_at 업데이트 실패 (무시됨): {str(e)}")
 
             # Format results
             result_text = await self.format_results(

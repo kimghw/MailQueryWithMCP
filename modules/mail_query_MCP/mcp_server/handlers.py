@@ -19,12 +19,13 @@ logger = get_logger(__name__)
 
 def get_default_user_id() -> Optional[str]:
     """
-    Get default user_id from database based on token validity
+    Get default user_id from database based on token validity and last usage
 
     우선순위:
-    1. access_token이 유효한 계정 (만료 시간이 현재보다 미래)
-    2. 계정이 1개만 있는 경우 해당 계정
-    3. 다중 계정이지만 유효한 토큰이 1개만 있는 경우
+    1. 유효한 토큰이 있고 최근 사용한 계정 (last_used_at 기준)
+    2. 유효한 토큰이 있는 계정 (만료 시간이 가장 먼 계정)
+    3. 최근 사용한 계정 (last_used_at 기준)
+    4. 계정이 1개만 있는 경우 해당 계정
 
     Returns:
         user_id if valid account found, None otherwise
@@ -34,12 +35,12 @@ def get_default_user_id() -> Optional[str]:
 
         db = get_database_manager()
 
-        # 활성화된 계정 조회
+        # 활성화된 계정 조회 (last_used_at 추가)
         query = """
-            SELECT user_id, token_expiry, access_token
+            SELECT user_id, token_expiry, access_token, last_used_at
             FROM accounts
             WHERE is_active = 1
-            ORDER BY token_expiry DESC NULLS LAST
+            ORDER BY last_used_at DESC NULLS LAST, token_expiry DESC NULLS LAST
         """
         rows = db.fetch_all(query)
 
@@ -55,6 +56,7 @@ def get_default_user_id() -> Optional[str]:
             user_id = row['user_id']
             token_expiry = row['token_expiry']
             access_token = row['access_token']
+            last_used_at = row.get('last_used_at')
 
             # access_token과 token_expiry가 모두 있고, 만료되지 않은 경우
             if access_token and token_expiry:
@@ -73,24 +75,56 @@ def get_default_user_id() -> Optional[str]:
                         expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
 
                     if expiry_dt > now:
+                        # Parse last_used_at
+                        last_used_dt = None
+                        if last_used_at:
+                            try:
+                                if isinstance(last_used_at, str):
+                                    if '.' in last_used_at:
+                                        last_used_at = last_used_at.split('.')[0]
+                                    last_used_dt = datetime.fromisoformat(last_used_at.replace('Z', '+00:00'))
+                                else:
+                                    last_used_dt = last_used_at
+
+                                if last_used_dt and last_used_dt.tzinfo is None:
+                                    last_used_dt = last_used_dt.replace(tzinfo=timezone.utc)
+                            except Exception as e:
+                                logger.debug(f"last_used_at 파싱 실패: {e}")
+
                         valid_accounts.append({
                             'user_id': user_id,
-                            'token_expiry': expiry_dt
+                            'token_expiry': expiry_dt,
+                            'last_used_at': last_used_dt
                         })
-                        logger.info(f"✅ 유효한 토큰 발견: {user_id} (만료: {expiry_dt})")
+                        logger.info(f"✅ 유효한 토큰 발견: {user_id} (만료: {expiry_dt}, 마지막 사용: {last_used_dt or 'N/A'})")
                 except Exception as e:
                     logger.warning(f"⚠️ {user_id}의 토큰 만료 시간 파싱 실패: {e}")
                     continue
 
-        # 우선순위 1: 유효한 토큰이 있는 계정 중 가장 최근 것
+        # 우선순위 1: 유효한 토큰이 있고 최근 사용한 계정
         if valid_accounts:
-            # 만료 시간이 가장 먼 계정 선택
+            # last_used_at이 있는 계정 우선, 없으면 token_expiry 기준
+            valid_with_last_used = [acc for acc in valid_accounts if acc['last_used_at']]
+            if valid_with_last_used:
+                selected = max(valid_with_last_used, key=lambda x: x['last_used_at'])
+                user_id = selected['user_id']
+                logger.info(f"✅ 최근 사용 계정 자동 선택: {user_id} (마지막 사용: {selected['last_used_at']})")
+                return user_id
+
+            # last_used_at이 없으면 만료 시간이 가장 먼 계정 선택
             selected = max(valid_accounts, key=lambda x: x['token_expiry'])
             user_id = selected['user_id']
             logger.info(f"✅ 유효한 토큰 계정 자동 선택: {user_id}")
             return user_id
 
-        # 우선순위 2: 계정이 1개만 있는 경우
+        # 우선순위 2: 최근 사용한 계정 (토큰 만료되어도)
+        for row in rows:
+            if row.get('last_used_at'):
+                user_id = row['user_id']
+                logger.info(f"✅ 최근 사용 계정 선택: {user_id} (토큰 만료됨, 재인증 필요)")
+                return user_id
+
+        # 우선순위 3: 계정이 1개만 있는 경우
         if len(rows) == 1:
             user_id = rows[0]['user_id']
             logger.info(f"✅ 단일 계정 발견, 자동 선택: {user_id} (토큰 만료됨)")
@@ -129,8 +163,8 @@ class MCPHandlers(AttachmentFilterHandlers):
                     "type": "object",
                     "properties": {
                         "user_id": {
-                            "type": "string",
-                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr). 생략 시 계정이 1개만 등록되어 있으면 자동 선택됨.",
+                            "type": ["string", "null"],
+                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr). 생략 시 최근 사용 계정 자동 선택 (last_used_at 기준). 인증이 필요한 경우 자동으로 OAuth 인증이 시작됩니다.",
                         },
                         "days_back": {
                             "type": "integer",

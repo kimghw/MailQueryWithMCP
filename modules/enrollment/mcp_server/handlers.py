@@ -57,10 +57,22 @@ class AuthAccountHandlers:
                     token_expiry TEXT,
                     is_active INTEGER NOT NULL DEFAULT 1,
                     last_sync_time TEXT,
+                    last_used_at TEXT,
                     created_at TEXT NOT NULL DEFAULT (datetime('now')),
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 )
             """)
+
+            # Add last_used_at column if it doesn't exist (for existing databases)
+            try:
+                self.db.execute_query("""
+                    ALTER TABLE accounts ADD COLUMN last_used_at TEXT
+                """)
+                logger.info("✅ Added last_used_at column to accounts table")
+            except Exception as e:
+                # Column already exists or other error - safe to ignore
+                if "duplicate column name" not in str(e).lower():
+                    logger.debug(f"last_used_at column may already exist: {str(e)}")
 
             # account_audit_logs 테이블 생성
             self.db.execute_query("""
@@ -91,37 +103,37 @@ class AuthAccountHandlers:
         return [
             Tool(
                 name="register_account",
-                description="Register a new email account with OAuth credentials. Saves account to database for future authentication.",
+                description="Register a new email account with OAuth credentials. Saves account to database for future authentication. If parameters are empty/null, automatically uses environment variables (AUTO_REGISTER_*).",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "user_id": {
-                            "type": "string",
-                            "description": "User ID (e.g., 'kimghw')"
+                            "type": ["string", "null"],
+                            "description": "User ID (e.g., 'kimghw'). If null/empty, uses AUTO_REGISTER_USER_ID from environment"
                         },
                         "email": {
-                            "type": "string",
-                            "description": "Email address (e.g., 'kimghw@krs.co.kr')"
+                            "type": ["string", "null"],
+                            "description": "Email address (e.g., 'kimghw@krs.co.kr'). If null/empty, uses AUTO_REGISTER_EMAIL from environment"
                         },
                         "user_name": {
-                            "type": "string",
-                            "description": "User display name (optional, defaults to user_id)"
+                            "type": ["string", "null"],
+                            "description": "User display name. If null/empty, uses AUTO_REGISTER_USER_NAME from environment or defaults to user_id"
                         },
                         "oauth_client_id": {
-                            "type": "string",
-                            "description": "Microsoft Azure App OAuth Client ID"
+                            "type": ["string", "null"],
+                            "description": "Microsoft Azure App OAuth Client ID. If null/empty, uses AUTO_REGISTER_OAUTH_CLIENT_ID from environment"
                         },
                         "oauth_client_secret": {
-                            "type": "string",
-                            "description": "Microsoft Azure App OAuth Client Secret"
+                            "type": ["string", "null"],
+                            "description": "Microsoft Azure App OAuth Client Secret. If null/empty, uses AUTO_REGISTER_OAUTH_CLIENT_SECRET from environment"
                         },
                         "oauth_tenant_id": {
-                            "type": "string",
-                            "description": "Microsoft Azure AD Tenant ID"
+                            "type": ["string", "null"],
+                            "description": "Microsoft Azure AD Tenant ID. If null/empty, uses AUTO_REGISTER_OAUTH_TENANT_ID from environment"
                         },
                         "oauth_redirect_uri": {
-                            "type": "string",
-                            "description": "OAuth redirect URI (optional, defaults to http://localhost:9999/enrollment/callback for local, https://mailquery-mcp-server.onrender.com/enrollment/callback for production)"
+                            "type": ["string", "null"],
+                            "description": "OAuth redirect URI. If null/empty, uses AUTO_REGISTER_OAUTH_REDIRECT_URI from environment or defaults based on RENDER environment"
                         },
                     },
                     "required": ["user_id", "email", "oauth_client_id", "oauth_client_secret", "oauth_tenant_id"]
@@ -216,30 +228,58 @@ class AuthAccountHandlers:
 
         Args:
             arguments: Dict containing user_id, email, oauth_* credentials
+                      If any required field is missing, will attempt to load from environment variables
 
         Returns:
             Registration result message
         """
         try:
-            # Extract arguments
-            user_id = arguments.get("user_id")
-            email = arguments.get("email")
-            oauth_client_id = arguments.get("oauth_client_id")
-            oauth_client_secret = arguments.get("oauth_client_secret")
-            oauth_tenant_id = arguments.get("oauth_tenant_id")
-            user_name = arguments.get("user_name", user_id if user_id else "")
+            # Extract arguments - fallback to environment variables if null/empty
+            user_id = arguments.get("user_id") or os.getenv("AUTO_REGISTER_USER_ID")
+            email = arguments.get("email") or os.getenv("AUTO_REGISTER_EMAIL")
+            oauth_client_id = arguments.get("oauth_client_id") or os.getenv("AUTO_REGISTER_OAUTH_CLIENT_ID")
+            oauth_client_secret = arguments.get("oauth_client_secret") or os.getenv("AUTO_REGISTER_OAUTH_CLIENT_SECRET")
+            oauth_tenant_id = arguments.get("oauth_tenant_id") or os.getenv("AUTO_REGISTER_OAUTH_TENANT_ID")
+            user_name = arguments.get("user_name") or os.getenv("AUTO_REGISTER_USER_NAME") or (user_id if user_id else "")
 
-            # Set default redirect URI
+            # Set default redirect URI - priority: argument > env var > default
             default_redirect = (
                 "https://mailquery-mcp-server.onrender.com/enrollment/callback"
                 if os.getenv("RENDER")
                 else "http://localhost:9999/enrollment/callback"
             )
-            oauth_redirect_uri = arguments.get("oauth_redirect_uri", default_redirect)
+            oauth_redirect_uri = arguments.get("oauth_redirect_uri") or os.getenv("AUTO_REGISTER_OAUTH_REDIRECT_URI") or default_redirect
+
+            # Track data source for logging and response
+            used_env_for_required = []
+            if not arguments.get("user_id") and user_id:
+                used_env_for_required.append("user_id")
+            if not arguments.get("email") and email:
+                used_env_for_required.append("email")
+            if not arguments.get("oauth_client_id") and oauth_client_id:
+                used_env_for_required.append("oauth_client_id")
+            if not arguments.get("oauth_client_secret") and oauth_client_secret:
+                used_env_for_required.append("oauth_client_secret")
+            if not arguments.get("oauth_tenant_id") and oauth_tenant_id:
+                used_env_for_required.append("oauth_tenant_id")
+
+            use_env_mode = len(used_env_for_required) > 0
 
             # Validate required fields
-            if not all([user_id, email, oauth_client_id, oauth_client_secret, oauth_tenant_id]):
-                return "❌ Error: Missing required fields (user_id, email, oauth_client_id, oauth_client_secret, oauth_tenant_id)"
+            missing_fields = []
+            if not user_id:
+                missing_fields.append("user_id (or AUTO_REGISTER_USER_ID)")
+            if not email:
+                missing_fields.append("email (or AUTO_REGISTER_EMAIL)")
+            if not oauth_client_id:
+                missing_fields.append("oauth_client_id (or AUTO_REGISTER_OAUTH_CLIENT_ID)")
+            if not oauth_client_secret:
+                missing_fields.append("oauth_client_secret (or AUTO_REGISTER_OAUTH_CLIENT_SECRET)")
+            if not oauth_tenant_id:
+                missing_fields.append("oauth_tenant_id (or AUTO_REGISTER_OAUTH_TENANT_ID)")
+
+            if missing_fields:
+                return f"❌ Error: Missing required fields: {', '.join(missing_fields)}"
 
             # Validate OAuth credentials format
             is_valid, error_msg = auth_validate_oauth_credentials(
@@ -251,7 +291,11 @@ class AuthAccountHandlers:
                 logger.error(f"OAuth 자격 증명 검증 실패: {error_msg}")
                 return f"❌ OAuth 자격 증명 포맷 오류:\n{error_msg}"
 
-            logger.info(f"Registering account: {user_id} ({email})")
+            # Log registration source
+            if use_env_mode:
+                logger.info(f"Registering account: {user_id} ({email}) - 환경변수 사용: {', '.join(used_env_for_required)}")
+            else:
+                logger.info(f"Registering account: {user_id} ({email}) - 직접 입력")
 
             # Check if account exists
             existing = self.db.fetch_one(
@@ -296,6 +340,12 @@ class AuthAccountHandlers:
             # Permissions JSON
             default_permissions_json = '["Mail.ReadWrite", "Mail.Send", "offline_access"]'
 
+            # Prepare source information message
+            if use_env_mode:
+                source_info = f"\n데이터 소스: 환경변수 사용 ({', '.join(used_env_for_required)})"
+            else:
+                source_info = "\n데이터 소스: 직접 입력"
+
             if existing:
                 # Update existing account
                 self.db.execute_query("""
@@ -318,7 +368,7 @@ class AuthAccountHandlers:
 사용자 ID: {user_id}
 이메일: {email}
 Enrollment 파일: {enrollment_file}
-상태: 업데이트됨
+상태: 업데이트됨{source_info}
 
 다음 단계:
 start_authentication 도구로 OAuth 인증을 진행하세요."""
@@ -343,7 +393,7 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
 이메일: {email}
 Enrollment 파일: {enrollment_file}
 권한: Mail.ReadWrite, Mail.Send, offline_access
-상태: 새로 생성됨
+상태: 새로 생성됨{source_info}
 
 다음 단계:
 start_authentication 도구로 OAuth 인증을 진행하세요."""
