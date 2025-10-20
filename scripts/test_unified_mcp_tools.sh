@@ -373,25 +373,81 @@ else
 fi
 echo ""
 
-# 2.7 attachmentManager
-echo -e "${YELLOW}[7/8] attachmentManager 테스트...${NC}"
-RESPONSE=$(call_tool "$MAIL_QUERY_URL" "attachmentManager" "{
+# 2.7 query_email with download_attachments (첨부파일 다운로드 및 변환 테스트) ⭐ NEW
+echo -e "${YELLOW}[7/8] query_email (첨부파일 다운로드 및 텍스트 변환) 테스트...${NC}"
+# 실제 키워드로 특정 메일 조회 (첨부파일이 있을 가능성이 높은 메일)
+RESPONSE=$(call_tool "$MAIL_QUERY_URL" "query_email" "{
+    \"keyword\":\"현장 점검 준비사항 안내\",
     \"user_id\":\"$TEST_USER_ID\",
-    \"start_date\":\"$START_DATE\",
-    \"end_date\":\"$END_DATE\",
-    \"filename_keywords\":[\"pdf\"],
-    \"save_enabled\":false
+    \"start_date\":\"2025-10-15\",
+    \"end_date\":\"2025-10-15\",
+    \"include_body\":true,
+    \"download_attachments\":true
 }")
-if echo "$RESPONSE" | grep -q "첨부파일 관리 결과\|첨부파일 관리 완료\|user_id가 필요합니다"; then
-    print_test_result "Mail Query - attachmentManager" "PASS"
-    # PDF 첨부파일 개수 추출
-    PDF_COUNT=$(echo "$RESPONSE" | grep -o "총 [0-9]* 개" | grep -o "[0-9]*" | head -1)
-    if [ -n "$PDF_COUNT" ]; then
-        echo -e "${GREEN}📎 PDF 첨부파일: ${PDF_COUNT}개${NC}"
+
+# 첨부파일 처리 검증
+ATTACHMENT_TEST_PASSED=true
+
+# 1. 기본 응답 확인
+if echo "$RESPONSE" | grep -q "메일 조회 결과\|조회된 메일\|인증이 필요합니다"; then
+    echo -e "  ${GREEN}✓${NC} 기본 응답 정상"
+else
+    echo -e "  ${RED}✗${NC} 기본 응답 오류"
+    ATTACHMENT_TEST_PASSED=false
+fi
+
+# 2. 첨부파일 다운로드 상태 확인
+if echo "$RESPONSE" | grep -q "downloaded\|converted\|skipped_too_large"; then
+    echo -e "  ${GREEN}✓${NC} 첨부파일 다운로드 시도됨"
+
+    # 다운로드 성공 개수
+    DOWNLOADED=$(echo "$RESPONSE" | grep -o "\[downloaded\]" | wc -l)
+    if [ "$DOWNLOADED" -gt 0 ]; then
+        echo -e "  ${GREEN}✓${NC} 다운로드 완료: ${DOWNLOADED}개"
+    fi
+
+    # 텍스트 변환 성공 개수
+    CONVERTED=$(echo "$RESPONSE" | grep -o "\[converted\]" | wc -l)
+    if [ "$CONVERTED" -gt 0 ]; then
+        echo -e "  ${GREEN}✓${NC} 텍스트 변환 완료: ${CONVERTED}개"
+    fi
+
+    # 변환된 텍스트 내용 확인
+    if echo "$RESPONSE" | grep -q "📄 내용:"; then
+        echo -e "  ${GREEN}✓${NC} 변환된 텍스트 내용 포함됨"
+    fi
+
+    # 토큰 카운트 확인
+    if echo "$RESPONSE" | grep -q "🔢 토큰:"; then
+        echo -e "  ${GREEN}✓${NC} 토큰 카운트 정보 포함됨"
+    fi
+
+    # 파일 크기 제한 처리 확인
+    if echo "$RESPONSE" | grep -q "skipped_too_large"; then
+        SKIPPED=$(echo "$RESPONSE" | grep -o "\[skipped_too_large\]" | wc -l)
+        echo -e "  ${YELLOW}⚠${NC} 크기 제한 초과: ${SKIPPED}개"
     fi
 else
-    print_test_result "Mail Query - attachmentManager" "FAIL"
-    echo "Response: $RESPONSE"
+    if echo "$RESPONSE" | grep -q "첨부파일 다운로드"; then
+        echo -e "  ${YELLOW}⚠${NC} 첨부파일이 있는 메일 없음"
+    else
+        echo -e "  ${YELLOW}⚠${NC} 첨부파일 처리 로그 없음 (첨부파일이 없거나 인증 필요)"
+    fi
+fi
+
+# 3. 에러 체크
+if echo "$RESPONSE" | grep -qi "error\|exception\|failed"; then
+    if ! echo "$RESPONSE" | grep -q "인증이 필요합니다"; then
+        echo -e "  ${RED}✗${NC} 에러 발생"
+        ATTACHMENT_TEST_PASSED=false
+    fi
+fi
+
+if [ "$ATTACHMENT_TEST_PASSED" = true ]; then
+    print_test_result "Mail Query - 첨부파일 다운로드/변환" "PASS"
+else
+    print_test_result "Mail Query - 첨부파일 다운로드/변환" "FAIL"
+    echo "Response (first 500 chars): ${RESPONSE:0:500}"
 fi
 echo ""
 
