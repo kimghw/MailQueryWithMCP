@@ -491,22 +491,116 @@ class UnifiedMCPServer:
                     auth_code = state
                     original_state = None
 
-                # TODO: Verify auth_code and exchange Azure token
-                # For now, return success page
+                # DCR 서비스에서 auth_code 검증 및 클라이언트 정보 조회
+                dcr_service = DCRService()
 
-                return Response(
-                    """
-                    <!DOCTYPE html>
-                    <html>
-                    <head><title>Authentication Successful</title></head>
-                    <body>
-                        <h1>✅ Authentication Successful</h1>
-                        <p>You can close this window and return to Claude.</p>
-                    </body>
-                    </html>
-                    """,
-                    media_type="text/html",
+                # auth_code로부터 클라이언트 정보 조회
+                query = """
+                SELECT client_id, redirect_uri, scope
+                FROM dcr_auth_codes
+                WHERE code = ? AND used_at IS NULL
+                """
+                result = dcr_service.db.execute_query(query, (auth_code,), fetch_one=True)
+
+                if not result:
+                    logger.error(f"❌ Invalid auth_code: {auth_code}")
+                    return Response(
+                        """
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>Authentication Error</title></head>
+                        <body>
+                            <h1>❌ Authentication Failed</h1>
+                            <p>Invalid authorization code</p>
+                        </body>
+                        </html>
+                        """,
+                        media_type="text/html",
+                        status_code=400,
+                    )
+
+                client_id, redirect_uri, scope = result
+
+                # 클라이언트 정보로 Azure 토큰 교환
+                client = dcr_service.get_client(client_id)
+                if not client:
+                    logger.error(f"❌ Client not found: {client_id}")
+                    return Response(
+                        """
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>Authentication Error</title></head>
+                        <body>
+                            <h1>❌ Authentication Failed</h1>
+                            <p>Client not found</p>
+                        </body>
+                        </html>
+                        """,
+                        media_type="text/html",
+                        status_code=400,
+                    )
+
+                # Azure AD에서 토큰 교환
+                import httpx
+                async with httpx.AsyncClient() as http_client:
+                    token_url = f"https://login.microsoftonline.com/{client['azure_tenant_id']}/oauth2/v2.0/token"
+                    token_data = {
+                        "client_id": client["azure_client_id"],
+                        "client_secret": client["azure_client_secret"],
+                        "code": azure_code,
+                        "redirect_uri": "https://mailquery-mcp-server.onrender.com/oauth/azure_callback",
+                        "grant_type": "authorization_code",
+                        "scope": scope or "https://graph.microsoft.com/.default"
+                    }
+
+                    response = await http_client.post(token_url, data=token_data)
+                    if response.status_code != 200:
+                        logger.error(f"❌ Azure token exchange failed: {response.text}")
+                        return Response(
+                            f"""
+                            <!DOCTYPE html>
+                            <html>
+                            <head><title>Authentication Error</title></head>
+                            <body>
+                                <h1>❌ Authentication Failed</h1>
+                                <p>Failed to exchange Azure token</p>
+                                <details><summary>Error Details</summary>{response.text}</details>
+                            </body>
+                            </html>
+                            """,
+                            media_type="text/html",
+                            status_code=400,
+                        )
+
+                    azure_token_data = response.json()
+
+                # Azure 토큰을 auth_code와 매핑하여 저장
+                update_query = """
+                UPDATE dcr_auth_codes
+                SET azure_code = ?, azure_access_token = ?, azure_refresh_token = ?
+                WHERE code = ?
+                """
+                dcr_service.db.execute_query(
+                    update_query,
+                    (
+                        azure_code,
+                        azure_token_data.get("access_token"),
+                        azure_token_data.get("refresh_token", ""),
+                        auth_code,
+                    ),
                 )
+
+                # Claude로 리다이렉트 (원본 auth_code와 state 포함)
+                redirect_params = {
+                    "code": auth_code,
+                }
+                if original_state:
+                    redirect_params["state"] = original_state
+
+                redirect_url = f"{redirect_uri}?{urllib.parse.urlencode(redirect_params)}"
+
+                from starlette.responses import RedirectResponse
+                return RedirectResponse(url=redirect_url)
 
             except Exception as e:
                 logger.error(f"❌ Azure callback failed: {e}")

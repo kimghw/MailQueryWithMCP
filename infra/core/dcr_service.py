@@ -103,7 +103,9 @@ class DCRService:
             redirect_uri TEXT NOT NULL,
             scope TEXT,
             state TEXT,
-            azure_auth_code TEXT,
+            azure_code TEXT,
+            azure_access_token TEXT,
+            azure_refresh_token TEXT,
             expires_at DATETIME NOT NULL,
             used_at DATETIME,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -428,3 +430,25 @@ class DCRService:
                 continue
 
         return None
+
+    def get_azure_tokens_by_auth_code(self, auth_code: str) -> Optional[Dict[str, Any]]:
+        """DCR auth_code로 저장된 Azure 토큰 조회"""
+        query = """
+        SELECT azure_access_token, azure_refresh_token, scope
+        FROM dcr_auth_codes
+        WHERE code = ? AND used_at IS NULL AND azure_access_token IS NOT NULL
+        """
+
+        result = self.db.execute_query(query, (auth_code,), fetch_one=True)
+
+        if not result:
+            return None
+
+        azure_access_token, azure_refresh_token, scope = result
+
+        return {
+            "access_token": azure_access_token,
+            "refresh_token": azure_refresh_token,
+            "scope": scope,
+            "expires_in": 3600  # Default expiry
+        }
