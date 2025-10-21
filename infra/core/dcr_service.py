@@ -124,7 +124,9 @@ class DCRService:
         try:
             # Use executescript for multiple statements
             import sqlite3
-            conn = sqlite3.connect(self.db.db_path)
+            from infra.core.config import get_config
+            config = get_config()
+            conn = sqlite3.connect(config.database_path)
             conn.executescript(schema_sql)
             conn.commit()
             conn.close()
