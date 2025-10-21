@@ -271,7 +271,6 @@ class UnifiedMCPServer:
             """OAuth Authorization Endpoint - Azure AD 프록시"""
             try:
                 import urllib.parse
-                from infra.core.oauth_client import OAuthClient
 
                 # Get query parameters
                 params = dict(request.query_params)
@@ -304,26 +303,30 @@ class UnifiedMCPServer:
                         status_code=400,
                     )
 
-                # Azure AD OAuth 클라이언트 생성
-                oauth_client = OAuthClient(
-                    client_id=client["azure_client_id"],
-                    client_secret=client["azure_client_secret"],
-                    tenant_id=client["azure_tenant_id"],
-                    redirect_uri=f"{request.url.scheme}://{request.url.netloc}/oauth/azure_callback",
-                )
-
-                # Azure AD 인증 URL 생성
-                base_url = f"{request.url.scheme}://{request.url.netloc}"
-                auth_url = oauth_client.get_authorization_url(scope=scope)
-
                 # Authorization code 생성 (Azure AD callback용)
                 auth_code = dcr_service.create_authorization_code(
                     client_id=client_id, redirect_uri=redirect_uri, scope=scope, state=state
                 )
 
-                # Azure AD로 리다이렉트 (state에 내부 auth_code 포함)
+                # Azure AD 인증 URL 직접 생성
+                azure_tenant_id = client["azure_tenant_id"]
+                azure_client_id = client["azure_client_id"]
+                azure_redirect_uri = f"{request.url.scheme}://{request.url.netloc}/oauth/azure_callback"
+
+                # state에 내부 auth_code 포함
                 internal_state = f"{auth_code}:{state}" if state else auth_code
-                azure_auth_url = auth_url.replace("state=", f"state={internal_state}&original_state=")
+
+                # Azure AD authorization endpoint
+                import urllib.parse
+                azure_auth_url = (
+                    f"https://login.microsoftonline.com/{azure_tenant_id}/oauth2/v2.0/authorize?"
+                    f"client_id={azure_client_id}&"
+                    f"response_type=code&"
+                    f"redirect_uri={urllib.parse.quote(azure_redirect_uri)}&"
+                    f"response_mode=query&"
+                    f"scope={urllib.parse.quote(scope)}&"
+                    f"state={urllib.parse.quote(internal_state)}"
+                )
 
                 from starlette.responses import RedirectResponse
                 return RedirectResponse(url=azure_auth_url)
@@ -434,7 +437,6 @@ class UnifiedMCPServer:
             """Azure AD OAuth Callback - 토큰 교환 및 저장"""
             try:
                 import urllib.parse
-                from infra.core.oauth_client import OAuthClient
 
                 # Get query parameters
                 params = dict(request.query_params)
