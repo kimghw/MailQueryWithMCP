@@ -133,6 +133,38 @@ class HTTPStreamingMailAttachmentServer:
             "Access-Control-Expose-Headers": "Mcp-Session-Id",
         }
 
+        # Bearer token authentication (DCR support)
+        auth_header = request.headers.get("Authorization", "")
+        azure_access_token = None
+
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+
+            try:
+                from infra.core.dcr_service import DCRService
+
+                dcr_service = DCRService()
+                token_data = dcr_service.verify_bearer_token(token)
+
+                if token_data:
+                    azure_access_token = token_data["azure_access_token"]
+                    logger.info(f"✅ Authenticated DCR client: {token_data['client_id']}")
+                    # Store in request state for handlers to use
+                    request.state.azure_token = azure_access_token
+                else:
+                    logger.warning("⚠️ Invalid Bearer token")
+                    return JSONResponse(
+                        {
+                            "jsonrpc": "2.0",
+                            "error": {"code": -32001, "message": "Invalid authentication token"},
+                        },
+                        status_code=401,
+                        headers={**base_headers, "WWW-Authenticate": "Bearer"},
+                    )
+            except Exception as e:
+                logger.error(f"❌ Token verification failed: {str(e)}")
+                # Continue without authentication (backward compatibility)
+
         # Read and parse request
         try:
             body = await request.body()
@@ -605,13 +637,24 @@ class HTTPStreamingMailAttachmentServer:
 
             return Response("Missing authorization code", status_code=400)
 
-        # OAuth discovery endpoints - indicate no auth required
+        # OAuth discovery endpoints - RFC 8414 compliant
         async def oauth_authorization_server(request):
-            """OAuth authorization server metadata - returns empty to indicate no auth"""
-            # Return 404 to indicate OAuth is not supported
+            """RFC 8414 OAuth 2.0 Authorization Server Metadata with DCR support"""
+            # Build base URL from request
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
             return JSONResponse(
-                {"error": "OAuth not supported - this server does not require authentication"},
-                status_code=404,
+                {
+                    "issuer": base_url,
+                    "authorization_endpoint": f"{base_url}/oauth/authorize",
+                    "token_endpoint": f"{base_url}/oauth/token",
+                    "registration_endpoint": f"{base_url}/oauth/register",  # DCR endpoint
+                    "response_types_supported": ["code"],
+                    "grant_types_supported": ["authorization_code", "refresh_token"],
+                    "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+                    "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                    "code_challenge_methods_supported": ["S256"],
+                },
                 headers={
                     "Access-Control-Allow-Origin": "*",
                     "Content-Type": "application/json",
@@ -629,7 +672,337 @@ class HTTPStreamingMailAttachmentServer:
                     "Content-Type": "application/json",
                 },
             )
-        
+
+        # DCR endpoints
+        async def dcr_register_handler(request):
+            """RFC 7591: Dynamic Client Registration"""
+            from infra.core.dcr_service import DCRService
+
+            try:
+                body = await request.body()
+                request_data = json.loads(body) if body else {}
+
+                dcr_service = DCRService()
+                response = await dcr_service.register_client(request_data)
+
+                logger.info(f"✅ DCR client registered: {response['client_id']}")
+
+                return JSONResponse(
+                    response,
+                    status_code=201,
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Content-Type": "application/json",
+                        "Cache-Control": "no-store",
+                    },
+                )
+
+            except Exception as e:
+                logger.error(f"❌ DCR registration failed: {str(e)}")
+                return JSONResponse(
+                    {"error": "invalid_client_metadata", "error_description": str(e)},
+                    status_code=400,
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Content-Type": "application/json",
+                    },
+                )
+
+        async def dcr_client_handler(request):
+            """RFC 7591: Client Configuration Endpoint"""
+            from infra.core.dcr_service import DCRService
+
+            client_id = request.path_params.get("client_id")
+            dcr_service = DCRService()
+
+            # GET - Read client configuration
+            if request.method == "GET":
+                client = dcr_service.get_client(client_id)
+                if not client:
+                    return JSONResponse(
+                        {"error": "invalid_client_id"},
+                        status_code=404,
+                        headers={"Access-Control-Allow-Origin": "*"},
+                    )
+
+                return JSONResponse(client, headers={"Access-Control-Allow-Origin": "*"})
+
+            # DELETE - Delete client
+            elif request.method == "DELETE":
+                auth_header = request.headers.get("Authorization", "")
+                if not auth_header.startswith("Bearer "):
+                    return JSONResponse(
+                        {"error": "invalid_token"},
+                        status_code=401,
+                        headers={"WWW-Authenticate": "Bearer"},
+                    )
+
+                registration_token = auth_header[7:]
+                success = await dcr_service.delete_client(client_id, registration_token)
+
+                if not success:
+                    return JSONResponse(
+                        {"error": "invalid_token"},
+                        status_code=401,
+                        headers={"Access-Control-Allow-Origin": "*"},
+                    )
+
+                return Response(status_code=204, headers={"Access-Control-Allow-Origin": "*"})
+
+        async def oauth_authorize_handler(request):
+            """OAuth Authorization Endpoint - Azure AD 프록시"""
+            from infra.core.dcr_service import DCRService
+
+            # Query parameters
+            client_id = request.query_params.get("client_id")
+            redirect_uri = request.query_params.get("redirect_uri")
+            response_type = request.query_params.get("response_type", "code")
+            scope = request.query_params.get("scope", "Mail.Read User.Read")
+            state = request.query_params.get("state")
+
+            if not client_id or not redirect_uri:
+                return JSONResponse(
+                    {"error": "invalid_request", "error_description": "Missing required parameters"},
+                    status_code=400,
+                )
+
+            # Verify client
+            dcr_service = DCRService()
+            client = dcr_service.get_client(client_id)
+
+            if not client:
+                return JSONResponse(
+                    {"error": "invalid_client"},
+                    status_code=401,
+                )
+
+            # Azure AD authorization URL
+            azure_tenant_id = client["azure_tenant_id"]
+            azure_client_id = client["azure_client_id"]
+
+            # Map to Azure AD redirect URI (our callback)
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+            azure_redirect_uri = f"{base_url}/oauth/azure_callback"
+
+            # Store original request for callback
+            auth_code = dcr_service.create_authorization_code(
+                client_id=client_id,
+                redirect_uri=redirect_uri,
+                scope=scope,
+                state=state,
+            )
+
+            # Build Azure AD authorization URL
+            from urllib.parse import urlencode
+
+            azure_params = {
+                "client_id": azure_client_id,
+                "response_type": "code",
+                "redirect_uri": azure_redirect_uri,
+                "response_mode": "query",
+                "scope": "offline_access User.Read Mail.Read",
+                "state": auth_code,  # Use our code as state
+            }
+
+            azure_auth_url = (
+                f"https://login.microsoftonline.com/{azure_tenant_id}/oauth2/v2.0/authorize?"
+                f"{urlencode(azure_params)}"
+            )
+
+            logger.info(f"🔐 Redirecting to Azure AD for authorization")
+
+            # Redirect to Azure AD
+            return Response(
+                status_code=302,
+                headers={
+                    "Location": azure_auth_url,
+                    "Access-Control-Allow-Origin": "*",
+                },
+            )
+
+        async def oauth_azure_callback_handler(request):
+            """Azure AD Callback - 중간 처리"""
+            from infra.core.dcr_service import DCRService
+
+            code = request.query_params.get("code")
+            state = request.query_params.get("state")  # This is our auth_code
+            error = request.query_params.get("error")
+
+            if error:
+                logger.error(f"❌ Azure AD error: {error}")
+                return JSONResponse(
+                    {"error": error},
+                    status_code=400,
+                )
+
+            if not code or not state:
+                return JSONResponse(
+                    {"error": "invalid_request"},
+                    status_code=400,
+                )
+
+            # Get original request from our auth_code
+            dcr_service = DCRService()
+            # state is our authorization code
+            # We'll exchange Azure code for token and then redirect back to client
+
+            # Store Azure code temporarily
+            query = """
+            UPDATE dcr_auth_codes
+            SET azure_auth_code = ?
+            WHERE code = ?
+            """
+            dcr_service.db.execute_query(query, (code, state))
+
+            # Now redirect to client with our authorization code
+            auth_code_data = dcr_service.db.fetch_one(
+                "SELECT redirect_uri, state FROM dcr_auth_codes WHERE code = ?",
+                (state,),
+            )
+
+            if not auth_code_data:
+                return JSONResponse({"error": "invalid_state"}, status_code=400)
+
+            client_redirect_uri, client_state = auth_code_data
+
+            # Build redirect URL to client
+            from urllib.parse import urlencode, urlparse, parse_qs
+
+            params = {"code": state}  # Our authorization code
+            if client_state:
+                params["state"] = client_state
+
+            redirect_url = f"{client_redirect_uri}?{urlencode(params)}"
+
+            logger.info(f"✅ Redirecting back to client: {redirect_url}")
+
+            return Response(
+                status_code=302,
+                headers={
+                    "Location": redirect_url,
+                    "Access-Control-Allow-Origin": "*",
+                },
+            )
+
+        async def oauth_token_handler(request):
+            """OAuth Token Endpoint - Azure AD 토큰 교환"""
+            from infra.core.dcr_service import DCRService
+            from infra.core.oauth_client import get_oauth_client
+
+            try:
+                # Parse form data
+                form = await request.form()
+                grant_type = form.get("grant_type")
+                code = form.get("code")
+                redirect_uri = form.get("redirect_uri")
+                client_id = form.get("client_id")
+                client_secret = form.get("client_secret")
+
+                if grant_type != "authorization_code":
+                    return JSONResponse(
+                        {"error": "unsupported_grant_type"},
+                        status_code=400,
+                    )
+
+                if not all([code, redirect_uri, client_id, client_secret]):
+                    return JSONResponse(
+                        {"error": "invalid_request"},
+                        status_code=400,
+                    )
+
+                # Verify client credentials
+                dcr_service = DCRService()
+                if not dcr_service.verify_client_credentials(client_id, client_secret):
+                    return JSONResponse(
+                        {"error": "invalid_client"},
+                        status_code=401,
+                    )
+
+                # Verify authorization code
+                code_data = dcr_service.verify_authorization_code(code, client_id, redirect_uri)
+                if not code_data:
+                    return JSONResponse(
+                        {"error": "invalid_grant"},
+                        status_code=400,
+                    )
+
+                # Get Azure auth code
+                azure_code_result = dcr_service.db.fetch_one(
+                    "SELECT azure_auth_code FROM dcr_auth_codes WHERE code = ?",
+                    (code,),
+                )
+
+                if not azure_code_result or not azure_code_result[0]:
+                    return JSONResponse(
+                        {"error": "invalid_grant", "error_description": "Azure code not found"},
+                        status_code=400,
+                    )
+
+                azure_auth_code = azure_code_result[0]
+
+                # Get client Azure config
+                client = dcr_service.get_client(client_id)
+
+                # Exchange Azure code for tokens
+                base_url = f"{request.url.scheme}://{request.url.netloc}"
+                azure_redirect_uri = f"{base_url}/oauth/azure_callback"
+
+                oauth_client = get_oauth_client()
+                token_info = await oauth_client.exchange_code_for_tokens_with_account_config(
+                    authorization_code=azure_auth_code,
+                    client_id=client["azure_client_id"],
+                    client_secret=client["azure_client_secret"],
+                    tenant_id=client["azure_tenant_id"],
+                    redirect_uri=azure_redirect_uri,
+                )
+
+                # Generate our own access token
+                access_token = secrets.token_urlsafe(32)
+                refresh_token = secrets.token_urlsafe(32)
+
+                # Store token mapping
+                from datetime import datetime, timedelta
+
+                azure_expiry = datetime.fromisoformat(token_info["expiry"])
+                dcr_service.store_token(
+                    client_id=client_id,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    expires_in=3600,
+                    scope=code_data["scope"],
+                    azure_access_token=token_info["access_token"],
+                    azure_refresh_token=token_info.get("refresh_token"),
+                    azure_token_expiry=azure_expiry,
+                )
+
+                logger.info(f"✅ Token issued for DCR client: {client_id}")
+
+                # RFC 6749 token response
+                return JSONResponse(
+                    {
+                        "access_token": access_token,
+                        "token_type": "Bearer",
+                        "expires_in": 3600,
+                        "refresh_token": refresh_token,
+                        "scope": code_data["scope"],
+                    },
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "no-store",
+                        "Pragma": "no-cache",
+                    },
+                )
+
+            except Exception as e:
+                logger.error(f"❌ Token exchange failed: {str(e)}")
+                import traceback
+                traceback.print_exc()
+
+                return JSONResponse(
+                    {"error": "server_error", "error_description": str(e)},
+                    status_code=500,
+                )
+
         # Create routes
         routes = [
             # Root endpoint
@@ -660,6 +1033,15 @@ class HTTPStreamingMailAttachmentServer:
             Route("/.well-known/oauth-protected-resource/stream", endpoint=oauth_protected_resource, methods=["GET"]),
             Route("/.well-known/oauth-authorization-server/steam", endpoint=oauth_authorization_server, methods=["GET"]),
             Route("/.well-known/oauth-protected-resource/steam", endpoint=oauth_protected_resource, methods=["GET"]),
+            # DCR endpoints
+            Route("/oauth/register", endpoint=dcr_register_handler, methods=["POST"]),
+            Route("/oauth/register", endpoint=options_handler, methods=["OPTIONS"]),
+            Route("/oauth/register/{client_id}", endpoint=dcr_client_handler, methods=["GET", "DELETE"]),
+            Route("/oauth/register/{client_id}", endpoint=options_handler, methods=["OPTIONS"]),
+            Route("/oauth/authorize", endpoint=oauth_authorize_handler, methods=["GET"]),
+            Route("/oauth/token", endpoint=oauth_token_handler, methods=["POST"]),
+            Route("/oauth/token", endpoint=options_handler, methods=["OPTIONS"]),
+            Route("/oauth/azure_callback", endpoint=oauth_azure_callback_handler, methods=["GET"]),
         ]
         
         return Starlette(routes=routes)

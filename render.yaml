@@ -43,6 +43,18 @@ services:
         value: "production"
 
       # ===========================
+      # 🔐 DCR - Dynamic Client Registration (Claude Connector)
+      # ===========================
+
+      # Azure AD 앱 정보 (DCR 백엔드용)
+      - key: AZURE_CLIENT_ID
+        sync: false
+      - key: AZURE_CLIENT_SECRET
+        sync: false
+      - key: AZURE_TENANT_ID
+        sync: false
+
+      # ===========================
       # 📩 MODULES/ACCOUNT - 계정 관리 모듈
       # ===========================
 
