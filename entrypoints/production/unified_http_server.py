@@ -500,7 +500,7 @@ class UnifiedMCPServer:
                 FROM dcr_auth_codes
                 WHERE code = ? AND used_at IS NULL
                 """
-                result = dcr_service.db.execute_query(query, (auth_code,), fetch_one=True)
+                result = dcr_service.db.fetch_one(query, (auth_code,))
 
                 if not result:
                     logger.error(f"❌ Invalid auth_code: {auth_code}")

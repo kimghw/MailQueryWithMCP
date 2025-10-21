@@ -439,7 +439,7 @@ class DCRService:
         WHERE code = ? AND used_at IS NULL AND azure_access_token IS NOT NULL
         """
 
-        result = self.db.execute_query(query, (auth_code,), fetch_one=True)
+        result = self.db.fetch_one(query, (auth_code,))
 
         if not result:
             return None
