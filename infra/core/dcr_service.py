@@ -54,33 +54,84 @@ class DCRService:
             logger.warning("⚠️ No Azure AD config found. DCR will not work.")
 
     def _ensure_dcr_schema(self):
-        """DCR 스키마 초기화"""
-        schema_path = "infra/migrations/dcr_schema.sql"
+        """DCR 스키마 초기화 - Inline SQL"""
+        # Create tables directly with executescript
+        schema_sql = """
+        -- DCR Clients Table
+        CREATE TABLE IF NOT EXISTS dcr_clients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id TEXT NOT NULL UNIQUE,
+            client_secret TEXT NOT NULL,
+            client_id_issued_at INTEGER NOT NULL,
+            client_secret_expires_at INTEGER DEFAULT 0,
+            redirect_uris TEXT,
+            grant_types TEXT,
+            response_types TEXT,
+            client_name TEXT,
+            client_uri TEXT,
+            scope TEXT,
+            azure_client_id TEXT NOT NULL,
+            azure_client_secret TEXT NOT NULL,
+            azure_tenant_id TEXT NOT NULL,
+            is_active INTEGER DEFAULT 1,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
 
-        if os.path.exists(schema_path):
-            with open(schema_path, 'r', encoding='utf-8') as f:
-                schema_sql = f.read()
+        -- DCR Tokens Table
+        CREATE TABLE IF NOT EXISTS dcr_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id TEXT NOT NULL,
+            access_token TEXT NOT NULL,
+            refresh_token TEXT,
+            token_type TEXT DEFAULT 'Bearer',
+            expires_at DATETIME NOT NULL,
+            scope TEXT,
+            azure_access_token TEXT,
+            azure_refresh_token TEXT,
+            azure_token_expiry DATETIME,
+            revoked_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (client_id) REFERENCES dcr_clients(client_id)
+        );
 
-            # Remove comments and split by semicolons
-            statements = []
-            for line in schema_sql.split('\n'):
-                line = line.strip()
-                if line and not line.startswith('--'):
-                    statements.append(line)
+        -- DCR Authorization Codes Table
+        CREATE TABLE IF NOT EXISTS dcr_auth_codes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            code TEXT NOT NULL UNIQUE,
+            client_id TEXT NOT NULL,
+            redirect_uri TEXT NOT NULL,
+            scope TEXT,
+            state TEXT,
+            azure_auth_code TEXT,
+            expires_at DATETIME NOT NULL,
+            used_at DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (client_id) REFERENCES dcr_clients(client_id)
+        );
 
-            # Join back and split by semicolons
-            full_sql = ' '.join(statements)
-            for statement in full_sql.split(';'):
-                statement = statement.strip()
-                if statement:
-                    try:
-                        self.db.execute_query(statement)
-                    except Exception as e:
-                        # Ignore table already exists errors
-                        if 'already exists' not in str(e):
-                            logger.debug(f"Schema execution note: {e}")
+        -- Indexes
+        CREATE INDEX IF NOT EXISTS idx_dcr_clients_client_id ON dcr_clients (client_id);
+        CREATE INDEX IF NOT EXISTS idx_dcr_clients_azure_client_id ON dcr_clients (azure_client_id);
+        CREATE INDEX IF NOT EXISTS idx_dcr_clients_is_active ON dcr_clients (is_active);
+        CREATE INDEX IF NOT EXISTS idx_dcr_tokens_client_id ON dcr_tokens (client_id);
+        CREATE INDEX IF NOT EXISTS idx_dcr_tokens_access_token ON dcr_tokens (access_token);
+        CREATE INDEX IF NOT EXISTS idx_dcr_tokens_expires_at ON dcr_tokens (expires_at);
+        CREATE INDEX IF NOT EXISTS idx_dcr_auth_codes_code ON dcr_auth_codes (code);
+        CREATE INDEX IF NOT EXISTS idx_dcr_auth_codes_expires_at ON dcr_auth_codes (expires_at);
+        """
 
+        try:
+            # Use executescript for multiple statements
+            import sqlite3
+            conn = sqlite3.connect(self.db.db_path)
+            conn.executescript(schema_sql)
+            conn.commit()
+            conn.close()
             logger.info("✅ DCR schema initialized")
+        except Exception as e:
+            logger.error(f"❌ DCR schema initialization failed: {e}")
+            raise
 
     async def register_client(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """
