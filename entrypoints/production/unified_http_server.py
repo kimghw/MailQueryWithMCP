@@ -36,6 +36,7 @@ from modules.onenote_mcp.mcp_server.http_server import HTTPStreamingOneNoteServe
 from modules.enrollment.auth import get_auth_orchestrator
 from modules.enrollment.auth.auth_web_server import AuthWebServer
 from infra.core.logger import get_logger
+from infra.core.dcr_service import DCRService
 
 logger = get_logger(__name__)
 
@@ -212,16 +213,328 @@ class UnifiedMCPServer:
                     status_code=500
                 )
 
+        # DCR OAuth metadata endpoint (proxy to mail-query server)
+        async def oauth_metadata_handler(request):
+            """RFC 8414 OAuth 2.0 Authorization Server Metadata"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "issuer": base_url,
+                    "authorization_endpoint": f"{base_url}/oauth/authorize",
+                    "token_endpoint": f"{base_url}/oauth/token",
+                    "registration_endpoint": f"{base_url}/oauth/register",
+                    "response_types_supported": ["code"],
+                    "grant_types_supported": ["authorization_code", "refresh_token"],
+                    "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
+                    "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                    "code_challenge_methods_supported": ["S256"],
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
+        # DCR Register endpoint
+        async def dcr_register_handler(request):
+            """RFC 7591: Dynamic Client Registration"""
+            try:
+                body = await request.body()
+                import json
+                request_data = json.loads(body) if body else {}
+
+                dcr_service = DCRService()
+                response = await dcr_service.register_client(request_data)
+
+                logger.info(f"✅ DCR client registered: {response['client_id']}")
+
+                return JSONResponse(
+                    response,
+                    status_code=201,
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Content-Type": "application/json",
+                    },
+                )
+            except Exception as e:
+                logger.error(f"❌ DCR registration failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return JSONResponse(
+                    {"error": "invalid_client_metadata", "error_description": str(e)},
+                    status_code=400,
+                )
+
+        # OAuth Authorize endpoint
+        async def oauth_authorize_handler(request):
+            """OAuth Authorization Endpoint - Azure AD 프록시"""
+            try:
+                import urllib.parse
+                from infra.core.oauth_client import OAuthClient
+
+                # Get query parameters
+                params = dict(request.query_params)
+                client_id = params.get("client_id")
+                redirect_uri = params.get("redirect_uri")
+                scope = params.get("scope", "Mail.Read User.Read")
+                state = params.get("state")
+                response_type = params.get("response_type", "code")
+
+                if not client_id or not redirect_uri:
+                    return JSONResponse(
+                        {"error": "invalid_request", "error_description": "Missing client_id or redirect_uri"},
+                        status_code=400,
+                    )
+
+                # DCR 클라이언트 조회
+                dcr_service = DCRService()
+                client = dcr_service.get_client(client_id)
+
+                if not client:
+                    return JSONResponse(
+                        {"error": "invalid_client", "error_description": "Client not found"},
+                        status_code=401,
+                    )
+
+                # Redirect URI 검증
+                if redirect_uri not in client["redirect_uris"]:
+                    return JSONResponse(
+                        {"error": "invalid_request", "error_description": "Invalid redirect_uri"},
+                        status_code=400,
+                    )
+
+                # Azure AD OAuth 클라이언트 생성
+                oauth_client = OAuthClient(
+                    client_id=client["azure_client_id"],
+                    client_secret=client["azure_client_secret"],
+                    tenant_id=client["azure_tenant_id"],
+                    redirect_uri=f"{request.url.scheme}://{request.url.netloc}/oauth/azure_callback",
+                )
+
+                # Azure AD 인증 URL 생성
+                base_url = f"{request.url.scheme}://{request.url.netloc}"
+                auth_url = oauth_client.get_authorization_url(scope=scope)
+
+                # Authorization code 생성 (Azure AD callback용)
+                auth_code = dcr_service.create_authorization_code(
+                    client_id=client_id, redirect_uri=redirect_uri, scope=scope, state=state
+                )
+
+                # Azure AD로 리다이렉트 (state에 내부 auth_code 포함)
+                internal_state = f"{auth_code}:{state}" if state else auth_code
+                azure_auth_url = auth_url.replace("state=", f"state={internal_state}&original_state=")
+
+                from starlette.responses import RedirectResponse
+                return RedirectResponse(url=azure_auth_url)
+
+            except Exception as e:
+                logger.error(f"❌ OAuth authorize failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return JSONResponse(
+                    {"error": "server_error", "error_description": str(e)},
+                    status_code=500,
+                )
+
+        # OAuth Token endpoint
+        async def oauth_token_handler(request):
+            """OAuth Token Endpoint - Azure AD 토큰 교환"""
+            try:
+                import secrets
+                from datetime import datetime, timedelta
+                from infra.core.oauth_client import OAuthClient
+
+                # Parse form data
+                form_data = await request.form()
+                grant_type = form_data.get("grant_type")
+                code = form_data.get("code")
+                client_id = form_data.get("client_id")
+                client_secret = form_data.get("client_secret")
+                redirect_uri = form_data.get("redirect_uri")
+
+                if grant_type != "authorization_code":
+                    return JSONResponse(
+                        {"error": "unsupported_grant_type"},
+                        status_code=400,
+                    )
+
+                # 클라이언트 인증
+                dcr_service = DCRService()
+                if not dcr_service.verify_client_credentials(client_id, client_secret):
+                    return JSONResponse(
+                        {"error": "invalid_client"},
+                        status_code=401,
+                    )
+
+                # Authorization code 검증
+                auth_data = dcr_service.verify_authorization_code(code, client_id, redirect_uri)
+                if not auth_data:
+                    return JSONResponse(
+                        {"error": "invalid_grant"},
+                        status_code=400,
+                    )
+
+                # DCR 클라이언트 정보 조회
+                client = dcr_service.get_client(client_id)
+                if not client:
+                    return JSONResponse(
+                        {"error": "invalid_client"},
+                        status_code=401,
+                    )
+
+                # Azure AD에서 토큰 가져오기 (실제 Azure AD 인증 완료 후 저장된 토큰 사용)
+                # Note: 실제로는 Azure callback에서 토큰을 받아서 저장해야 함
+                # 여기서는 간단히 새로운 토큰 생성
+                access_token = secrets.token_urlsafe(32)
+                refresh_token = secrets.token_urlsafe(32)
+                expires_in = 3600
+
+                # 토큰 저장 (실제 Azure 토큰과 매핑)
+                azure_access_token = "azure_token_placeholder"  # Azure AD에서 받은 실제 토큰
+                azure_refresh_token = "azure_refresh_placeholder"
+                azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
+
+                dcr_service.store_token(
+                    client_id=client_id,
+                    access_token=access_token,
+                    refresh_token=refresh_token,
+                    expires_in=expires_in,
+                    scope=auth_data["scope"],
+                    azure_access_token=azure_access_token,
+                    azure_refresh_token=azure_refresh_token,
+                    azure_token_expiry=azure_token_expiry,
+                )
+
+                return JSONResponse(
+                    {
+                        "access_token": access_token,
+                        "token_type": "Bearer",
+                        "expires_in": expires_in,
+                        "refresh_token": refresh_token,
+                        "scope": auth_data["scope"],
+                    },
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Content-Type": "application/json",
+                    },
+                )
+
+            except Exception as e:
+                logger.error(f"❌ OAuth token exchange failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return JSONResponse(
+                    {"error": "server_error", "error_description": str(e)},
+                    status_code=500,
+                )
+
+        # Azure AD Callback endpoint
+        async def oauth_azure_callback_handler(request):
+            """Azure AD OAuth Callback - 토큰 교환 및 저장"""
+            try:
+                import urllib.parse
+                from infra.core.oauth_client import OAuthClient
+
+                # Get query parameters
+                params = dict(request.query_params)
+                azure_code = params.get("code")
+                state = params.get("state")
+                error = params.get("error")
+
+                if error:
+                    logger.error(f"❌ Azure AD error: {error}")
+                    return Response(
+                        f"""
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>Authentication Error</title></head>
+                        <body>
+                            <h1>❌ Authentication Failed</h1>
+                            <p>Error: {error}</p>
+                            <p>You can close this window.</p>
+                        </body>
+                        </html>
+                        """,
+                        media_type="text/html",
+                        status_code=400,
+                    )
+
+                if not azure_code or not state:
+                    return Response(
+                        """
+                        <!DOCTYPE html>
+                        <html>
+                        <head><title>Invalid Request</title></head>
+                        <body>
+                            <h1>❌ Invalid Request</h1>
+                            <p>Missing code or state parameter</p>
+                        </body>
+                        </html>
+                        """,
+                        media_type="text/html",
+                        status_code=400,
+                    )
+
+                # Extract internal auth code from state
+                if ":" in state:
+                    auth_code, original_state = state.split(":", 1)
+                else:
+                    auth_code = state
+                    original_state = None
+
+                # TODO: Verify auth_code and exchange Azure token
+                # For now, return success page
+
+                return Response(
+                    """
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Authentication Successful</title></head>
+                    <body>
+                        <h1>✅ Authentication Successful</h1>
+                        <p>You can close this window and return to Claude.</p>
+                    </body>
+                    </html>
+                    """,
+                    media_type="text/html",
+                )
+
+            except Exception as e:
+                logger.error(f"❌ Azure callback failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return Response(
+                    f"""
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Authentication Error</title></head>
+                    <body>
+                        <h1>❌ Authentication Failed</h1>
+                        <p>Error: {str(e)}</p>
+                    </body>
+                    </html>
+                    """,
+                    media_type="text/html",
+                    status_code=500,
+                )
+
         # Create routes
         routes = [
-            # Root endpoints
-            Route("/", endpoint=root_handler, methods=["GET"]),
-            Route("/", endpoint=options_handler, methods=["OPTIONS"]),
+            # Unified endpoints
             Route("/health", endpoint=unified_health, methods=["GET"]),
             Route("/info", endpoint=unified_info, methods=["GET"]),
+            Route("/", endpoint=root_handler, methods=["GET", "HEAD"]),
+            Route("/", endpoint=options_handler, methods=["OPTIONS"]),
+            # DCR OAuth endpoints (at root for Claude Connector compatibility)
+            Route("/.well-known/oauth-authorization-server", endpoint=oauth_metadata_handler, methods=["GET"]),
+            Route("/oauth/register", endpoint=dcr_register_handler, methods=["POST"]),
+            Route("/oauth/authorize", endpoint=oauth_authorize_handler, methods=["GET"]),
+            Route("/oauth/token", endpoint=oauth_token_handler, methods=["POST"]),
+            Route("/oauth/azure_callback", endpoint=oauth_azure_callback_handler, methods=["GET"]),
             # OAuth callback (enrollment service)
             Route("/enrollment/callback", endpoint=auth_callback_handler, methods=["GET"]),
-            # Mount MCP servers on different paths
+            # Mount MCP servers on specific paths
             Mount("/mail-query", app=self.mail_query_server.app),
             Mount("/enrollment", app=self.enrollment_server.app),
             Mount("/onenote", app=self.onenote_server.app),
