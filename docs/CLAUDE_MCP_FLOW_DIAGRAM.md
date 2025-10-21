@@ -1,6 +1,6 @@
 # Claude MCP OAuth 인증 플로우 다이어그램
 
-## 전체 OAuth 플로우 (간소화된 버전)
+## 전체 OAuth 플로우
 
 ```mermaid
 sequenceDiagram
@@ -15,17 +15,22 @@ sequenceDiagram
 
     Note over Claude,User: 2. 인증 시작
     Claude->>DCR: GET /oauth/authorize<br/>?client_id=xxx&redirect_uri=https://claude.ai/api/mcp/auth_callback
-    DCR-->>User: Redirect to Azure AD<br/>https://login.microsoftonline.com/.../authorize<br/>?redirect_uri=https://claude.ai/api/mcp/auth_callback
+    DCR->>DCR: 1) auth_code 생성 및 저장<br/>2) Azure AD URL 생성
+    DCR-->>User: Redirect to Azure AD<br/>https://login.microsoftonline.com/.../authorize<br/>?redirect_uri=https://mailquery-mcp-server.onrender.com/oauth/azure_callback
 
     Note over Claude,User: 3. Azure AD 로그인
     User->>Azure: 사용자 로그인
-    Azure-->>Claude: Direct Redirect to https://claude.ai/api/mcp/auth_callback<br/>?code=azure_code&state=original_state
+    Azure-->>DCR: Redirect to /oauth/azure_callback<br/>?code=azure_code&state=dcr_auth_code
 
-    Note over Claude,User: 4. 토큰 교환
-    Claude->>DCR: POST /oauth/token<br/>{code: azure_code, client_id, client_secret}
+    Note over Claude,User: 4. DCR 콜백 처리
+    DCR->>DCR: 1) state에서 원본 auth_code 추출<br/>2) Azure code로 토큰 교환<br/>3) 토큰 저장
     DCR->>Azure: POST /token<br/>{code: azure_code}
     Azure-->>DCR: {access_token, refresh_token}
-    DCR->>DCR: 토큰 저장 및 매핑
+    DCR-->>Claude: Redirect to https://claude.ai/api/mcp/auth_callback<br/>?code=dcr_auth_code&state=original_state
+
+    Note over Claude,User: 5. 토큰 교환
+    Claude->>DCR: POST /oauth/token<br/>{code: dcr_auth_code, client_id, client_secret}
+    DCR->>DCR: 저장된 Azure 토큰 조회
     DCR-->>Claude: {access_token: dcr_token}
 
     Note over Claude,User: 6. API 사용
@@ -40,9 +45,9 @@ sequenceDiagram
 
 ### 1. Azure AD 앱 등록에서 설정해야 할 Redirect URI
 ```
-https://claude.ai/api/mcp/auth_callback
+https://mailquery-mcp-server.onrender.com/oauth/azure_callback
 ```
-**중요**: Azure AD에 Claude의 콜백 URL을 직접 등록해야 합니다!
+**중요**: Azure AD에 DCR 서버의 콜백 URL을 등록해야 합니다! (Claude URL 아님)
 
 ### 2. Claude Connector에서 사용하는 Redirect URI
 ```
@@ -92,14 +97,14 @@ graph TD
 ## 문제 해결
 
 ### AADSTS50011 에러 (Redirect URI 불일치)
-**원인**: Azure AD 앱 등록의 redirect URI가 Claude의 콜백 URL과 일치하지 않음
+**원인**: Azure AD 앱 등록의 redirect URI가 DCR 서버 URL과 일치하지 않음
 
 **해결방법**:
 1. Azure Portal > App registrations > 해당 앱 선택 (Client ID: 88f1daa2-a6cc-4c7b-b575-b76bf0a6435b)
 2. Authentication > Platform configurations > Web
 3. Redirect URIs에 다음 URL 추가:
    ```
-   https://claude.ai/api/mcp/auth_callback
+   https://mailquery-mcp-server.onrender.com/oauth/azure_callback
    ```
 4. Save 클릭
 
