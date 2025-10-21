@@ -168,15 +168,14 @@ class DCRService:
         if not all([self.azure_client_id, self.azure_client_secret, self.azure_tenant_id]):
             raise ValueError("Azure AD configuration not available for DCR")
 
-        # DB에 저장
+        # DB에 저장 (테이블 스키마와 일치)
         query = """
         INSERT INTO dcr_clients (
             client_id, client_secret, client_id_issued_at,
-            client_name, redirect_uris, token_endpoint_auth_method,
+            client_name, redirect_uris,
             grant_types, response_types, scope,
-            azure_client_id, azure_client_secret, azure_tenant_id,
-            registration_access_token
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            azure_client_id, azure_client_secret, azure_tenant_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """
 
         # Encrypt Azure client secret
@@ -190,14 +189,12 @@ class DCRService:
                 issued_at,
                 client_name,
                 json.dumps(redirect_uris),
-                token_endpoint_auth_method,
                 json.dumps(grant_types),
                 json.dumps(response_types),
                 scope,
                 self.azure_client_id,
                 encrypted_azure_secret,
                 self.azure_tenant_id,
-                self.crypto.account_encrypt_sensitive_data(registration_access_token),
             ),
         )
 
