@@ -311,10 +311,12 @@ class UnifiedMCPServer:
                 # Azure AD 인증 URL 직접 생성
                 azure_tenant_id = client["azure_tenant_id"]
                 azure_client_id = client["azure_client_id"]
-                azure_redirect_uri = f"{request.url.scheme}://{request.url.netloc}/oauth/azure_callback"
+                # Claude의 콜백 URL을 직접 사용 (Azure AD에 이 URL을 등록해야 함)
+                azure_redirect_uri = "https://claude.ai/api/mcp/auth_callback"
 
-                # state에 내부 auth_code 포함
-                internal_state = f"{auth_code}:{state}" if state else auth_code
+                # state는 Claude가 보낸 원본 state를 그대로 전달
+                # auth_code는 더 이상 필요 없음 (Azure가 직접 Claude로 전달)
+                internal_state = state if state else ""
 
                 # Azure AD authorization endpoint
                 import urllib.parse
@@ -370,14 +372,6 @@ class UnifiedMCPServer:
                         status_code=401,
                     )
 
-                # Authorization code 검증
-                auth_data = dcr_service.verify_authorization_code(code, client_id, redirect_uri)
-                if not auth_data:
-                    return JSONResponse(
-                        {"error": "invalid_grant"},
-                        status_code=400,
-                    )
-
                 # DCR 클라이언트 정보 조회
                 client = dcr_service.get_client(client_id)
                 if not client:
@@ -386,16 +380,39 @@ class UnifiedMCPServer:
                         status_code=401,
                     )
 
-                # Azure AD에서 토큰 가져오기 (실제 Azure AD 인증 완료 후 저장된 토큰 사용)
-                # Note: 실제로는 Azure callback에서 토큰을 받아서 저장해야 함
-                # 여기서는 간단히 새로운 토큰 생성
-                access_token = secrets.token_urlsafe(32)
-                refresh_token = secrets.token_urlsafe(32)
-                expires_in = 3600
+                # Azure AD에서 토큰 교환 (Claude가 받은 Azure authorization code 사용)
+                # code는 Azure AD가 직접 발급한 authorization code
+                azure_client_id = client["azure_client_id"]
+                azure_client_secret = client["azure_client_secret"]
+                azure_tenant_id = client["azure_tenant_id"]
 
-                # 토큰 저장 (실제 Azure 토큰과 매핑)
-                azure_access_token = "azure_token_placeholder"  # Azure AD에서 받은 실제 토큰
-                azure_refresh_token = "azure_refresh_placeholder"
+                import httpx
+                async with httpx.AsyncClient() as http_client:
+                    token_url = f"https://login.microsoftonline.com/{azure_tenant_id}/oauth2/v2.0/token"
+                    token_data = {
+                        "client_id": azure_client_id,
+                        "client_secret": azure_client_secret,
+                        "code": code,
+                        "redirect_uri": "https://claude.ai/api/mcp/auth_callback",
+                        "grant_type": "authorization_code",
+                        "scope": "https://graph.microsoft.com/.default"
+                    }
+
+                    response = await http_client.post(token_url, data=token_data)
+                    if response.status_code != 200:
+                        logger.error(f"Azure token exchange failed: {response.text}")
+                        return JSONResponse(
+                            {"error": "invalid_grant", "error_description": "Failed to exchange Azure token"},
+                            status_code=400,
+                        )
+
+                    azure_token_data = response.json()
+                    azure_access_token = azure_token_data["access_token"]
+                    azure_refresh_token = azure_token_data.get("refresh_token", "")
+                    expires_in = azure_token_data.get("expires_in", 3600)
+
+                # DCR 토큰 생성 및 Azure 토큰과 매핑
+                access_token = secrets.token_urlsafe(32)
                 azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
                 dcr_service.store_token(
