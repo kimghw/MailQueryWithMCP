@@ -26,14 +26,14 @@ def print_test_result(test_name: str, passed: bool, details: str = ""):
 
 
 async def test_list_sections():
-    """list_sections 핸들러 테스트"""
-    print("\n📁 [1/7] list_sections 핸들러 테스트...")
+    """manage_sections_and_pages (list_sections) 핸들러 테스트"""
+    print("\n📁 [1/10] manage_sections_and_pages (list_sections) 핸들러 테스트...")
 
     try:
         handler = OneNoteHandlers()
         result = await handler.handle_call_tool(
-            "list_sections",
-            {"user_id": "kimghw"}
+            "manage_sections_and_pages",
+            {"action": "list_sections", "user_id": "kimghw"}
         )
         result_text = result[0].text if result else ""
 
@@ -49,14 +49,14 @@ async def test_list_sections():
 
 
 async def test_list_sections_with_filter():
-    """list_sections 핸들러 테스트 (필터링)"""
-    print("\n📁 [2/7] list_sections 핸들러 테스트 (section_name 필터)...")
+    """manage_sections_and_pages (list_sections 필터링) 핸들러 테스트"""
+    print("\n📁 [2/10] manage_sections_and_pages (list_sections 필터) 핸들러 테스트...")
 
     try:
         handler = OneNoteHandlers()
         result = await handler.handle_call_tool(
-            "list_sections",
-            {"user_id": "kimghw", "section_name": "테스트"}
+            "manage_sections_and_pages",
+            {"action": "list_sections", "user_id": "kimghw", "section_name": "테스트"}
         )
         result_text = result[0].text if result else ""
 
@@ -72,14 +72,14 @@ async def test_list_sections_with_filter():
 
 
 async def test_list_pages():
-    """list_pages 핸들러 테스트 (모든 페이지)"""
-    print("\n📄 [3/7] list_pages 핸들러 테스트 (모든 페이지)...")
+    """manage_sections_and_pages (list_pages) 핸들러 테스트"""
+    print("\n📄 [3/10] manage_sections_and_pages (list_pages) 핸들러 테스트...")
 
     try:
         handler = OneNoteHandlers()
         result = await handler.handle_call_tool(
-            "list_pages",
-            {"user_id": "kimghw"}
+            "manage_sections_and_pages",
+            {"action": "list_pages", "user_id": "kimghw"}
         )
         result_text = result[0].text if result else ""
 
@@ -95,14 +95,14 @@ async def test_list_pages():
 
 
 async def test_list_pages_by_section():
-    """list_pages 핸들러 테스트 (섹션별)"""
-    print("\n📄 [4/7] list_pages 핸들러 테스트 (section_id 필터)...")
+    """manage_sections_and_pages (list_pages 섹션 필터) 핸들러 테스트"""
+    print("\n📄 [4/10] manage_sections_and_pages (list_pages 섹션 필터) 핸들러 테스트...")
 
     try:
         handler = OneNoteHandlers()
         result = await handler.handle_call_tool(
-            "list_pages",
-            {"user_id": "kimghw", "section_id": "1-test-section"}
+            "manage_sections_and_pages",
+            {"action": "list_pages", "user_id": "kimghw", "section_id": "1-test-section"}
         )
         result_text = result[0].text if result else ""
 
@@ -118,14 +118,15 @@ async def test_list_pages_by_section():
 
 
 async def test_create_section():
-    """create_section 핸들러 테스트"""
-    print("\n📁 [5/7] create_section 핸들러 테스트...")
+    """manage_sections_and_pages (create_section) 핸들러 테스트"""
+    print("\n📁 [5/10] manage_sections_and_pages (create_section) 핸들러 테스트...")
 
     try:
         handler = OneNoteHandlers()
         result = await handler.handle_call_tool(
-            "create_section",
+            "manage_sections_and_pages",
             {
+                "action": "create_section",
                 "user_id": "kimghw",
                 "notebook_id": "1-test-notebook",
                 "section_name": "Test Section"
@@ -145,14 +146,14 @@ async def test_create_section():
 
 
 async def test_get_page_content():
-    """get_page_content 핸들러 테스트"""
-    print("\n📄 [6/7] get_page_content 핸들러 테스트...")
+    """manage_page_content (get) 핸들러 테스트"""
+    print("\n📄 [6/10] manage_page_content (get) 핸들러 테스트...")
 
     try:
         handler = OneNoteHandlers()
         result = await handler.handle_call_tool(
-            "get_page_content",
-            {"user_id": "kimghw", "page_id": "1-test-page"}
+            "manage_page_content",
+            {"action": "get", "user_id": "kimghw", "page_id": "1-test-page"}
         )
         result_text = result[0].text if result else ""
 
@@ -167,9 +168,88 @@ async def test_get_page_content():
         return False
 
 
+async def test_create_page():
+    """manage_page_content (create) 핸들러 테스트"""
+    print("\n📝 [7/10] manage_page_content (create) 핸들러 테스트...")
+
+    try:
+        handler = OneNoteHandlers()
+        result = await handler.handle_call_tool(
+            "manage_page_content",
+            {
+                "action": "create",
+                "user_id": "kimghw",
+                "section_id": "1-test-section",
+                "title": "Test Page",
+                "content": "<html><body><p>Test content</p></body></html>"
+            }
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증
+        success = "success" in result_text.lower() or "액세스 토큰이 없습니다" in result_text
+        print_test_result("create_page", success, result_text[:200])
+
+        return success
+
+    except Exception as e:
+        print_test_result("create_page", False, f"Exception: {e}")
+        return False
+
+
+async def test_delete_page():
+    """manage_page_content (delete) 핸들러 테스트"""
+    print("\n🗑️ [8/10] manage_page_content (delete) 핸들러 테스트...")
+
+    try:
+        handler = OneNoteHandlers()
+        result = await handler.handle_call_tool(
+            "manage_page_content",
+            {"action": "delete", "user_id": "kimghw", "page_id": "1-test-page"}
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증
+        success = "success" in result_text.lower() or "액세스 토큰이 없습니다" in result_text or "error" in result_text.lower()
+        print_test_result("delete_page", success, result_text[:200])
+
+        return success
+
+    except Exception as e:
+        print_test_result("delete_page", False, f"Exception: {e}")
+        return False
+
+
+async def test_edit_page():
+    """edit_page 핸들러 테스트 (기존 update_page)"""
+    print("\n✏️ [9/10] edit_page 핸들러 테스트...")
+
+    try:
+        handler = OneNoteHandlers()
+        result = await handler.handle_call_tool(
+            "edit_page",
+            {
+                "user_id": "kimghw",
+                "page_id": "1-test-page",
+                "content": "<html><body><p>Updated content</p></body></html>"
+            }
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증
+        success = "success" in result_text.lower() or "액세스 토큰이 없습니다" in result_text
+        print_test_result("edit_page", success, result_text[:200])
+
+        return success
+
+    except Exception as e:
+        print_test_result("edit_page", False, f"Exception: {e}")
+        return False
+
+
 async def test_db_onenote_update():
     """db_onenote_update 핸들러 테스트"""
-    print("\n💾 [7/7] db_onenote_update 핸들러 테스트...")
+    print("\n💾 [10/10] db_onenote_update 핸들러 테스트...")
 
     try:
         handler = OneNoteHandlers()
@@ -207,6 +287,9 @@ async def run_tests():
     results.append(await test_list_pages_by_section())
     results.append(await test_create_section())
     results.append(await test_get_page_content())
+    results.append(await test_create_page())
+    results.append(await test_delete_page())
+    results.append(await test_edit_page())
     results.append(await test_db_onenote_update())
 
     return results

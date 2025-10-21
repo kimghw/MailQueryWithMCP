@@ -515,3 +515,54 @@ class OneNoteHandler:
             error_msg = f"페이지 업데이트 오류: {str(e)}"
             logger.error(error_msg)
             return {"success": False, "message": error_msg}
+
+    async def delete_page(
+        self,
+        user_id: str,
+        page_id: str
+    ) -> Dict[str, Any]:
+        """
+        페이지 삭제
+
+        Args:
+            user_id: 사용자 ID
+            page_id: 페이지 ID
+
+        Returns:
+            삭제 결과
+        """
+        try:
+            # ID 정규화
+            page_id = self._normalize_onenote_id(page_id)
+
+            access_token = await self._get_access_token(user_id)
+            if not access_token:
+                return {"success": False, "message": "액세스 토큰이 없습니다"}
+
+            headers = {
+                "Authorization": f"Bearer {access_token}"
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.delete(
+                    f"{self.graph_base_url}/me/onenote/pages/{page_id}",
+                    headers=headers,
+                    timeout=30.0
+                )
+
+                if response.status_code == 204:
+                    logger.info(f"✅ 페이지 삭제 성공: {page_id}")
+                    return {
+                        "success": True,
+                        "page_id": page_id,
+                        "message": "페이지가 성공적으로 삭제되었습니다"
+                    }
+                else:
+                    error_msg = f"페이지 삭제 실패: {response.status_code} - {response.text}"
+                    logger.error(error_msg)
+                    return {"success": False, "message": error_msg}
+
+        except Exception as e:
+            error_msg = f"페이지 삭제 오류: {str(e)}"
+            logger.error(error_msg)
+            return {"success": False, "message": error_msg}
