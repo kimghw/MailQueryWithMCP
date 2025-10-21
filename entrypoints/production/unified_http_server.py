@@ -311,9 +311,9 @@ class UnifiedMCPServer:
                 # Azure AD 인증 URL 직접 생성
                 azure_tenant_id = client["azure_tenant_id"]
                 azure_client_id = client["azure_client_id"]
-                # Azure AD에 등록된 redirect URI (DCR 서버로 돌아옴)
-                # 이 URL이 Azure AD 앱 등록에 추가되어 있어야 함
-                azure_redirect_uri = "https://mailquery-mcp-server.onrender.com/oauth/azure_callback"
+                # Azure AD에 등록된 redirect URI (localhost:8000으로 고정)
+                # Azure Portal에서 http://localhost:8000/oauth/azure_callback 추가 필요
+                azure_redirect_uri = "http://localhost:8000/oauth/azure_callback"
 
                 # state에 내부 auth_code 포함 (DCR 서버에서 매핑에 사용)
                 internal_state = f"{auth_code}:{state}" if state else auth_code
@@ -373,28 +373,35 @@ class UnifiedMCPServer:
                     )
 
                 # Authorization code 검증 (DCR auth_code)
+                logger.info(f"🔍 Verifying authorization code: {code[:20]}...")
                 auth_data = dcr_service.verify_authorization_code(code, client_id, redirect_uri)
                 if not auth_data:
+                    logger.error(f"❌ Invalid authorization code")
                     return JSONResponse(
-                        {"error": "invalid_grant"},
+                        {"error": "invalid_grant", "error_description": "Invalid authorization code"},
                         status_code=400,
                     )
+                logger.info(f"✅ Authorization code verified")
 
                 # DCR 클라이언트 정보 조회
                 client = dcr_service.get_client(client_id)
                 if not client:
+                    logger.error(f"❌ Client not found: {client_id}")
                     return JSONResponse(
                         {"error": "invalid_client"},
                         status_code=401,
                     )
 
                 # 저장된 Azure 토큰 조회 (azure_callback에서 저장한 토큰)
+                logger.info(f"🔍 Looking for Azure tokens with auth_code: {code[:20]}...")
                 azure_tokens = dcr_service.get_azure_tokens_by_auth_code(code)
                 if not azure_tokens:
+                    logger.error(f"❌ Azure token not found for auth_code")
                     return JSONResponse(
                         {"error": "invalid_grant", "error_description": "Azure token not found"},
                         status_code=400,
                     )
+                logger.info(f"✅ Azure token found")
 
                 azure_access_token = azure_tokens["access_token"]
                 azure_refresh_token = azure_tokens.get("refresh_token", "")
@@ -402,6 +409,7 @@ class UnifiedMCPServer:
 
                 # DCR 토큰 생성 및 Azure 토큰과 매핑
                 access_token = secrets.token_urlsafe(32)
+                refresh_token = secrets.token_urlsafe(32)
                 azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
                 dcr_service.store_token(
@@ -548,7 +556,7 @@ class UnifiedMCPServer:
                         "client_id": client["azure_client_id"],
                         "client_secret": client["azure_client_secret"],
                         "code": azure_code,
-                        "redirect_uri": "https://mailquery-mcp-server.onrender.com/oauth/azure_callback",
+                        "redirect_uri": "http://localhost:8000/oauth/azure_callback",
                         "grant_type": "authorization_code",
                         "scope": scope or "https://graph.microsoft.com/.default"
                     }
@@ -573,8 +581,10 @@ class UnifiedMCPServer:
                         )
 
                     azure_token_data = response.json()
+                    logger.info(f"✅ Got Azure token, expires_in: {azure_token_data.get('expires_in')}")
 
                 # Azure 토큰을 auth_code와 매핑하여 저장
+                logger.info(f"💾 Saving Azure token for auth_code: {auth_code[:20]}...")
                 update_query = """
                 UPDATE dcr_auth_codes
                 SET azure_code = ?, azure_access_token = ?, azure_refresh_token = ?
@@ -589,6 +599,7 @@ class UnifiedMCPServer:
                         auth_code,
                     ),
                 )
+                logger.info(f"✅ Azure token saved for auth_code: {auth_code[:20]}")
 
                 # Claude로 리다이렉트 (원본 auth_code와 state 포함)
                 redirect_params = {

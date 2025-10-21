@@ -436,7 +436,7 @@ class DCRService:
         query = """
         SELECT azure_access_token, azure_refresh_token, scope
         FROM dcr_auth_codes
-        WHERE code = ? AND used_at IS NULL AND azure_access_token IS NOT NULL
+        WHERE code = ? AND azure_access_token IS NOT NULL
         """
 
         result = self.db.fetch_one(query, (auth_code,))
