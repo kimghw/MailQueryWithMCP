@@ -133,37 +133,65 @@ class HTTPStreamingMailAttachmentServer:
             "Access-Control-Expose-Headers": "Mcp-Session-Id",
         }
 
-        # Bearer token authentication (DCR support)
+        # Bearer token authentication (DCR support) - REQUIRED
         auth_header = request.headers.get("Authorization", "")
-        azure_access_token = None
 
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
+        if not auth_header.startswith("Bearer "):
+            logger.warning("⚠️ Missing Bearer token - authentication required")
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "error": {
+                        "code": -32001,
+                        "message": "Authentication required. Please authenticate using OAuth 2.0"
+                    },
+                },
+                status_code=401,
+                headers={
+                    **base_headers,
+                    "WWW-Authenticate": 'Bearer realm="MCP Server", error="invalid_token"',
+                },
+            )
 
-            try:
-                from infra.core.dcr_service import DCRService
+        token = auth_header[7:]
 
-                dcr_service = DCRService()
-                token_data = dcr_service.verify_bearer_token(token)
+        try:
+            from infra.core.dcr_service import DCRService
 
-                if token_data:
-                    azure_access_token = token_data["azure_access_token"]
-                    logger.info(f"✅ Authenticated DCR client: {token_data['client_id']}")
-                    # Store in request state for handlers to use
-                    request.state.azure_token = azure_access_token
-                else:
-                    logger.warning("⚠️ Invalid Bearer token")
-                    return JSONResponse(
-                        {
-                            "jsonrpc": "2.0",
-                            "error": {"code": -32001, "message": "Invalid authentication token"},
-                        },
-                        status_code=401,
-                        headers={**base_headers, "WWW-Authenticate": "Bearer"},
-                    )
-            except Exception as e:
-                logger.error(f"❌ Token verification failed: {str(e)}")
-                # Continue without authentication (backward compatibility)
+            dcr_service = DCRService()
+            token_data = dcr_service.verify_bearer_token(token)
+
+            if token_data:
+                azure_access_token = token_data["azure_access_token"]
+                logger.info(f"✅ Authenticated DCR client: {token_data['client_id']}")
+                # Store in request state for handlers to use
+                request.state.azure_token = azure_access_token
+            else:
+                logger.warning("⚠️ Invalid Bearer token")
+                return JSONResponse(
+                    {
+                        "jsonrpc": "2.0",
+                        "error": {"code": -32001, "message": "Invalid authentication token"},
+                    },
+                    status_code=401,
+                    headers={
+                        **base_headers,
+                        "WWW-Authenticate": 'Bearer realm="MCP Server", error="invalid_token"',
+                    },
+                )
+        except Exception as e:
+            logger.error(f"❌ Token verification failed: {str(e)}")
+            return JSONResponse(
+                {
+                    "jsonrpc": "2.0",
+                    "error": {"code": -32001, "message": f"Authentication error: {str(e)}"},
+                },
+                status_code=401,
+                headers={
+                    **base_headers,
+                    "WWW-Authenticate": 'Bearer realm="MCP Server", error="invalid_token"',
+                },
+            )
 
         # Read and parse request
         try:
