@@ -1,7 +1,10 @@
 #!/bin/bash
 
 # Cloudflare Tunnel Deployment Script for MailQueryWithMCP
-# This script sets up and manages Cloudflare Tunnel for the unified HTTP server
+# Smart management of unified server and Cloudflare tunnel
+# - Starts both if neither is running
+# - Keeps Cloudflare running when unified stops
+# - Reconnects to existing Cloudflare when unified restarts
 
 set -e
 
@@ -9,6 +12,7 @@ set -e
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
@@ -16,8 +20,11 @@ TUNNEL_NAME="mailquery-mcp"
 CONFIG_FILE="cloudflare-tunnel-config.yml"
 SERVICE_FILE="cloudflared.service"
 UNIFIED_SERVER="entrypoints/production/unified_http_server.py"
+PROJECT_DIR="/home/kimghw/MailQueryWithMCP"
+LOG_DIR="$PROJECT_DIR/logs"
+UNIFIED_PID_FILE="/tmp/unified_server.pid"
 
-echo -e "${GREEN}MailQueryWithMCP Cloudflare Tunnel Deployment Script${NC}"
+echo -e "${GREEN}MailQueryWithMCP Smart Deployment Manager${NC}"
 echo "=================================================="
 
 # Function to print colored messages
@@ -33,185 +40,640 @@ print_warning() {
     echo -e "${YELLOW}[!]${NC} $1"
 }
 
+print_info() {
+    echo -e "${BLUE}[i]${NC} $1"
+}
+
 # Check if cloudflared is installed
 check_cloudflared() {
-    if ! command -v cloudflared &> /dev/null; then
-        print_error "cloudflared is not installed!"
-        echo "Please install cloudflared first:"
-        echo "  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o cloudflared"
-        echo "  chmod +x cloudflared"
-        echo "  sudo mv cloudflared /usr/local/bin/"
-        exit 1
-    fi
-    print_status "cloudflared is installed ($(cloudflared --version))"
-}
-
-# Login to Cloudflare (if not already logged in)
-cloudflare_login() {
-    if [ ! -f "$HOME/.cloudflared/cert.pem" ]; then
-        print_warning "Not logged in to Cloudflare. Starting login process..."
-        cloudflared tunnel login
-    else
-        print_status "Already logged in to Cloudflare"
-    fi
-}
-
-# Create tunnel if it doesn't exist
-create_tunnel() {
-    if cloudflared tunnel list | grep -q "$TUNNEL_NAME"; then
-        print_status "Tunnel '$TUNNEL_NAME' already exists"
-    else
-        print_warning "Creating new tunnel '$TUNNEL_NAME'..."
-        cloudflared tunnel create "$TUNNEL_NAME"
-        print_status "Tunnel created successfully"
+    # Check in PATH first
+    if command -v cloudflared &> /dev/null; then
+        CLOUDFLARED_BIN="cloudflared"
+        print_status "cloudflared is installed ($(cloudflared --version))"
+        return 0
     fi
 
-    # Get tunnel credentials file
-    TUNNEL_ID=$(cloudflared tunnel list | grep "$TUNNEL_NAME" | awk '{print $1}')
-    CRED_FILE="$HOME/.cloudflared/${TUNNEL_ID}.json"
-
-    if [ ! -f "$CRED_FILE" ]; then
-        print_error "Credentials file not found at $CRED_FILE"
-        exit 1
+    # Check in ~/.local/bin
+    if [ -x "$HOME/.local/bin/cloudflared" ]; then
+        CLOUDFLARED_BIN="$HOME/.local/bin/cloudflared"
+        print_status "cloudflared is installed ($($CLOUDFLARED_BIN --version))"
+        export PATH="$HOME/.local/bin:$PATH"
+        return 0
     fi
 
-    # Update config file with correct credentials path
-    sed -i "s|credentials-file:.*|credentials-file: $CRED_FILE|" "$CONFIG_FILE"
-    print_status "Updated config with credentials file: $CRED_FILE"
+    print_error "cloudflared is not installed!"
+    echo "Install cloudflared (separate from venv):"
+    echo "  mkdir -p ~/.local/bin"
+    echo "  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o ~/.local/bin/cloudflared"
+    echo "  chmod +x ~/.local/bin/cloudflared"
+    echo ""
+    echo "Or run: ./install_cloudflared.sh"
+    exit 1
 }
 
-# Configure DNS
-configure_dns() {
-    echo ""
-    print_warning "DNS Configuration Required!"
-    echo "Please add the following CNAME record to your DNS:"
-    echo ""
-    echo "  Name: mailquery-mcp (or your preferred subdomain)"
-    echo "  Target: ${TUNNEL_ID}.cfargotunnel.com"
-    echo ""
-    echo "You can do this through:"
-    echo "1. Cloudflare Dashboard > DNS"
-    echo "2. Or run: cloudflared tunnel route dns $TUNNEL_NAME mailquery-mcp.yourdomain.com"
-    echo ""
-    read -p "Press Enter when DNS is configured..."
+# Check unified server status
+check_unified_status() {
+    if [ -f "$UNIFIED_PID_FILE" ]; then
+        PID=$(cat "$UNIFIED_PID_FILE")
+        if ps -p "$PID" > /dev/null 2>&1; then
+            if ps -p "$PID" -o comm= | grep -q python; then
+                return 0  # Running
+            fi
+        fi
+        # PID file exists but process is dead, cleanup
+        rm -f "$UNIFIED_PID_FILE"
+    fi
+
+    # Double check with pgrep
+    if pgrep -f "$UNIFIED_SERVER" > /dev/null; then
+        # Update PID file
+        pgrep -f "$UNIFIED_SERVER" | head -1 > "$UNIFIED_PID_FILE"
+        return 0  # Running
+    fi
+
+    return 1  # Not running
 }
+
+
 
 # Start the unified HTTP server
 start_unified_server() {
-    print_status "Checking unified HTTP server..."
+    if check_unified_status; then
+        print_status "Unified HTTP server is already running (PID: $(cat $UNIFIED_PID_FILE))"
+        return 0
+    fi
+
+    print_warning "Starting unified HTTP server..."
+
+    # Ensure log directory exists
+    mkdir -p "$LOG_DIR"
+
+    cd "$PROJECT_DIR"
+
+    # Check if virtual environment exists
+    if [ -d "$PROJECT_DIR/.venv" ]; then
+        print_info "Using virtual environment at $PROJECT_DIR/.venv"
+        # Use virtual environment Python
+        nohup "$PROJECT_DIR/.venv/bin/python" "$UNIFIED_SERVER" > "$LOG_DIR/unified_server.log" 2>&1 &
+    else
+        print_warning "No virtual environment found. Trying system Python..."
+        print_info "Consider creating one with: uv venv && uv pip install -e ."
+        # Fallback to system Python
+        nohup python3 "$UNIFIED_SERVER" > "$LOG_DIR/unified_server.log" 2>&1 &
+    fi
+
+    UNIFIED_PID=$!
+    echo $UNIFIED_PID > "$UNIFIED_PID_FILE"
+
+    sleep 3
+
+    if check_unified_status; then
+        print_status "Unified HTTP server started successfully (PID: $UNIFIED_PID)"
+        return 0
+    else
+        print_error "Failed to start unified HTTP server"
+        echo "Check $LOG_DIR/unified_server.log for details"
+        rm -f "$UNIFIED_PID_FILE"
+        return 1
+    fi
+}
+
+# Stop unified server
+stop_unified_server() {
+    if [ -f "$UNIFIED_PID_FILE" ]; then
+        PID=$(cat "$UNIFIED_PID_FILE")
+        if ps -p "$PID" > /dev/null 2>&1; then
+            kill "$PID"
+            sleep 2
+            if ps -p "$PID" > /dev/null 2>&1; then
+                kill -9 "$PID" 2>/dev/null || true
+            fi
+        fi
+        rm -f "$UNIFIED_PID_FILE"
+    fi
+
+    # Backup kill by process name
+    pkill -f "$UNIFIED_SERVER" 2>/dev/null || true
+
+    print_status "Unified HTTP server stopped"
+}
+
+
+# Start Quick Tunnel in background
+start_quick_tunnel_background() {
+    QUICK_PID_FILE="/tmp/quick_tunnel.pid"
+    QUICK_LOG_FILE="$LOG_DIR/quick_tunnel.log"
 
     # Check if already running
-    if pgrep -f "$UNIFIED_SERVER" > /dev/null; then
-        print_status "Unified HTTP server is already running"
-    else
-        print_warning "Starting unified HTTP server..."
-        cd /home/kimghw/MailQueryWithMCP
-        nohup python3 "$UNIFIED_SERVER" > logs/unified_server.log 2>&1 &
-        sleep 3
+    if [ -f "$QUICK_PID_FILE" ]; then
+        PID=$(cat "$QUICK_PID_FILE")
+        if ps -p "$PID" > /dev/null 2>&1; then
+            print_status "Quick Tunnel이 이미 실행 중입니다 (PID: $PID)"
+            print_info "로그 확인: tail -f $QUICK_LOG_FILE"
 
-        if pgrep -f "$UNIFIED_SERVER" > /dev/null; then
-            print_status "Unified HTTP server started successfully"
+            # Try to extract URL from log
+            URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+            if [ -n "$URL" ]; then
+                print_status "접속 URL: $URL"
+            fi
+            return 0
+        fi
+        rm -f "$QUICK_PID_FILE"
+    fi
+
+    # Ensure cloudflared exists
+    if [ -z "$CLOUDFLARED_BIN" ]; then
+        check_cloudflared
+    fi
+
+    # Start Quick Tunnel in background
+    print_warning "Quick Tunnel을 백그라운드로 시작합니다..."
+    mkdir -p "$LOG_DIR"
+
+    nohup $CLOUDFLARED_BIN tunnel --url http://localhost:8000 > "$QUICK_LOG_FILE" 2>&1 &
+    QUICK_PID=$!
+    echo $QUICK_PID > "$QUICK_PID_FILE"
+
+    # Wait for URL to appear in log
+    print_info "Quick Tunnel URL 대기 중..."
+    for i in {1..10}; do
+        sleep 2
+        URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+        if [ -n "$URL" ]; then
+            print_status "Quick Tunnel 시작 성공! (PID: $QUICK_PID)"
+            echo ""
+            echo "==================================="
+            echo "접속 URL: ${GREEN}$URL${NC}"
+            echo "==================================="
+            echo ""
+            print_info "로그 확인: tail -f $QUICK_LOG_FILE"
+            return 0
+        fi
+    done
+
+    print_error "Quick Tunnel 시작 실패"
+    print_info "로그 확인: cat $QUICK_LOG_FILE"
+    return 1
+}
+
+# Stop Quick Tunnel
+stop_quick_tunnel() {
+    QUICK_PID_FILE="/tmp/quick_tunnel.pid"
+
+    if [ -f "$QUICK_PID_FILE" ]; then
+        PID=$(cat "$QUICK_PID_FILE")
+        if ps -p "$PID" > /dev/null 2>&1; then
+            kill "$PID"
+            sleep 2
+            if ps -p "$PID" > /dev/null 2>&1; then
+                kill -9 "$PID" 2>/dev/null || true
+            fi
+            print_status "Quick Tunnel 중지됨 (PID: $PID)"
+        fi
+        rm -f "$QUICK_PID_FILE"
+    else
+        # Backup: kill by process pattern
+        pkill -f "cloudflared.*tunnel.*--url" 2>/dev/null || true
+    fi
+}
+
+# Interactive menu function
+interactive_menu() {
+    echo ""
+    echo "=== 현재 서비스 상태 ==="
+    echo ""
+
+    UNIFIED_RUNNING=false
+    CLOUDFLARE_RUNNING=false
+    QUICK_RUNNING=false
+
+    # Check unified status
+    echo "┌─────────────────────────────────────────────────────────────────────────┐"
+    echo "│ Unified Server                                                          │"
+    echo "├─────────────────────────────────────────────────────────────────────────┤"
+    if check_unified_status; then
+        UNIFIED_RUNNING=true
+        PID=$(cat $UNIFIED_PID_FILE)
+        echo "│ 상태: 실행 중 (PID: $PID)"
+        echo "│"
+        echo "│ 로컬 엔드포인트:"
+        echo "│   • Mail Query:  http://localhost:8000/mail-query/"
+        echo "│   • Enrollment:  http://localhost:8000/enrollment/"
+        echo "│   • OneNote:     http://localhost:8000/onenote/"
+        echo "│   • Health:      http://localhost:8000/health"
+    else
+        echo "│ 상태: 중지됨"
+    fi
+    echo "└─────────────────────────────────────────────────────────────────────────┘"
+    echo ""
+
+    # Check Quick Tunnel status
+    QUICK_PID_FILE="/tmp/quick_tunnel.pid"
+
+    # Check both PID file and actual cloudflared process
+    CLOUDFLARED_PID=""
+    if [ -f "$QUICK_PID_FILE" ] && ps -p "$(cat $QUICK_PID_FILE)" > /dev/null 2>&1; then
+        CLOUDFLARED_PID=$(cat "$QUICK_PID_FILE")
+    else
+        # Check if cloudflared tunnel is running without PID file
+        CLOUDFLARED_PID=$(pgrep -f "cloudflared.*tunnel.*--url" 2>/dev/null | head -1)
+    fi
+
+    echo "┌─────────────────────────────────────────────────────────────────────────┐"
+    echo "│ Quick Tunnel (무료)                                                     │"
+    echo "├─────────────────────────────────────────────────────────────────────────┤"
+    if [ -n "$CLOUDFLARED_PID" ]; then
+        QUICK_RUNNING=true
+        echo "│ 상태: 실행 중 (PID: $CLOUDFLARED_PID)"
+
+        # Try to get URL from log file first
+        QUICK_LOG_FILE="$LOG_DIR/quick_tunnel.log"
+        TUNNEL_URL=""
+        if [ -f "$QUICK_LOG_FILE" ]; then
+            TUNNEL_URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+        fi
+
+        # Try to get URL from metrics endpoint
+        if [ -z "$TUNNEL_URL" ]; then
+            TUNNEL_URL=$(curl -s http://127.0.0.1:20241/metrics 2>/dev/null | grep "userHostname=" | grep -o "https://[^\"]*\.trycloudflare\.com" | head -1)
+        fi
+
+        if [ -n "$TUNNEL_URL" ]; then
+            echo "│"
+            echo "│ 공개 URL:"
+            echo "│   $TUNNEL_URL"
+            echo "│"
+            echo "│ MCP 서버 엔드포인트:"
+            echo "│   • Mail Query:  $TUNNEL_URL/mail-query/"
+            echo "│   • Enrollment:  $TUNNEL_URL/enrollment/"
+            echo "│   • OneNote:     $TUNNEL_URL/onenote/"
+            echo "│"
+            echo "│ Health Check:"
+            echo "│   $TUNNEL_URL/health"
         else
-            print_error "Failed to start unified HTTP server"
-            echo "Check logs/unified_server.log for details"
-            exit 1
+            echo "│ 터널 URL 확인 중... (잠시만 기다려주세요)"
+        fi
+    else
+        echo "│ 상태: 중지됨"
+    fi
+    echo "└─────────────────────────────────────────────────────────────────────────┘"
+
+    echo ""
+    echo "=== 실행 옵션 ==="
+    echo ""
+    echo "1) Unified Server 시작/중지"
+    echo "2) Quick Tunnel 시작 (무료, 임시 URL)"
+    echo "3) Quick Tunnel 백그라운드 시작"
+    echo "4) Quick Tunnel 중지"
+    echo "5) 상태 확인"
+    echo "6) 로그 보기"
+    echo "0) 종료"
+    echo ""
+
+    read -p "선택하세요: " choice
+
+    case $choice in
+        1)
+            # Unified Server 토글
+            if [ "$UNIFIED_RUNNING" = true ]; then
+                print_warning "Unified Server를 중지합니다..."
+                stop_unified_server
+            else
+                print_warning "Unified Server를 시작합니다..."
+                start_unified_server
+            fi
+            ;;
+        2)
+            # Quick Tunnel 포그라운드 시작
+            if [ "$QUICK_RUNNING" = true ]; then
+                print_warning "Quick Tunnel이 이미 실행 중입니다"
+                QUICK_LOG_FILE="$LOG_DIR/quick_tunnel.log"
+                URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+                if [ -n "$URL" ]; then
+                    echo "접속 URL: ${GREEN}$URL${NC}"
+                fi
+            else
+                # Unified 서버 확인 및 시작
+                if [ "$UNIFIED_RUNNING" = false ]; then
+                    print_warning "Unified Server를 먼저 시작합니다..."
+                    start_unified_server
+                    if [ $? -ne 0 ]; then
+                        print_error "Unified Server 시작 실패"
+                        return 1
+                    fi
+                fi
+
+                # Quick Tunnel 시작
+                echo ""
+                print_status "Quick Tunnel을 시작합니다 (무료)..."
+                print_info "임시 도메인이 생성됩니다. Ctrl+C로 종료할 수 있습니다."
+                echo ""
+
+                # cloudflared 경로 확인
+                if [ -z "$CLOUDFLARED_BIN" ]; then
+                    check_cloudflared
+                fi
+
+                # Quick Tunnel 실행 (foreground)
+                $CLOUDFLARED_BIN tunnel --url http://localhost:8000
+            fi
+            ;;
+        3)
+            # Quick Tunnel 백그라운드 시작
+            if [ "$QUICK_RUNNING" = true ]; then
+                print_warning "Quick Tunnel이 이미 실행 중입니다"
+                QUICK_LOG_FILE="$LOG_DIR/quick_tunnel.log"
+                URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+                if [ -n "$URL" ]; then
+                    echo "접속 URL: ${GREEN}$URL${NC}"
+                fi
+            else
+                # Unified 서버 확인 및 시작
+                if [ "$UNIFIED_RUNNING" = false ]; then
+                    print_warning "Unified Server를 먼저 시작합니다..."
+                    start_unified_server
+                    if [ $? -ne 0 ]; then
+                        print_error "Unified Server 시작 실패"
+                        return 1
+                    fi
+                fi
+
+                # Quick Tunnel 백그라운드 시작
+                start_quick_tunnel_background
+            fi
+            ;;
+        4)
+            # Quick Tunnel 중지
+            if [ "$QUICK_RUNNING" = true ]; then
+                stop_quick_tunnel
+            else
+                print_warning "Quick Tunnel이 실행 중이지 않습니다"
+            fi
+            ;;
+        5)
+            detailed_status
+            ;;
+        6)
+            echo ""
+            echo "로그 옵션:"
+            echo "1) Unified server logs"
+            echo "2) Quick Tunnel logs"
+            echo "3) Both (화면 분할)"
+            read -p "Choice (1-3): " log_choice
+
+            case $log_choice in
+                1)
+                    tail -f "$LOG_DIR/unified_server.log"
+                    ;;
+                2)
+                    if [ -f "$LOG_DIR/quick_tunnel.log" ]; then
+                        tail -f "$LOG_DIR/quick_tunnel.log"
+                    else
+                        print_warning "Quick Tunnel이 실행된 적이 없습니다"
+                    fi
+                    ;;
+                3)
+                    if command -v tmux &> /dev/null; then
+                        tmux new-session \; \
+                            send-keys "tail -f $LOG_DIR/unified_server.log" C-m \; \
+                            split-window -h \; \
+                            send-keys "tail -f $LOG_DIR/quick_tunnel.log" C-m \;
+                    else
+                        print_error "tmux not installed. Install with: sudo apt install tmux"
+                    fi
+                    ;;
+            esac
+            ;;
+        0)
+            echo "종료합니다."
+            exit 0
+            ;;
+        *)
+            print_error "잘못된 선택입니다"
+            ;;
+    esac
+
+    echo ""
+    show_access_info
+
+    # Automatically show menu again
+    echo ""
+    interactive_menu
+}
+
+
+# Show access information
+show_access_info() {
+    if check_unified_status; then
+        print_status "Unified Server is active!"
+        echo ""
+        echo "Access points:"
+        echo "  Local: http://localhost:8000"
+
+        # Check if Quick Tunnel is running
+        QUICK_PID_FILE="/tmp/quick_tunnel.pid"
+        if [ -f "$QUICK_PID_FILE" ] && ps -p "$(cat $QUICK_PID_FILE)" > /dev/null 2>&1; then
+            QUICK_LOG_FILE="$LOG_DIR/quick_tunnel.log"
+            URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+            if [ -n "$URL" ]; then
+                echo "  Tunnel: $URL"
+            fi
+        fi
+
+        echo ""
+        echo "Logs:"
+        echo "  Unified server: tail -f $LOG_DIR/unified_server.log"
+
+        if [ -f "$QUICK_PID_FILE" ] && ps -p "$(cat $QUICK_PID_FILE)" > /dev/null 2>&1; then
+            echo "  Quick Tunnel: tail -f $LOG_DIR/quick_tunnel.log"
         fi
     fi
 }
 
-# Install systemd service
-install_service() {
-    print_status "Installing systemd service..."
+# Detailed status
+detailed_status() {
+    echo ""
+    echo "=== Service Status ==="
+    echo ""
 
-    # Copy service file
-    sudo cp "$SERVICE_FILE" /etc/systemd/system/
-
-    # Reload systemd
-    sudo systemctl daemon-reload
-
-    # Enable and start service
-    sudo systemctl enable cloudflared.service
-    sudo systemctl restart cloudflared.service
-
-    # Check status
-    if sudo systemctl is-active --quiet cloudflared.service; then
-        print_status "Cloudflare Tunnel service is running"
+    echo "Unified HTTP Server:"
+    if check_unified_status; then
+        PID=$(cat "$UNIFIED_PID_FILE")
+        echo "  Status: ${GREEN}RUNNING${NC}"
+        echo "  PID: $PID"
+        echo "  Memory: $(ps -o rss= -p $PID | awk '{print int($1/1024) "MB"}' 2>/dev/null || echo "N/A")"
+        echo "  Uptime: $(ps -o etime= -p $PID 2>/dev/null || echo "N/A")"
     else
-        print_error "Failed to start Cloudflare Tunnel service"
-        echo "Check logs with: sudo journalctl -u cloudflared -f"
-        exit 1
+        echo "  Status: ${RED}STOPPED${NC}"
     fi
-}
-
-# Test the tunnel
-test_tunnel() {
-    print_status "Testing tunnel connection..."
-
-    # Wait for tunnel to establish
-    sleep 5
-
-    # Get tunnel info
-    cloudflared tunnel info "$TUNNEL_NAME"
 
     echo ""
-    print_status "Tunnel is active!"
+    echo "Quick Tunnel (무료):"
+    QUICK_PID_FILE="/tmp/quick_tunnel.pid"
+
+    # Check both PID file and actual cloudflared process
+    CLOUDFLARED_PID=""
+    if [ -f "$QUICK_PID_FILE" ] && ps -p "$(cat $QUICK_PID_FILE)" > /dev/null 2>&1; then
+        CLOUDFLARED_PID=$(cat "$QUICK_PID_FILE")
+    else
+        # Check if cloudflared tunnel is running without PID file
+        CLOUDFLARED_PID=$(pgrep -f "cloudflared.*tunnel.*--url" 2>/dev/null | head -1)
+    fi
+
+    if [ -n "$CLOUDFLARED_PID" ]; then
+        echo "  Status: ${GREEN}RUNNING${NC}"
+        echo "  PID: $CLOUDFLARED_PID"
+
+        # Try to get URL from log file
+        QUICK_LOG_FILE="$LOG_DIR/quick_tunnel.log"
+        TUNNEL_URL=""
+        if [ -f "$QUICK_LOG_FILE" ]; then
+            TUNNEL_URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+        fi
+
+        # Try to get URL from metrics endpoint
+        if [ -z "$TUNNEL_URL" ]; then
+            TUNNEL_URL=$(curl -s http://127.0.0.1:20241/metrics 2>/dev/null | grep "userHostname=" | grep -o "https://[^\"]*\.trycloudflare\.com" | head -1)
+        fi
+
+        if [ -n "$TUNNEL_URL" ]; then
+            echo ""
+            echo "  ${BLUE}공개 URL:${NC}"
+            echo "    $TUNNEL_URL"
+            echo ""
+            echo "  ${BLUE}MCP 서버 엔드포인트:${NC}"
+            echo "    Mail Query:  $TUNNEL_URL/mail-query/"
+            echo "    Enrollment:  $TUNNEL_URL/enrollment/"
+            echo "    OneNote:     $TUNNEL_URL/onenote/"
+            echo ""
+            echo "  ${BLUE}Health Check:${NC}"
+            echo "    $TUNNEL_URL/health"
+        else
+            echo "  Note: 터널 URL 확인 중..."
+        fi
+    else
+        echo "  Status: ${RED}STOPPED${NC}"
+    fi
+
     echo ""
-    echo "Your application should now be accessible at:"
-    echo "  https://mailquery-mcp.yourdomain.com"
-    echo ""
-    echo "Useful commands:"
-    echo "  View tunnel status: cloudflared tunnel info $TUNNEL_NAME"
-    echo "  View service logs: sudo journalctl -u cloudflared -f"
-    echo "  Restart service: sudo systemctl restart cloudflared"
-    echo "  Stop service: sudo systemctl stop cloudflared"
+
+    # Check connectivity
+    if check_unified_status; then
+        echo "=== Connectivity Test ==="
+        echo -n "  Local endpoint (http://localhost:8000/health): "
+        if curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health | grep -q "200"; then
+            echo "${GREEN}OK${NC}"
+        else
+            echo "${RED}FAILED${NC}"
+        fi
+
+        # Quick Tunnel URL test if running
+        QUICK_PID_FILE="/tmp/quick_tunnel.pid"
+        if [ -f "$QUICK_PID_FILE" ] && ps -p "$(cat $QUICK_PID_FILE)" > /dev/null 2>&1; then
+            QUICK_LOG_FILE="$LOG_DIR/quick_tunnel.log"
+            URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
+            if [ -n "$URL" ]; then
+                echo -n "  Tunnel endpoint ($URL/health): "
+                if curl -s -o /dev/null -w "%{http_code}" "$URL/health" | grep -q "200"; then
+                    echo "${GREEN}OK${NC}"
+                else
+                    echo "${YELLOW}PENDING${NC} (터널이 아직 준비 중일 수 있습니다)"
+                fi
+            fi
+        fi
+    fi
 }
 
 # Main execution
 main() {
-    case "${1:-deploy}" in
-        deploy)
-            check_cloudflared
-            cloudflare_login
-            create_tunnel
-            configure_dns
-            start_unified_server
-            install_service
-            test_tunnel
-            ;;
-        start)
-            start_unified_server
-            sudo systemctl start cloudflared
-            print_status "Services started"
-            ;;
-        stop)
-            sudo systemctl stop cloudflared
-            pkill -f "$UNIFIED_SERVER" || true
-            print_status "Services stopped"
-            ;;
-        restart)
-            $0 stop
-            $0 start
+    # If no arguments, run interactive menu
+    if [ $# -eq 0 ]; then
+        interactive_menu
+        return
+    fi
+
+    case "${1}" in
+        menu)
+            interactive_menu
             ;;
         status)
-            echo "Unified HTTP Server:"
-            pgrep -f "$UNIFIED_SERVER" && echo "  Running" || echo "  Stopped"
+            detailed_status
+            ;;
+        quick)
+            # Quick Tunnel - 무료 임시 도메인 (명령줄 버전)
+            print_info "Quick Tunnel 시작 중 (무료, 임시 도메인)..."
+
+            # cloudflared 확인
+            check_cloudflared
+
+            # Unified 서버 시작
+            if ! check_unified_status; then
+                print_warning "Unified Server를 먼저 시작합니다..."
+                start_unified_server
+                if [ $? -ne 0 ]; then
+                    print_error "Unified Server 시작 실패"
+                    exit 1
+                fi
+            else
+                print_status "Unified Server가 이미 실행 중입니다"
+            fi
+
             echo ""
-            echo "Cloudflare Tunnel:"
-            sudo systemctl status cloudflared --no-pager
+            print_status "Quick Tunnel을 시작합니다..."
+            print_info "아래 URL로 접속할 수 있습니다 (Ctrl+C로 종료)"
+            echo ""
+
+            # Quick Tunnel 실행
+            $CLOUDFLARED_BIN tunnel --url http://localhost:8000
             ;;
         logs)
-            echo "Showing Cloudflare Tunnel logs (Ctrl+C to exit)..."
-            sudo journalctl -u cloudflared -f
+            echo "Select log to view:"
+            echo "1) Unified server logs"
+            echo "2) Cloudflare tunnel logs"
+            echo "3) Both (in split screen with tmux)"
+            read -p "Choice (1-3): " choice
+
+            case $choice in
+                1)
+                    tail -f "$LOG_DIR/unified_server.log"
+                    ;;
+                2)
+                    sudo journalctl -u cloudflared -f
+                    ;;
+                3)
+                    if command -v tmux &> /dev/null; then
+                        tmux new-session \; \
+                            send-keys "tail -f $LOG_DIR/unified_server.log" C-m \; \
+                            split-window -h \; \
+                            send-keys "sudo journalctl -u cloudflared -f" C-m \;
+                    else
+                        print_error "tmux not installed. Install with: sudo apt install tmux"
+                    fi
+                    ;;
+            esac
+            ;;
+        help|--help|-h)
+            echo "Usage: $0 [command]"
+            echo ""
+            echo "Without arguments: Interactive menu"
+            echo ""
+            echo "Commands:"
+            echo "  menu           - Show interactive menu"
+            echo "  quick          - Quick Tunnel 시작 (무료, 임시 도메인)"
+            echo "  status         - Show detailed service status"
+            echo "  logs           - View service logs"
+            echo "  help           - Show this help message"
+            echo ""
+            echo "Examples:"
+            echo "  $0              # Interactive menu"
+            echo "  $0 quick        # 무료 터널로 빠른 시작"
+            echo "  $0 status       # 상태 확인"
+            exit 0
             ;;
         *)
-            echo "Usage: $0 {deploy|start|stop|restart|status|logs}"
-            echo ""
-            echo "  deploy  - Full deployment (login, create tunnel, configure DNS, start services)"
-            echo "  start   - Start the HTTP server and tunnel"
-            echo "  stop    - Stop all services"
-            echo "  restart - Restart all services"
-            echo "  status  - Show service status"
-            echo "  logs    - Show tunnel logs"
+            echo "Unknown command: $1"
+            echo "Use '$0 help' for usage information"
+            echo "Or run '$0' without arguments for interactive menu"
             exit 1
             ;;
     esac

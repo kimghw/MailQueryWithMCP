@@ -8,26 +8,35 @@ import os
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
+from logging.handlers import RotatingFileHandler
 
 class AuthLogger:
     """인증 전용 로거"""
     
-    def __init__(self, log_dir: str = "./logs/auth"):
+    def __init__(self, log_dir: str = "./logs/auth",
+                 max_bytes: int = 10 * 1024 * 1024,  # 10MB
+                 backup_count: int = 5):
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
-        
+
         # 인증 전용 로거 생성
         self.logger = logging.getLogger("auth_logger")
         self.logger.setLevel(logging.INFO)
-        
+
         # 기존 핸들러 제거 (중복 방지)
         self.logger.handlers.clear()
-        
-        # 파일 핸들러 설정 (일별 로그 파일)
-        log_filename = datetime.now().strftime("auth_%Y-%m-%d.log")
+
+        # RotatingFileHandler 설정 (단일 파일 + 자동 로테이션)
+        log_filename = "auth.log"
         log_path = self.log_dir / log_filename
-        
-        file_handler = logging.FileHandler(log_path, encoding='utf-8')
+
+        # 다른 로그와 일관성 있게 RotatingFileHandler 사용
+        file_handler = RotatingFileHandler(
+            log_path,
+            maxBytes=max_bytes,
+            backupCount=backup_count,
+            encoding='utf-8'
+        )
         file_handler.setLevel(logging.INFO)
         
         # 포맷 설정
@@ -130,8 +139,8 @@ class AuthLogger:
     
     def get_log_path(self) -> Path:
         """현재 로그 파일 경로 반환"""
-        log_filename = datetime.now().strftime("auth_%Y-%m-%d.log")
-        return self.log_dir / log_filename
+        # 이제 단일 파일이므로 고정된 이름 반환
+        return self.log_dir / "auth.log"
 
 
 # 싱글톤 인스턴스

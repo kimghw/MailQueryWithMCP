@@ -527,7 +527,7 @@ class UnifiedMCPServer:
 
                 # auth_code로부터 클라이언트 정보 조회 (새 스키마 사용)
                 query = """
-                SELECT client_id, metadata
+                SELECT client_id, metadata, scope
                 FROM dcr_oauth
                 WHERE token_type = 'auth_code'
                   AND token_value = ?
@@ -553,7 +553,12 @@ class UnifiedMCPServer:
                         status_code=400,
                     )
 
-                client_id, redirect_uri, scope = result
+                client_id, metadata_json, scope = result
+
+                # metadata에서 redirect_uri 추출
+                import json
+                metadata = json.loads(metadata_json) if metadata_json else {}
+                redirect_uri = metadata.get('redirect_uri', '')
 
                 # 클라이언트 정보로 Azure 토큰 교환
                 client = dcr_service.get_client(client_id)
@@ -659,8 +664,8 @@ class UnifiedMCPServer:
                 dcr_service.db.execute_query(
                     update_query,
                     (
-                        dcr_service._encrypt_token(azure_token_data.get("access_token")),
-                        dcr_service._encrypt_token(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token", "") else None,
+                        azure_token_data.get("access_token"),
+                        azure_token_data.get("refresh_token", ""),
                         json.dumps(existing_metadata),
                         auth_code,
                     ),
