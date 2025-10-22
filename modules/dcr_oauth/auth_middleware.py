@@ -28,7 +28,7 @@ async def verify_bearer_token_middleware(request, call_next=None):
         "/oauth/",
         "/health",
         "/info",
-        "/enrollment/callback"  # Enrollment 서비스 콜백
+        "/enrollment/callback"  # Enrollment 서비스의 OAuth 콜백만 제외
     ]
 
     if any(path.startswith(excluded) for excluded in excluded_paths):
