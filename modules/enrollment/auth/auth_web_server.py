@@ -42,7 +42,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
 
         if parsed_path.path == "/health":
             self._handle_health_check()
-        elif parsed_path.path == "/auth/callback":
+        elif parsed_path.path in ["/auth/callback", "/enrollment/callback"]:
             self._handle_oauth_callback()
         else:
             self.send_response(404)
