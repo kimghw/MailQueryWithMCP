@@ -228,7 +228,8 @@ class UnifiedMCPServer:
                     "grant_types_supported": ["authorization_code", "refresh_token"],
                     "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
                     "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
-                    "code_challenge_methods_supported": ["S256"],
+                    "code_challenge_methods_supported": ["S256", "plain"],
+                    "pkce_required": False,  # PKCE is optional but supported
                 },
                 headers={
                     "Access-Control-Allow-Origin": "*",
@@ -279,6 +280,9 @@ class UnifiedMCPServer:
                 scope = params.get("scope", "Mail.Read User.Read")
                 state = params.get("state")
                 response_type = params.get("response_type", "code")
+                # PKCE parameters (RFC 7636)
+                code_challenge = params.get("code_challenge")
+                code_challenge_method = params.get("code_challenge_method", "plain" if code_challenge else None)
 
                 if not client_id or not redirect_uri:
                     return JSONResponse(
@@ -303,10 +307,18 @@ class UnifiedMCPServer:
                         status_code=400,
                     )
 
-                # Authorization code 생성 (Azure AD callback용)
+                # Authorization code 생성 (Azure AD callback용, PKCE 지원)
                 auth_code = dcr_service.create_authorization_code(
-                    client_id=client_id, redirect_uri=redirect_uri, scope=scope, state=state
+                    client_id=client_id,
+                    redirect_uri=redirect_uri,
+                    scope=scope,
+                    state=state,
+                    code_challenge=code_challenge,
+                    code_challenge_method=code_challenge_method
                 )
+
+                if code_challenge:
+                    logger.info(f"📝 PKCE enabled for authorization: method={code_challenge_method}")
 
                 # Azure AD 인증 URL 직접 생성
                 azure_tenant_id = client["azure_tenant_id"]
@@ -357,6 +369,8 @@ class UnifiedMCPServer:
                 client_id = form_data.get("client_id")
                 client_secret = form_data.get("client_secret")
                 redirect_uri = form_data.get("redirect_uri")
+                # PKCE parameter (RFC 7636)
+                code_verifier = form_data.get("code_verifier")
 
                 if grant_type != "authorization_code":
                     return JSONResponse(
@@ -372,13 +386,22 @@ class UnifiedMCPServer:
                         status_code=401,
                     )
 
-                # Authorization code 검증 (DCR auth_code)
+                # Authorization code 검증 (DCR auth_code, PKCE 지원)
                 logger.info(f"🔍 Verifying authorization code: {code[:20]}...")
-                auth_data = dcr_service.verify_authorization_code(code, client_id, redirect_uri)
+                if code_verifier:
+                    logger.info(f"📝 PKCE verification requested")
+
+                auth_data = dcr_service.verify_authorization_code(
+                    code=code,
+                    client_id=client_id,
+                    redirect_uri=redirect_uri,
+                    code_verifier=code_verifier
+                )
                 if not auth_data:
-                    logger.error(f"❌ Invalid authorization code")
+                    error_desc = "PKCE verification failed" if code_verifier else "Invalid authorization code"
+                    logger.error(f"❌ {error_desc}")
                     return JSONResponse(
-                        {"error": "invalid_grant", "error_description": "Invalid authorization code"},
+                        {"error": "invalid_grant", "error_description": error_desc},
                         status_code=400,
                     )
                 logger.info(f"✅ Authorization code verified")

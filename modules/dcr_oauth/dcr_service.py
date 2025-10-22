@@ -7,8 +7,10 @@ import json
 import os
 import secrets
 import time
+import hashlib
+import base64
 from datetime import datetime, timedelta
-from typing import Dict, Optional, Any
+from typing import Dict, Optional, Any, Tuple
 from enum import Enum
 
 from infra.core.database import get_database_manager
@@ -241,31 +243,74 @@ class DCRServiceV2:
         return secrets.compare_digest(client.get("client_secret", ""), client_secret)
 
     def create_authorization_code(
-        self, client_id: str, redirect_uri: str, scope: str, state: Optional[str] = None
+        self,
+        client_id: str,
+        redirect_uri: str,
+        scope: str,
+        state: Optional[str] = None,
+        code_challenge: Optional[str] = None,
+        code_challenge_method: Optional[str] = None
     ) -> str:
-        """Authorization code 생성 (10분 유효)"""
+        """Authorization code 생성 (10분 유효, PKCE 지원)
+
+        Args:
+            client_id: 클라이언트 ID
+            redirect_uri: 리다이렉트 URI
+            scope: 요청 스코프
+            state: CSRF 방지용 state
+            code_challenge: PKCE code challenge (RFC 7636)
+            code_challenge_method: PKCE method ('S256' or 'plain')
+
+        Returns:
+            생성된 authorization code
+        """
         code = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(minutes=10)
 
+        # metadata에 PKCE 정보 저장
+        metadata = {
+            "redirect_uri": redirect_uri,
+            "state": state
+        }
+
+        if code_challenge:
+            metadata["code_challenge"] = code_challenge
+            metadata["code_challenge_method"] = code_challenge_method or "plain"
+            logger.info(f"📝 PKCE enabled for auth code: method={metadata['code_challenge_method']}")
+
         query = """
         INSERT INTO dcr_oauth (
-            token_type, token_value, client_id, scope, state, expires_at
+            token_type, token_value, client_id, scope, metadata, expires_at
         ) VALUES (?, ?, ?, ?, ?, ?)
         """
 
         self.db.execute_query(
             query,
-            (TokenType.AUTH_CODE.value, code, client_id, scope, state, expires_at)
+            (TokenType.AUTH_CODE.value, code, client_id, scope, json.dumps(metadata), expires_at)
         )
 
         return code
 
     def verify_authorization_code(
-        self, code: str, client_id: str, redirect_uri: str = None
+        self,
+        code: str,
+        client_id: str,
+        redirect_uri: str = None,
+        code_verifier: Optional[str] = None
     ) -> Optional[Dict[str, Any]]:
-        """Authorization code 검증 (일회용)"""
+        """Authorization code 검증 (일회용, PKCE 지원)
+
+        Args:
+            code: Authorization code
+            client_id: 클라이언트 ID
+            redirect_uri: 리다이렉트 URI
+            code_verifier: PKCE code verifier (RFC 7636)
+
+        Returns:
+            검증 성공 시 스코프와 상태 정보, 실패 시 None
+        """
         query = """
-        SELECT client_id, scope, state, expires_at, used_at
+        SELECT client_id, scope, metadata, expires_at, used_at
         FROM dcr_oauth
         WHERE token_type = ? AND token_value = ?
         """
@@ -273,11 +318,15 @@ class DCRServiceV2:
         result = self.db.fetch_one(query, (TokenType.AUTH_CODE.value, code))
 
         if not result:
+            logger.warning(f"❌ Authorization code not found")
             return None
 
-        stored_client_id, scope, state, expires_at, used_at = result
+        stored_client_id, scope, metadata_str, expires_at, used_at = result
 
-        # 검증
+        # metadata 파싱
+        metadata = json.loads(metadata_str) if metadata_str else {}
+
+        # 기본 검증
         if stored_client_id != client_id:
             logger.warning(f"❌ Client ID mismatch")
             return None
@@ -290,6 +339,27 @@ class DCRServiceV2:
             logger.warning(f"❌ Authorization code expired")
             return None
 
+        # Redirect URI 검증 (metadata에서)
+        if redirect_uri and metadata.get("redirect_uri") != redirect_uri:
+            logger.warning(f"❌ Redirect URI mismatch")
+            return None
+
+        # PKCE 검증 (RFC 7636)
+        if "code_challenge" in metadata:
+            if not code_verifier:
+                logger.warning(f"❌ PKCE required but no code_verifier provided")
+                return None
+
+            if not self._verify_pkce(
+                code_verifier,
+                metadata["code_challenge"],
+                metadata.get("code_challenge_method", "plain")
+            ):
+                logger.warning(f"❌ PKCE verification failed")
+                return None
+
+            logger.info(f"✅ PKCE verification successful")
+
         # Mark as used
         update_query = """
         UPDATE dcr_oauth
@@ -298,7 +368,7 @@ class DCRServiceV2:
         """
         self.db.execute_query(update_query, (TokenType.AUTH_CODE.value, code))
 
-        return {"scope": scope, "state": state}
+        return {"scope": scope, "state": metadata.get("state")}
 
     def store_token(
         self,
@@ -418,6 +488,61 @@ class DCRServiceV2:
             "scope": scope,
             "expires_in": 3600  # Default expiry
         }
+
+    # PKCE Helper Methods (RFC 7636)
+    def _generate_code_verifier(self) -> str:
+        """PKCE code_verifier 생성 (43-128 문자)"""
+        return base64.urlsafe_b64encode(secrets.token_bytes(32)).decode('utf-8').rstrip('=')
+
+    def _generate_code_challenge(self, code_verifier: str, method: str = "S256") -> str:
+        """PKCE code_challenge 생성
+
+        Args:
+            code_verifier: 원본 verifier
+            method: 'plain' 또는 'S256'
+
+        Returns:
+            code_challenge 값
+        """
+        if method == "plain":
+            return code_verifier
+        elif method == "S256":
+            digest = hashlib.sha256(code_verifier.encode('utf-8')).digest()
+            return base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
+        else:
+            raise ValueError(f"Unsupported PKCE method: {method}")
+
+    def _verify_pkce(self, code_verifier: str, code_challenge: str, method: str = "plain") -> bool:
+        """PKCE 검증
+
+        Args:
+            code_verifier: 클라이언트가 제공한 verifier
+            code_challenge: 저장된 challenge
+            method: 'plain' 또는 'S256'
+
+        Returns:
+            검증 성공 여부
+        """
+        if method == "plain":
+            # plain 방식: verifier와 challenge가 같아야 함
+            return secrets.compare_digest(code_verifier, code_challenge)
+        elif method == "S256":
+            # S256 방식: SHA256(verifier) == challenge
+            calculated_challenge = self._generate_code_challenge(code_verifier, "S256")
+            return secrets.compare_digest(calculated_challenge, code_challenge)
+        else:
+            logger.warning(f"Unsupported PKCE method: {method}")
+            return False
+
+    def generate_pkce_pair(self) -> Tuple[str, str]:
+        """PKCE code_verifier와 code_challenge 쌍 생성 (S256 방식)
+
+        Returns:
+            (code_verifier, code_challenge) 튜플
+        """
+        code_verifier = self._generate_code_verifier()
+        code_challenge = self._generate_code_challenge(code_verifier, "S256")
+        return code_verifier, code_challenge
 
     def update_auth_code_with_azure_tokens(
         self, auth_code: str, azure_code: str, azure_access_token: str, azure_refresh_token: str
