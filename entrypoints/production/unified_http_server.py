@@ -415,11 +415,19 @@ class UnifiedMCPServer:
                         status_code=401,
                     )
 
-                # 저장된 Azure 토큰 조회 (azure_callback에서 azure_tokens 테이블에 저장한 토큰)
-                logger.info(f"🔍 Looking for Azure tokens for client: {client_id}...")
-                azure_tokens = dcr_service.get_azure_tokens_by_client_id(client_id)
+                # principal_id로 Azure 토큰 조회
+                principal_id = auth_data.get("principal_id")
+                if not principal_id:
+                    logger.error(f"❌ No principal_id in authorization code")
+                    return JSONResponse(
+                        {"error": "invalid_grant", "error_description": "No user identity in authorization code"},
+                        status_code=400,
+                    )
+
+                logger.info(f"🔍 Looking for Azure tokens for principal: {principal_id}...")
+                azure_tokens = dcr_service.get_azure_tokens_by_principal_id(principal_id)
                 if not azure_tokens:
-                    logger.error(f"❌ Azure token not found for client: {client_id}")
+                    logger.error(f"❌ Azure token not found for principal: {principal_id}")
                     return JSONResponse(
                         {"error": "invalid_grant", "error_description": "Azure token not found"},
                         status_code=400,
@@ -436,11 +444,11 @@ class UnifiedMCPServer:
                 refresh_token = secrets.token_urlsafe(32)
                 azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                # Azure 토큰은 이미 azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장
+                # Azure 토큰은 이미 azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장 (principal_id 연결)
                 dcr_query = """
                 INSERT INTO dcr_tokens (
-                    token_value, client_id, token_type, expires_at, status
-                ) VALUES (?, ?, 'Bearer', ?, 'active')
+                    token_value, client_id, token_type, principal_id, expires_at, status
+                ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
                 """
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
@@ -450,10 +458,11 @@ class UnifiedMCPServer:
                     (
                         crypto.account_encrypt_sensitive_data(access_token),
                         client_id,
+                        principal_id,
                         azure_token_expiry,
                     ),
                 )
-                logger.info(f"✅ DCR token stored for client: {client_id}")
+                logger.info(f"✅ DCR token stored for client: {client_id}, linked to principal: {principal_id}")
 
                 return JSONResponse(
                     {
@@ -675,19 +684,19 @@ class UnifiedMCPServer:
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
 
+                # Azure 토큰을 principal_id 기준으로 저장 (여러 DCR 클라이언트가 공유)
                 azure_insert_query = """
                 INSERT OR REPLACE INTO azure_tokens (
-                    client_id, azure_tenant_id, principal_type, principal_id, resource,
+                    principal_id, azure_tenant_id, principal_type, resource,
                     granted_scope, azure_access_token, azure_refresh_token, azure_token_expiry,
-                    user_email, user_name
-                ) VALUES (?, ?, 'delegated', ?, 'https://graph.microsoft.com', ?, ?, ?, ?, ?, ?)
+                    user_email, user_name, updated_at
+                ) VALUES (?, ?, 'delegated', 'https://graph.microsoft.com', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """
                 dcr_service.db.execute_query(
                     azure_insert_query,
                     (
-                        client_id,
-                        client["azure_tenant_id"],
                         principal_id,
+                        client["azure_tenant_id"],
                         scope,
                         crypto.account_encrypt_sensitive_data(azure_token_data.get("access_token")),
                         crypto.account_encrypt_sensitive_data(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token") else None,
@@ -696,7 +705,17 @@ class UnifiedMCPServer:
                         user_name,
                     ),
                 )
-                logger.info(f"✅ Azure token saved to azure_tokens for client: {client_id}, user: {user_email}")
+                logger.info(f"✅ Azure token saved for principal: {principal_id}, user: {user_email}")
+
+                # authorization code에 principal_id 업데이트 (토큰 교환 시 사용)
+                if principal_id:
+                    update_auth_code_query = """
+                    UPDATE dcr_tokens
+                    SET principal_id = ?
+                    WHERE token_value = ? AND token_type = 'authorization_code'
+                    """
+                    dcr_service.db.execute_query(update_auth_code_query, (principal_id, auth_code))
+                    logger.info(f"✅ Authorization code updated with principal_id: {principal_id}")
 
                 # Claude로 리다이렉트 (원본 auth_code와 state 포함)
                 redirect_params = {
