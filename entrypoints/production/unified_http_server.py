@@ -415,36 +415,45 @@ class UnifiedMCPServer:
                         status_code=401,
                     )
 
-                # 저장된 Azure 토큰 조회 (azure_callback에서 저장한 토큰)
-                logger.info(f"🔍 Looking for Azure tokens with auth_code: {code[:20]}...")
-                azure_tokens = dcr_service.get_azure_tokens_by_auth_code(code)
+                # 저장된 Azure 토큰 조회 (azure_callback에서 azure_tokens 테이블에 저장한 토큰)
+                logger.info(f"🔍 Looking for Azure tokens for client: {client_id}...")
+                azure_tokens = dcr_service.get_azure_tokens_by_client_id(client_id)
                 if not azure_tokens:
-                    logger.error(f"❌ Azure token not found for auth_code")
+                    logger.error(f"❌ Azure token not found for client: {client_id}")
                     return JSONResponse(
                         {"error": "invalid_grant", "error_description": "Azure token not found"},
                         status_code=400,
                     )
-                logger.info(f"✅ Azure token found")
+                logger.info(f"✅ Azure token found for user: {azure_tokens.get('user_email')}")
 
                 azure_access_token = azure_tokens["access_token"]
                 azure_refresh_token = azure_tokens.get("refresh_token", "")
                 expires_in = azure_tokens.get("expires_in", 3600)
+                user_email = azure_tokens.get("user_email")
 
-                # DCR 토큰 생성 및 Azure 토큰과 매핑
+                # DCR 토큰 생성 (dcr_tokens 테이블에 저장)
                 access_token = secrets.token_urlsafe(32)
                 refresh_token = secrets.token_urlsafe(32)
                 azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                dcr_service.store_token(
-                    client_id=client_id,
-                    access_token=access_token,
-                    refresh_token=refresh_token,
-                    expires_in=expires_in,
-                    scope=auth_data["scope"],
-                    azure_access_token=azure_access_token,
-                    azure_refresh_token=azure_refresh_token,
-                    azure_token_expiry=azure_token_expiry,
+                # Azure 토큰은 이미 azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장
+                dcr_query = """
+                INSERT INTO dcr_tokens (
+                    token_value, client_id, token_type, expires_at, status
+                ) VALUES (?, ?, 'Bearer', ?, 'active')
+                """
+                from modules.enrollment.account import AccountCryptoHelpers
+                crypto = AccountCryptoHelpers()
+
+                dcr_service.db.execute_query(
+                    dcr_query,
+                    (
+                        crypto.account_encrypt_sensitive_data(access_token),
+                        client_id,
+                        azure_token_expiry,
+                    ),
                 )
+                logger.info(f"✅ DCR token stored for client: {client_id}")
 
                 return JSONResponse(
                     {
@@ -620,10 +629,17 @@ class UnifiedMCPServer:
                         headers={"Authorization": f"Bearer {azure_token_data.get('access_token')}"}
                     )
 
+                    # 사용자 정보 추출
+                    user_email = "unknown"
+                    user_name = None
+                    principal_id = None
+
                     if user_info_response.status_code == 200:
                         user_info = user_info_response.json()
                         user_email = user_info.get("mail") or user_info.get("userPrincipalName", "")
-                        logger.info(f"🔍 User login: {user_email}")
+                        user_name = user_info.get("displayName")
+                        principal_id = user_info.get("id")  # Azure AD User Object ID
+                        logger.info(f"🔍 User login: {user_email} (name: {user_name}, id: {principal_id})")
 
                         # 사용자 허용 여부 확인
                         if not dcr_service.is_user_allowed(user_email):
@@ -645,32 +661,41 @@ class UnifiedMCPServer:
                             )
                     else:
                         logger.warning("⚠️ Could not fetch user info from Microsoft Graph")
-                        # 사용자 정보를 가져올 수 없어도 계속 진행 (허용 목록이 없는 경우를 위해)
-                        user_email = "unknown"
 
-                # Azure 토큰을 auth_code와 매핑하여 저장 (새 스키마 사용)
-                logger.info(f"💾 Saving Azure token for auth_code: {auth_code[:20]}...")
+                # Azure 토큰을 azure_tokens 테이블에 저장 (새 3-테이블 스키마)
+                logger.info(f"💾 Saving Azure token to azure_tokens table for client: {client_id}")
 
-                # metadata JSON에 Azure 코드 저장
-                import json
-                existing_metadata = json.loads(result[1]) if result[1] else {}
-                existing_metadata["azure_code"] = azure_code
+                # 토큰 만료 시간 계산
+                from datetime import datetime, timedelta
+                expires_in = azure_token_data.get("expires_in", 3600)
+                azure_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                update_query = """
-                UPDATE dcr_oauth
-                SET azure_access_token = ?, azure_refresh_token = ?, metadata = ?
-                WHERE token_type = 'auth_code' AND token_value = ?
+                # azure_tokens 테이블에 직접 저장 (INSERT OR REPLACE)
+                from modules.enrollment.account import AccountCryptoHelpers
+                crypto = AccountCryptoHelpers()
+
+                azure_insert_query = """
+                INSERT OR REPLACE INTO azure_tokens (
+                    client_id, azure_tenant_id, principal_type, principal_id, resource,
+                    granted_scope, azure_access_token, azure_refresh_token, azure_token_expiry,
+                    user_email, user_name
+                ) VALUES (?, ?, 'delegated', ?, 'https://graph.microsoft.com', ?, ?, ?, ?, ?, ?)
                 """
                 dcr_service.db.execute_query(
-                    update_query,
+                    azure_insert_query,
                     (
-                        azure_token_data.get("access_token"),
-                        azure_token_data.get("refresh_token", ""),
-                        json.dumps(existing_metadata),
-                        auth_code,
+                        client_id,
+                        client["azure_tenant_id"],
+                        principal_id,
+                        scope,
+                        crypto.account_encrypt_sensitive_data(azure_token_data.get("access_token")),
+                        crypto.account_encrypt_sensitive_data(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token") else None,
+                        azure_expiry,
+                        user_email,
+                        user_name,
                     ),
                 )
-                logger.info(f"✅ Azure token saved for auth_code: {auth_code[:20]}")
+                logger.info(f"✅ Azure token saved to azure_tokens for client: {client_id}, user: {user_email}")
 
                 # Claude로 리다이렉트 (원본 auth_code와 state 포함)
                 redirect_params = {

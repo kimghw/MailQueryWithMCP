@@ -86,55 +86,90 @@ class DCRServiceV2:
             logger.warning("⚠️ No Azure AD config found. DCR will not work.")
 
     def _ensure_dcr_schema(self):
-        """DCR 단일 테이블 스키마 초기화"""
+        """DCR 3-테이블 스키마 초기화 (Claude vs Azure 데이터 분리)"""
         schema_sql = """
-        -- 통합 DCR OAuth 테이블
-        CREATE TABLE IF NOT EXISTS dcr_oauth (
-            -- 공통 필드
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            token_type TEXT NOT NULL,           -- 'client', 'auth_code', 'access', 'refresh'
-            token_value TEXT NOT NULL,          -- client_id, code, or token (암호화)
-            secret_value TEXT,                   -- client_secret (암호화)
-
-            -- 클라이언트 정보 (token_type='client')
-            client_id TEXT,                     -- 참조용 client_id
-            client_name TEXT,
-            redirect_uris TEXT,                 -- JSON array
-            grant_types TEXT,                   -- JSON array
-            scope TEXT,
-
-            -- Azure 매핑 정보
-            azure_client_id TEXT,
-            azure_client_secret TEXT,            -- 암호화
-            azure_tenant_id TEXT,
-            azure_access_token TEXT,             -- 암호화
-            azure_refresh_token TEXT,            -- 암호화
-            azure_token_expiry DATETIME,
-
-            -- 메타데이터
-            expires_at DATETIME,
-            used_at DATETIME,                    -- auth_code 사용 시점
-            revoked_at DATETIME,                 -- 토큰 무효화 시점
-            state TEXT,                          -- OAuth state parameter
-
-            -- 타임스탬프
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-
-            -- 인덱스를 위한 제약
-            UNIQUE(token_type, token_value)
+        -- 1) DCR 클라이언트 (Claude가 보는 정보)
+        CREATE TABLE IF NOT EXISTS dcr_clients (
+            client_id        TEXT PRIMARY KEY,
+            client_secret    TEXT NOT NULL,
+            client_name      TEXT,
+            redirect_uris    TEXT,                  -- JSON string
+            grant_types      TEXT,                  -- JSON string
+            requested_scope  TEXT,
+            azure_client_id  TEXT NOT NULL,
+            created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP
         );
 
-        -- 성능 최적화 인덱스
-        CREATE INDEX IF NOT EXISTS idx_dcr_oauth_token_type ON dcr_oauth (token_type);
-        CREATE INDEX IF NOT EXISTS idx_dcr_oauth_token_value ON dcr_oauth (token_value);
-        CREATE INDEX IF NOT EXISTS idx_dcr_oauth_client_id ON dcr_oauth (client_id);
-        CREATE INDEX IF NOT EXISTS idx_dcr_oauth_expires_at ON dcr_oauth (expires_at);
-        CREATE INDEX IF NOT EXISTS idx_dcr_oauth_revoked_at ON dcr_oauth (revoked_at);
+        -- 2) DCR 토큰 (토큰 회전 추적)
+        CREATE TABLE IF NOT EXISTS dcr_tokens (
+            token_value   TEXT PRIMARY KEY,
+            client_id     TEXT NOT NULL,
+            token_type    TEXT DEFAULT 'Bearer',
+            issued_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+            expires_at    DATETIME NOT NULL,
+            status        TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','revoked','expired')),
+            rotated_from  TEXT,
+            metadata      TEXT,                     -- JSON string (PKCE, redirect_uri 등)
+            FOREIGN KEY (client_id) REFERENCES dcr_clients(client_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_dcrt_expires_at ON dcr_tokens(expires_at);
+        CREATE INDEX IF NOT EXISTS idx_dcrt_client_active ON dcr_tokens(client_id, status);
+
+        -- 3) Azure 토큰 (Claude는 접근 불가)
+        CREATE TABLE IF NOT EXISTS azure_tokens (
+            azure_token_id     INTEGER PRIMARY KEY AUTOINCREMENT,
+            client_id          TEXT NOT NULL,
+            azure_tenant_id    TEXT,
+            principal_type     TEXT NOT NULL DEFAULT 'delegated' CHECK (principal_type IN ('application','delegated')),
+            principal_id       TEXT,
+            resource           TEXT NOT NULL DEFAULT 'https://graph.microsoft.com',
+            granted_scope      TEXT,
+            azure_access_token TEXT NOT NULL,
+            azure_refresh_token TEXT,
+            azure_token_expiry DATETIME NOT NULL,
+            user_email         TEXT,
+            user_name          TEXT,
+            created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (client_id) REFERENCES dcr_clients(client_id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_azt_client ON azure_tokens(client_id);
+        CREATE INDEX IF NOT EXISTS idx_azt_expiry ON azure_tokens(azure_token_expiry);
+        CREATE UNIQUE INDEX IF NOT EXISTS uq_azt_ctx
+            ON azure_tokens (client_id, resource, COALESCE(azure_tenant_id,''), COALESCE(principal_id,''));
+
+        -- 기존 dcr_oauth 테이블 유지 (호환성)
+        CREATE TABLE IF NOT EXISTS dcr_oauth (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            token_type TEXT NOT NULL,
+            token_value TEXT NOT NULL,
+            secret_value TEXT,
+            client_id TEXT,
+            client_name TEXT,
+            redirect_uris TEXT,
+            grant_types TEXT,
+            scope TEXT,
+            azure_client_id TEXT,
+            azure_client_secret TEXT,
+            azure_tenant_id TEXT,
+            azure_access_token TEXT,
+            azure_refresh_token TEXT,
+            azure_token_expiry DATETIME,
+            expires_at DATETIME,
+            used_at DATETIME,
+            revoked_at DATETIME,
+            state TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            metadata TEXT,
+            UNIQUE(token_type, token_value)
+        );
         """
 
         try:
-            # Use executescript for multiple statements
             import sqlite3
             from infra.core.config import get_config
             config = get_config()
@@ -142,14 +177,14 @@ class DCRServiceV2:
             conn.executescript(schema_sql)
             conn.commit()
             conn.close()
-            logger.info("✅ DCR V2 schema initialized (single table)")
+            logger.info("✅ DCR V3 schema initialized (3-table structure)")
         except Exception as e:
-            logger.error(f"❌ DCR V2 schema initialization failed: {e}")
+            logger.error(f"❌ DCR V3 schema initialization failed: {e}")
             raise
 
     async def register_client(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        RFC 7591: 동적 클라이언트 등록
+        RFC 7591: 동적 클라이언트 등록 (dcr_clients 테이블)
         """
         # Azure AD 설정 확인
         if not all([self.azure_client_id, self.azure_client_secret]):
@@ -168,29 +203,24 @@ class DCRServiceV2:
         grant_types = request_data.get("grant_types", ["authorization_code", "refresh_token"])
         scope = request_data.get("scope", "Mail.Read User.Read")
 
-        # 단일 테이블에 클라이언트 정보 저장
+        # dcr_clients 테이블에 클라이언트 정보 저장
         query = """
-        INSERT INTO dcr_oauth (
-            token_type, token_value, secret_value,
-            client_id, client_name, redirect_uris, grant_types, scope,
-            azure_client_id, azure_client_secret, azure_tenant_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO dcr_clients (
+            client_id, client_secret, client_name,
+            redirect_uris, grant_types, requested_scope, azure_client_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
         """
 
         self.db.execute_query(
             query,
             (
-                TokenType.CLIENT.value,
-                client_id,  # token_value = client_id
+                client_id,
                 self.crypto.account_encrypt_sensitive_data(client_secret),
-                client_id,  # client_id 필드에도 저장 (참조용)
                 client_name,
                 json.dumps(redirect_uris),
                 json.dumps(grant_types),
                 scope,
                 self.azure_client_id,
-                self.crypto.account_encrypt_sensitive_data(self.azure_client_secret),
-                self.azure_tenant_id,
             ),
         )
 
@@ -209,19 +239,20 @@ class DCRServiceV2:
         }
 
     def get_client(self, client_id: str) -> Optional[Dict[str, Any]]:
-        """클라이언트 정보 조회"""
+        """클라이언트 정보 조회 (dcr_clients 테이블)"""
         query = """
-        SELECT token_value, secret_value, client_name, redirect_uris, grant_types, scope,
-               azure_client_id, azure_client_secret, azure_tenant_id
-        FROM dcr_oauth
-        WHERE token_type = ? AND token_value = ? AND revoked_at IS NULL
+        SELECT client_id, client_secret, client_name, redirect_uris, grant_types,
+               requested_scope, azure_client_id
+        FROM dcr_clients
+        WHERE client_id = ?
         """
 
-        result = self.db.fetch_one(query, (TokenType.CLIENT.value, client_id))
+        result = self.db.fetch_one(query, (client_id,))
 
         if not result:
             return None
 
+        # Azure 설정은 환경변수에서 가져오기 (dcr_clients에는 저장 안 함)
         return {
             "client_id": result[0],
             "client_secret": self.crypto.account_decrypt_sensitive_data(result[1]) if result[1] else None,
@@ -230,8 +261,8 @@ class DCRServiceV2:
             "grant_types": json.loads(result[4]) if result[4] else [],
             "scope": result[5],
             "azure_client_id": result[6],
-            "azure_client_secret": self.crypto.account_decrypt_sensitive_data(result[7]) if result[7] else None,
-            "azure_tenant_id": result[8],
+            "azure_client_secret": self.azure_client_secret,  # 환경변수에서
+            "azure_tenant_id": self.azure_tenant_id,  # 환경변수에서
         }
 
     def verify_client_credentials(self, client_id: str, client_secret: str) -> bool:
@@ -270,7 +301,8 @@ class DCRServiceV2:
         # metadata에 PKCE 정보 저장
         metadata = {
             "redirect_uri": redirect_uri,
-            "state": state
+            "state": state,
+            "scope": scope
         }
 
         if code_challenge:
@@ -278,15 +310,16 @@ class DCRServiceV2:
             metadata["code_challenge_method"] = code_challenge_method or "plain"
             logger.info(f"📝 PKCE enabled for auth code: method={metadata['code_challenge_method']}")
 
+        # dcr_tokens 테이블에 auth_code 저장
         query = """
-        INSERT INTO dcr_oauth (
-            token_type, token_value, client_id, scope, metadata, expires_at
-        ) VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO dcr_tokens (
+            token_value, client_id, token_type, expires_at, status, metadata
+        ) VALUES (?, ?, 'authorization_code', ?, 'active', ?)
         """
 
         self.db.execute_query(
             query,
-            (TokenType.AUTH_CODE.value, code, client_id, scope, json.dumps(metadata), expires_at)
+            (code, client_id, expires_at, json.dumps(metadata))
         )
 
         return code
@@ -309,34 +342,38 @@ class DCRServiceV2:
         Returns:
             검증 성공 시 스코프와 상태 정보, 실패 시 None
         """
+        # dcr_tokens 테이블에서 auth_code 조회
         query = """
-        SELECT client_id, scope, metadata, expires_at, used_at
-        FROM dcr_oauth
-        WHERE token_type = ? AND token_value = ?
+        SELECT client_id, metadata, expires_at, status
+        FROM dcr_tokens
+        WHERE token_value = ? AND token_type = 'authorization_code'
         """
 
-        result = self.db.fetch_one(query, (TokenType.AUTH_CODE.value, code))
+        result = self.db.fetch_one(query, (code,))
 
         if not result:
             logger.warning(f"❌ Authorization code not found")
             return None
 
-        stored_client_id, scope, metadata_str, expires_at, used_at = result
+        stored_client_id, metadata_str, expires_at, status = result
 
         # metadata 파싱
         metadata = json.loads(metadata_str) if metadata_str else {}
+        scope = metadata.get("scope")
 
         # 기본 검증
         if stored_client_id != client_id:
             logger.warning(f"❌ Client ID mismatch")
             return None
 
-        if used_at:
-            logger.warning(f"❌ Authorization code already used")
+        if status != 'active':
+            logger.warning(f"❌ Authorization code already used or revoked")
             return None
 
         if datetime.fromisoformat(expires_at) < datetime.now():
             logger.warning(f"❌ Authorization code expired")
+            # 만료된 코드 상태 업데이트
+            self.db.execute_query("UPDATE dcr_tokens SET status = 'expired' WHERE token_value = ?", (code,))
             return None
 
         # Redirect URI 검증 (metadata에서)
@@ -360,13 +397,13 @@ class DCRServiceV2:
 
             logger.info(f"✅ PKCE verification successful")
 
-        # Mark as used
+        # Mark as used (status = 'expired' 로 변경)
         update_query = """
-        UPDATE dcr_oauth
-        SET used_at = CURRENT_TIMESTAMP
-        WHERE token_type = ? AND token_value = ?
+        UPDATE dcr_tokens
+        SET status = 'expired'
+        WHERE token_value = ?
         """
-        self.db.execute_query(update_query, (TokenType.AUTH_CODE.value, code))
+        self.db.execute_query(update_query, (code,))
 
         return {"scope": scope, "state": metadata.get("state")}
 
@@ -380,113 +417,143 @@ class DCRServiceV2:
         azure_access_token: str,
         azure_refresh_token: Optional[str],
         azure_token_expiry: datetime,
+        user_email: Optional[str] = None,
+        user_name: Optional[str] = None,
+        principal_id: Optional[str] = None,
     ):
-        """액세스 토큰 저장"""
+        """DCR 토큰 + Azure 토큰 분리 저장 (dcr_tokens + azure_tokens)"""
         expires_at = datetime.now() + timedelta(seconds=expires_in)
 
-        # Access token 저장
-        query = """
-        INSERT INTO dcr_oauth (
-            token_type, token_value, client_id, scope, expires_at,
-            azure_access_token, azure_refresh_token, azure_token_expiry
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        # 1) dcr_tokens 테이블에 DCR access token 저장
+        dcr_query = """
+        INSERT INTO dcr_tokens (
+            token_value, client_id, token_type, expires_at, status
+        ) VALUES (?, ?, 'Bearer', ?, 'active')
         """
 
         self.db.execute_query(
-            query,
+            dcr_query,
             (
-                TokenType.ACCESS_TOKEN.value,
                 self.crypto.account_encrypt_sensitive_data(access_token),
                 client_id,
-                scope,
                 expires_at,
-                self.crypto.account_encrypt_sensitive_data(azure_access_token),
-                self.crypto.account_encrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None,
-                azure_token_expiry,
             ),
         )
 
-        # Refresh token 저장 (있으면)
+        # 2) azure_tokens 테이블에 Azure 토큰 저장
+        azure_query = """
+        INSERT OR REPLACE INTO azure_tokens (
+            client_id, azure_tenant_id, principal_type, principal_id, resource,
+            granted_scope, azure_access_token, azure_refresh_token, azure_token_expiry,
+            user_email, user_name
+        ) VALUES (?, ?, 'delegated', ?, 'https://graph.microsoft.com', ?, ?, ?, ?, ?, ?)
+        """
+
+        self.db.execute_query(
+            azure_query,
+            (
+                client_id,
+                self.azure_tenant_id,
+                principal_id,
+                scope,
+                self.crypto.account_encrypt_sensitive_data(azure_access_token),
+                self.crypto.account_encrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None,
+                azure_token_expiry,
+                user_email,
+                user_name,
+            ),
+        )
+
+        logger.info(f"✅ Stored DCR token + Azure token for client: {client_id}, user: {user_email}")
+
+        # 3) DCR refresh token 저장 (있으면)
         if refresh_token:
             refresh_expires = datetime.now() + timedelta(days=30)
+            refresh_query = """
+            INSERT INTO dcr_tokens (
+                token_value, client_id, token_type, expires_at, status
+            ) VALUES (?, ?, 'refresh_token', ?, 'active')
+            """
             self.db.execute_query(
-                query,
+                refresh_query,
                 (
-                    TokenType.REFRESH_TOKEN.value,
                     self.crypto.account_encrypt_sensitive_data(refresh_token),
                     client_id,
-                    scope,
                     refresh_expires,
-                    None, None, None,  # Refresh token에는 Azure 토큰 연결 안 함
                 ),
             )
 
     def verify_bearer_token(self, token: str) -> Optional[Dict[str, Any]]:
-        """Bearer 토큰 검증 및 Azure AD 토큰 반환"""
+        """Bearer 토큰 검증 및 Azure AD 토큰 반환 (dcr_tokens + azure_tokens 조인)"""
+        # dcr_tokens 테이블에서 활성 토큰 조회
         query = """
-        SELECT client_id, azure_access_token, azure_token_expiry, scope, expires_at
-        FROM dcr_oauth
-        WHERE token_type = ? AND revoked_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+        SELECT d.client_id, d.token_value, d.expires_at,
+               a.azure_access_token, a.azure_token_expiry, a.granted_scope, a.user_email
+        FROM dcr_tokens d
+        LEFT JOIN azure_tokens a ON d.client_id = a.client_id
+        WHERE d.token_type = 'Bearer' AND d.status = 'active' AND d.expires_at > CURRENT_TIMESTAMP
         """
 
-        # 모든 활성 액세스 토큰 조회
-        results = self.db.fetch_all(query, (TokenType.ACCESS_TOKEN.value,))
+        results = self.db.fetch_all(query)
 
         if not results:
             return None
 
         # 암호화된 토큰 비교
         for row in results:
-            client_id, encrypted_azure_token, azure_expiry, scope, expires_at = row
+            client_id, encrypted_token, expires_at, encrypted_azure_token, azure_expiry, scope, user_email = row
 
-            # token_value는 이미 암호화되어 저장됨
-            # 각 토큰을 복호화해서 비교해야 함
-            token_query = """
-            SELECT token_value FROM dcr_oauth
-            WHERE token_type = ? AND client_id = ? AND expires_at = ?
-            """
-            token_result = self.db.fetch_one(
-                token_query,
-                (TokenType.ACCESS_TOKEN.value, client_id, expires_at)
-            )
+            try:
+                decrypted_token = self.crypto.account_decrypt_sensitive_data(encrypted_token)
+                if secrets.compare_digest(decrypted_token, token):
+                    # 토큰 매치!
+                    if not encrypted_azure_token:
+                        logger.warning(f"⚠️ DCR token found but no Azure token for client: {client_id}")
+                        return None
 
-            if token_result:
-                try:
-                    decrypted_token = self.crypto.account_decrypt_sensitive_data(token_result[0])
-                    if secrets.compare_digest(decrypted_token, token):
-                        # 토큰 매치!
-                        azure_access_token = self.crypto.account_decrypt_sensitive_data(encrypted_azure_token)
-                        return {
-                            "client_id": client_id,
-                            "azure_access_token": azure_access_token,
-                            "azure_token_expiry": azure_expiry,
-                            "scope": scope,
-                        }
-                except Exception:
-                    continue
+                    azure_access_token = self.crypto.account_decrypt_sensitive_data(encrypted_azure_token)
+                    return {
+                        "client_id": client_id,
+                        "azure_access_token": azure_access_token,
+                        "azure_token_expiry": azure_expiry,
+                        "scope": scope,
+                        "user_email": user_email,
+                    }
+            except Exception as e:
+                logger.error(f"Token decryption error: {e}")
+                continue
 
         return None
 
-    def get_azure_tokens_by_auth_code(self, auth_code: str) -> Optional[Dict[str, Any]]:
-        """Authorization code로 저장된 Azure 토큰 조회"""
+    def get_azure_tokens_by_client_id(self, client_id: str) -> Optional[Dict[str, Any]]:
+        """client_id로 Azure 토큰 조회 (azure_tokens 테이블)"""
         query = """
-        SELECT azure_access_token, azure_refresh_token, scope
-        FROM dcr_oauth
-        WHERE token_type = ? AND token_value = ? AND azure_access_token IS NOT NULL
+        SELECT azure_access_token, azure_refresh_token, granted_scope, azure_token_expiry, user_email
+        FROM azure_tokens
+        WHERE client_id = ?
         """
 
-        result = self.db.fetch_one(query, (TokenType.AUTH_CODE.value, auth_code))
+        result = self.db.fetch_one(query, (client_id,))
 
         if not result:
             return None
 
-        azure_access_token, azure_refresh_token, scope = result
+        azure_access_token, azure_refresh_token, scope, expiry, user_email = result
+
+        # 만료 시간 계산
+        if expiry:
+            expires_in = int((datetime.fromisoformat(expiry) - datetime.now()).total_seconds())
+            if expires_in < 0:
+                expires_in = 0
+        else:
+            expires_in = 3600
 
         return {
-            "access_token": azure_access_token,
-            "refresh_token": azure_refresh_token,
+            "access_token": self.crypto.account_decrypt_sensitive_data(azure_access_token),
+            "refresh_token": self.crypto.account_decrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None,
             "scope": scope,
-            "expires_in": 3600  # Default expiry
+            "expires_in": expires_in,
+            "user_email": user_email,
         }
 
     # PKCE Helper Methods (RFC 7636)
