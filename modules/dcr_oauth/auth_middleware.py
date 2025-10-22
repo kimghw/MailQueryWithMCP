@@ -70,9 +70,10 @@ async def verify_bearer_token_middleware(request, call_next=None):
             # Store Azure token in request state for handlers to use
             request.state.azure_token = token_data["azure_access_token"]
             request.state.token_scope = token_data.get("scope", "")
-            request.state.client_id = token_data.get("client_id", "")
+            request.state.dcr_client_id = token_data.get("dcr_client_id", "")
+            request.state.azure_object_id = token_data.get("azure_object_id", "")
 
-            logger.info(f"✅ Authenticated DCR client: {token_data['client_id']} for {path}")
+            logger.info(f"✅ Authenticated DCR client: {token_data['dcr_client_id']} for {path}")
             return None  # Authentication successful
         else:
             logger.warning(f"⚠️ Invalid Bearer token for path: {path}")

@@ -67,10 +67,76 @@ class UnifiedMCPServer:
         orchestrator = get_auth_orchestrator()
         self.auth_web_server.set_session_store(orchestrator.auth_sessions)
 
+        # Initialize DCR Azure auth from environment variables
+        self._initialize_dcr_azure_auth()
+
         # Create unified Starlette app
         self.app = self._create_unified_app()
 
         logger.info("✅ Unified MCP Server initialized")
+
+    def _initialize_dcr_azure_auth(self):
+        """환경변수에서 Azure 인증 정보를 읽어 dcr_azure_auth 테이블에 저장"""
+        try:
+            # DCR_ 접두사 우선, 없으면 기본 이름 사용
+            azure_client_id = os.getenv("DCR_AZURE_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID")
+            azure_client_secret = os.getenv("DCR_AZURE_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET")
+            azure_tenant_id = os.getenv("DCR_AZURE_TENANT_ID") or os.getenv("AZURE_TENANT_ID", "common")
+            azure_redirect_uri = os.getenv("DCR_OAUTH_REDIRECT_URI") or os.getenv("AZURE_REDIRECT_URI", "http://localhost:8000/oauth/azure_callback")
+
+            if not azure_client_id or not azure_client_secret:
+                logger.warning("⚠️ DCR_AZURE_CLIENT_ID/AZURE_CLIENT_ID or DCR_AZURE_CLIENT_SECRET/AZURE_CLIENT_SECRET not found. DCR will not work.")
+                return
+
+            # dcr_azure_auth 테이블에 저장
+            import sqlite3
+            from infra.core.config import get_config
+            from modules.enrollment.account import AccountCryptoHelpers
+
+            config = get_config()
+            crypto = AccountCryptoHelpers()
+            conn = sqlite3.connect(config.dcr_database_path)
+
+            try:
+                # 기존 데이터 확인
+                cursor = conn.cursor()
+                cursor.execute("SELECT application_id FROM dcr_azure_auth WHERE application_id = ?", (azure_client_id,))
+                existing = cursor.fetchone()
+
+                if existing:
+                    # 업데이트
+                    cursor.execute("""
+                        UPDATE dcr_azure_auth
+                        SET client_secret = ?, tenant_id = ?, redirect_uri = ?
+                        WHERE application_id = ?
+                    """, (
+                        crypto.account_encrypt_sensitive_data(azure_client_secret),
+                        azure_tenant_id,
+                        azure_redirect_uri,
+                        azure_client_id
+                    ))
+                    logger.info(f"✅ Updated Azure auth config in dcr_azure_auth: {azure_client_id}")
+                else:
+                    # 신규 삽입
+                    cursor.execute("""
+                        INSERT INTO dcr_azure_auth (application_id, client_secret, tenant_id, redirect_uri)
+                        VALUES (?, ?, ?, ?)
+                    """, (
+                        azure_client_id,
+                        crypto.account_encrypt_sensitive_data(azure_client_secret),
+                        azure_tenant_id,
+                        azure_redirect_uri
+                    ))
+                    logger.info(f"✅ Saved Azure auth config to dcr_azure_auth: {azure_client_id}")
+
+                conn.commit()
+            finally:
+                conn.close()
+
+        except Exception as e:
+            logger.error(f"❌ Failed to initialize DCR Azure auth: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
 
     def _create_unified_app(self):
         """Create unified Starlette application with multiple MCP servers"""
@@ -301,7 +367,7 @@ class UnifiedMCPServer:
                     )
 
                 # Redirect URI 검증
-                if redirect_uri not in client["redirect_uris"]:
+                if redirect_uri not in client["dcr_redirect_uris"]:
                     return JSONResponse(
                         {"error": "invalid_request", "error_description": "Invalid redirect_uri"},
                         status_code=400,
@@ -309,7 +375,7 @@ class UnifiedMCPServer:
 
                 # Authorization code 생성 (Azure AD callback용, PKCE 지원)
                 auth_code = dcr_service.create_authorization_code(
-                    client_id=client_id,
+                    dcr_client_id=client_id,
                     redirect_uri=redirect_uri,
                     scope=scope,
                     state=state,
@@ -322,10 +388,9 @@ class UnifiedMCPServer:
 
                 # Azure AD 인증 URL 직접 생성
                 azure_tenant_id = client["azure_tenant_id"]
-                azure_client_id = client["azure_client_id"]
-                # Azure AD에 등록된 redirect URI (localhost:8000으로 고정)
-                # Azure Portal에서 http://localhost:8000/oauth/azure_callback 추가 필요
-                azure_redirect_uri = "http://localhost:8000/oauth/azure_callback"
+                azure_application_id = client["azure_application_id"]
+                # Azure AD에 등록된 redirect URI
+                azure_redirect_uri = client.get("azure_redirect_uri", "http://localhost:8000/oauth/azure_callback")
 
                 # state에 내부 auth_code 포함 (DCR 서버에서 매핑에 사용)
                 internal_state = f"{auth_code}:{state}" if state else auth_code
@@ -334,7 +399,7 @@ class UnifiedMCPServer:
                 import urllib.parse
                 azure_auth_url = (
                     f"https://login.microsoftonline.com/{azure_tenant_id}/oauth2/v2.0/authorize?"
-                    f"client_id={azure_client_id}&"
+                    f"client_id={azure_application_id}&"
                     f"response_type=code&"
                     f"redirect_uri={urllib.parse.quote(azure_redirect_uri)}&"
                     f"response_mode=query&"
@@ -393,7 +458,7 @@ class UnifiedMCPServer:
 
                 auth_data = dcr_service.verify_authorization_code(
                     code=code,
-                    client_id=client_id,
+                    dcr_client_id=client_id,
                     redirect_uri=redirect_uri,
                     code_verifier=code_verifier
                 )
@@ -415,19 +480,19 @@ class UnifiedMCPServer:
                         status_code=401,
                     )
 
-                # principal_id로 Azure 토큰 조회
-                principal_id = auth_data.get("principal_id")
-                if not principal_id:
-                    logger.error(f"❌ No principal_id in authorization code")
+                # azure_object_id로 Azure 토큰 조회
+                azure_object_id = auth_data.get("azure_object_id")
+                if not azure_object_id:
+                    logger.error(f"❌ No azure_object_id in authorization code")
                     return JSONResponse(
                         {"error": "invalid_grant", "error_description": "No user identity in authorization code"},
                         status_code=400,
                     )
 
-                logger.info(f"🔍 Looking for Azure tokens for principal: {principal_id}...")
-                azure_tokens = dcr_service.get_azure_tokens_by_principal_id(principal_id)
+                logger.info(f"🔍 Looking for Azure tokens for object_id: {azure_object_id}...")
+                azure_tokens = dcr_service.get_azure_tokens_by_object_id(azure_object_id)
                 if not azure_tokens:
-                    logger.error(f"❌ Azure token not found for principal: {principal_id}")
+                    logger.error(f"❌ Azure token not found for object_id: {azure_object_id}")
                     return JSONResponse(
                         {"error": "invalid_grant", "error_description": "Azure token not found"},
                         status_code=400,
@@ -444,25 +509,25 @@ class UnifiedMCPServer:
                 refresh_token = secrets.token_urlsafe(32)
                 azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                # Azure 토큰은 이미 azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장 (principal_id 연결)
+                # Azure 토큰은 이미 dcr_azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장 (azure_object_id 연결)
                 dcr_query = """
                 INSERT INTO dcr_tokens (
-                    token_value, client_id, token_type, principal_id, expires_at, status
+                    dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
                 ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
                 """
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
 
-                dcr_service.db.execute_query(
+                dcr_service._execute_query(
                     dcr_query,
                     (
                         crypto.account_encrypt_sensitive_data(access_token),
                         client_id,
-                        principal_id,
+                        azure_object_id,
                         azure_token_expiry,
                     ),
                 )
-                logger.info(f"✅ DCR token stored for client: {client_id}, linked to principal: {principal_id}")
+                logger.info(f"✅ DCR token stored for client: {client_id}, linked to object_id: {azure_object_id}")
 
                 return JSONResponse(
                     {
@@ -543,16 +608,16 @@ class UnifiedMCPServer:
                 # DCR 서비스에서 auth_code 검증 및 클라이언트 정보 조회
                 dcr_service = DCRService()
 
-                # auth_code로부터 클라이언트 정보 조회 (새 3-테이블 스키마 사용)
+                # auth_code로부터 클라이언트 정보 조회 (V3 스키마)
                 query = """
-                SELECT client_id, metadata
+                SELECT dcr_client_id, metadata
                 FROM dcr_tokens
-                WHERE token_type = 'authorization_code'
-                  AND token_value = ?
-                  AND status = 'active'
+                WHERE dcr_token_type = 'authorization_code'
+                  AND dcr_token_value = ?
+                  AND dcr_status = 'active'
                   AND expires_at > datetime('now')
                 """
-                result = dcr_service.db.fetch_one(query, (auth_code,))
+                result = dcr_service._fetch_one(query, (auth_code,))
 
                 if not result:
                     logger.error(f"❌ Invalid auth_code: {auth_code}")
@@ -603,7 +668,7 @@ class UnifiedMCPServer:
                 async with httpx.AsyncClient() as http_client:
                     token_url = f"https://login.microsoftonline.com/{client['azure_tenant_id']}/oauth2/v2.0/token"
                     token_data = {
-                        "client_id": client["azure_client_id"],
+                        "client_id": client["azure_application_id"],
                         "client_secret": client["azure_client_secret"],
                         "code": azure_code,
                         "redirect_uri": "http://localhost:8000/oauth/azure_callback",
@@ -648,8 +713,8 @@ class UnifiedMCPServer:
                         user_info = user_info_response.json()
                         user_email = user_info.get("mail") or user_info.get("userPrincipalName", "")
                         user_name = user_info.get("displayName")
-                        principal_id = user_info.get("id")  # Azure AD User Object ID
-                        logger.info(f"🔍 User login: {user_email} (name: {user_name}, id: {principal_id})")
+                        azure_object_id = user_info.get("id")  # Azure AD User Object ID
+                        logger.info(f"🔍 User login: {user_email} (name: {user_name}, object_id: {azure_object_id})")
 
                         # 사용자 허용 여부 확인
                         if not dcr_service.is_user_allowed(user_email):
@@ -672,50 +737,49 @@ class UnifiedMCPServer:
                     else:
                         logger.warning("⚠️ Could not fetch user info from Microsoft Graph")
 
-                # Azure 토큰을 azure_tokens 테이블에 저장 (새 3-테이블 스키마)
-                logger.info(f"💾 Saving Azure token to azure_tokens table for client: {client_id}")
+                # Azure 토큰을 dcr_azure_tokens 테이블에 저장 (V3 스키마)
+                logger.info(f"💾 Saving Azure token to dcr_azure_tokens table for client: {client_id}")
 
                 # 토큰 만료 시간 계산
                 from datetime import datetime, timedelta
                 expires_in = azure_token_data.get("expires_in", 3600)
                 azure_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                # azure_tokens 테이블에 직접 저장 (INSERT OR REPLACE)
+                # dcr_azure_tokens 테이블에 직접 저장 (INSERT OR REPLACE)
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
 
-                # Azure 토큰을 principal_id 기준으로 저장 (여러 DCR 클라이언트가 공유)
+                # Azure 토큰을 object_id 기준으로 저장 (여러 DCR 클라이언트가 공유)
                 azure_insert_query = """
-                INSERT OR REPLACE INTO azure_tokens (
-                    principal_id, azure_tenant_id, principal_type, resource,
-                    granted_scope, azure_access_token, azure_refresh_token, azure_token_expiry,
-                    user_email, user_name, updated_at
-                ) VALUES (?, ?, 'delegated', 'https://graph.microsoft.com', ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                INSERT OR REPLACE INTO dcr_azure_tokens (
+                    object_id, application_id, access_token, refresh_token, expires_at,
+                    scope, user_email, user_name, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                 """
-                dcr_service.db.execute_query(
+                dcr_service._execute_query(
                     azure_insert_query,
                     (
-                        principal_id,
-                        client["azure_tenant_id"],
-                        scope,
+                        azure_object_id,
+                        client["azure_application_id"],
                         crypto.account_encrypt_sensitive_data(azure_token_data.get("access_token")),
                         crypto.account_encrypt_sensitive_data(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token") else None,
                         azure_expiry,
+                        scope,
                         user_email,
                         user_name,
                     ),
                 )
-                logger.info(f"✅ Azure token saved for principal: {principal_id}, user: {user_email}")
+                logger.info(f"✅ Azure token saved for object_id: {azure_object_id}, user: {user_email}")
 
-                # authorization code에 principal_id 업데이트 (토큰 교환 시 사용)
-                if principal_id:
+                # authorization code에 azure_object_id 업데이트 (토큰 교환 시 사용)
+                if azure_object_id:
                     update_auth_code_query = """
                     UPDATE dcr_tokens
-                    SET principal_id = ?
-                    WHERE token_value = ? AND token_type = 'authorization_code'
+                    SET azure_object_id = ?
+                    WHERE dcr_token_value = ? AND dcr_token_type = 'authorization_code'
                     """
-                    dcr_service.db.execute_query(update_auth_code_query, (principal_id, auth_code))
-                    logger.info(f"✅ Authorization code updated with principal_id: {principal_id}")
+                    dcr_service._execute_query(update_auth_code_query, (azure_object_id, auth_code))
+                    logger.info(f"✅ Authorization code updated with object_id: {azure_object_id}")
 
                 # Claude로 리다이렉트 (원본 auth_code와 state 포함)
                 redirect_params = {

@@ -108,6 +108,19 @@ class Config:
         db_dir.mkdir(parents=True, exist_ok=True)
         return path
 
+    @property
+    def dcr_database_path(self) -> str:
+        """DCR 전용 SQLite 데이터베이스 파일 경로"""
+        path = os.getenv("DCR_DATABASE_PATH")
+        if not path:
+            default_path = "./data/claudedcr.db"
+            logger.info(f"DCR_DATABASE_PATH 미설정. 기본값 사용: {default_path}")
+            path = default_path
+        # 디렉터리가 없으면 생성
+        db_dir = Path(path).parent
+        db_dir.mkdir(parents=True, exist_ok=True)
+        return path
+
     # Kafka 설정
     @property
     def kafka_bootstrap_servers(self) -> List[str]:
