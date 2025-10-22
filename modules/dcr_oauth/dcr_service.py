@@ -140,33 +140,6 @@ class DCRServiceV2:
         CREATE INDEX IF NOT EXISTS idx_azt_expiry ON azure_tokens(azure_token_expiry);
         CREATE UNIQUE INDEX IF NOT EXISTS uq_azt_ctx
             ON azure_tokens (client_id, resource, COALESCE(azure_tenant_id,''), COALESCE(principal_id,''));
-
-        -- 기존 dcr_oauth 테이블 유지 (호환성)
-        CREATE TABLE IF NOT EXISTS dcr_oauth (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            token_type TEXT NOT NULL,
-            token_value TEXT NOT NULL,
-            secret_value TEXT,
-            client_id TEXT,
-            client_name TEXT,
-            redirect_uris TEXT,
-            grant_types TEXT,
-            scope TEXT,
-            azure_client_id TEXT,
-            azure_client_secret TEXT,
-            azure_tenant_id TEXT,
-            azure_access_token TEXT,
-            azure_refresh_token TEXT,
-            azure_token_expiry DATETIME,
-            expires_at DATETIME,
-            used_at DATETIME,
-            revoked_at DATETIME,
-            state TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            metadata TEXT,
-            UNIQUE(token_type, token_value)
-        );
         """
 
         try:
