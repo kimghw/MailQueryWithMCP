@@ -36,7 +36,7 @@ from modules.onenote_mcp.mcp_server.http_server import HTTPStreamingOneNoteServe
 from modules.enrollment.auth import get_auth_orchestrator
 from modules.enrollment.auth.auth_web_server import AuthWebServer
 from infra.core.logger import get_logger
-from infra.core.dcr_service import DCRService
+from modules.dcr_oauth import DCRService
 
 logger = get_logger(__name__)
 
@@ -502,11 +502,14 @@ class UnifiedMCPServer:
                 # DCR 서비스에서 auth_code 검증 및 클라이언트 정보 조회
                 dcr_service = DCRService()
 
-                # auth_code로부터 클라이언트 정보 조회
+                # auth_code로부터 클라이언트 정보 조회 (새 스키마 사용)
                 query = """
-                SELECT client_id, redirect_uri, scope
-                FROM dcr_auth_codes
-                WHERE code = ? AND used_at IS NULL
+                SELECT client_id, metadata
+                FROM dcr_oauth
+                WHERE token_type = 'auth_code'
+                  AND token_value = ?
+                  AND used_at IS NULL
+                  AND expires_at > datetime('now')
                 """
                 result = dcr_service.db.fetch_one(query, (auth_code,))
 
@@ -583,19 +586,59 @@ class UnifiedMCPServer:
                     azure_token_data = response.json()
                     logger.info(f"✅ Got Azure token, expires_in: {azure_token_data.get('expires_in')}")
 
-                # Azure 토큰을 auth_code와 매핑하여 저장
+                    # 사용자 정보 가져오기 (Microsoft Graph API)
+                    user_info_response = await http_client.get(
+                        "https://graph.microsoft.com/v1.0/me",
+                        headers={"Authorization": f"Bearer {azure_token_data.get('access_token')}"}
+                    )
+
+                    if user_info_response.status_code == 200:
+                        user_info = user_info_response.json()
+                        user_email = user_info.get("mail") or user_info.get("userPrincipalName", "")
+                        logger.info(f"🔍 User login: {user_email}")
+
+                        # 사용자 허용 여부 확인
+                        if not dcr_service.is_user_allowed(user_email):
+                            logger.warning(f"❌ User {user_email} is not in allowed users list")
+                            return Response(
+                                f"""
+                                <!DOCTYPE html>
+                                <html>
+                                <head><title>Access Denied</title></head>
+                                <body>
+                                    <h1>❌ Access Denied</h1>
+                                    <p>User <b>{user_email}</b> is not authorized to access this service.</p>
+                                    <p>Please contact your administrator for access.</p>
+                                </body>
+                                </html>
+                                """,
+                                media_type="text/html",
+                                status_code=403,
+                            )
+                    else:
+                        logger.warning("⚠️ Could not fetch user info from Microsoft Graph")
+                        # 사용자 정보를 가져올 수 없어도 계속 진행 (허용 목록이 없는 경우를 위해)
+                        user_email = "unknown"
+
+                # Azure 토큰을 auth_code와 매핑하여 저장 (새 스키마 사용)
                 logger.info(f"💾 Saving Azure token for auth_code: {auth_code[:20]}...")
+
+                # metadata JSON에 Azure 코드 저장
+                import json
+                existing_metadata = json.loads(result[1]) if result[1] else {}
+                existing_metadata["azure_code"] = azure_code
+
                 update_query = """
-                UPDATE dcr_auth_codes
-                SET azure_code = ?, azure_access_token = ?, azure_refresh_token = ?
-                WHERE code = ?
+                UPDATE dcr_oauth
+                SET azure_access_token = ?, azure_refresh_token = ?, metadata = ?
+                WHERE token_type = 'auth_code' AND token_value = ?
                 """
                 dcr_service.db.execute_query(
                     update_query,
                     (
-                        azure_code,
-                        azure_token_data.get("access_token"),
-                        azure_token_data.get("refresh_token", ""),
+                        dcr_service._encrypt_token(azure_token_data.get("access_token")),
+                        dcr_service._encrypt_token(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token", "") else None,
+                        json.dumps(existing_metadata),
                         auth_code,
                     ),
                 )

@@ -134,64 +134,12 @@ class HTTPStreamingMailAttachmentServer:
         }
 
         # Bearer token authentication (DCR support) - REQUIRED
-        auth_header = request.headers.get("Authorization", "")
+        from modules.dcr_oauth import verify_bearer_token_middleware
 
-        if not auth_header.startswith("Bearer "):
-            logger.warning("⚠️ Missing Bearer token - authentication required")
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "error": {
-                        "code": -32001,
-                        "message": "Authentication required. Please authenticate using OAuth 2.0"
-                    },
-                },
-                status_code=401,
-                headers={
-                    **base_headers,
-                    "WWW-Authenticate": 'Bearer realm="MCP Server", error="invalid_token"',
-                },
-            )
-
-        token = auth_header[7:]
-
-        try:
-            from infra.core.dcr_service import DCRService
-
-            dcr_service = DCRService()
-            token_data = dcr_service.verify_bearer_token(token)
-
-            if token_data:
-                azure_access_token = token_data["azure_access_token"]
-                logger.info(f"✅ Authenticated DCR client: {token_data['client_id']}")
-                # Store in request state for handlers to use
-                request.state.azure_token = azure_access_token
-            else:
-                logger.warning("⚠️ Invalid Bearer token")
-                return JSONResponse(
-                    {
-                        "jsonrpc": "2.0",
-                        "error": {"code": -32001, "message": "Invalid authentication token"},
-                    },
-                    status_code=401,
-                    headers={
-                        **base_headers,
-                        "WWW-Authenticate": 'Bearer realm="MCP Server", error="invalid_token"',
-                    },
-                )
-        except Exception as e:
-            logger.error(f"❌ Token verification failed: {str(e)}")
-            return JSONResponse(
-                {
-                    "jsonrpc": "2.0",
-                    "error": {"code": -32001, "message": f"Authentication error: {str(e)}"},
-                },
-                status_code=401,
-                headers={
-                    **base_headers,
-                    "WWW-Authenticate": 'Bearer realm="MCP Server", error="invalid_token"',
-                },
-            )
+        auth_response = await verify_bearer_token_middleware(request)
+        if auth_response:
+            # Authentication failed, return error response
+            return auth_response
 
         # Read and parse request
         try:
@@ -704,7 +652,7 @@ class HTTPStreamingMailAttachmentServer:
         # DCR endpoints
         async def dcr_register_handler(request):
             """RFC 7591: Dynamic Client Registration"""
-            from infra.core.dcr_service import DCRService
+            from modules.dcr_oauth import DCRService
 
             try:
                 body = await request.body()
@@ -738,7 +686,7 @@ class HTTPStreamingMailAttachmentServer:
 
         async def dcr_client_handler(request):
             """RFC 7591: Client Configuration Endpoint"""
-            from infra.core.dcr_service import DCRService
+            from modules.dcr_oauth import DCRService
 
             client_id = request.path_params.get("client_id")
             dcr_service = DCRService()
@@ -779,7 +727,7 @@ class HTTPStreamingMailAttachmentServer:
 
         async def oauth_authorize_handler(request):
             """OAuth Authorization Endpoint - Azure AD 프록시"""
-            from infra.core.dcr_service import DCRService
+            from modules.dcr_oauth import DCRService
 
             # Query parameters
             client_id = request.query_params.get("client_id")
@@ -850,7 +798,7 @@ class HTTPStreamingMailAttachmentServer:
 
         async def oauth_azure_callback_handler(request):
             """Azure AD Callback - 중간 처리"""
-            from infra.core.dcr_service import DCRService
+            from modules.dcr_oauth import DCRService
 
             code = request.query_params.get("code")
             state = request.query_params.get("state")  # This is our auth_code
@@ -874,24 +822,42 @@ class HTTPStreamingMailAttachmentServer:
             # state is our authorization code
             # We'll exchange Azure code for token and then redirect back to client
 
-            # Store Azure code temporarily
-            query = """
-            UPDATE dcr_auth_codes
-            SET azure_auth_code = ?
-            WHERE code = ?
-            """
-            dcr_service.db.execute_query(query, (code, state))
+            # Store Azure code temporarily (새 스키마 사용)
+            import json
 
-            # Now redirect to client with our authorization code
-            auth_code_data = dcr_service.db.fetch_one(
-                "SELECT redirect_uri, state FROM dcr_auth_codes WHERE code = ?",
+            # Get existing metadata
+            existing_data = dcr_service.db.fetch_one(
+                "SELECT metadata FROM dcr_oauth WHERE token_type = 'auth_code' AND token_value = ?",
                 (state,),
             )
 
-            if not auth_code_data:
+            if existing_data and existing_data[0]:
+                metadata = json.loads(existing_data[0])
+            else:
+                metadata = {}
+
+            metadata["azure_auth_code"] = code
+
+            query = """
+            UPDATE dcr_oauth
+            SET metadata = ?
+            WHERE token_type = 'auth_code' AND token_value = ?
+            """
+            dcr_service.db.execute_query(query, (json.dumps(metadata), state))
+
+            # Now redirect to client with our authorization code
+            auth_code_data = dcr_service.db.fetch_one(
+                "SELECT metadata FROM dcr_oauth WHERE token_type = 'auth_code' AND token_value = ?",
+                (state,),
+            )
+
+            if not auth_code_data or not auth_code_data[0]:
                 return JSONResponse({"error": "invalid_state"}, status_code=400)
 
-            client_redirect_uri, client_state = auth_code_data
+            # Extract redirect_uri and state from metadata
+            metadata = json.loads(auth_code_data[0])
+            client_redirect_uri = metadata.get("redirect_uri", "")
+            client_state = metadata.get("state")
 
             # Build redirect URL to client
             from urllib.parse import urlencode, urlparse, parse_qs
@@ -914,7 +880,7 @@ class HTTPStreamingMailAttachmentServer:
 
         async def oauth_token_handler(request):
             """OAuth Token Endpoint - Azure AD 토큰 교환"""
-            from infra.core.dcr_service import DCRService
+            from modules.dcr_oauth import DCRService
             from infra.core.oauth_client import get_oauth_client
 
             try:
@@ -954,11 +920,20 @@ class HTTPStreamingMailAttachmentServer:
                         status_code=400,
                     )
 
-                # Get Azure auth code
-                azure_code_result = dcr_service.db.fetch_one(
-                    "SELECT azure_auth_code FROM dcr_auth_codes WHERE code = ?",
+                # Get Azure auth code (새 스키마 사용)
+                auth_code_result = dcr_service.db.fetch_one(
+                    "SELECT metadata FROM dcr_oauth WHERE token_type = 'auth_code' AND token_value = ?",
                     (code,),
                 )
+
+                if auth_code_result and auth_code_result[0]:
+                    import json
+                    metadata = json.loads(auth_code_result[0])
+                    azure_auth_code = metadata.get("azure_auth_code")
+                else:
+                    azure_auth_code = None
+
+                azure_code_result = (azure_auth_code,) if azure_auth_code else None
 
                 if not azure_code_result or not azure_code_result[0]:
                     return JSONResponse(

@@ -24,9 +24,19 @@ class DCRService:
         self.crypto = AccountCryptoHelpers()
 
         # Azure AD 설정 (환경변수 또는 기본 계정에서 가져옴)
-        self.azure_client_id = os.getenv("AZURE_CLIENT_ID")
-        self.azure_client_secret = os.getenv("AZURE_CLIENT_SECRET")
-        self.azure_tenant_id = os.getenv("AZURE_TENANT_ID")
+        # DCR_ 접두사 우선, 기존 이름도 호환성을 위해 지원
+        self.azure_client_id = os.getenv("DCR_AZURE_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID")
+        self.azure_client_secret = os.getenv("DCR_AZURE_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET")
+        self.azure_tenant_id = os.getenv("DCR_AZURE_TENANT_ID") or os.getenv("AZURE_TENANT_ID")
+
+        # 허용된 사용자 목록 (쉼표로 구분된 이메일)
+        allowed_users_str = os.getenv("DCR_ALLOWED_USERS", "").strip()
+        self.allowed_users = [email.strip().lower() for email in allowed_users_str.split(",") if email.strip()] if allowed_users_str else []
+
+        if self.allowed_users:
+            logger.info(f"✅ DCR access restricted to {len(self.allowed_users)} users")
+        else:
+            logger.warning("⚠️ DCR access allowed for ALL Azure users (no DCR_ALLOWED_USERS set)")
 
         # DCR 설정이 없으면 기본 계정에서 가져오기
         if not all([self.azure_client_id, self.azure_client_secret, self.azure_tenant_id]):
@@ -452,3 +462,30 @@ class DCRService:
             "scope": scope,
             "expires_in": 3600  # Default expiry
         }
+
+    def is_user_allowed(self, user_email: str) -> bool:
+        """
+        사용자가 허용된 사용자 목록에 있는지 확인
+
+        Args:
+            user_email: Azure AD에서 가져온 사용자 이메일
+
+        Returns:
+            허용된 사용자면 True, 아니면 False
+        """
+        # 허용 목록이 비어있으면 모든 사용자 허용
+        if not self.allowed_users:
+            return True
+
+        # 이메일을 소문자로 변환하여 비교
+        user_email_lower = user_email.lower().strip()
+
+        # 허용 목록에 있는지 확인
+        is_allowed = user_email_lower in self.allowed_users
+
+        if not is_allowed:
+            logger.warning(f"❌ Access denied for user: {user_email} (not in allowed users list)")
+        else:
+            logger.info(f"✅ Access granted for user: {user_email}")
+
+        return is_allowed

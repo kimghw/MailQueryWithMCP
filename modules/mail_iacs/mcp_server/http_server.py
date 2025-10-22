@@ -91,6 +91,14 @@ class HTTPStreamingIACSServer:
             "Access-Control-Expose-Headers": "Mcp-Session-Id",
         }
 
+        # Bearer token authentication (DCR support)
+        from modules.dcr_oauth import verify_bearer_token_middleware
+
+        auth_response = await verify_bearer_token_middleware(request)
+        if auth_response:
+            # Authentication failed, return error response
+            return auth_response
+
         # Read and parse request
         try:
             body = await request.body()
