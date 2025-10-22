@@ -534,13 +534,13 @@ class UnifiedMCPServer:
                 # DCR 서비스에서 auth_code 검증 및 클라이언트 정보 조회
                 dcr_service = DCRService()
 
-                # auth_code로부터 클라이언트 정보 조회 (새 스키마 사용)
+                # auth_code로부터 클라이언트 정보 조회 (새 3-테이블 스키마 사용)
                 query = """
-                SELECT client_id, metadata, scope
-                FROM dcr_oauth
-                WHERE token_type = 'auth_code'
+                SELECT client_id, metadata
+                FROM dcr_tokens
+                WHERE token_type = 'authorization_code'
                   AND token_value = ?
-                  AND used_at IS NULL
+                  AND status = 'active'
                   AND expires_at > datetime('now')
                 """
                 result = dcr_service.db.fetch_one(query, (auth_code,))
@@ -562,12 +562,13 @@ class UnifiedMCPServer:
                         status_code=400,
                     )
 
-                client_id, metadata_json, scope = result
+                client_id, metadata_json = result
 
-                # metadata에서 redirect_uri 추출
+                # metadata에서 redirect_uri와 scope 추출
                 import json
                 metadata = json.loads(metadata_json) if metadata_json else {}
                 redirect_uri = metadata.get('redirect_uri', '')
+                scope = metadata.get('scope', 'Mail.Read User.Read')
 
                 # 클라이언트 정보로 Azure 토큰 교환
                 client = dcr_service.get_client(client_id)
