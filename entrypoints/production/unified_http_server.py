@@ -724,7 +724,30 @@ class UnifiedMCPServer:
             Mount("/onenote", app=self.onenote_server.app),
         ]
 
-        return Starlette(routes=routes)
+        # Create Starlette app
+        app = Starlette(routes=routes)
+
+        # OAuth 인증 미들웨어 적용 (환경변수로 제어)
+        enable_oauth = os.getenv("ENABLE_OAUTH_AUTH", "false").lower() == "true"
+        if enable_oauth:
+            from starlette.middleware.base import BaseHTTPMiddleware
+            from modules.dcr_oauth.auth_middleware import verify_bearer_token_middleware
+
+            class OAuth2Middleware(BaseHTTPMiddleware):
+                async def dispatch(self, request, call_next):
+                    # 인증 검증
+                    auth_response = await verify_bearer_token_middleware(request)
+                    if auth_response:  # 인증 실패 시 에러 응답 반환
+                        return auth_response
+                    # 인증 성공 시 다음 핸들러로 진행
+                    return await call_next(request)
+
+            app.add_middleware(OAuth2Middleware)
+            logger.info("🔐 OAuth 인증 미들웨어 활성화됨")
+        else:
+            logger.warning("⚠️  OAuth 인증 비활성화 상태 (ENABLE_OAUTH_AUTH=false)")
+
+        return app
 
     def run(self):
         """Run the unified HTTP server"""
