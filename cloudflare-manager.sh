@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# Cloudflare Tunnel Deployment Script for MailQueryWithMCP
-# Smart management of unified server and Cloudflare tunnel
-# - Starts both if neither is running
-# - Keeps Cloudflare running when unified stops
-# - Reconnects to existing Cloudflare when unified restarts
+# Cloudflare Manager for MailQueryWithMCP
+# Combined cloudflared installation and tunnel deployment script
+# - Installs cloudflared if not present
+# - Manages unified server and Cloudflare tunnel
+# - Smart management of services with interactive menu
 
 set -e
 
@@ -24,7 +24,7 @@ PROJECT_DIR="/home/kimghw/MailQueryWithMCP"
 LOG_DIR="$PROJECT_DIR/logs"
 UNIFIED_PID_FILE="/tmp/unified_server.pid"
 
-echo -e "${GREEN}MailQueryWithMCP Smart Deployment Manager${NC}"
+echo -e "${GREEN}MailQueryWithMCP Cloudflare Manager${NC}"
 echo "=================================================="
 
 # Function to print colored messages
@@ -42,6 +42,154 @@ print_warning() {
 
 print_info() {
     echo -e "${BLUE}[i]${NC} $1"
+}
+
+# ==================== INSTALLATION FUNCTIONS ====================
+
+# Install cloudflared
+install_cloudflared() {
+    echo -e "\n${GREEN}Installing cloudflared...${NC}"
+    echo "=================================="
+
+    # Detect system architecture
+    ARCH=$(uname -m)
+    OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+
+    echo "Detected: OS=$OS, Architecture=$ARCH"
+
+    # Determine download URL based on architecture
+    case "$ARCH" in
+        x86_64)
+            DOWNLOAD_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64"
+            ;;
+        aarch64|arm64)
+            DOWNLOAD_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-arm64"
+            ;;
+        armv7l)
+            DOWNLOAD_URL="https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-armhf"
+            ;;
+        *)
+            echo -e "${RED}Unsupported architecture: $ARCH${NC}"
+            return 1
+            ;;
+    esac
+
+    echo -e "\n${YELLOW}Installation Options:${NC}"
+    echo "1) Install via package manager (requires sudo)"
+    echo "2) Download binary to local directory (no sudo)"
+    echo "3) Cancel"
+
+    read -p "Choose option (1-3): " install_choice
+
+    case $install_choice in
+        1)
+            echo -e "\n${GREEN}Installing via package manager...${NC}"
+
+            # Try different package managers
+            if command -v apt-get &> /dev/null; then
+                # Debian/Ubuntu
+                echo "Using apt package manager..."
+
+                # Add cloudflare gpg key
+                sudo mkdir -p --mode=0755 /usr/share/keyrings
+                curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg >/dev/null
+
+                # Add repository
+                echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared jammy main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+
+                # Update and install
+                sudo apt-get update
+                sudo apt-get install -y cloudflared
+
+            elif command -v yum &> /dev/null; then
+                # RHEL/CentOS/Fedora
+                echo "Using yum package manager..."
+                sudo rpm -ivh https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-x86_64.rpm
+
+            elif command -v pacman &> /dev/null; then
+                # Arch Linux
+                echo "Using pacman package manager..."
+                sudo pacman -S cloudflared
+
+            else
+                echo -e "${RED}No supported package manager found${NC}"
+                echo "Falling back to binary download..."
+                install_choice=2
+            fi
+            ;;
+
+        2)
+            echo -e "\n${GREEN}Downloading cloudflared binary...${NC}"
+
+            # Download to local bin directory
+            LOCAL_BIN="$HOME/.local/bin"
+            mkdir -p "$LOCAL_BIN"
+
+            echo "Downloading from: $DOWNLOAD_URL"
+            curl -L "$DOWNLOAD_URL" -o "$LOCAL_BIN/cloudflared"
+            chmod +x "$LOCAL_BIN/cloudflared"
+
+            # Check if .local/bin is in PATH
+            if [[ ":$PATH:" != *":$LOCAL_BIN:"* ]]; then
+                echo -e "\n${YELLOW}Note: Add $LOCAL_BIN to your PATH${NC}"
+                echo "Add this line to your ~/.bashrc or ~/.zshrc:"
+                echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+                echo ""
+                echo "Then reload your shell:"
+                echo "  source ~/.bashrc"
+                export PATH="$HOME/.local/bin:$PATH"
+            fi
+
+            CLOUDFLARED_PATH="$LOCAL_BIN/cloudflared"
+            ;;
+
+        3)
+            echo "Installation cancelled."
+            return 1
+            ;;
+
+        *)
+            echo -e "${RED}Invalid option${NC}"
+            return 1
+            ;;
+    esac
+
+    # Verify installation
+    echo -e "\n${GREEN}Verifying installation...${NC}"
+
+    if [ "$install_choice" = "1" ]; then
+        CLOUDFLARED_PATH="cloudflared"
+    elif [ "$install_choice" = "2" ]; then
+        CLOUDFLARED_PATH="$LOCAL_BIN/cloudflared"
+    fi
+
+    if command -v $CLOUDFLARED_PATH &> /dev/null || [ -x "$CLOUDFLARED_PATH" ]; then
+        echo -e "${GREEN}✓ Cloudflared installed successfully!${NC}"
+        $CLOUDFLARED_PATH --version
+
+        # Set global variable
+        CLOUDFLARED_BIN="$CLOUDFLARED_PATH"
+
+        # Optional: Install as systemd service
+        if [ "$install_choice" = "1" ]; then
+            echo ""
+            read -p "Install cloudflared as systemd service? (y/n): " -n 1 -r
+            echo
+            if [[ $REPLY =~ ^[Yy]$ ]]; then
+                sudo cloudflared service install
+                echo -e "${GREEN}✓ Systemd service installed${NC}"
+                echo "Control service with:"
+                echo "  sudo systemctl start cloudflared"
+                echo "  sudo systemctl stop cloudflared"
+                echo "  sudo systemctl status cloudflared"
+            fi
+        fi
+
+        return 0
+    else
+        echo -e "${RED}✗ Installation failed${NC}"
+        return 1
+    fi
 }
 
 # Check if cloudflared is installed
@@ -62,14 +210,24 @@ check_cloudflared() {
     fi
 
     print_error "cloudflared is not installed!"
-    echo "Install cloudflared (separate from venv):"
+    echo ""
+    read -p "Would you like to install cloudflared now? (y/n): " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        if install_cloudflared; then
+            return 0
+        fi
+    fi
+
+    echo ""
+    echo "Manual installation:"
     echo "  mkdir -p ~/.local/bin"
     echo "  curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -o ~/.local/bin/cloudflared"
     echo "  chmod +x ~/.local/bin/cloudflared"
-    echo ""
-    echo "Or run: ./install_cloudflared.sh"
     exit 1
 }
+
+# ==================== SERVICE MANAGEMENT FUNCTIONS ====================
 
 # Check unified server status
 check_unified_status() {
@@ -93,8 +251,6 @@ check_unified_status() {
 
     return 1  # Not running
 }
-
-
 
 # Start the unified HTTP server
 start_unified_server() {
@@ -157,7 +313,6 @@ stop_unified_server() {
 
     print_status "Unified HTTP server stopped"
 }
-
 
 # Start Quick Tunnel in background
 start_quick_tunnel_background() {
@@ -237,6 +392,8 @@ stop_quick_tunnel() {
     fi
 }
 
+# ==================== UI FUNCTIONS ====================
+
 # Interactive menu function
 interactive_menu() {
     echo ""
@@ -244,7 +401,6 @@ interactive_menu() {
     echo ""
 
     UNIFIED_RUNNING=false
-    CLOUDFLARE_RUNNING=false
     QUICK_RUNNING=false
 
     # Check unified status
@@ -327,6 +483,7 @@ interactive_menu() {
     echo "4) Quick Tunnel 중지"
     echo "5) 상태 확인"
     echo "6) 로그 보기"
+    echo "7) cloudflared 설치/재설치"
     echo "0) 종료"
     echo ""
 
@@ -353,6 +510,11 @@ interactive_menu() {
                     echo "접속 URL: ${GREEN}$URL${NC}"
                 fi
             else
+                # Check cloudflared
+                if [ -z "$CLOUDFLARED_BIN" ]; then
+                    check_cloudflared
+                fi
+
                 # Unified 서버 확인 및 시작
                 if [ "$UNIFIED_RUNNING" = false ]; then
                     print_warning "Unified Server를 먼저 시작합니다..."
@@ -369,11 +531,6 @@ interactive_menu() {
                 print_info "임시 도메인이 생성됩니다. Ctrl+C로 종료할 수 있습니다."
                 echo ""
 
-                # cloudflared 경로 확인
-                if [ -z "$CLOUDFLARED_BIN" ]; then
-                    check_cloudflared
-                fi
-
                 # Quick Tunnel 실행 (foreground)
                 $CLOUDFLARED_BIN tunnel --url http://localhost:8000
             fi
@@ -388,6 +545,11 @@ interactive_menu() {
                     echo "접속 URL: ${GREEN}$URL${NC}"
                 fi
             else
+                # Check cloudflared
+                if [ -z "$CLOUDFLARED_BIN" ]; then
+                    check_cloudflared
+                fi
+
                 # Unified 서버 확인 및 시작
                 if [ "$UNIFIED_RUNNING" = false ]; then
                     print_warning "Unified Server를 먼저 시작합니다..."
@@ -444,6 +606,10 @@ interactive_menu() {
                     ;;
             esac
             ;;
+        7)
+            # Install/Reinstall cloudflared
+            install_cloudflared
+            ;;
         0)
             echo "종료합니다."
             exit 0
@@ -460,7 +626,6 @@ interactive_menu() {
     echo ""
     interactive_menu
 }
-
 
 # Show access information
 show_access_info() {
@@ -556,6 +721,20 @@ detailed_status() {
     fi
 
     echo ""
+    echo "Cloudflared:"
+    if command -v cloudflared &> /dev/null; then
+        echo "  Status: ${GREEN}INSTALLED${NC}"
+        echo "  Version: $(cloudflared --version 2>&1 | head -1)"
+        echo "  Path: $(which cloudflared)"
+    elif [ -x "$HOME/.local/bin/cloudflared" ]; then
+        echo "  Status: ${GREEN}INSTALLED${NC}"
+        echo "  Version: $($HOME/.local/bin/cloudflared --version 2>&1 | head -1)"
+        echo "  Path: $HOME/.local/bin/cloudflared"
+    else
+        echo "  Status: ${RED}NOT INSTALLED${NC}"
+    fi
+
+    echo ""
 
     # Check connectivity
     if check_unified_status; then
@@ -584,8 +763,17 @@ detailed_status() {
     fi
 }
 
+# ==================== MAIN EXECUTION ====================
+
 # Main execution
 main() {
+    # First, check if cloudflared is installed
+    if ! command -v cloudflared &> /dev/null && [ ! -x "$HOME/.local/bin/cloudflared" ]; then
+        CLOUDFLARED_BIN=""
+    else
+        check_cloudflared > /dev/null 2>&1
+    fi
+
     # If no arguments, run interactive menu
     if [ $# -eq 0 ]; then
         interactive_menu
@@ -593,6 +781,9 @@ main() {
     fi
 
     case "${1}" in
+        install)
+            install_cloudflared
+            ;;
         menu)
             interactive_menu
             ;;
@@ -629,7 +820,7 @@ main() {
         logs)
             echo "Select log to view:"
             echo "1) Unified server logs"
-            echo "2) Cloudflare tunnel logs"
+            echo "2) Quick Tunnel logs"
             echo "3) Both (in split screen with tmux)"
             read -p "Choice (1-3): " choice
 
@@ -638,14 +829,18 @@ main() {
                     tail -f "$LOG_DIR/unified_server.log"
                     ;;
                 2)
-                    sudo journalctl -u cloudflared -f
+                    if [ -f "$LOG_DIR/quick_tunnel.log" ]; then
+                        tail -f "$LOG_DIR/quick_tunnel.log"
+                    else
+                        print_warning "Quick Tunnel이 실행된 적이 없습니다"
+                    fi
                     ;;
                 3)
                     if command -v tmux &> /dev/null; then
                         tmux new-session \; \
                             send-keys "tail -f $LOG_DIR/unified_server.log" C-m \; \
                             split-window -h \; \
-                            send-keys "sudo journalctl -u cloudflared -f" C-m \;
+                            send-keys "tail -f $LOG_DIR/quick_tunnel.log" C-m \;
                     else
                         print_error "tmux not installed. Install with: sudo apt install tmux"
                     fi
@@ -655,17 +850,29 @@ main() {
         help|--help|-h)
             echo "Usage: $0 [command]"
             echo ""
+            echo "MailQueryWithMCP Cloudflare Manager"
+            echo "Complete solution for cloudflared installation and tunnel management"
+            echo ""
             echo "Without arguments: Interactive menu"
             echo ""
             echo "Commands:"
+            echo "  install        - Install cloudflared"
             echo "  menu           - Show interactive menu"
             echo "  quick          - Quick Tunnel 시작 (무료, 임시 도메인)"
             echo "  status         - Show detailed service status"
             echo "  logs           - View service logs"
             echo "  help           - Show this help message"
             echo ""
+            echo "Features:"
+            echo "  • Automatic cloudflared installation"
+            echo "  • Unified HTTP server management"
+            echo "  • Quick Tunnel for instant public access"
+            echo "  • Real-time status monitoring"
+            echo "  • Integrated log viewing"
+            echo ""
             echo "Examples:"
             echo "  $0              # Interactive menu"
+            echo "  $0 install      # Install cloudflared"
             echo "  $0 quick        # 무료 터널로 빠른 시작"
             echo "  $0 status       # 상태 확인"
             exit 0
