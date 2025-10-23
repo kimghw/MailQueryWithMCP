@@ -475,16 +475,15 @@ class UnifiedMCPServer:
                     expires_in = azure_tokens.get("expires_in", 3600)
                     token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                    # Revoke all existing active tokens for this client + object_id (prevent duplicates)
+                    # Delete all existing active tokens for this client + object_id (prevent duplicates)
                     dcr_service._execute_query(
                         """
-                        UPDATE dcr_tokens
-                        SET dcr_status = 'revoked'
+                        DELETE FROM dcr_tokens
                         WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_status = 'active'
                         """,
                         (client_id, azure_object_id),
                     )
-                    logger.info(f"🔄 Revoked old tokens for client: {client_id}")
+                    logger.info(f"🗑️ Deleted old tokens for client: {client_id}")
 
                     # Store new access token
                     dcr_service._execute_query(
