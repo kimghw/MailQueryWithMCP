@@ -357,7 +357,7 @@ test_token_refresh() {
 
 # 5. MCP 서버 테스트
 test_mcp_server() {
-    echo -e "${MAGENTA}[5] POST /mail-query - MCP API 호출 (Bearer token)${NC}"
+    echo -e "${MAGENTA}[5] POST /mail-query/ - MCP API 호출 (Bearer token)${NC}"
     echo ""
 
     local access_token=$(load_state "access_token")
@@ -369,7 +369,7 @@ test_mcp_server() {
     fi
 
     echo -e "${YELLOW}요청:${NC}"
-    echo "POST $SERVER_URL/mail-query"
+    echo "POST $SERVER_URL/mail-query/"
     echo "Headers:"
     echo "  Content-Type: application/json"
     echo "  Authorization: Bearer ${access_token:0:20}..."
@@ -379,7 +379,7 @@ test_mcp_server() {
     echo ""
 
     echo -e "${CYAN}요청 중...${NC}"
-    response=$(curl -s -X POST "$SERVER_URL/mail-query" \
+    response=$(curl -s -X POST "$SERVER_URL/mail-query/" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $access_token" \
       -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
@@ -528,7 +528,7 @@ print(challenge)
     echo ""
     echo -e "${BLUE}Step 5: MCP API 호출 (Bearer token)${NC}"
 
-    response=$(curl -s -X POST "$SERVER_URL/mail-query" \
+    response=$(curl -s -X POST "$SERVER_URL/mail-query/" \
       -H "Content-Type: application/json" \
       -H "Authorization: Bearer $access_token" \
       -d '{"jsonrpc":"2.0","id":1,"method":"tools/list"}')
@@ -573,7 +573,7 @@ while true; do
     echo "2. POST /oauth/register - Dynamic Client Registration"
     echo "3. GET  /oauth/authorize - Authorization (Azure AD 리다이렉트)"
     echo "4. POST /oauth/token - Token Exchange (authorization_code)"
-    echo "5. POST /mail-query - MCP API 호출 (Bearer token)"
+    echo "5. POST /mail-query/ - MCP API 호출 (Bearer token)"
     echo "6. POST /oauth/token - Token Refresh (refresh_token)"
     echo "7. 전체 플로우 자동 실행 (1→2→3→4→5→6)"
     echo ""
