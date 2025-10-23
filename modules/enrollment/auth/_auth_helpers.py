@@ -12,7 +12,7 @@ import secrets
 import socket
 import subprocess
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import parse_qs, urlparse
 
@@ -31,7 +31,7 @@ def auth_generate_session_id(user_id: str) -> str:
     Returns:
         세션 ID
     """
-    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
     random_part = secrets.token_hex(8)
     user_hash = hashlib.md5(user_id.encode()).hexdigest()[:8]
 
@@ -181,7 +181,7 @@ def auth_create_session_expiry(minutes: int = 10) -> datetime:
     Returns:
         만료 시간
     """
-    expiry_time = datetime.utcnow() + timedelta(minutes=minutes)
+    expiry_time = datetime.now(timezone.utc) + timedelta(minutes=minutes)
     logger.debug(f"세션 만료 시간 설정: {expiry_time.isoformat()}")
     return expiry_time
 

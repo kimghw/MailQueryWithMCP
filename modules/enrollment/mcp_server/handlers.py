@@ -58,8 +58,8 @@ class AuthAccountHandlers:
                     is_active INTEGER NOT NULL DEFAULT 1,
                     last_sync_time TEXT,
                     last_used_at TEXT,
-                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
-                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
                 )
             """)
 
@@ -82,7 +82,7 @@ class AuthAccountHandlers:
                     user_id TEXT NOT NULL,
                     action TEXT NOT NULL,
                     details TEXT,
-                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    created_at TEXT NOT NULL,
                     FOREIGN KEY (account_id) REFERENCES accounts(id)
                 )
             """)
@@ -378,6 +378,9 @@ class AuthAccountHandlers:
 
             if existing:
                 # Update existing account
+                from datetime import datetime, timezone
+                current_time = datetime.now(timezone.utc).isoformat()
+
                 self.db.execute_query("""
                     UPDATE accounts
                     SET user_name = ?, email = ?,
@@ -386,10 +389,10 @@ class AuthAccountHandlers:
                         enrollment_file_path = ?,
                         delegated_permissions = COALESCE(delegated_permissions, ?),
                         auth_type = COALESCE(auth_type, 'Authorization Code Flow'),
-                        updated_at = datetime('now')
+                        updated_at = ?
                     WHERE user_id = ?
                 """, (user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id,
-                      oauth_redirect_uri, str(enrollment_file), default_permissions_json, user_id))
+                      oauth_redirect_uri, str(enrollment_file), default_permissions_json, current_time, user_id))
 
                 logger.info(f"Account updated: {user_id}")
 
@@ -405,15 +408,18 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
 
             else:
                 # Insert new account
+                from datetime import datetime, timezone
+                current_time = datetime.now(timezone.utc).isoformat()
+
                 self.db.execute_query("""
                     INSERT INTO accounts (
                         user_id, user_name, email,
                         oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri,
                         enrollment_file_path, delegated_permissions, auth_type,
                         status, is_active, created_at, updated_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Authorization Code Flow', 'ACTIVE', 1, datetime('now'), datetime('now'))
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Authorization Code Flow', 'ACTIVE', 1, ?, ?)
                 """, (user_id, user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id,
-                      oauth_redirect_uri, str(enrollment_file), default_permissions_json))
+                      oauth_redirect_uri, str(enrollment_file), default_permissions_json, current_time, current_time))
 
                 logger.info(f"New account registered: {user_id}")
 
@@ -486,10 +492,10 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
             token_detail = ""
             if has_access_token or has_refresh_token:
                 if token_expiry:
-                    expiry_dt = datetime.fromisoformat(token_expiry)
-                    if expiry_dt.tzinfo is not None:
-                        expiry_dt = expiry_dt.replace(tzinfo=None)
-                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                    expiry_dt = datetime.fromisoformat(
+                        token_expiry.replace("Z", "+00:00")
+                    )
+                    now_utc = datetime.now(timezone.utc)
 
                     if expiry_dt < now_utc:
                         token_status = f"❌ 만료됨"
@@ -688,10 +694,10 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
                 # Token status
                 token_expiry = account_dict.get('token_expiry')
                 if token_expiry:
-                    expiry_dt = datetime.fromisoformat(token_expiry)
-                    if expiry_dt.tzinfo is not None:
-                        expiry_dt = expiry_dt.replace(tzinfo=None)
-                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                    expiry_dt = datetime.fromisoformat(
+                        token_expiry.replace("Z", "+00:00")
+                    )
+                    now_utc = datetime.now(timezone.utc)
                     token_status = "만료" if expiry_dt < now_utc else "유효"
                     account_list.append(f"   Token: {token_status}\n")
                 else:
@@ -800,10 +806,10 @@ oauth:
             token_status = "❌ 토큰 없음"
             if has_access_token or has_refresh_token:
                 if token_expiry:
-                    expiry_dt = datetime.fromisoformat(token_expiry)
-                    if expiry_dt.tzinfo is not None:
-                        expiry_dt = expiry_dt.replace(tzinfo=None)
-                    now_utc = datetime.now(timezone.utc).replace(tzinfo=None)
+                    expiry_dt = datetime.fromisoformat(
+                        token_expiry.replace("Z", "+00:00")
+                    )
+                    now_utc = datetime.now(timezone.utc)
 
                     if expiry_dt < now_utc:
                         token_status = f"⚠️  토큰 만료됨 ({token_expiry})"

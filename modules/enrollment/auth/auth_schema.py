@@ -5,7 +5,7 @@ OAuth 2.0 인증 플로우에서 사용되는 데이터 모델들을 정의합�
 메모리 세션 관리와 인증 상태 관리를 위한 스키마를 포함합니다.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -31,7 +31,7 @@ class AuthSession(BaseModel):
     auth_url: str = Field(..., description="생성된 인증 URL")
     status: AuthState = Field(default=AuthState.PENDING, description="인증 상태")
     created_at: datetime = Field(
-        default_factory=datetime.utcnow, description="세션 생성 시간"
+        default_factory=lambda: datetime.now(timezone.utc), description="세션 생성 시간"
     )
     expires_at: datetime = Field(..., description="세션 만료 시간")
     error_message: Optional[str] = Field(None, description="오류 메시지")
@@ -45,13 +45,13 @@ class AuthSession(BaseModel):
     def set_expiry_time(cls, v, values):
         """세션 만료 시간 설정 (기본 10분)"""
         if v is None:
-            created_at = values.get("created_at", datetime.utcnow())
+            created_at = values.get("created_at", datetime.now(timezone.utc))
             return created_at + timedelta(minutes=10)
         return v
 
     def is_expired(self) -> bool:
         """세션 만료 여부 확인"""
-        return datetime.utcnow() > self.expires_at
+        return datetime.now(timezone.utc) > self.expires_at
 
     def is_pending(self) -> bool:
         """인증 대기 상태 확인"""

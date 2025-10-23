@@ -8,7 +8,7 @@ OAuth 2.0 인증 콜백을 처리하는 임시 웹서버입니다.
 import asyncio
 import json
 import threading
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
@@ -56,7 +56,7 @@ class CallbackHandler(BaseHTTPRequestHandler):
         self.end_headers()
         response = {
             "status": "ok",
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "server": "oauth_callback_server",
         }
         self.wfile.write(json.dumps(response).encode())
@@ -205,7 +205,7 @@ class AuthWebServer:
         try:
             # 세션 상태 업데이트
             session.status = AuthState.CALLBACK_RECEIVED
-            session.callback_received_at = datetime.utcnow()
+            session.callback_received_at = datetime.now(timezone.utc)
 
             auth_log_session_activity(
                 session.session_id,
@@ -414,7 +414,7 @@ class AuthWebServer:
 
         # 만료 시간 계산
         expires_in = response_data.get("expires_in", 3600)
-        expiry_time = datetime.utcnow() + timedelta(seconds=expires_in)
+        expiry_time = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
         response_data["expiry_time"] = expiry_time.isoformat()
 
         logger.info(f"계정별 설정으로 토큰 교환 성공: client_id={client_id[:8]}...")
@@ -494,8 +494,8 @@ class AuthWebServer:
         if self.is_running:
             try:
                 self._cleanup()
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Cleanup warning: {e}")
 
 
 class AuthWebServerManager:

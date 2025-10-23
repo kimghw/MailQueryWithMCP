@@ -6,7 +6,7 @@ infra 서비스들을 활용하여 토큰 저장/갱신/상태확인을 수행�
 """
 
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from infra.core.config import get_config
@@ -352,7 +352,7 @@ class AuthOrchestrator:
             세션 정리 응답
         """
         initial_count = len(self.auth_sessions)
-        cutoff_time = datetime.utcnow() - timedelta(
+        cutoff_time = datetime.now(timezone.utc) - timedelta(
             minutes=request.expire_threshold_minutes
         )
 
@@ -422,8 +422,11 @@ class AuthOrchestrator:
                 expiry_time = account_dict.get("token_expiry")
                 if expiry_time:
                     if isinstance(expiry_time, str):
-                        expiry_time = datetime.fromisoformat(expiry_time)
-                    account_dict["token_expired"] = datetime.utcnow() >= expiry_time
+                        expiry_time = datetime.fromisoformat(
+                            expiry_time.replace("Z", "+00:00")
+                        )
+                    now_utc = datetime.now(timezone.utc)
+                    account_dict["token_expired"] = now_utc >= expiry_time
                 else:
                     account_dict["token_expired"] = True
 
@@ -590,7 +593,9 @@ class AuthOrchestrator:
                     logger.error(
                         f"oauth_client_secret 복호화 실패: user_id={user_id}, error={str(decrypt_error)}"
                     )
-                    return None
+                    # 복호화 실패 시에도 암호화된 값 그대로 사용 시도 (이전 버전 호환성)
+                    logger.warning(f"암호화된 client_secret을 그대로 사용 시도: user_id={user_id}")
+                    account_dict["oauth_client_secret"] = oauth_client_secret
 
             logger.info(
                 f"계정별 OAuth 설정 발견: user_id={user_id}, client_id={oauth_client_id[:8]}..."

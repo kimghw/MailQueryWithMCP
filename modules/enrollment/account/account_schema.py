@@ -4,7 +4,7 @@ Account 모듈의 데이터 스키마 정의
 Pydantic 모델을 사용하여 계정 관련 데이터 구조와 검증 규칙을 정의합니다.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional
 
@@ -176,7 +176,10 @@ class AccountResponse(BaseModel):
     def validate_token_validity(cls, v, values):
         """토큰 유효성 검증"""
         if "token_expiry" in values and values["token_expiry"]:
-            return values["token_expiry"] > datetime.utcnow()
+            expiry = values["token_expiry"]
+            if isinstance(expiry, str):
+                expiry = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+            return expiry > datetime.now(timezone.utc)
         return False
 
 
@@ -239,8 +242,12 @@ class TokenInfo(BaseModel):
                 "access_token이 있는 경우 token_expiry도 설정되어야 합니다"
             )
 
-        if token_expiry and token_expiry <= datetime.utcnow():
-            values["is_valid"] = False
+        if token_expiry:
+            expiry = token_expiry
+            if isinstance(expiry, str):
+                expiry = datetime.fromisoformat(expiry.replace("Z", "+00:00"))
+            if expiry <= datetime.now(timezone.utc):
+                values["is_valid"] = False
         elif access_token and token_expiry:
             values["is_valid"] = True
 

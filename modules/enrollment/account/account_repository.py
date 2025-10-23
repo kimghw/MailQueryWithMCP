@@ -6,7 +6,7 @@ Account Repository - 계정 데이터 CRUD 및 암호화 처리
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from infra.core.database import get_database_manager
@@ -62,7 +62,7 @@ class AccountRepository:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """
 
-            current_time = datetime.utcnow()
+            current_time = datetime.now(timezone.utc)
             params = (
                 account_data.user_id,
                 account_data.user_name,
@@ -77,8 +77,8 @@ class AccountRepository:
                 account_data.auth_type.value,
                 permissions_json,
                 account_data.status == AccountStatus.ACTIVE,
-                current_time,
-                current_time,
+                current_time.isoformat(),
+                current_time.isoformat(),
             )
 
             with self.db.transaction() as conn:
@@ -211,7 +211,7 @@ class AccountRepository:
 
             # updated_at 추가
             update_fields.append("updated_at = ?")
-            params.append(datetime.utcnow())
+            params.append(datetime.now(timezone.utc).isoformat())
             params.append(account_id)
 
             query = f"UPDATE accounts SET {', '.join(update_fields)} WHERE id = ?"
@@ -299,8 +299,10 @@ class AccountRepository:
             expiry_time = datetime.fromisoformat(
                 row["token_expiry"].replace("Z", "+00:00")
             )
-            return expiry_time > datetime.utcnow()
-        except:
+            now_utc = datetime.now(timezone.utc)
+            return expiry_time > now_utc
+        except Exception as e:
+            logger.error(f"토큰 유효성 확인 오류: {e}")
             return False
 
     def _account_create_audit_log(self, cursor, audit_data: Dict[str, Any]) -> None:

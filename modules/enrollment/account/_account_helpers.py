@@ -6,7 +6,7 @@ Account 모듈의 헬퍼 클래스들
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
@@ -247,7 +247,7 @@ class AccountAuditHelpers:
             "old_values": AccountAuditHelpers._account_sanitize_values(old_values),
             "new_values": AccountAuditHelpers._account_sanitize_values(new_values),
             "changed_by": "system",  # 현재는 시스템으로 고정
-            "timestamp": datetime.utcnow(),
+            "timestamp": datetime.now(timezone.utc),
         }
 
     @staticmethod
@@ -298,7 +298,7 @@ class AccountAuditHelpers:
         """
         action = audit_data.get("action", "UNKNOWN")
         account_id = audit_data.get("account_id", "N/A")
-        timestamp = audit_data.get("timestamp", datetime.utcnow())
+        timestamp = audit_data.get("timestamp", datetime.now(timezone.utc))
 
         if isinstance(timestamp, str):
             timestamp = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))

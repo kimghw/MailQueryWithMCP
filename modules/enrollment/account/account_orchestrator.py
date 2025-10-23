@@ -5,7 +5,7 @@ Account Orchestrator - 계정 관리 비즈니스 로직 오케스트레이터
 오케스트레이터 패턴을 적용하여 의존성 주입과 호출 순서를 담당합니다.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from infra.core.exceptions import BusinessLogicError, DatabaseError, ValidationError
@@ -304,7 +304,7 @@ class AccountOrchestrator:
                 access_token=token_info.access_token,
                 refresh_token=token_info.refresh_token,
                 token_expiry=token_info.token_expiry,
-                last_sync_time=datetime.utcnow(),
+                last_sync_time=datetime.now(timezone.utc).isoformat(),
             )
 
             success = self.repository.account_update_by_id(account.id, update_data)
@@ -439,7 +439,7 @@ class AccountOrchestrator:
             status = {
                 "module": "account",
                 "status": "healthy",
-                "timestamp": datetime.utcnow(),
+                "timestamp": datetime.now(timezone.utc),
                 "components": {"repository": "healthy", "sync_service": "healthy"},
                 "statistics": {},
             }
@@ -461,5 +461,5 @@ class AccountOrchestrator:
                 "module": "account",
                 "status": "error",
                 "error": str(e),
-                "timestamp": datetime.utcnow(),
+                "timestamp": datetime.now(timezone.utc),
             }

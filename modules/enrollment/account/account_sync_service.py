@@ -4,7 +4,7 @@ Account Sync Service - Enrollment 파일 동기화 서비스
 enrollment 디렉터리의 YAML 파일들을 읽어서 계정 정보를 동기화합니다.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -50,7 +50,7 @@ class AccountSyncService:
             updated_accounts=0,
             deactivated_accounts=0,
             errors=[],
-            sync_time=datetime.utcnow(),
+            sync_time=datetime.now(timezone.utc),
         )
 
         try:
