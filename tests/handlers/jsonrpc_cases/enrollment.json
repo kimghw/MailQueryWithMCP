@@ -7,7 +7,14 @@
       "enabled": true,
       "tool": "register_account",
       "arguments": {
-        "use_env_vars": true
+        "use_env_vars": true,
+        "user_id": "",
+        "email": "",
+        "user_name": "",
+        "oauth_client_id": "",
+        "oauth_client_secret": "",
+        "oauth_tenant_id": "",
+        "oauth_redirect_uri": ""
       },
       "expect": {
         "contains": [
@@ -21,6 +28,7 @@
       "enabled": false,
       "tool": "register_account",
       "arguments": {
+        "use_env_vars": false,
         "user_id": "test_user",
         "email": "test@example.com",
         "user_name": "Test User",
@@ -65,7 +73,8 @@
       "enabled": false,
       "tool": "start_authentication",
       "arguments": {
-        "user_id": "kimghw"
+        "user_id": "kimghw",
+        "use_auto_select": false
       },
       "expect": {
         "contains": [
