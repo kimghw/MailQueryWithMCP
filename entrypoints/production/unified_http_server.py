@@ -475,15 +475,14 @@ class UnifiedMCPServer:
                     expires_in = azure_tokens.get("expires_in", 3600)
                     token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                    # Delete all existing active tokens for this client + object_id (prevent duplicates)
+                    # Delete existing Bearer token for this client + object_id + token_type (prevent duplicates)
                     dcr_service._execute_query(
                         """
                         DELETE FROM dcr_tokens
-                        WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_status = 'active'
+                        WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_token_type = 'Bearer' AND dcr_status = 'active'
                         """,
                         (client_id, azure_object_id),
                     )
-                    logger.info(f"🗑️ Deleted old tokens for client: {client_id}")
 
                     # Store new access token
                     dcr_service._execute_query(
@@ -493,6 +492,15 @@ class UnifiedMCPServer:
                         ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
                         """,
                         (crypto.account_encrypt_sensitive_data(new_access_token), client_id, azure_object_id, token_expiry),
+                    )
+
+                    # Delete existing refresh token for this client + object_id + token_type (prevent duplicates)
+                    dcr_service._execute_query(
+                        """
+                        DELETE FROM dcr_tokens
+                        WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_token_type = 'refresh' AND dcr_status = 'active'
+                        """,
+                        (client_id, azure_object_id),
                     )
 
                     # Store new refresh token (30 days)
@@ -505,6 +513,8 @@ class UnifiedMCPServer:
                         """,
                         (crypto.account_encrypt_sensitive_data(new_refresh_token), client_id, azure_object_id, refresh_expiry),
                     )
+
+                    logger.info(f"🗑️ Deleted old tokens for client: {client_id}")
 
                     logger.info(f"✅ New tokens issued via refresh_token grant")
 
@@ -589,16 +599,14 @@ class UnifiedMCPServer:
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
 
-                # Revoke all existing active tokens for this client + object_id (prevent duplicates)
+                # Delete existing Bearer token for this client + object_id + token_type (prevent duplicates)
                 dcr_service._execute_query(
                     """
-                    UPDATE dcr_tokens
-                    SET dcr_status = 'revoked'
-                    WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_status = 'active'
+                    DELETE FROM dcr_tokens
+                    WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_token_type = 'Bearer' AND dcr_status = 'active'
                     """,
                     (client_id, azure_object_id),
                 )
-                logger.info(f"🔄 Revoked old tokens for client: {client_id}")
 
                 # Store access token
                 dcr_service._execute_query(
@@ -613,6 +621,15 @@ class UnifiedMCPServer:
                         azure_object_id,
                         azure_token_expiry,
                     ),
+                )
+
+                # Delete existing refresh token for this client + object_id + token_type (prevent duplicates)
+                dcr_service._execute_query(
+                    """
+                    DELETE FROM dcr_tokens
+                    WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_token_type = 'refresh' AND dcr_status = 'active'
+                    """,
+                    (client_id, azure_object_id),
                 )
 
                 # Store refresh token (30 days validity)
@@ -630,6 +647,8 @@ class UnifiedMCPServer:
                         refresh_token_expiry,
                     ),
                 )
+
+                logger.info(f"🗑️ Deleted old tokens for client: {client_id}")
 
                 logger.info(f"✅ DCR access & refresh tokens stored for client: {client_id}, linked to object_id: {azure_object_id}")
 
