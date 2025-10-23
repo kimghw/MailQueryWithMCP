@@ -35,6 +35,9 @@ class DCRService:
         self.db_path = self.config.dcr_database_path
         self.crypto = AccountCryptoHelpers()
 
+        # 스키마 초기화 (가장 먼저 실행)
+        self._ensure_dcr_schema()
+
         # Azure AD 설정 로드
         self._load_azure_config()
 
@@ -46,9 +49,6 @@ class DCRService:
             logger.info(f"✅ DCR access restricted to {len(self.allowed_users)} users")
         else:
             logger.warning("⚠️ DCR access allowed for ALL Azure users")
-
-        # 스키마 초기화
-        self._ensure_dcr_schema()
 
     def _execute_query(self, query: str, params: tuple = ()):
         """SQL 쿼리 실행 헬퍼"""
