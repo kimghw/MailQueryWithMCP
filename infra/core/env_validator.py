@@ -61,15 +61,6 @@ class EnvValidator:
             example="your-44-character-fernet-key-here=========="
         ),
 
-        # 권장 환경변수
-        EnvVarDefinition(
-            "KAFKA_BOOTSTRAP_SERVERS",
-            EnvVarCategory.RECOMMENDED,
-            "Kafka 부트스트랩 서버 주소",
-            default="localhost:9092",
-            example="localhost:9092"
-        ),
-
         # 선택적 환경변수
         EnvVarDefinition(
             "LOG_LEVEL",

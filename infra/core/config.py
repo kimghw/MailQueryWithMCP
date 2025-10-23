@@ -72,7 +72,6 @@ class Config:
         """필수 설정값들이 있는지 검증"""
         required_settings = [
             "DATABASE_PATH",
-            "KAFKA_BOOTSTRAP_SERVERS",
             "ENCRYPTION_KEY",
         ]
 
@@ -120,23 +119,6 @@ class Config:
         db_dir = Path(path).parent
         db_dir.mkdir(parents=True, exist_ok=True)
         return path
-
-    # Kafka 설정
-    @property
-    def kafka_bootstrap_servers(self) -> List[str]:
-        """Kafka 부트스트랩 서버 목록"""
-        servers = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
-        return [server.strip() for server in servers.split(",")]
-
-    @property
-    def kafka_topic_email_events(self) -> str:
-        """이메일 이벤트 Kafka 토픽"""
-        return os.getenv("KAFKA_TOPIC_EMAIL_EVENTS", "email.recevied")
-
-    @property
-    def kafka_consumer_group_id(self) -> str:
-        """Kafka 컨슈머 그룹 ID"""
-        return os.getenv("KAFKA_CONSUMER_GROUP_ID", "iacsgraph-dev")
 
     # 로깅 설정
     @property
@@ -226,11 +208,6 @@ class Config:
     def http_timeout(self) -> int:
         """HTTP 요청 타임아웃(초)"""
         return int(os.getenv("HTTP_TIMEOUT", "30"))
-
-    @property
-    def kafka_timeout(self) -> int:
-        """Kafka 요청 타임아웃(초)"""
-        return int(os.getenv("KAFKA_TIMEOUT", "10"))
 
     # Account 모듈 설정
     @property
@@ -355,9 +332,6 @@ class Config:
         """설정을 딕셔너리로 반환 (민감한 정보 제외)"""
         return {
             "database_path": self.database_path,
-            "kafka_bootstrap_servers": self.kafka_bootstrap_servers,
-            "kafka_topic_email_events": self.kafka_topic_email_events,
-            "kafka_consumer_group_id": self.kafka_consumer_group_id,
             "log_level": self.log_level,
             "azure_tenant_id": self.azure_tenant_id,
             "azure_authority": self.azure_authority,
@@ -371,7 +345,6 @@ class Config:
             "debug_mode": self.debug_mode,
             "environment": self.environment,
             "http_timeout": self.http_timeout,
-            "kafka_timeout": self.kafka_timeout,
             "enrollment_directory": self.enrollment_directory,
             "max_keywords_per_mail": self.max_keywords_per_mail,
             "max_mails_per_account": self.max_mails_per_account,

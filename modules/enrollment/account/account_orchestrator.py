@@ -359,7 +359,6 @@ class AccountOrchestrator:
         Args:
             sync_result: 동기화 결과
         """
-        # 향후 Kafka 이벤트 발행, 알림 전송 등의 기능 구현 가능
         logger.debug(f"동기화 완료 알림: 총 {sync_result.total_files}개 파일 처리")
         pass
 
