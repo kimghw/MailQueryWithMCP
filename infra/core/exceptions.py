@@ -71,64 +71,6 @@ class ConnectionError(DatabaseError):
         )
 
 
-class KafkaError(IACSGraphError):
-    """Kafka 관련 오류"""
-
-    def __init__(
-        self,
-        message: str,
-        topic: Optional[str] = None,
-        operation: Optional[str] = None,
-        **kwargs,
-    ):
-        details = kwargs.get("details", {})
-        if topic:
-            details["topic"] = topic
-        if operation:
-            details["operation"] = operation
-
-        super().__init__(
-            message=message,
-            error_code=kwargs.get("error_code", "KAFKA_ERROR"),
-            details=details,
-        )
-
-
-class KafkaConnectionError(KafkaError):
-    """Kafka 연결 오류"""
-
-    def __init__(self, message: str = "Kafka 클러스터에 연결할 수 없습니다", **kwargs):
-        super().__init__(
-            message=message,
-            error_code=kwargs.get("error_code", "KAFKA_CONNECTION_ERROR"),
-            **kwargs,
-        )
-
-
-class KafkaProducerError(KafkaError):
-    """Kafka Producer 오류"""
-
-    def __init__(self, message: str, **kwargs):
-        super().__init__(
-            message=message,
-            error_code=kwargs.get("error_code", "KAFKA_PRODUCER_ERROR"),
-            operation="produce",
-            **kwargs,
-        )
-
-
-class KafkaConsumerError(KafkaError):
-    """Kafka Consumer 오류"""
-
-    def __init__(self, message: str, **kwargs):
-        super().__init__(
-            message=message,
-            error_code=kwargs.get("error_code", "KAFKA_CONSUMER_ERROR"),
-            operation="consume",
-            **kwargs,
-        )
-
-
 class APIConnectionError(IACSGraphError):
     """외부 API 연결 오류"""
 

@@ -35,16 +35,11 @@ try:
         ConnectionError,
         DatabaseError,
         IACSGraphError,
-        KafkaConnectionError,
-        KafkaConsumerError,
-        KafkaError,
-        KafkaProducerError,
         TokenError,
         TokenExpiredError,
         TokenRefreshError,
         ValidationError,
     )
-    from .kafka_client import get_kafka_client, kafka_client
     from .logger import get_logger
     from .oauth_client import get_oauth_client, oauth_client
     from .token_service import get_token_service, token_service
@@ -70,10 +65,6 @@ __all__ = [
     "IACSGraphError",
     "DatabaseError",
     "ConnectionError",
-    "KafkaError",
-    "KafkaConnectionError",
-    "KafkaProducerError",
-    "KafkaConsumerError",
     "APIConnectionError",
     "AuthenticationError",
     "TokenError",
@@ -82,9 +73,6 @@ __all__ = [
     "ConfigurationError",
     "ValidationError",
     "BusinessLogicError",
-    # Kafka
-    "get_kafka_client",
-    "kafka_client",
     # OAuth
     "get_oauth_client",
     "oauth_client",
