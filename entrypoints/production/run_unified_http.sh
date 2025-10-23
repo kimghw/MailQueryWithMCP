@@ -11,6 +11,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Activate virtual environment if it exists
+if [ -f "$PROJECT_ROOT/.venv/bin/activate" ]; then
+    source "$PROJECT_ROOT/.venv/bin/activate"
+    echo "✅ Virtual environment activated"
+fi
+
 # Set environment variables
 export PYTHONPATH="$PROJECT_ROOT"
 export PYTHONDONTWRITEBYTECODE=1
@@ -58,10 +64,10 @@ echo "✅ Data directory: $PROJECT_ROOT/data"
 # Verify environment
 echo "✅ Python path: $PYTHONPATH"
 echo "✅ Working directory: $(pwd)"
-echo "🐍 Python executable: $(which python)"
-echo "🐍 Python version: $(python --version)"
+echo "🐍 Python executable: $(which python3)"
+echo "🐍 Python version: $(python3 --version)"
 echo "📦 Python site-packages:"
-python -c "import sys; print('\n'.join(sys.path))"
+python3 -c "import sys; print('\n'.join(sys.path))"
 echo ""
 
 # Check if required environment variables are set
@@ -71,6 +77,6 @@ fi
 
 # Run the unified server
 echo "🔥 Starting HTTP server..."
-exec python "$PROJECT_ROOT/entrypoints/production/unified_http_server.py" \
+exec python3 "$PROJECT_ROOT/entrypoints/production/unified_http_server.py" \
     --host "$HOST" \
     --port "$PORT"

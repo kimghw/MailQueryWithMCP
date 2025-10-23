@@ -262,6 +262,96 @@ class UnifiedMCPServer:
                 },
             )
 
+        async def enrollment_mcp_discovery_handler(request):
+            """MCP Discovery for Enrollment Service"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "Enrollment MCP Server",
+                    "description": "Authentication and account management service",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
+        async def mail_query_mcp_discovery_handler(request):
+            """MCP Discovery for Mail Query Service"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "Mail Query MCP Server",
+                    "description": "Email attachment management and query service",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
+        async def onenote_mcp_discovery_handler(request):
+            """MCP Discovery for OneNote Service"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "OneNote MCP Server",
+                    "description": "OneNote notebooks, sections, and pages management service",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Notes.ReadWrite", "Notes.Create", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
         # DCR Register endpoint
         async def dcr_register_handler(request):
             """RFC 7591: Dynamic Client Registration"""
@@ -349,7 +439,7 @@ class UnifiedMCPServer:
                 azure_tenant_id = client["azure_tenant_id"]
                 azure_application_id = client["azure_application_id"]
                 # Azure AD에 등록된 redirect URI
-                azure_redirect_uri = client.get("azure_redirect_uri", "http://localhost:8000/oauth/azure_callback")
+                azure_redirect_uri = client.get("azure_redirect_uri")
 
                 # state에 내부 auth_code 포함 (DCR 서버에서 매핑에 사용)
                 internal_state = f"{auth_code}:{state}" if state else auth_code
@@ -794,7 +884,7 @@ class UnifiedMCPServer:
                         "client_id": client["azure_application_id"],
                         "client_secret": client["azure_client_secret"],
                         "code": azure_code,
-                        "redirect_uri": "http://localhost:8000/oauth/azure_callback",
+                        "redirect_uri": client.get("azure_redirect_uri"),
                         "grant_type": "authorization_code",
                         "scope": scope or "https://graph.microsoft.com/.default"
                     }
@@ -948,8 +1038,13 @@ class UnifiedMCPServer:
             Route("/oauth/authorize", endpoint=oauth_authorize_handler, methods=["GET"]),
             Route("/oauth/token", endpoint=oauth_token_handler, methods=["POST"]),
             Route("/oauth/azure_callback", endpoint=oauth_azure_callback_handler, methods=["GET"]),
+            Route("/auth/callback", endpoint=oauth_azure_callback_handler, methods=["GET"]),  # Azure AD redirect (alternative path)
             # OAuth callback (enrollment service)
             Route("/enrollment/callback", endpoint=auth_callback_handler, methods=["GET"]),
+            # MCP Discovery endpoints (before Mount to take precedence)
+            Route("/enrollment/.well-known/mcp.json", endpoint=enrollment_mcp_discovery_handler, methods=["GET"]),
+            Route("/mail-query/.well-known/mcp.json", endpoint=mail_query_mcp_discovery_handler, methods=["GET"]),
+            Route("/onenote/.well-known/mcp.json", endpoint=onenote_mcp_discovery_handler, methods=["GET"]),
             # Mount MCP servers on specific paths
             Mount("/mail-query", app=self.mail_query_server.app),
             Mount("/enrollment", app=self.enrollment_server.app),

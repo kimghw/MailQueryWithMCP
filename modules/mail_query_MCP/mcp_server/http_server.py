@@ -649,6 +649,38 @@ class HTTPStreamingMailAttachmentServer:
                 },
             )
 
+        async def mcp_discovery_handler(request):
+            """MCP Server Discovery - /.well-known/mcp.json"""
+            # Build base URL from request
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+            path_prefix = request.scope.get("root_path", "")  # Get mount path if exists
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "Mail Query MCP Server",
+                    "description": "Email attachment management and query service",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}{path_prefix}/oauth/authorize",
+                        "token_endpoint": f"{base_url}{path_prefix}/oauth/token",
+                        "registration_endpoint": f"{base_url}{path_prefix}/oauth/register",
+                        "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
         # DCR endpoints
         async def dcr_register_handler(request):
             """RFC 7591: Dynamic Client Registration"""
@@ -1029,6 +1061,8 @@ class HTTPStreamingMailAttachmentServer:
             Route("/steam", endpoint=options_handler, methods=["OPTIONS"]),
             Route("/health", endpoint=options_handler, methods=["OPTIONS"]),
             Route("/info", endpoint=options_handler, methods=["OPTIONS"]),
+            # MCP Discovery
+            Route("/.well-known/mcp.json", endpoint=mcp_discovery_handler, methods=["GET"]),
             # OAuth discovery endpoints
             Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET"]),
             Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET"]),

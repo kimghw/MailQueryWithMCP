@@ -94,14 +94,14 @@ class DCRService:
             self.azure_application_id = result[0]
             self.azure_client_secret = self.crypto.account_decrypt_sensitive_data(result[1])
             self.azure_tenant_id = result[2] or "common"
-            self.azure_redirect_uri = result[3] or "http://localhost:8000/oauth/azure_callback"
+            self.azure_redirect_uri = result[3]
             logger.info(f"✅ Loaded Azure config from dcr_azure_auth: {self.azure_application_id}")
         else:
-            # 2순위: 환경변수 (DCR_ 접두사 우선)
-            self.azure_application_id = os.getenv("DCR_AZURE_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID")
-            self.azure_client_secret = os.getenv("DCR_AZURE_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET")
-            self.azure_tenant_id = os.getenv("DCR_AZURE_TENANT_ID") or os.getenv("AZURE_TENANT_ID", "common")
-            self.azure_redirect_uri = os.getenv("DCR_OAUTH_REDIRECT_URI") or os.getenv("AZURE_REDIRECT_URI", "http://localhost:8000/oauth/azure_callback")
+            # 2순위: 환경변수 (DCR_ 접두사만 사용)
+            self.azure_application_id = os.getenv("DCR_AZURE_CLIENT_ID")
+            self.azure_client_secret = os.getenv("DCR_AZURE_CLIENT_SECRET")
+            self.azure_tenant_id = os.getenv("DCR_AZURE_TENANT_ID", "common")
+            self.azure_redirect_uri = os.getenv("DCR_OAUTH_REDIRECT_URI")
 
             if self.azure_application_id and self.azure_client_secret:
                 # 환경변수에서 읽은 경우 DB에 저장

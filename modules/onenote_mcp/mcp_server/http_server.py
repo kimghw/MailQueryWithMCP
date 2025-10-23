@@ -294,6 +294,38 @@ class HTTPStreamingOneNoteServer:
                 },
             )
 
+        async def mcp_discovery_handler(request):
+            """MCP Server Discovery - /.well-known/mcp.json"""
+            # Build base URL from request
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+            path_prefix = request.scope.get("root_path", "")  # Get mount path if exists
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "OneNote MCP Server",
+                    "description": "OneNote notebooks, sections, and pages management service",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}{path_prefix}/oauth/authorize",
+                        "token_endpoint": f"{base_url}{path_prefix}/oauth/token",
+                        "registration_endpoint": f"{base_url}{path_prefix}/oauth/register",
+                        "scopes_supported": ["Notes.ReadWrite", "Notes.Create", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
         # Root endpoint handler
         async def root_handler(request):
             """Handle root endpoint requests"""
@@ -321,6 +353,8 @@ class HTTPStreamingOneNoteServer:
             # Root endpoint
             Route("/", endpoint=root_handler, methods=["GET", "POST", "HEAD"]),
             Route("/", endpoint=options_handler, methods=["OPTIONS"]),
+            # MCP Discovery
+            Route("/.well-known/mcp.json", endpoint=mcp_discovery_handler, methods=["GET"]),
             # Health and info endpoints
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/info", endpoint=server_info, methods=["GET"]),

@@ -227,6 +227,93 @@ class AttachmentFilterHandlers:
 
         return False
 
+    async def _upload_to_onedrive(
+        self,
+        graph_client,
+        user_id: str,
+        file_path: Path,
+        access_token: str,
+        target_folder_url: str = None
+    ) -> Optional[str]:
+        """
+        OneDrive/SharePoint 폴더에 파일 업로드
+
+        Args:
+            graph_client: Graph API client
+            user_id: 사용자 ID
+            file_path: 업로드할 로컬 파일 경로
+            access_token: 액세스 토큰
+            target_folder_url: SharePoint 공유 URL (없으면 OneDrive 루트)
+
+        Returns:
+            업로드된 파일의 OneDrive URL (실패 시 None)
+        """
+        try:
+            import base64
+            import urllib.parse
+            import httpx
+
+            # 기본 OneDrive 경로 (공유 폴더 없으면)
+            if not target_folder_url:
+                # OneDrive 루트에 저장
+                upload_url = f"https://graph.microsoft.com/v1.0/me/drive/root:/{file_path.name}:/content"
+            else:
+                # SharePoint 공유 링크를 드라이브 아이템으로 변환
+                # URL을 base64url로 인코딩 (padding 없이)
+                encoded_url = base64.urlsafe_b64encode(target_folder_url.encode()).decode().rstrip('=')
+                # 'u!' 접두사 추가 (sharing link identifier)
+                sharing_token = f"u!{encoded_url}"
+
+                # 공유 링크에서 드라이브 아이템 정보 가져오기
+                async with httpx.AsyncClient() as client:
+                    response = await client.get(
+                        f"https://graph.microsoft.com/v1.0/shares/{sharing_token}/driveItem",
+                        headers={"Authorization": f"Bearer {access_token}"}
+                    )
+
+                    if response.status_code != 200:
+                        logger.warning(f"⚠️ SharePoint 폴더 접근 실패: {response.status_code}")
+                        return None
+
+                    folder_info = response.json()
+                    folder_id = folder_info.get("id")
+                    drive_id = folder_info.get("parentReference", {}).get("driveId")
+
+                    if not folder_id or not drive_id:
+                        logger.warning("⚠️ SharePoint 폴더 ID를 가져올 수 없습니다")
+                        return None
+
+                    # 드라이브 아이템에 파일 업로드
+                    upload_url = f"https://graph.microsoft.com/v1.0/drives/{drive_id}/items/{folder_id}:/{file_path.name}:/content"
+
+            # 파일 업로드
+            async with httpx.AsyncClient() as client:
+                with open(file_path, 'rb') as f:
+                    file_data = f.read()
+
+                upload_response = await client.put(
+                    upload_url,
+                    headers={
+                        "Authorization": f"Bearer {access_token}",
+                        "Content-Type": "application/octet-stream"
+                    },
+                    content=file_data,
+                    timeout=60.0
+                )
+
+                if upload_response.status_code in [200, 201]:
+                    uploaded_item = upload_response.json()
+                    web_url = uploaded_item.get("webUrl")
+                    logger.info(f"✅ OneDrive 업로드 성공: {file_path.name}")
+                    return web_url
+                else:
+                    logger.warning(f"⚠️ OneDrive 업로드 실패: {upload_response.status_code}")
+                    return None
+
+        except Exception as e:
+            logger.warning(f"⚠️ OneDrive 업로드 중 오류: {str(e)}")
+            return None
+
     def _extract_text_from_file(self, file_path: Path) -> Optional[str]:
         """
         파일에서 텍스트 추출 (PDF, DOCX, TXT 등)
@@ -467,31 +554,62 @@ class AttachmentFilterHandlers:
 
                                 # 저장 활성화된 경우 파일 저장
                                 if save_enabled:
-                                    # 모든 저장 경로에 복사
-                                    for save_path in filter_config.save_paths:
-                                        target_path = save_path / original_path.name
+                                    # SharePoint 폴더 URL (환경변수에서 가져오기)
+                                    import os
+                                    sharepoint_folder_url = os.getenv("SHAREPOINT_FOLDER_URL")
 
-                                        # 중복 파일명 처리
-                                        counter = 1
-                                        while target_path.exists():
-                                            name, ext = target_path.stem, target_path.suffix
-                                            target_path = save_path / f"{name}_{counter}{ext}"
-                                            counter += 1
+                                    # 1. OneDrive/SharePoint에 업로드 시도 (URL이 설정된 경우만)
+                                    onedrive_url = None
+                                    if sharepoint_folder_url:
+                                        onedrive_url = await self._upload_to_onedrive(
+                                            graph_client=orchestrator.graph_client,
+                                            user_id=user_id,
+                                            file_path=original_path,
+                                            access_token=access_token,
+                                            target_folder_url=sharepoint_folder_url
+                                        )
 
-                                        # 파일 복사
-                                        import shutil
-                                        shutil.copy2(original_path, target_path)
-                                        logger.info(f"파일 저장 완료: {target_path}")
-
-                                        # saved_files에 추가 (여기가 핵심!)
+                                    if onedrive_url:
+                                        # OneDrive 업로드 성공
+                                        logger.info(f"📤 OneDrive 저장 성공: {attachment_name}")
                                         saved_files.append({
                                             "filename": attachment_name,
-                                            "path": str(target_path),
+                                            "path": onedrive_url,
+                                            "location": "OneDrive",
                                             "size": file_size,
                                             "mail_subject": mail.subject,
                                             "mail_date": mail.received_date_time.isoformat() if mail.received_date_time else None
                                         })
-                                        logger.info(f"saved_files에 추가: {attachment_name} (총 {len(saved_files)}개)")
+                                    else:
+                                        # OneDrive 실패 → 로컬 저장
+                                        logger.info(f"📁 OneDrive 실패, 로컬 저장: {attachment_name}")
+
+                                        # 모든 저장 경로에 복사
+                                        for save_path in filter_config.save_paths:
+                                            target_path = save_path / original_path.name
+
+                                            # 중복 파일명 처리
+                                            counter = 1
+                                            while target_path.exists():
+                                                name, ext = target_path.stem, target_path.suffix
+                                                target_path = save_path / f"{name}_{counter}{ext}"
+                                                counter += 1
+
+                                            # 파일 복사
+                                            import shutil
+                                            shutil.copy2(original_path, target_path)
+                                            logger.info(f"파일 저장 완료: {target_path}")
+
+                                            # saved_files에 추가
+                                            saved_files.append({
+                                                "filename": attachment_name,
+                                                "path": str(target_path),
+                                                "location": "로컬",
+                                                "size": file_size,
+                                                "mail_subject": mail.subject,
+                                                "mail_date": mail.received_date_time.isoformat() if mail.received_date_time else None
+                                            })
+                                            logger.info(f"saved_files에 추가: {attachment_name} (총 {len(saved_files)}개)")
 
                                 # 텍스트 추출 활성화된 경우 텍스트 추출
                                 if extract_text:

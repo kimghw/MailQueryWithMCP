@@ -46,12 +46,24 @@ services:
       # 🔐 DCR - Dynamic Client Registration (Claude Connector)
       # ===========================
 
-      # Azure AD 앱 정보 (DCR 백엔드용)
-      - key: AZURE_CLIENT_ID
+      # OAuth 인증 활성화
+      - key: ENABLE_OAUTH_AUTH
+        value: "true"
+
+      # DCR을 위한 Azure AD 앱 정보 (계정별 설정이 없을 경우 기본값으로 사용)
+      - key: DCR_AZURE_CLIENT_ID
         sync: false
-      - key: AZURE_CLIENT_SECRET
+      - key: DCR_AZURE_CLIENT_SECRET
         sync: false
-      - key: AZURE_TENANT_ID
+      - key: DCR_AZURE_TENANT_ID
+        sync: false
+      - key: DCR_OAUTH_REDIRECT_URI
+        sync: false
+      - key: DCR_OAUTH_SCOPE
+        sync: false
+
+      # 허용된 사용자 목록 (쉼표로 구분된 이메일, 비어있으면 모든 사용자 허용)
+      - key: DCR_ALLOWED_USERS
         sync: false
 
       # ===========================
@@ -98,4 +110,12 @@ services:
         value: "스팸,광고,홍보,마케팅,unsubscribe,newsletter,promotion"
       - key: BLOCKED_SENDER_PATTERNS
         value: "noreply@,no-reply@,donotreply@,auto-reply@,block@"
+
+      # ===========================
+      # 💾 FILE STORAGE - 파일 저장 설정
+      # ===========================
+
+      # SharePoint 폴더 공유 URL (attachmentManager 기본 저장 위치)
+      - key: SHAREPOINT_FOLDER_URL
+        sync: false
     healthCheckPath: /health

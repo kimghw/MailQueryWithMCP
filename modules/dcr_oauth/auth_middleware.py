@@ -23,15 +23,20 @@ async def verify_bearer_token_middleware(request, call_next=None):
     path = request.url.path
 
     # OAuth 엔드포인트와 메타데이터는 인증 제외
-    excluded_paths = [
-        "/.well-known/",
+    # .well-known은 경로 어디든 포함되면 제외 (MCP discovery 지원)
+    if "/.well-known/" in path:
+        return None  # Skip authentication for discovery endpoints
+
+    # 특정 경로로 시작하면 제외
+    excluded_path_prefixes = [
         "/oauth/",
         "/health",
         "/info",
-        "/enrollment/callback"  # Enrollment 서비스의 OAuth 콜백만 제외
+        "/enrollment/callback",  # Enrollment 서비스의 OAuth 콜백
+        "/auth/callback"  # DCR OAuth 콜백
     ]
 
-    if any(path.startswith(excluded) for excluded in excluded_paths):
+    if any(path.startswith(excluded) for excluded in excluded_path_prefixes):
         return None  # Skip authentication
 
     # OPTIONS 요청은 인증 제외
