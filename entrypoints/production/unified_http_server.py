@@ -67,20 +67,22 @@ class UnifiedMCPServer:
         orchestrator = get_auth_orchestrator()
         self.auth_web_server.set_session_store(orchestrator.auth_sessions)
 
-        # Initialize DCR Azure auth from environment variables
-        self._initialize_dcr_azure_auth()
+        # Initialize DCR schema (환경변수 → DB 저장은 DCRService.__init__에서 자동 처리)
+        self._ensure_dcr_schema_only()
 
         # Create unified Starlette app
         self.app = self._create_unified_app()
 
         logger.info("✅ Unified MCP Server initialized")
 
-    def _ensure_dcr_schema(self, db_path: str):
-        """DCR V3 스키마 초기화"""
+    def _ensure_dcr_schema_only(self):
+        """DCR V3 스키마만 초기화 (Azure 설정은 DCRService에서 처리)"""
         import sqlite3
+        from infra.core.config import get_config
 
         try:
-            conn = sqlite3.connect(db_path)
+            config = get_config()
+            conn = sqlite3.connect(config.dcr_database_path)
 
             # 스키마 파일 읽기
             schema_path = PROJECT_ROOT / "infra" / "migrations" / "dcr_schema_v3.sql"
@@ -90,77 +92,10 @@ class UnifiedMCPServer:
             conn.executescript(schema_sql)
             conn.commit()
             conn.close()
-            logger.info("✅ DCR V3 schema initialized")
+            logger.info("✅ DCR V3 schema initialized (Azure config will be loaded by DCRService)")
         except Exception as e:
             logger.error(f"❌ DCR V3 schema initialization failed: {e}")
             raise
-
-    def _initialize_dcr_azure_auth(self):
-        """환경변수에서 Azure 인증 정보를 읽어 dcr_azure_auth 테이블에 저장"""
-        try:
-            # DCR_ 접두사 우선, 없으면 기본 이름 사용
-            azure_client_id = os.getenv("DCR_AZURE_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID")
-            azure_client_secret = os.getenv("DCR_AZURE_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET")
-            azure_tenant_id = os.getenv("DCR_AZURE_TENANT_ID") or os.getenv("AZURE_TENANT_ID", "common")
-            azure_redirect_uri = os.getenv("DCR_OAUTH_REDIRECT_URI") or os.getenv("AZURE_REDIRECT_URI", "http://localhost:8000/oauth/azure_callback")
-
-            if not azure_client_id or not azure_client_secret:
-                logger.warning("⚠️ DCR_AZURE_CLIENT_ID/AZURE_CLIENT_ID or DCR_AZURE_CLIENT_SECRET/AZURE_CLIENT_SECRET not found. DCR will not work.")
-                return
-
-            # dcr_azure_auth 테이블에 저장
-            import sqlite3
-            from infra.core.config import get_config
-            from modules.enrollment.account import AccountCryptoHelpers
-
-            config = get_config()
-            crypto = AccountCryptoHelpers()
-
-            # 스키마 먼저 생성
-            self._ensure_dcr_schema(config.dcr_database_path)
-
-            conn = sqlite3.connect(config.dcr_database_path)
-
-            try:
-                # 기존 데이터 확인
-                cursor = conn.cursor()
-                cursor.execute("SELECT application_id FROM dcr_azure_auth WHERE application_id = ?", (azure_client_id,))
-                existing = cursor.fetchone()
-
-                if existing:
-                    # 업데이트
-                    cursor.execute("""
-                        UPDATE dcr_azure_auth
-                        SET client_secret = ?, tenant_id = ?, redirect_uri = ?
-                        WHERE application_id = ?
-                    """, (
-                        crypto.account_encrypt_sensitive_data(azure_client_secret),
-                        azure_tenant_id,
-                        azure_redirect_uri,
-                        azure_client_id
-                    ))
-                    logger.info(f"✅ Updated Azure auth config in dcr_azure_auth: {azure_client_id}")
-                else:
-                    # 신규 삽입
-                    cursor.execute("""
-                        INSERT INTO dcr_azure_auth (application_id, client_secret, tenant_id, redirect_uri)
-                        VALUES (?, ?, ?, ?)
-                    """, (
-                        azure_client_id,
-                        crypto.account_encrypt_sensitive_data(azure_client_secret),
-                        azure_tenant_id,
-                        azure_redirect_uri
-                    ))
-                    logger.info(f"✅ Saved Azure auth config to dcr_azure_auth: {azure_client_id}")
-
-                conn.commit()
-            finally:
-                conn.close()
-
-        except Exception as e:
-            logger.error(f"❌ Failed to initialize DCR Azure auth: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
 
     def _create_unified_app(self):
         """Create unified Starlette application with multiple MCP servers"""

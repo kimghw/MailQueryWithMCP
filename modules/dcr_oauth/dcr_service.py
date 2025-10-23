@@ -97,14 +97,16 @@ class DCRService:
             self.azure_redirect_uri = result[3] or "http://localhost:8000/oauth/azure_callback"
             logger.info(f"✅ Loaded Azure config from dcr_azure_auth: {self.azure_application_id}")
         else:
-            # 2순위: 환경변수
-            self.azure_application_id = os.getenv("AZURE_CLIENT_ID")
-            self.azure_client_secret = os.getenv("AZURE_CLIENT_SECRET")
-            self.azure_tenant_id = os.getenv("AZURE_TENANT_ID", "common")
-            self.azure_redirect_uri = os.getenv("AZURE_REDIRECT_URI", "http://localhost:8000/oauth/azure_callback")
+            # 2순위: 환경변수 (DCR_ 접두사 우선)
+            self.azure_application_id = os.getenv("DCR_AZURE_CLIENT_ID") or os.getenv("AZURE_CLIENT_ID")
+            self.azure_client_secret = os.getenv("DCR_AZURE_CLIENT_SECRET") or os.getenv("AZURE_CLIENT_SECRET")
+            self.azure_tenant_id = os.getenv("DCR_AZURE_TENANT_ID") or os.getenv("AZURE_TENANT_ID", "common")
+            self.azure_redirect_uri = os.getenv("DCR_OAUTH_REDIRECT_URI") or os.getenv("AZURE_REDIRECT_URI", "http://localhost:8000/oauth/azure_callback")
 
             if self.azure_application_id and self.azure_client_secret:
+                # 환경변수에서 읽은 경우 DB에 저장
                 logger.info(f"✅ Loaded Azure config from environment: {self.azure_application_id}")
+                self._save_azure_config_to_db()
             else:
                 logger.warning("⚠️ No Azure config found. DCR will not work.")
 
@@ -129,6 +131,52 @@ class DCRService:
         except Exception as e:
             logger.error(f"❌ DCR V3 schema initialization failed: {e}")
             raise
+
+    def _save_azure_config_to_db(self):
+        """환경변수에서 읽은 Azure 설정을 DB에 저장"""
+        if not all([self.azure_application_id, self.azure_client_secret]):
+            return
+
+        try:
+            # 기존 데이터 확인
+            query = "SELECT application_id FROM dcr_azure_auth WHERE application_id = ?"
+            existing = self._fetch_one(query, (self.azure_application_id,))
+
+            if existing:
+                # 업데이트
+                update_query = """
+                UPDATE dcr_azure_auth
+                SET client_secret = ?, tenant_id = ?, redirect_uri = ?
+                WHERE application_id = ?
+                """
+                self._execute_query(
+                    update_query,
+                    (
+                        self.crypto.account_encrypt_sensitive_data(self.azure_client_secret),
+                        self.azure_tenant_id,
+                        self.azure_redirect_uri,
+                        self.azure_application_id,
+                    ),
+                )
+                logger.info(f"✅ Updated Azure config in dcr_azure_auth: {self.azure_application_id}")
+            else:
+                # 신규 삽입
+                insert_query = """
+                INSERT INTO dcr_azure_auth (application_id, client_secret, tenant_id, redirect_uri)
+                VALUES (?, ?, ?, ?)
+                """
+                self._execute_query(
+                    insert_query,
+                    (
+                        self.azure_application_id,
+                        self.crypto.account_encrypt_sensitive_data(self.azure_client_secret),
+                        self.azure_tenant_id,
+                        self.azure_redirect_uri,
+                    ),
+                )
+                logger.info(f"✅ Saved Azure config to dcr_azure_auth: {self.azure_application_id}")
+        except Exception as e:
+            logger.error(f"❌ Failed to save Azure config to DB: {e}")
 
     async def register_client(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """RFC 7591: 동적 클라이언트 등록"""
