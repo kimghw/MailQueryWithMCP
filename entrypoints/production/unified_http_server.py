@@ -421,21 +421,32 @@ class UnifiedMCPServer:
                     from modules.enrollment.account import AccountCryptoHelpers
                     crypto = AccountCryptoHelpers()
 
+                    # Query all active refresh tokens for this client
                     query = """
-                    SELECT dcr_client_id, azure_object_id, expires_at, dcr_status
+                    SELECT dcr_token_value, dcr_client_id, azure_object_id, expires_at
                     FROM dcr_tokens
-                    WHERE dcr_token_type = 'refresh' AND dcr_status = 'active'
+                    WHERE dcr_client_id = ? AND dcr_token_type = 'refresh' AND dcr_status = 'active'
                     """
-                    results = dcr_service._fetch_all(query)
+                    results = dcr_service._fetch_all(query, (client_id,))
 
                     found_token = None
                     for row in results:
-                        stored_client_id, azure_object_id, expires_at, status = row
-                        if stored_client_id != client_id:
+                        encrypted_token, stored_client_id, azure_object_id, expires_at = row
+
+                        # Decrypt and compare token value
+                        try:
+                            decrypted_token = crypto.account_decrypt_sensitive_data(encrypted_token)
+                            if not secrets.compare_digest(decrypted_token, refresh_token_value):
+                                continue  # Token mismatch
+                        except Exception as e:
+                            logger.error(f"Token decryption error: {e}")
                             continue
+
                         # Check expiration
                         if datetime.fromisoformat(expires_at) < datetime.now():
+                            logger.warning(f"Refresh token expired")
                             continue
+
                         found_token = (azure_object_id, expires_at)
                         break
 
