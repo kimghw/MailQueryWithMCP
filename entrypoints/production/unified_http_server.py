@@ -85,7 +85,7 @@ class UnifiedMCPServer:
             conn = sqlite3.connect(config.dcr_database_path)
 
             # 스키마 파일 읽기
-            schema_path = PROJECT_ROOT / "infra" / "migrations" / "dcr_schema_v3.sql"
+            schema_path = PROJECT_ROOT / "modules" / "dcr_oauth" / "migrations" / "dcr_schema_v3.sql"
             with open(schema_path, 'r') as f:
                 schema_sql = f.read()
 

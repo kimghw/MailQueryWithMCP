@@ -120,7 +120,7 @@ class DCRService:
             conn = sqlite3.connect(config.dcr_database_path)
 
             # 스키마 파일 읽기
-            schema_path = os.path.join(os.path.dirname(__file__), "../../infra/migrations/dcr_schema_v3.sql")
+            schema_path = os.path.join(os.path.dirname(__file__), "migrations/dcr_schema_v3.sql")
             with open(schema_path, 'r') as f:
                 schema_sql = f.read()
 
