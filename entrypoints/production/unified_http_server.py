@@ -464,6 +464,17 @@ class UnifiedMCPServer:
                     expires_in = azure_tokens.get("expires_in", 3600)
                     token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
+                    # Revoke all existing active tokens for this client + object_id (prevent duplicates)
+                    dcr_service._execute_query(
+                        """
+                        UPDATE dcr_tokens
+                        SET dcr_status = 'revoked'
+                        WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_status = 'active'
+                        """,
+                        (client_id, azure_object_id),
+                    )
+                    logger.info(f"🔄 Revoked old tokens for client: {client_id}")
+
                     # Store new access token
                     dcr_service._execute_query(
                         """
@@ -484,9 +495,6 @@ class UnifiedMCPServer:
                         """,
                         (crypto.account_encrypt_sensitive_data(new_refresh_token), client_id, azure_object_id, refresh_expiry),
                     )
-
-                    # Revoke old refresh token (optional - rotation)
-                    # dcr_service._execute_query("UPDATE dcr_tokens SET dcr_status = 'revoked' WHERE dcr_token_value = ?", (refresh_token_value,))
 
                     logger.info(f"✅ New tokens issued via refresh_token grant")
 
@@ -570,6 +578,17 @@ class UnifiedMCPServer:
                 # Azure 토큰은 이미 dcr_azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장 (azure_object_id 연결)
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
+
+                # Revoke all existing active tokens for this client + object_id (prevent duplicates)
+                dcr_service._execute_query(
+                    """
+                    UPDATE dcr_tokens
+                    SET dcr_status = 'revoked'
+                    WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_status = 'active'
+                    """,
+                    (client_id, azure_object_id),
+                )
+                logger.info(f"🔄 Revoked old tokens for client: {client_id}")
 
                 # Store access token
                 dcr_service._execute_query(
