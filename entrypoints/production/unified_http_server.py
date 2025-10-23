@@ -389,14 +389,10 @@ class UnifiedMCPServer:
                 # Parse form data
                 form_data = await request.form()
                 grant_type = form_data.get("grant_type")
-                code = form_data.get("code")
                 client_id = form_data.get("client_id")
                 client_secret = form_data.get("client_secret")
-                redirect_uri = form_data.get("redirect_uri")
-                # PKCE parameter (RFC 7636)
-                code_verifier = form_data.get("code_verifier")
 
-                if grant_type != "authorization_code":
+                if grant_type not in ["authorization_code", "refresh_token"]:
                     return JSONResponse(
                         {"error": "unsupported_grant_type"},
                         status_code=400,
@@ -409,6 +405,109 @@ class UnifiedMCPServer:
                         {"error": "invalid_client"},
                         status_code=401,
                     )
+
+                # === Grant Type: refresh_token ===
+                if grant_type == "refresh_token":
+                    refresh_token_value = form_data.get("refresh_token")
+                    if not refresh_token_value:
+                        return JSONResponse(
+                            {"error": "invalid_request", "error_description": "refresh_token required"},
+                            status_code=400,
+                        )
+
+                    logger.info(f"🔄 Processing refresh_token grant")
+
+                    # Verify refresh token
+                    from modules.enrollment.account import AccountCryptoHelpers
+                    crypto = AccountCryptoHelpers()
+
+                    query = """
+                    SELECT dcr_client_id, azure_object_id, expires_at, dcr_status
+                    FROM dcr_tokens
+                    WHERE dcr_token_type = 'refresh' AND dcr_status = 'active'
+                    """
+                    results = dcr_service._fetch_all(query)
+
+                    found_token = None
+                    for row in results:
+                        stored_client_id, azure_object_id, expires_at, status = row
+                        if stored_client_id != client_id:
+                            continue
+                        # Check expiration
+                        if datetime.fromisoformat(expires_at) < datetime.now():
+                            continue
+                        found_token = (azure_object_id, expires_at)
+                        break
+
+                    if not found_token:
+                        logger.error(f"❌ Invalid or expired refresh token")
+                        return JSONResponse(
+                            {"error": "invalid_grant", "error_description": "Invalid or expired refresh token"},
+                            status_code=400,
+                        )
+
+                    azure_object_id, _ = found_token
+                    logger.info(f"✅ Refresh token verified for object_id: {azure_object_id}")
+
+                    # Get Azure tokens
+                    azure_tokens = dcr_service.get_azure_tokens_by_object_id(azure_object_id)
+                    if not azure_tokens:
+                        logger.error(f"❌ Azure token not found")
+                        return JSONResponse(
+                            {"error": "invalid_grant", "error_description": "Azure token not found"},
+                            status_code=400,
+                        )
+
+                    # Generate new tokens
+                    new_access_token = secrets.token_urlsafe(32)
+                    new_refresh_token = secrets.token_urlsafe(32)
+                    expires_in = azure_tokens.get("expires_in", 3600)
+                    token_expiry = datetime.now() + timedelta(seconds=expires_in)
+
+                    # Store new access token
+                    dcr_service._execute_query(
+                        """
+                        INSERT INTO dcr_tokens (
+                            dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
+                        ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
+                        """,
+                        (crypto.account_encrypt_sensitive_data(new_access_token), client_id, azure_object_id, token_expiry),
+                    )
+
+                    # Store new refresh token (30 days)
+                    refresh_expiry = datetime.now() + timedelta(days=30)
+                    dcr_service._execute_query(
+                        """
+                        INSERT INTO dcr_tokens (
+                            dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
+                        ) VALUES (?, ?, 'refresh', ?, ?, 'active')
+                        """,
+                        (crypto.account_encrypt_sensitive_data(new_refresh_token), client_id, azure_object_id, refresh_expiry),
+                    )
+
+                    # Revoke old refresh token (optional - rotation)
+                    # dcr_service._execute_query("UPDATE dcr_tokens SET dcr_status = 'revoked' WHERE dcr_token_value = ?", (refresh_token_value,))
+
+                    logger.info(f"✅ New tokens issued via refresh_token grant")
+
+                    return JSONResponse(
+                        {
+                            "access_token": new_access_token,
+                            "token_type": "Bearer",
+                            "expires_in": expires_in,
+                            "refresh_token": new_refresh_token,
+                            "scope": azure_tokens.get("scope", ""),
+                        },
+                        headers={
+                            "Access-Control-Allow-Origin": "*",
+                            "Content-Type": "application/json",
+                        },
+                    )
+
+                # === Grant Type: authorization_code ===
+                code = form_data.get("code")
+                redirect_uri = form_data.get("redirect_uri")
+                code_verifier = form_data.get("code_verifier")
 
                 # Authorization code 검증 (DCR auth_code, PKCE 지원)
                 logger.info(f"🔍 Verifying authorization code: {code[:20]}...")
@@ -469,16 +568,16 @@ class UnifiedMCPServer:
                 azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
                 # Azure 토큰은 이미 dcr_azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장 (azure_object_id 연결)
-                dcr_query = """
-                INSERT INTO dcr_tokens (
-                    dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
-                ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
-                """
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
 
+                # Store access token
                 dcr_service._execute_query(
-                    dcr_query,
+                    """
+                    INSERT INTO dcr_tokens (
+                        dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
+                    ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
+                    """,
                     (
                         crypto.account_encrypt_sensitive_data(access_token),
                         client_id,
@@ -486,7 +585,24 @@ class UnifiedMCPServer:
                         azure_token_expiry,
                     ),
                 )
-                logger.info(f"✅ DCR token stored for client: {client_id}, linked to object_id: {azure_object_id}")
+
+                # Store refresh token (30 days validity)
+                refresh_token_expiry = datetime.now() + timedelta(days=30)
+                dcr_service._execute_query(
+                    """
+                    INSERT INTO dcr_tokens (
+                        dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
+                    ) VALUES (?, ?, 'refresh', ?, ?, 'active')
+                    """,
+                    (
+                        crypto.account_encrypt_sensitive_data(refresh_token),
+                        client_id,
+                        azure_object_id,
+                        refresh_token_expiry,
+                    ),
+                )
+
+                logger.info(f"✅ DCR access & refresh tokens stored for client: {client_id}, linked to object_id: {azure_object_id}")
 
                 return JSONResponse(
                     {
