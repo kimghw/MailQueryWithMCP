@@ -47,19 +47,28 @@ select_module() {
     echo -e "${YELLOW}  [1]${NC} enrollment  - Enrollment MCP 테스트" >&2
     echo -e "${YELLOW}  [2]${NC} mail-query  - Mail Query MCP 테스트" >&2
     echo -e "${YELLOW}  [3]${NC} onenote     - OneNote MCP 테스트" >&2
-    echo -e "${YELLOW}  [4]${NC} all         - 모든 모듈 테스트" >&2
+    echo -e "${YELLOW}  [4]${NC} teams       - Teams MCP 테스트" >&2
+    echo -e "${YELLOW}  [5]${NC} onedrive    - OneDrive MCP 테스트" >&2
+    echo -e "${YELLOW}  [6]${NC} all         - 모든 모듈 테스트" >&2
+    echo -e "${CYAN}  [q]${NC} quit        - 종료" >&2
     echo "" >&2
 
     while true; do
-        echo -ne "${MAGENTA}모듈 선택 (1-4) > ${NC}" >&2
+        echo -ne "${MAGENTA}모듈 선택 (1-6, q) > ${NC}" >&2
         read -r module_choice
 
         case "$module_choice" in
             1) echo "enrollment"; return 0 ;;
             2) echo "mail-query"; return 0 ;;
             3) echo "onenote"; return 0 ;;
-            4) echo "all"; return 0 ;;
-            *) echo -e "${RED}❌ 잘못된 입력입니다. 1-4 중 선택하세요.${NC}" >&2 ;;
+            4) echo "teams"; return 0 ;;
+            5) echo "onedrive"; return 0 ;;
+            6) echo "all"; return 0 ;;
+            q|Q|quit|exit)
+                echo -e "${GREEN}👋 종료합니다.${NC}" >&2
+                exit 0
+                ;;
+            *) echo -e "${RED}❌ 잘못된 입력입니다. 1-6 또는 q를 선택하세요.${NC}" >&2 ;;
         esac
     done
 }

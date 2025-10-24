@@ -59,7 +59,7 @@ class TeamsHandlers:
             ),
             Tool(
                 name="teams_get_chat_messages",
-                description="채팅의 메시지 목록을 조회합니다.",
+                description="채팅의 메시지 목록을 조회합니다. chat_id를 지정하지 않으면 본인의 Notes 채팅(48:notes)을 조회합니다.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -69,7 +69,8 @@ class TeamsHandlers:
                         },
                         "chat_id": {
                             "type": "string",
-                            "description": "채팅 ID"
+                            "description": "채팅 ID (기본값: 48:notes - 나의 Notes 채팅)",
+                            "default": "48:notes"
                         },
                         "limit": {
                             "type": "integer",
@@ -77,12 +78,12 @@ class TeamsHandlers:
                             "default": 50
                         }
                     },
-                    "required": ["user_id", "chat_id"]
+                    "required": ["user_id"]
                 }
             ),
             Tool(
                 name="teams_send_chat_message",
-                description="채팅에 메시지를 전송합니다.",
+                description="채팅에 메시지를 전송합니다. chat_id를 지정하지 않으면 본인의 Notes 채팅(48:notes)으로 전송합니다.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -92,7 +93,8 @@ class TeamsHandlers:
                         },
                         "chat_id": {
                             "type": "string",
-                            "description": "채팅 ID"
+                            "description": "채팅 ID (기본값: 48:notes - 나의 Notes 채팅)",
+                            "default": "48:notes"
                         },
                         "content": {
                             "type": "string",
@@ -104,7 +106,7 @@ class TeamsHandlers:
                             "default": "[claude]"
                         }
                     },
-                    "required": ["user_id", "chat_id", "content"]
+                    "required": ["user_id", "content"]
                 }
             ),
         ]
@@ -155,7 +157,7 @@ class TeamsHandlers:
 
             elif name == "teams_get_chat_messages":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id")
+                chat_id = arguments.get("chat_id", "48:notes")
                 limit = arguments.get("limit", 50)
 
                 result = await self.teams_handler.get_chat_messages(user_id, chat_id, limit)
@@ -185,7 +187,7 @@ class TeamsHandlers:
 
             elif name == "teams_send_chat_message":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id")
+                chat_id = arguments.get("chat_id", "48:notes")
                 content = arguments.get("content")
                 prefix = arguments.get("prefix", "[claude]")
 
@@ -228,15 +230,16 @@ class TeamsHandlers:
 
             elif name == "teams_get_chat_messages":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id")
+                chat_id = arguments.get("chat_id", "48:notes")
                 limit = arguments.get("limit", 50)
                 return await self.teams_handler.get_chat_messages(user_id, chat_id, limit)
 
             elif name == "teams_send_chat_message":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id")
+                chat_id = arguments.get("chat_id", "48:notes")
                 content = arguments.get("content")
-                return await self.teams_handler.send_chat_message(user_id, chat_id, content)
+                prefix = arguments.get("prefix", "[claude]")
+                return await self.teams_handler.send_chat_message(user_id, chat_id, content, prefix)
 
             else:
                 raise ValueError(f"알 수 없는 도구: {name}")

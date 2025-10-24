@@ -11,6 +11,12 @@ from infra.core.token_service import TokenService
 
 logger = get_logger(__name__)
 
+# 특별한 Teams Chat ID 상수
+# 주의: 이 chat_id들은 teams_list_chats API에 나타나지 않지만 직접 사용 가능합니다
+SPECIAL_CHAT_IDS = {
+    "notes": "48:notes",  # Teams Notes 채팅 (개인 메모용)
+}
+
 
 class TeamsHandler:
     """Teams Graph API 작업 처리 핸들러"""

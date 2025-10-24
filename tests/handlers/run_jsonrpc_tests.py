@@ -28,6 +28,8 @@ sys.path.insert(0, str(project_root))
 from modules.enrollment.mcp_server.handlers import AuthAccountHandlers
 from modules.mail_query_MCP.mcp_server.handlers import MCPHandlers
 from modules.onenote_mcp.handlers import OneNoteHandlers
+from modules.teams_mcp.handlers import TeamsHandlers
+from modules.onedrive_mcp.handlers import OneDriveHandlers
 from infra.core.database import get_database_manager
 
 
@@ -54,6 +56,10 @@ class TestRunner:
                 self.handlers[module] = MCPHandlers()
             elif module == "onenote":
                 self.handlers[module] = OneNoteHandlers()
+            elif module == "teams":
+                self.handlers[module] = TeamsHandlers()
+            elif module == "onedrive":
+                self.handlers[module] = OneDriveHandlers()
             else:
                 raise ValueError(f"Unknown module: {module}")
         return self.handlers[module]
@@ -352,6 +358,8 @@ async def main():
         print("  enrollment  - Enrollment MCP 테스트")
         print("  mail-query  - Mail Query MCP 테스트")
         print("  onenote     - OneNote MCP 테스트")
+        print("  teams       - Teams MCP 테스트")
+        print("  onedrive    - OneDrive MCP 테스트")
         print("  all         - 모든 모듈 테스트")
         print()
         print("테스트 번호 (선택사항):")
@@ -384,7 +392,7 @@ async def main():
     if module == "all":
         if selected_tests:
             print("⚠️  경고: 'all' 모드에서는 테스트 번호 선택이 무시됩니다.")
-        for mod in ["enrollment", "mail-query", "onenote"]:
+        for mod in ["enrollment", "mail-query", "onenote", "teams", "onedrive"]:
             await runner.run_module_tests(mod)
     else:
         await runner.run_module_tests(module)

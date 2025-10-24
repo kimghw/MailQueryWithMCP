@@ -8,6 +8,8 @@
 #   ./tests/handlers/run_tests.sh enrollment  # Enrollment만
 #   ./tests/handlers/run_tests.sh mail-query  # Mail Query만
 #   ./tests/handlers/run_tests.sh onenote     # OneNote만
+#   ./tests/handlers/run_tests.sh teams       # Teams만
+#   ./tests/handlers/run_tests.sh onedrive    # OneDrive만
 #   ./tests/handlers/run_tests.sh             # 전체
 
 set -e
@@ -37,38 +39,54 @@ TEST_MODULE="${1:-all}"
 case "$TEST_MODULE" in
     enrollment)
         echo -e "${YELLOW}🔐 Enrollment 핸들러 테스트${NC}"
-        python tests/handlers/test_enrollment_handlers.py
+        python3 tests/handlers/test_enrollment_handlers.py
         ;;
     mail-query)
         echo -e "${YELLOW}📧 Mail Query 핸들러 테스트${NC}"
-        python tests/handlers/test_mail_query_handlers.py
+        python3 tests/handlers/test_mail_query_handlers.py
         ;;
     onenote)
         echo -e "${YELLOW}📝 OneNote 핸들러 테스트${NC}"
-        python tests/handlers/test_onenote_handlers.py
+        python3 tests/handlers/test_onenote_handlers.py
+        ;;
+    teams)
+        echo -e "${YELLOW}💬 Teams 핸들러 테스트${NC}"
+        python3 tests/handlers/test_teams_handlers.py
+        ;;
+    onedrive)
+        echo -e "${YELLOW}💾 OneDrive 핸들러 테스트${NC}"
+        python3 tests/handlers/test_onedrive_handlers.py
         ;;
     all)
         echo -e "${YELLOW}🌐 전체 핸들러 테스트${NC}"
         echo ""
 
-        python tests/handlers/test_enrollment_handlers.py
+        python3 tests/handlers/test_enrollment_handlers.py
         EXIT_CODE_1=$?
         echo ""
 
-        python tests/handlers/test_mail_query_handlers.py
+        python3 tests/handlers/test_mail_query_handlers.py
         EXIT_CODE_2=$?
         echo ""
 
-        python tests/handlers/test_onenote_handlers.py
+        python3 tests/handlers/test_onenote_handlers.py
         EXIT_CODE_3=$?
+        echo ""
+
+        python3 tests/handlers/test_teams_handlers.py
+        EXIT_CODE_4=$?
+        echo ""
+
+        python3 tests/handlers/test_onedrive_handlers.py
+        EXIT_CODE_5=$?
 
         # 하나라도 실패하면 에러 코드 반환
-        if [ $EXIT_CODE_1 -ne 0 ] || [ $EXIT_CODE_2 -ne 0 ] || [ $EXIT_CODE_3 -ne 0 ]; then
+        if [ $EXIT_CODE_1 -ne 0 ] || [ $EXIT_CODE_2 -ne 0 ] || [ $EXIT_CODE_3 -ne 0 ] || [ $EXIT_CODE_4 -ne 0 ] || [ $EXIT_CODE_5 -ne 0 ]; then
             exit 1
         fi
         ;;
     *)
-        echo "사용법: $0 [enrollment|mail-query|onenote|all]"
+        echo "사용법: $0 [enrollment|mail-query|onenote|teams|onedrive|all]"
         exit 1
         ;;
 esac
