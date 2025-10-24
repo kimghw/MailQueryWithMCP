@@ -88,6 +88,7 @@ class EnrollmentFileData(BaseModel):
 
     account_email: EmailStr = Field(..., description="계정 이메일")
     account_name: str = Field(..., min_length=1, description="계정 이름")
+    account_user_id: Optional[str] = Field(None, description="YAML에서 지정한 사용자 ID")
     oauth_config: OAuthConfig = Field(..., description="OAuth 설정")
     file_path: str = Field(..., description="파일 경로")
     file_hash: str = Field(..., description="파일 해시")
@@ -98,6 +99,16 @@ class EnrollmentFileData(BaseModel):
         if len(v.strip()) == 0:
             raise ValueError("계정 이름은 공백일 수 없습니다")
         return v.strip()
+
+    @validator("account_user_id")
+    def validate_account_user_id(cls, v):
+        """YAML user_id 검증 (영문, 숫자, 일부 특수문자만 허용)"""
+        if v is None:
+            return v
+        import re
+        if not re.match(r"^[a-zA-Z0-9._-]+$", v):
+            raise ValueError("user_id는 영문, 숫자, '.', '_', '-'만 포함할 수 있습니다")
+        return v
 
 
 class AccountCreate(BaseModel):
@@ -139,9 +150,11 @@ class AccountUpdate(BaseModel):
     status: Optional[AccountStatus] = Field(None, description="계정 상태")
     enrollment_file_path: Optional[str] = Field(None, description="등록 파일 경로")
     enrollment_file_hash: Optional[str] = Field(None, description="등록 파일 해시")
+    oauth_client_id: Optional[str] = Field(None, description="OAuth 클라이언트 ID")
     oauth_client_secret: Optional[str] = Field(
         None, description="OAuth 클라이언트 시크릿 (암호화됨)"
     )
+    oauth_tenant_id: Optional[str] = Field(None, description="OAuth 테넌트 ID")
     oauth_redirect_uri: Optional[str] = Field(None, description="OAuth 리다이렉트 URI")
     delegated_permissions: Optional[List[str]] = Field(None, description="위임된 권한")
     access_token: Optional[str] = Field(None, description="액세스 토큰")

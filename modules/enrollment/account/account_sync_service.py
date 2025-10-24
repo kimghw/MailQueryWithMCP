@@ -145,8 +145,15 @@ class AccountSyncService:
                 file_data, file_path, file_hash
             )
 
-            # 사용자 ID 생성 (이메일에서 @ 앞부분 추출)
-            user_id = enrollment_data.account_email.split("@")[0]
+            # 사용자 ID 결정: YAML의 user_id 우선, 없으면 이메일 로컬파트 사용
+            if enrollment_data.account_user_id:
+                user_id = enrollment_data.account_user_id
+                logger.debug(f"YAML에서 user_id 사용: {user_id}")
+            else:
+                user_id = enrollment_data.account_email.split("@")[0]
+                logger.debug(
+                    f"이메일에서 user_id 생성: {user_id} (from {enrollment_data.account_email})"
+                )
 
             # 기존 계정 확인
             existing_account = self.repository.account_get_by_user_id(user_id)
@@ -213,10 +220,14 @@ class AccountSyncService:
                 delegated_permissions=file_data["oauth"]["delegated_permissions"],
             )
 
+            # YAML에서 user_id 읽기 (Optional)
+            account_user_id = file_data.get("account", {}).get("user_id")
+
             # EnrollmentFileData 생성
             enrollment_data = EnrollmentFileData(
                 account_email=file_data["account"]["email"],
                 account_name=file_data["account"]["name"],
+                account_user_id=account_user_id,
                 oauth_config=oauth_config,
                 file_path=file_path,
                 file_hash=file_hash,
@@ -285,7 +296,9 @@ class AccountSyncService:
             user_name=enrollment_data.account_name,
             enrollment_file_path=enrollment_data.file_path,
             enrollment_file_hash=enrollment_data.file_hash,
+            oauth_client_id=enrollment_data.oauth_config.client_id,
             oauth_client_secret=enrollment_data.oauth_config.client_secret,
+            oauth_tenant_id=enrollment_data.oauth_config.tenant_id,
             oauth_redirect_uri=enrollment_data.oauth_config.redirect_uri,
             delegated_permissions=enrollment_data.oauth_config.delegated_permissions,
         )

@@ -554,20 +554,14 @@ class AttachmentFilterHandlers:
 
                                 # 저장 활성화된 경우 파일 저장
                                 if save_enabled:
-                                    # SharePoint 폴더 URL (환경변수에서 가져오기)
-                                    import os
-                                    sharepoint_folder_url = os.getenv("SHAREPOINT_FOLDER_URL")
-
-                                    # 1. OneDrive/SharePoint에 업로드 시도 (URL이 설정된 경우만)
-                                    onedrive_url = None
-                                    if sharepoint_folder_url:
-                                        onedrive_url = await self._upload_to_onedrive(
-                                            graph_client=orchestrator.graph_client,
-                                            user_id=user_id,
-                                            file_path=original_path,
-                                            access_token=access_token,
-                                            target_folder_url=sharepoint_folder_url
-                                        )
+                                    # OneDrive에 업로드 시도
+                                    onedrive_url = await self._upload_to_onedrive(
+                                        graph_client=orchestrator.graph_client,
+                                        user_id=user_id,
+                                        file_path=original_path,
+                                        access_token=access_token,
+                                        target_folder_url=None
+                                    )
 
                                     if onedrive_url:
                                         # OneDrive 업로드 성공

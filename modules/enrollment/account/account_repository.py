@@ -174,12 +174,20 @@ class AccountRepository:
                 update_fields.append("enrollment_file_hash = ?")
                 params.append(update_data.enrollment_file_hash)
 
+            if update_data.oauth_client_id is not None:
+                update_fields.append("oauth_client_id = ?")
+                params.append(update_data.oauth_client_id)
+
             if update_data.oauth_client_secret is not None:
                 encrypted_secret = self.crypto.account_encrypt_sensitive_data(
                     update_data.oauth_client_secret
                 )
                 update_fields.append("oauth_client_secret = ?")
                 params.append(encrypted_secret)
+
+            if update_data.oauth_tenant_id is not None:
+                update_fields.append("oauth_tenant_id = ?")
+                params.append(update_data.oauth_tenant_id)
 
             if update_data.oauth_redirect_uri is not None:
                 update_fields.append("oauth_redirect_uri = ?")

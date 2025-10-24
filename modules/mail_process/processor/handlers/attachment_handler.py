@@ -1,5 +1,6 @@
 """첨부파일 다운로드 및 저장 핸들러"""
 
+import asyncio
 import logging
 import base64
 from pathlib import Path
@@ -23,7 +24,7 @@ class AttachmentHandler:
         save_dir: Path
     ) -> List[Dict[str, Any]]:
         """
-        첨부파일 다운로드 및 저장
+        첨부파일 다운로드 및 저장 (병렬 처리)
 
         Returns:
             List of {
@@ -34,25 +35,32 @@ class AttachmentHandler:
             }
         """
         save_dir.mkdir(parents=True, exist_ok=True)
-        results = []
 
-        for attachment in attachments:
-            try:
-                result = await self._process_single_attachment(
-                    graph_client,
-                    message_id,
-                    attachment,
-                    save_dir
-                )
-                results.append(result)
-            except Exception as e:
-                logger.error(f"Failed to process attachment: {str(e)}")
-                results.append({
-                    'name': attachment.get('name', 'unknown'),
-                    'path': None,
-                    'size': attachment.get('size', 0),
-                    'error': str(e)
-                })
+        # Semaphore로 동시 다운로드 수 제한 (최대 3개)
+        semaphore = asyncio.Semaphore(3)
+
+        async def process_with_semaphore(attachment):
+            """Semaphore를 사용한 첨부파일 처리"""
+            async with semaphore:
+                try:
+                    return await self._process_single_attachment(
+                        graph_client,
+                        message_id,
+                        attachment,
+                        save_dir
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to process attachment: {str(e)}")
+                    return {
+                        'name': attachment.get('name', 'unknown'),
+                        'path': None,
+                        'size': attachment.get('size', 0),
+                        'error': str(e)
+                    }
+
+        # 모든 첨부파일을 병렬로 처리
+        tasks = [process_with_semaphore(att) for att in attachments]
+        results = await asyncio.gather(*tasks)
 
         return results
 
