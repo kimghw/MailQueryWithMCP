@@ -10,6 +10,7 @@ from infra.core.logger import get_logger
 from infra.core.error_messages import ErrorCode, MCPError
 from infra.core.database import get_database_manager
 from infra.handlers.attachment_filter_handlers import AttachmentFilterHandlers
+from modules.calendar_mcp import CalendarHandlers
 from .prompts import get_prompt
 from .tools import MailAttachmentTools  # This now imports from tools/__init__.py
 from .utils import preprocess_arguments
@@ -139,15 +140,16 @@ def get_default_user_id() -> Optional[str]:
         return None
 
 
-class MCPHandlers(AttachmentFilterHandlers):
-    """MCP Protocol handlers for Mail Query (상속: AttachmentFilterHandlers)"""
+class MCPHandlers(AttachmentFilterHandlers, CalendarHandlers):
+    """MCP Protocol handlers for Mail Query (상속: AttachmentFilterHandlers, CalendarHandlers)"""
 
     def __init__(self):
-        # AttachmentFilterHandlers 초기화
-        super().__init__()
+        # 다중 상속: AttachmentFilterHandlers와 CalendarHandlers 초기화
+        AttachmentFilterHandlers.__init__(self)
+        CalendarHandlers.__init__(self)
 
         self.tools = MailAttachmentTools()
-        logger.info("✅ MCPHandlers initialized with AttachmentFilterHandlers")
+        logger.info("✅ MCPHandlers initialized with AttachmentFilterHandlers and CalendarHandlers")
     
     async def handle_list_tools(self) -> List[Tool]:
         """List available tools"""
@@ -318,6 +320,10 @@ class MCPHandlers(AttachmentFilterHandlers):
         attachment_tools = self.get_attachment_filter_tools()
         mail_query_tools.extend(attachment_tools)
 
+        # CalendarHandlers에서 Calendar 툴 추가
+        calendar_tools = await self.handle_calendar_list_tools()
+        mail_query_tools.extend(calendar_tools)
+
         return mail_query_tools
     
     async def handle_call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
@@ -333,6 +339,10 @@ class MCPHandlers(AttachmentFilterHandlers):
             # AttachmentFilterHandlers 툴 체크
             if self.is_attachment_filter_tool(name):
                 return await self.handle_attachment_filter_tool(name, arguments)
+
+            # CalendarHandlers 툴 체크
+            if name.startswith("calendar_"):
+                return await self.handle_calendar_call_tool(name, arguments)
 
             # Mail Query 툴 처리
             if name == "query_email":
