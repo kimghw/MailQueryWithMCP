@@ -1,5 +1,6 @@
 """Email query tool for MCP server"""
 
+import asyncio
 import logging
 import csv
 from datetime import datetime, timedelta, timezone
@@ -293,7 +294,7 @@ class EmailQueryTool:
         return messages
 
     async def format_email_info(self, mail, index: int, user_id: str, save_emails: bool,
-                          download_attachments: bool, graph_client=None) -> Dict[str, Any]:
+                          download_attachments: bool, graph_client=None, access_token=None) -> Dict[str, Any]:
         """
         Format email information for display and storage
 
@@ -304,6 +305,7 @@ class EmailQueryTool:
             save_emails: Whether to save emails
             download_attachments: Whether to download attachments
             graph_client: Graph API client for attachment download
+            access_token: Access token for Graph API (needed for large attachments)
 
         Returns:
             Formatted email information dictionary
@@ -381,20 +383,35 @@ class EmailQueryTool:
         elif mail.body_preview:
             mail_info["body_preview"] = mail.body_preview
 
-        # Process attachments if requested
+        # Process attachments if requested (병렬 처리)
         if download_attachments and mail.has_attachments and hasattr(mail, "attachments"):
             if mail.attachments:
-                for attachment in mail.attachments:
-                    att_info = await self.process_attachment(
-                        attachment, mail.id, user_id, graph_client
-                    )
+                # Semaphore로 동시 다운로드 수 제한 (최대 3개)
+                semaphore = asyncio.Semaphore(3)
+
+                async def process_with_semaphore(attachment):
+                    """Semaphore를 사용한 첨부파일 처리"""
+                    async with semaphore:
+                        return await self.process_attachment(
+                            attachment, mail.id, user_id, graph_client, access_token
+                        )
+
+                # 모든 첨부파일을 병렬로 처리
+                tasks = [process_with_semaphore(att) for att in mail.attachments]
+                att_infos = await asyncio.gather(*tasks, return_exceptions=True)
+
+                # 결과 수집 (예외 제외)
+                for att_info in att_infos:
+                    if isinstance(att_info, Exception):
+                        logger.warning(f"첨부파일 처리 중 오류 발생: {att_info}")
+                        continue
                     if att_info:
                         mail_info["attachments"].append(att_info)
 
         return mail_info
 
     async def process_attachment(self, attachment: Dict, mail_id: str, user_id: str,
-                          graph_client) -> Optional[Dict]:
+                          graph_client, access_token=None) -> Optional[Dict]:
         """
         Process a single attachment
 
@@ -403,6 +420,7 @@ class EmailQueryTool:
             mail_id: Email ID
             user_id: User ID
             graph_client: Graph API client
+            access_token: Access token for Graph API (needed for large attachments)
 
         Returns:
             Attachment information or None if processing failed
@@ -427,7 +445,8 @@ class EmailQueryTool:
                     graph_client=graph_client,
                     user_id=user_id,
                     message_id=mail_id,
-                    attachment=attachment
+                    attachment=attachment,
+                    access_token=access_token
                 )
 
                 if saved_result and saved_result.get("file_path"):
@@ -607,6 +626,13 @@ class EmailQueryTool:
                 response = await orchestrator.mail_query_user_emails(request)
                 graph_client = orchestrator.graph_client if download_attachments else None
 
+                # Get access token for attachment download (needed for large files without contentBytes)
+                access_token = None
+                if download_attachments and graph_client:
+                    from infra.core.token_service import get_token_service
+                    token_service = get_token_service()
+                    access_token = await token_service.get_valid_access_token(user_id)
+
             # ⭐ Always apply blocking + optional filters (client-side filtering)
             response.messages = self.filter_messages(
                 response.messages,
@@ -644,6 +670,7 @@ class EmailQueryTool:
                 save_emails,
                 download_attachments,
                 graph_client,
+                access_token,
                 save_csv,
                 output_format
             )
@@ -658,7 +685,7 @@ class EmailQueryTool:
 
     async def format_results(self, messages: List, user_id: str, start_date, end_date,
                        days_back: int, filters: Dict, save_emails: bool,
-                       download_attachments: bool, graph_client, save_csv: bool,
+                       download_attachments: bool, graph_client, access_token, save_csv: bool,
                        output_format: str = "text") -> str:
         """
         Format query results for display
@@ -673,6 +700,7 @@ class EmailQueryTool:
             save_emails: Whether emails were saved
             download_attachments: Whether attachments were downloaded
             graph_client: Graph API client
+            access_token: Access token for Graph API (needed for large attachments)
             save_csv: Whether to save as CSV
             output_format: Output format style (text or json)
 
@@ -706,7 +734,7 @@ class EmailQueryTool:
         mail_map = {}  # mail_info와 원본 mail 객체 매핑
         for i, mail in enumerate(messages, 1):
             mail_info = await self.format_email_info(
-                mail, i, user_id, save_emails, download_attachments, graph_client
+                mail, i, user_id, save_emails, download_attachments, graph_client, access_token
             )
 
             if mail_info:  # Skip if None (blocked sender)
