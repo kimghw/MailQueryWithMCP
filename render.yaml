@@ -89,7 +89,7 @@ services:
       - key: AUTO_REGISTER_OAUTH_REDIRECT_URI
         sync: false
       - key: AUTO_REGISTER_DELEGATED_PERMISSIONS
-        value: "Mail.ReadWrite,Mail.Send,Notes.ReadWrite,Notes.Create,offline_access"
+        value: "Mail.ReadWrite,Mail.Send,Notes.ReadWrite,Notes.Create,Files.Read,Files.ReadWrite,Files.ReadWrite.All,offline_access"
 
       # ===========================
       # ⚙️ MODULES/MAIL_PROCESS - 메일 처리 모듈
@@ -115,7 +115,5 @@ services:
       # 💾 FILE STORAGE - 파일 저장 설정
       # ===========================
 
-      # SharePoint 폴더 공유 URL (attachmentManager 기본 저장 위치)
-      - key: SHAREPOINT_FOLDER_URL
-        sync: false
+      # OneDrive 업로드 실패 시 로컬 저장
     healthCheckPath: /health

@@ -10,7 +10,7 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 # Storage mode type
-StorageMode = Literal["local", "onedrive", "sharepoint"]
+StorageMode = Literal["local", "onedrive"]
 
 
 class AttachmentDownloader:
@@ -20,18 +20,16 @@ class AttachmentDownloader:
         self,
         output_dir: str = "./attachments",
         storage_mode: Optional[StorageMode] = None,
-        onedrive_folder_path: str = "/EmailAttachments",
-        sharepoint_folder_url: Optional[str] = None
+        onedrive_folder_path: str = "/EmailAttachments"
     ):
         """
         Initialize attachment downloader
 
         Args:
             output_dir: Directory to save attachments locally
-            storage_mode: Storage mode - local, onedrive, or sharepoint
+            storage_mode: Storage mode - local or onedrive
                          If None, reads from ATTACHMENT_STORAGE_MODE env var (default: local)
             onedrive_folder_path: OneDrive folder path for uploads
-            sharepoint_folder_url: SharePoint folder URL for uploads
         """
         self.output_dir = Path(output_dir)
         self.output_dir.mkdir(parents=True, exist_ok=True)
@@ -42,33 +40,18 @@ class AttachmentDownloader:
 
         self.storage_mode: StorageMode = storage_mode
         self.onedrive_folder_path = onedrive_folder_path
-        self.sharepoint_folder_url = sharepoint_folder_url
 
         logger.info(f"AttachmentDownloader initialized with storage_mode={self.storage_mode}")
 
-        # Initialize OneDrive uploader if needed
+        # Initialize OneDrive handler if needed
         if self.storage_mode == "onedrive":
             try:
-                from .onedrive_uploader import OneDriveUploader
-                self.onedrive_uploader = OneDriveUploader(folder_path=self.onedrive_folder_path)
-                logger.info("OneDrive uploader initialized")
-            except ImportError:
-                logger.error("OneDrive uploader not available. Falling back to local storage.")
+                from modules.onedrive_mcp.onedrive_handler import OneDriveHandler
+                self.onedrive_handler = OneDriveHandler()
+                logger.info("OneDrive handler initialized (using onedrive_mcp module)")
+            except ImportError as e:
+                logger.error(f"OneDrive handler not available: {e}. Falling back to local storage.")
                 self.storage_mode = "local"
-
-        # Initialize SharePoint uploader if needed
-        if self.storage_mode == "sharepoint":
-            if not self.sharepoint_folder_url:
-                logger.warning("SharePoint URL not provided. Falling back to local storage.")
-                self.storage_mode = "local"
-            else:
-                try:
-                    from .sharepoint_uploader import SharePointUploader
-                    self.sharepoint_uploader = SharePointUploader(folder_url=self.sharepoint_folder_url)
-                    logger.info("SharePoint uploader initialized")
-                except ImportError:
-                    logger.error("SharePoint uploader not available. Falling back to local storage.")
-                    self.storage_mode = "local"
     
     async def download_attachment(
         self,
@@ -288,68 +271,67 @@ class AttachmentDownloader:
                 "file_name": attachment_name,
                 "size": len(content),
                 "storage_mode": self.storage_mode,
-                "onedrive": None,
-                "sharepoint": None
+                "onedrive": None
             }
 
-            # Storage mode에 따라 업로드 처리
-            if self.storage_mode == "onedrive" and hasattr(self, 'onedrive_uploader') and email_date:
+            # OneDrive 업로드 시도 (storage_mode == "onedrive"인 경우)
+            if self.storage_mode == "onedrive" and hasattr(self, 'onedrive_handler') and email_date:
                 from datetime import datetime
-                
+
                 # 날짜 객체 확인
                 if not isinstance(email_date, datetime):
                     email_date = datetime.now()
-                
+
                 # OneDrive 경로 설정 - 메일제목_날짜_보낸사람 형식
                 date_str = email_date.strftime("%Y%m%d")
-                # OneDrive용 전체 이메일 주소 사용
-                safe_email = self.onedrive_uploader._sanitize_for_path(sender_email or "unknown")
-                safe_subject = self.onedrive_uploader._sanitize_for_path((email_subject or "NoSubject")[:50])
-                
-                folder_name = f"{safe_subject}_{date_str}_{safe_email}"
-                onedrive_path = f"/EmailAttachments/{user_id}/{folder_name}/{attachment_name}"
-                
-                # 업로드 실행
-                upload_result = await self.onedrive_uploader.upload_file(
-                    graph_client,
-                    file_path,
-                    onedrive_path,
-                    access_token=access_token
-                )
-                
-                if upload_result:
-                    result["onedrive"] = {
-                        "path": onedrive_path,
-                        "webUrl": upload_result.get("webUrl"),
-                        "id": upload_result.get("id"),
-                        "name": upload_result.get("name")
-                    }
-                    logger.info(f"Uploaded to OneDrive: {onedrive_path}")
-                else:
-                    logger.warning(f"Failed to upload to OneDrive: {attachment_name}")
+                # 파일명 안전화
+                safe_email = self._sanitize_filename(sender_email or "unknown")
+                safe_subject = self._sanitize_filename((email_subject or "NoSubject")[:50])
 
-            # SharePoint 업로드
-            elif self.storage_mode == "sharepoint" and hasattr(self, 'sharepoint_uploader'):
+                folder_path = f"EmailAttachments/{user_id}/{safe_subject}_{date_str}_{safe_email}"
+                onedrive_file_path = f"{folder_path}/{attachment_name}"
+
+                # 업로드 실행
                 try:
-                    upload_result = await self.sharepoint_uploader.upload_file(
-                        file_path=file_path,
-                        folder_name=folder_name,
-                        user_id=user_id
+                    # 파일 내용을 문자열로 변환 (텍스트 파일) 또는 base64 인코딩 (바이너리)
+                    is_binary = False
+                    try:
+                        # 텍스트 파일 시도
+                        file_content = content.decode('utf-8')
+                        logger.info(f"Text file detected for OneDrive upload: {attachment_name}")
+                    except UnicodeDecodeError:
+                        # 바이너리 파일은 base64 인코딩
+                        import base64
+                        file_content = base64.b64encode(content).decode('utf-8')
+                        is_binary = True
+                        logger.info(f"Binary file encoded to base64 for OneDrive upload: {attachment_name}")
+
+                    # OneDrive에 파일 업로드
+                    upload_result = await self.onedrive_handler.write_file(
+                        user_id=user_id,
+                        file_path=onedrive_file_path,
+                        content=file_content,
+                        overwrite=True,
+                        is_binary=is_binary
                     )
 
                     if upload_result and upload_result.get("success"):
-                        result["sharepoint"] = {
-                            "uploaded": True,
-                            "folder_url": self.sharepoint_folder_url,
-                            "message": upload_result.get("message")
+                        result["onedrive"] = {
+                            "path": onedrive_file_path,
+                            "file_id": upload_result.get("file_id"),
+                            "file_name": upload_result.get("file_name"),
+                            "message": upload_result.get("message", "Uploaded successfully")
                         }
-                        logger.info(f"Uploaded to SharePoint: {attachment_name}")
+                        logger.info(f"✅ Uploaded to OneDrive: {onedrive_file_path}")
                     else:
-                        logger.warning(f"Failed to upload to SharePoint: {attachment_name}")
-                        result["sharepoint"] = {"uploaded": False, "error": upload_result.get("error")}
+                        error_msg = upload_result.get("message", "Unknown error") if upload_result else "No response"
+                        logger.warning(f"❌ Failed to upload to OneDrive: {attachment_name}. Error: {error_msg}. File saved locally at {file_path}")
+                        # OneDrive 업로드 실패 시 로컬 저장만 유지 (이미 file_path에 저장됨)
+                        result["storage_mode"] = "local"
                 except Exception as e:
-                    logger.error(f"SharePoint upload error: {str(e)}")
-                    result["sharepoint"] = {"uploaded": False, "error": str(e)}
+                    logger.error(f"❌ OneDrive upload error: {str(e)}. File saved locally at {file_path}")
+                    # OneDrive 업로드 실패 시 로컬 저장만 유지
+                    result["storage_mode"] = "local"
 
             return result
             

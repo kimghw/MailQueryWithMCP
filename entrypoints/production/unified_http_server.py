@@ -33,6 +33,8 @@ if env_file.exists():
 from modules.mail_query_MCP.mcp_server.http_server import HTTPStreamingMailAttachmentServer
 from modules.enrollment.mcp_server.http_server import HTTPStreamingAuthServer
 from modules.onenote_mcp.mcp_server.http_server import HTTPStreamingOneNoteServer
+from modules.onedrive_mcp.mcp_server.http_server import HTTPStreamingOneDriveServer
+from modules.teams_mcp.mcp_server.http_server import HTTPStreamingTeamsServer
 from modules.enrollment.auth import get_auth_orchestrator
 from modules.enrollment.auth.auth_callback_processor import AuthCallbackProcessor
 from infra.core.logger import get_logger
@@ -59,6 +61,12 @@ class UnifiedMCPServer:
 
         logger.info("📝 Initializing OneNote MCP Server...")
         self.onenote_server = HTTPStreamingOneNoteServer(host=host, port=port)
+
+        logger.info("📁 Initializing OneDrive MCP Server...")
+        self.onedrive_server = HTTPStreamingOneDriveServer(host=host, port=port)
+
+        logger.info("👥 Initializing Teams MCP Server...")
+        self.teams_server = HTTPStreamingTeamsServer(host=host, port=port)
 
         # Initialize Auth Callback Processor for OAuth callback handling
         logger.info("🔐 Initializing Auth Callback Processor for OAuth callbacks...")
@@ -111,11 +119,15 @@ class UnifiedMCPServer:
                         "mail-query": "running",
                         "enrollment": "running",
                         "onenote": "running",
+                        "onedrive": "running",
+                        "teams": "running",
                     },
                     "endpoints": {
                         "mail-query": "/mail-query/",
                         "enrollment": "/enrollment/",
                         "onenote": "/onenote/",
+                        "onedrive": "/onedrive/",
+                        "teams": "/teams/",
                     },
                 },
                 headers={
@@ -149,6 +161,16 @@ class UnifiedMCPServer:
                             "path": "/onenote",
                             "description": "OneNote notebooks, sections, and pages management",
                         },
+                        {
+                            "name": "onedrive-server",
+                            "path": "/onedrive",
+                            "description": "OneDrive file management (read/write)",
+                        },
+                        {
+                            "name": "teams-server",
+                            "path": "/teams",
+                            "description": "Microsoft Teams chat (1:1 and group chats)",
+                        },
                     ],
                     "endpoints": {
                         "health": "/health",
@@ -168,6 +190,8 @@ class UnifiedMCPServer:
                         "mail-query": "/mail-query/",
                         "enrollment": "/enrollment/",
                         "onenote": "/onenote/",
+                        "onedrive": "/onedrive/",
+                        "teams": "/teams/",
                     },
                     "endpoints": {
                         "health": "/health",
@@ -337,6 +361,66 @@ class UnifiedMCPServer:
                         "token_endpoint": f"{base_url}/oauth/token",
                         "registration_endpoint": f"{base_url}/oauth/register",
                         "scopes_supported": ["Notes.ReadWrite", "Notes.Create", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
+        async def onedrive_mcp_discovery_handler(request):
+            """MCP Discovery for OneDrive Service"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "OneDrive MCP Server",
+                    "description": "OneDrive file management service with read/write capabilities",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Files.Read", "Files.ReadWrite", "Files.ReadWrite.All", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
+        async def teams_mcp_discovery_handler(request):
+            """MCP Discovery for Teams Chat Service"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "Teams Chat MCP Server",
+                    "description": "Microsoft Teams 1:1 and group chat service",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Chat.Read", "Chat.ReadWrite", "User.Read"],
                         "grant_types_supported": ["authorization_code", "refresh_token"],
                         "code_challenge_methods_supported": ["S256"]
                     },
@@ -1045,10 +1129,14 @@ class UnifiedMCPServer:
             Route("/enrollment/.well-known/mcp.json", endpoint=enrollment_mcp_discovery_handler, methods=["GET"]),
             Route("/mail-query/.well-known/mcp.json", endpoint=mail_query_mcp_discovery_handler, methods=["GET"]),
             Route("/onenote/.well-known/mcp.json", endpoint=onenote_mcp_discovery_handler, methods=["GET"]),
+            Route("/onedrive/.well-known/mcp.json", endpoint=onedrive_mcp_discovery_handler, methods=["GET"]),
+            Route("/teams/.well-known/mcp.json", endpoint=teams_mcp_discovery_handler, methods=["GET"]),
             # Mount MCP servers on specific paths
             Mount("/mail-query", app=self.mail_query_server.app),
             Mount("/enrollment", app=self.enrollment_server.app),
             Mount("/onenote", app=self.onenote_server.app),
+            Mount("/onedrive", app=self.onedrive_server.app),
+            Mount("/teams", app=self.teams_server.app),
         ]
 
         # Create Starlette app
@@ -1084,6 +1172,8 @@ class UnifiedMCPServer:
         logger.info(f"📧 Mail Query MCP: http://{self.host}:{self.port}/mail-query/")
         logger.info(f"🔐 Enrollment MCP: http://{self.host}:{self.port}/enrollment/")
         logger.info(f"📝 OneNote MCP: http://{self.host}:{self.port}/onenote/")
+        logger.info(f"📁 OneDrive MCP: http://{self.host}:{self.port}/onedrive/")
+        logger.info(f"👥 Teams MCP: http://{self.host}:{self.port}/teams/")
         logger.info("-" * 80)
         logger.info(f"💚 Health check: http://{self.host}:{self.port}/health")
         logger.info(f"ℹ️  Server info: http://{self.host}:{self.port}/info")
