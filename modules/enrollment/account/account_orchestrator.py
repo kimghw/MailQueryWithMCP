@@ -19,6 +19,7 @@ from .account_schema import (
     AccountResponse,
     AccountStatus,
     AccountSyncResult,
+    AccountUpdate,
     TokenInfo,
 )
 from .account_sync_service import AccountSyncService
@@ -397,6 +398,51 @@ class AccountOrchestrator:
                 logger.info(
                     f"환경변수 계정이 이미 등록되어 있음: user_id={account_data.user_id}"
                 )
+
+                # 환경변수가 변경되었는지 확인 (redirect_uri 비교)
+                if existing_account.oauth_redirect_uri != account_data.oauth_redirect_uri:
+                    logger.warning(
+                        f"⚠️ redirect_uri가 변경되었습니다:\n"
+                        f"   기존: {existing_account.oauth_redirect_uri}\n"
+                        f"   신규: {account_data.oauth_redirect_uri}"
+                    )
+                    logger.info("환경변수 기반 계정 정보로 업데이트합니다...")
+
+                    # 계정 업데이트
+                    update_data = AccountUpdate(
+                        oauth_client_id=account_data.oauth_client_id,
+                        oauth_client_secret=account_data.oauth_client_secret,
+                        oauth_tenant_id=account_data.oauth_tenant_id,
+                        oauth_redirect_uri=account_data.oauth_redirect_uri,
+                        delegated_permissions=account_data.delegated_permissions,
+                    )
+
+                    # Repository를 통해 직접 업데이트
+                    self.repository.account_update_by_id(existing_account.id, update_data)
+
+                    # YAML 파일도 업데이트
+                    import yaml
+                    yaml_path = existing_account.enrollment_file_path
+                    if yaml_path and yaml_path != "<ENV_AUTO_REGISTERED>":
+                        try:
+                            with open(yaml_path, 'r') as f:
+                                yaml_data = yaml.safe_load(f)
+
+                            # redirect_uri 업데이트
+                            yaml_data['oauth']['redirect_uri'] = account_data.oauth_redirect_uri
+
+                            with open(yaml_path, 'w') as f:
+                                yaml.safe_dump(yaml_data, f, allow_unicode=True, sort_keys=False)
+
+                            logger.info(f"✅ YAML 파일 업데이트 완료: {yaml_path}")
+                        except Exception as e:
+                            logger.warning(f"⚠️ YAML 파일 업데이트 실패: {e}")
+
+                    # 업데이트된 계정 조회
+                    updated_account = self.account_get_by_user_id(account_data.user_id)
+                    logger.info(f"✅ 환경변수 기반 계정 업데이트 완료: user_id={account_data.user_id}")
+                    return updated_account
+
                 logger.debug(
                     f"기존 계정 상태: status={existing_account.status}, "
                     f"has_valid_token={existing_account.has_valid_token}"

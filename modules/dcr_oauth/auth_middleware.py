@@ -46,6 +46,9 @@ async def verify_bearer_token_middleware(request, call_next=None):
     # Get Authorization header
     auth_header = request.headers.get("Authorization", "")
 
+    # Debug: Log all headers for troubleshooting
+    logger.info(f"🔍 Request to {path} - Headers: {dict(request.headers)}")
+
     # Check Bearer token
     if not auth_header.startswith("Bearer "):
         logger.warning(f"⚠️ Missing Bearer token for path: {path}")

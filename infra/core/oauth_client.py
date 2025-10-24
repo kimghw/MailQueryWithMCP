@@ -108,6 +108,9 @@ class OAuthClient:
 
         # 리다이렉트 URI 결정 (계정별 설정이 있으면 사용, 없으면 기본값)
         redirect_uri = redirect_uri or self.config.oauth_redirect_uri
+        logger.info(f"🔍 Redirect URI 결정: 전달받은 값={redirect_uri}, 기본값={self.config.oauth_redirect_uri}")
+        redirect_uri_before = redirect_uri
+        logger.info(f"✅ 최종 Redirect URI: {redirect_uri}")
 
         # 스코프 결정 (계정별 스코프가 있으면 사용, 없으면 기본값)
         if scopes:

@@ -286,6 +286,25 @@ class UnifiedMCPServer:
                 },
             )
 
+        # RFC 8707 OAuth 2.0 Protected Resource Metadata
+        async def oauth_protected_resource_handler(request):
+            """RFC 8707: Resource Server Metadata"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "resource": base_url,
+                    "authorization_servers": [base_url],
+                    "bearer_methods_supported": ["header"],
+                    "resource_signing_alg_values_supported": ["none"],
+                    "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"]
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
         async def enrollment_mcp_discovery_handler(request):
             """MCP Discovery for Enrollment Service"""
             base_url = f"{request.url.scheme}://{request.url.netloc}"
@@ -1118,6 +1137,7 @@ class UnifiedMCPServer:
             Route("/", endpoint=options_handler, methods=["OPTIONS"]),
             # DCR OAuth endpoints (at root for Claude Connector compatibility)
             Route("/.well-known/oauth-authorization-server", endpoint=oauth_metadata_handler, methods=["GET"]),
+            Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource_handler, methods=["GET"]),
             Route("/oauth/register", endpoint=dcr_register_handler, methods=["POST"]),
             Route("/oauth/authorize", endpoint=oauth_authorize_handler, methods=["GET"]),
             Route("/oauth/token", endpoint=oauth_token_handler, methods=["POST"]),
@@ -1144,6 +1164,8 @@ class UnifiedMCPServer:
 
         # OAuth 인증 미들웨어 적용 (환경변수로 제어)
         enable_oauth = os.getenv("ENABLE_OAUTH_AUTH", "false").lower() == "true"
+
+        logger.info("=" * 80)
         if enable_oauth:
             from starlette.middleware.base import BaseHTTPMiddleware
             from modules.dcr_oauth.auth_middleware import verify_bearer_token_middleware
@@ -1158,9 +1180,15 @@ class UnifiedMCPServer:
                     return await call_next(request)
 
             app.add_middleware(OAuth2Middleware)
-            logger.info("🔐 OAuth 인증 미들웨어 활성화됨")
+            logger.info("🔐 OAuth 인증 미들웨어: 활성화됨 (ENABLE_OAUTH_AUTH=true)")
+            logger.info("   → 모든 MCP 요청에 Bearer 토큰 필요")
+            logger.info("   → 제외 경로: /oauth/, /health, /info, /.well-known/")
         else:
-            logger.warning("⚠️  OAuth 인증 비활성화 상태 (ENABLE_OAUTH_AUTH=false)")
+            logger.warning("⚠️  OAuth 인증 미들웨어: 비활성화됨 (ENABLE_OAUTH_AUTH=false)")
+            logger.warning("   → 각 MCP 서버가 자체 인증 방식 사용")
+            logger.warning("   → Enrollment: Mcp-Session-Id 기반 인증")
+            logger.warning("   → Mail-Query/OneNote/OneDrive/Teams: 자체 토큰 인증")
+        logger.info("=" * 80)
 
         return app
 
