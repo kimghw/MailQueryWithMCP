@@ -3,6 +3,7 @@ Mail Query 오케스트레이터
 메일 조회 비즈니스 로직 및 플로우 관리
 """
 
+import asyncio
 import time
 from datetime import datetime
 from typing import Any, Dict, Optional
@@ -186,41 +187,78 @@ class MailQueryOrchestrator:
             # 4. 페이징 설정
             pagination = request.pagination or PaginationOptions()
 
-            # 5. 모듈 내부: Graph API 호출 (페이징 처리)
+            # 5. 모듈 내부: Graph API 호출 (병렬 페이징 처리)
             messages = []
             total_pages = 0
             next_link = None
-            current_skip = pagination.skip
 
+            # Semaphore로 동시 요청 수 제한 (최대 3개)
+            # Microsoft Graph API MailboxConcurrency 제한 고려
+            semaphore = asyncio.Semaphore(3)
+
+            async def fetch_page_with_semaphore(page_num: int, skip: int):
+                """Semaphore를 사용한 페이지 조회"""
+                async with semaphore:
+                    logger.debug(
+                        f"페이지 {page_num + 1} 조회 시작: user_id={request.user_id}, skip={skip}"
+                    )
+
+                    page_data = await self.graph_client.query_messages_single_page(
+                        access_token=access_token,
+                        odata_filter=odata_filter,
+                        select_fields=select_fields,
+                        top=pagination.top,
+                        skip=skip,
+                    )
+
+                    logger.debug(
+                        f"페이지 {page_num + 1} 완료: {len(page_data.get('messages', []))}개 메시지"
+                    )
+
+                    return page_num, page_data
+
+            # 병렬로 페이지 조회 (최대 max_pages까지)
+            tasks = []
             for page_num in range(pagination.max_pages):
-                logger.debug(
-                    f"페이지 {page_num + 1} 조회 시작: user_id={request.user_id}"
-                )
+                skip = pagination.skip + (page_num * pagination.top)
+                task = fetch_page_with_semaphore(page_num, skip)
+                tasks.append(task)
 
-                page_data = await self.graph_client.query_messages_single_page(
-                    access_token=access_token,
-                    odata_filter=odata_filter,
-                    select_fields=select_fields,
-                    top=pagination.top,
-                    skip=current_skip,
-                )
+            logger.info(f"병렬 페이지 조회 시작: {len(tasks)}개 페이지, 최대 동시 3개")
 
-                if not page_data.get("messages"):
-                    logger.debug(f"페이지 {page_num + 1}에서 메시지 없음")
-                    break
+            # 모든 페이지를 병렬로 조회
+            results = await asyncio.gather(*tasks, return_exceptions=True)
 
+            # 결과 병합 (페이지 순서대로 정렬)
+            successful_pages = []
+            for result in results:
+                if isinstance(result, Exception):
+                    logger.warning(f"페이지 조회 중 오류 발생: {result}")
+                    continue
+
+                page_num, page_data = result
+                if page_data.get("messages"):
+                    successful_pages.append((page_num, page_data))
+
+            # 페이지 번호 순서대로 정렬
+            successful_pages.sort(key=lambda x: x[0])
+
+            # 메시지 병합
+            for page_num, page_data in successful_pages:
                 messages.extend(page_data["messages"])
-                next_link = page_data.get("next_link")
                 total_pages += 1
 
-                logger.debug(
-                    f"페이지 {page_num + 1} 완료: {len(page_data['messages'])}개 메시지"
-                )
+                # 마지막 페이지의 next_link 저장
+                if page_data.get("next_link"):
+                    next_link = page_data["next_link"]
 
-                if not page_data.get("has_more"):
+                # 메시지가 없으면 이후 페이지는 무시
+                if not page_data.get("messages") or not page_data.get("has_more"):
+                    # 현재 페이지 이후의 결과는 무시
+                    logger.debug(f"페이지 {page_num + 1}에서 더 이상 메시지 없음")
                     break
 
-                current_skip += pagination.top
+            logger.info(f"병렬 페이지 조회 완료: {total_pages}개 페이지, 총 {len(messages)}개 메시지")
 
             # 6. 공통 응답 생성 (blocking + 포맷팅)
             response = self._build_query_response(
