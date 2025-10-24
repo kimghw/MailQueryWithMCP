@@ -34,7 +34,7 @@ from modules.mail_query_MCP.mcp_server.http_server import HTTPStreamingMailAttac
 from modules.enrollment.mcp_server.http_server import HTTPStreamingAuthServer
 from modules.onenote_mcp.mcp_server.http_server import HTTPStreamingOneNoteServer
 from modules.enrollment.auth import get_auth_orchestrator
-from modules.enrollment.auth.auth_web_server import AuthWebServer
+from modules.enrollment.auth.auth_callback_processor import AuthCallbackProcessor
 from infra.core.logger import get_logger
 from modules.dcr_oauth import DCRService
 
@@ -60,12 +60,12 @@ class UnifiedMCPServer:
         logger.info("📝 Initializing OneNote MCP Server...")
         self.onenote_server = HTTPStreamingOneNoteServer(host=host, port=port)
 
-        # Initialize Auth Web Server for OAuth callback handling
-        logger.info("🔐 Initializing Auth Web Server for OAuth callbacks...")
-        self.auth_web_server = AuthWebServer()
+        # Initialize Auth Callback Processor for OAuth callback handling
+        logger.info("🔐 Initializing Auth Callback Processor for OAuth callbacks...")
+        self.callback_processor = AuthCallbackProcessor()
         # Set session store from auth orchestrator
         orchestrator = get_auth_orchestrator()
-        self.auth_web_server.set_session_store(orchestrator.auth_sessions)
+        self.callback_processor.set_session_store(orchestrator.auth_sessions)
 
         # Initialize DCR schema (환경변수 → DB 저장은 DCRService.__init__에서 자동 처리)
         self._ensure_dcr_schema_only()
@@ -206,7 +206,7 @@ class UnifiedMCPServer:
                 loop = asyncio.get_running_loop()
                 html_response = await loop.run_in_executor(
                     None,
-                    self.auth_web_server._process_callback,
+                    self.callback_processor.process_callback,
                     params
                 )
 
