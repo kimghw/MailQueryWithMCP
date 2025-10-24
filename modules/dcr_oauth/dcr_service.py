@@ -8,7 +8,7 @@ import os
 import secrets
 import hashlib
 import base64
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Optional, Any, Tuple
 
 from infra.core.database import get_database_manager
@@ -186,7 +186,7 @@ class DCRService:
         # DCR 클라이언트 ID/Secret 생성
         dcr_client_id = f"dcr_{secrets.token_urlsafe(16)}"
         dcr_client_secret = secrets.token_urlsafe(32)
-        issued_at = int(datetime.now().timestamp())
+        issued_at = int(datetime.now(timezone.utc).timestamp())
 
         # 요청 데이터
         client_name = request_data.get("client_name", "Claude Connector")
@@ -274,7 +274,7 @@ class DCRService:
     ) -> str:
         """Authorization code 생성 (PKCE 지원)"""
         code = secrets.token_urlsafe(32)
-        expires_at = datetime.now() + timedelta(minutes=10)
+        expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
 
         metadata = {
             "redirect_uri": redirect_uri,
@@ -331,7 +331,11 @@ class DCRService:
             logger.warning(f"❌ Authorization code already used")
             return None
 
-        if datetime.fromisoformat(expires_at) < datetime.now():
+        # timezone-aware 비교
+        expiry_dt = datetime.fromisoformat(expires_at)
+        if expiry_dt.tzinfo is None:
+            expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+        if expiry_dt < datetime.now(timezone.utc):
             logger.warning(f"❌ Authorization code expired")
             self._execute_query("UPDATE dcr_tokens SET dcr_status = 'expired' WHERE dcr_token_value = ?", (code,))
             return None
@@ -370,7 +374,7 @@ class DCRService:
         user_name: Optional[str] = None,
     ):
         """DCR 토큰 + Azure 토큰 저장"""
-        dcr_expires_at = datetime.now() + timedelta(seconds=expires_in)
+        dcr_expires_at = datetime.now(timezone.utc) + timedelta(seconds=expires_in)
 
         # 1) dcr_azure_tokens에 Azure 토큰 저장
         if azure_object_id:
@@ -417,7 +421,7 @@ class DCRService:
 
         # 3) DCR refresh token 저장
         if dcr_refresh_token:
-            refresh_expires = datetime.now() + timedelta(days=30)
+            refresh_expires = datetime.now(timezone.utc) + timedelta(days=30)
             refresh_query = """
             INSERT INTO dcr_tokens (
                 dcr_token_value, dcr_client_id, dcr_token_type, expires_at, dcr_status
@@ -487,9 +491,16 @@ class DCRService:
 
         access_token, refresh_token, scope, expires_at, user_email = result
 
-        expires_in = int((datetime.fromisoformat(expires_at) - datetime.now()).total_seconds()) if expires_at else 3600
-        if expires_in < 0:
-            expires_in = 0
+        # timezone-aware 계산
+        if expires_at:
+            expiry_dt = datetime.fromisoformat(expires_at)
+            if expiry_dt.tzinfo is None:
+                expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+            expires_in = int((expiry_dt - datetime.now(timezone.utc)).total_seconds())
+            if expires_in < 0:
+                expires_in = 0
+        else:
+            expires_in = 3600
 
         return {
             "access_token": self.crypto.account_decrypt_sensitive_data(access_token),

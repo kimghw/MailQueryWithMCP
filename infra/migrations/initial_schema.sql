@@ -36,19 +36,19 @@ CREATE TABLE IF NOT EXISTS accounts (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- 메일 히스토리 테이블
-CREATE TABLE IF NOT EXISTS mail_history (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    account_id INTEGER NOT NULL,
-    message_id TEXT NOT NULL UNIQUE,
-    received_time TIMESTAMP NOT NULL,
-    subject TEXT,
-    sender TEXT,
-    keywords TEXT, -- JSON 형태의 텍스트
-    processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    content_hash TEXT, -- 중복 메일 검사를 위한 내용 해시
-    FOREIGN KEY (account_id) REFERENCES accounts (id)
-);
+-- 메일 히스토리 테이블 (사용 안함 - 주석 처리)
+-- CREATE TABLE IF NOT EXISTS mail_history (
+--     id INTEGER PRIMARY KEY AUTOINCREMENT,
+--     account_id INTEGER NOT NULL,
+--     message_id TEXT NOT NULL UNIQUE,
+--     received_time TIMESTAMP NOT NULL,
+--     subject TEXT,
+--     sender TEXT,
+--     keywords TEXT, -- JSON 형태의 텍스트
+--     processed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+--     content_hash TEXT, -- 중복 메일 검사를 위한 내용 해시
+--     FOREIGN KEY (account_id) REFERENCES accounts (id)
+-- );
 
 -- 처리 로그 테이블
 CREATE TABLE IF NOT EXISTS processing_logs (
@@ -81,8 +81,9 @@ CREATE INDEX IF NOT EXISTS idx_accounts_enrollment_hash ON accounts (enrollment_
 CREATE INDEX IF NOT EXISTS idx_account_audit_logs_account_id ON account_audit_logs (account_id);
 CREATE INDEX IF NOT EXISTS idx_account_audit_logs_timestamp ON account_audit_logs (timestamp);
 CREATE INDEX IF NOT EXISTS idx_account_audit_logs_action ON account_audit_logs (action);
-CREATE INDEX IF NOT EXISTS idx_mail_history_message_id ON mail_history (message_id);
-CREATE INDEX IF NOT EXISTS idx_mail_history_received_time ON mail_history (received_time);
-CREATE INDEX IF NOT EXISTS idx_mail_history_content_hash ON mail_history (content_hash);
+-- mail_history 인덱스 (사용 안함 - 주석 처리)
+-- CREATE INDEX IF NOT EXISTS idx_mail_history_message_id ON mail_history (message_id);
+-- CREATE INDEX IF NOT EXISTS idx_mail_history_received_time ON mail_history (received_time);
+-- CREATE INDEX IF NOT EXISTS idx_mail_history_content_hash ON mail_history (content_hash);
 CREATE INDEX IF NOT EXISTS idx_processing_logs_run_id ON processing_logs (run_id);
 CREATE INDEX IF NOT EXISTS idx_processing_logs_timestamp ON processing_logs (timestamp);

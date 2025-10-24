@@ -26,10 +26,16 @@ tests/handlers/
 JSON 파일에 정의된 테스트 케이스를 실행합니다. **테스트 케이스를 추가/수정하기 가장 쉬운 방법입니다.**
 
 ```bash
-# 특정 모듈 테스트
+# 특정 모듈의 모든 테스트 실행
 python tests/handlers/run_jsonrpc_tests.py enrollment
 python tests/handlers/run_jsonrpc_tests.py mail-query
 python tests/handlers/run_jsonrpc_tests.py onenote
+
+# 특정 번호의 테스트만 실행 ⭐ 새 기능!
+python tests/handlers/run_jsonrpc_tests.py enrollment 1        # 1번 테스트만
+python tests/handlers/run_jsonrpc_tests.py enrollment 1,3,5    # 1, 3, 5번 테스트
+python tests/handlers/run_jsonrpc_tests.py enrollment 2-4      # 2~4번 테스트 (범위)
+python tests/handlers/run_jsonrpc_tests.py enrollment 1,3-5,7  # 복합 선택
 
 # 모든 모듈 테스트
 python tests/handlers/run_jsonrpc_tests.py all
@@ -228,6 +234,53 @@ export PYTHONPATH=/home/kimghw/MailQueryWithMCP
 # 또는 직접 실행 시 PYTHONPATH 지정
 PYTHONPATH=/home/kimghw/MailQueryWithMCP python tests/handlers/run_jsonrpc_tests.py enrollment
 ```
+
+## 🔐 OAuth 콜백 자동 대기 (start_authentication)
+
+`start_authentication` 툴 실행 시 OAuth 콜백을 자동으로 대기합니다:
+
+```bash
+# start_authentication 테스트 실행 (예: 5번 테스트)
+python tests/handlers/run_jsonrpc_tests.py enrollment 5
+
+# 실행 결과:
+# ================================================================================
+# [5/5] start_authentication
+# ================================================================================
+#
+# 📥 결과:
+# 🔐 OAuth 인증 시작
+#
+# 사용자 ID: kimghw
+# 세션 ID: auth_20251024...
+#
+# 🌐 **인증 URL:**
+# https://login.microsoftonline.com/...
+#
+# 🔐 OAuth 인증 프로세스 시작
+#    User ID: kimghw
+#
+# ⏳ OAuth 인증 콜백 대기 중...
+#    브라우저에서 Microsoft 로그인을 완료하세요
+#    타임아웃: 180초
+#    대기 중... (15초 경과)
+#
+# ✅ OAuth 콜백 수신 완료! (경과 시간: 23.4초)
+# ✅ PASS
+```
+
+**작동 방식:**
+
+1. 인증 URL이 출력됨
+2. 테스트 러너가 자동으로 데이터베이스 폴링 시작 (2초마다)
+3. 브라우저에서 Microsoft 로그인 완료
+4. 토큰이 데이터베이스에 저장되면 자동으로 감지
+5. 테스트 계속 진행
+
+**timezone-aware 기능:**
+- 모든 datetime 비교가 UTC 기준으로 통일
+- naive datetime 자동 변환
+- timezone 비교 에러 방지
 
 ## 💡 팁
 

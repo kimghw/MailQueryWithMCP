@@ -5,7 +5,7 @@ Authentication-specific logger module
 
 import logging
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 from logging.handlers import RotatingFileHandler
@@ -96,11 +96,15 @@ class AuthLogger:
     
     def log_token_expiry(self, user_id: str, token_type: str, expiry_time: datetime):
         """토큰 만료 예정 로그"""
-        remaining = expiry_time - datetime.now()
+        # expiry_time을 timezone-aware로 변환 (필요시)
+        if expiry_time.tzinfo is None:
+            expiry_time = expiry_time.replace(tzinfo=timezone.utc)
+
+        remaining = expiry_time - datetime.now(timezone.utc)
         hours = remaining.total_seconds() / 3600
-        
+
         msg = f"TOKEN_EXPIRY | {user_id} | {token_type} | expires_in={hours:.1f}h | expiry_time={expiry_time.isoformat()}"
-        
+
         if hours < 1:
             self.logger.warning(msg)
         else:

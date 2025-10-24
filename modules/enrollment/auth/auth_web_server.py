@@ -68,10 +68,25 @@ class CallbackHandler(BaseHTTPRequestHandler):
             self.send_header("Content-type", "text/html; charset=utf-8")
             self.end_headers()
             self.wfile.write(response_html.encode("utf-8"))
+
+            # 응답 전송 후 서버 종료 스케줄링
+            self._schedule_server_shutdown()
         else:
             self.send_response(500)
             self.end_headers()
             self.wfile.write(b"Server Error")
+
+    def _schedule_server_shutdown(self):
+        """응답 전송 후 서버를 안전하게 종료"""
+        def shutdown_server():
+            import time
+            time.sleep(0.5)  # 응답이 완전히 전송될 시간 확보
+            if hasattr(self.server, "auth_server"):
+                logger.info("OAuth 콜백 처리 완료, 웹서버 종료 중...")
+                self.server.shutdown()
+
+        shutdown_thread = threading.Thread(target=shutdown_server, daemon=True)
+        shutdown_thread.start()
 
     def log_message(self, format, *args):
         """로그 메시지 커스터마이징"""

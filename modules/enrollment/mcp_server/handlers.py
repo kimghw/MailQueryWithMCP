@@ -492,19 +492,27 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
             token_detail = ""
             if has_access_token or has_refresh_token:
                 if token_expiry:
-                    expiry_dt = datetime.fromisoformat(
-                        token_expiry.replace("Z", "+00:00")
-                    )
-                    now_utc = datetime.now(timezone.utc)
+                    try:
+                        expiry_dt = datetime.fromisoformat(
+                            token_expiry.replace("Z", "+00:00")
+                        )
+                        # 타임존 정보가 없으면 UTC로 간주
+                        if expiry_dt.tzinfo is None:
+                            expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+                        now_utc = datetime.now(timezone.utc)
 
-                    if expiry_dt < now_utc:
-                        token_status = f"❌ 만료됨"
-                        token_detail = f"만료 시간: {token_expiry}"
-                    else:
-                        remaining = expiry_dt - now_utc
-                        hours = remaining.total_seconds() / 3600
-                        token_status = f"✅ 유효"
-                        token_detail = f"만료까지: {hours:.1f}시간 ({token_expiry})"
+                        if expiry_dt < now_utc:
+                            token_status = f"❌ 만료됨"
+                            token_detail = f"만료 시간: {token_expiry}"
+                        else:
+                            remaining = expiry_dt - now_utc
+                            hours = remaining.total_seconds() / 3600
+                            token_status = f"✅ 유효"
+                            token_detail = f"만료까지: {hours:.1f}시간 ({token_expiry})"
+                    except Exception as e:
+                        logger.warning(f"토큰 만료 시간 파싱 실패: {e}")
+                        token_status = "⚠️  토큰 있으나 만료시간 파싱 실패"
+                        token_detail = f"원본 값: {token_expiry}"
                 else:
                     token_status = "⚠️  토큰 있으나 만료시간 없음"
                     token_detail = ""
@@ -694,12 +702,19 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
                 # Token status
                 token_expiry = account_dict.get('token_expiry')
                 if token_expiry:
-                    expiry_dt = datetime.fromisoformat(
-                        token_expiry.replace("Z", "+00:00")
-                    )
-                    now_utc = datetime.now(timezone.utc)
-                    token_status = "만료" if expiry_dt < now_utc else "유효"
-                    account_list.append(f"   Token: {token_status}\n")
+                    try:
+                        expiry_dt = datetime.fromisoformat(
+                            token_expiry.replace("Z", "+00:00")
+                        )
+                        # 타임존 정보가 없으면 UTC로 간주
+                        if expiry_dt.tzinfo is None:
+                            expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+                        now_utc = datetime.now(timezone.utc)
+                        token_status = "만료" if expiry_dt < now_utc else "유효"
+                        account_list.append(f"   Token: {token_status}\n")
+                    except Exception as e:
+                        logger.warning(f"토큰 만료 시간 파싱 실패: {e}")
+                        account_list.append(f"   Token: 있음 (만료 시간 파싱 실패)\n")
                 else:
                     account_list.append(f"   Token: 없음\n")
 
@@ -806,15 +821,22 @@ oauth:
             token_status = "❌ 토큰 없음"
             if has_access_token or has_refresh_token:
                 if token_expiry:
-                    expiry_dt = datetime.fromisoformat(
-                        token_expiry.replace("Z", "+00:00")
-                    )
-                    now_utc = datetime.now(timezone.utc)
+                    try:
+                        expiry_dt = datetime.fromisoformat(
+                            token_expiry.replace("Z", "+00:00")
+                        )
+                        # 타임존 정보가 없으면 UTC로 간주
+                        if expiry_dt.tzinfo is None:
+                            expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
+                        now_utc = datetime.now(timezone.utc)
 
-                    if expiry_dt < now_utc:
-                        token_status = f"⚠️  토큰 만료됨 ({token_expiry})"
-                    else:
-                        token_status = f"✅ 토큰 유효 (만료: {token_expiry})"
+                        if expiry_dt < now_utc:
+                            token_status = f"⚠️  토큰 만료됨 ({token_expiry})"
+                        else:
+                            token_status = f"✅ 토큰 유효 (만료: {token_expiry})"
+                    except Exception as e:
+                        logger.warning(f"토큰 만료 시간 파싱 실패: {e}")
+                        token_status = f"⚠️  토큰 있으나 만료시간 파싱 실패 ({token_expiry})"
                 else:
                     token_status = "⚠️  토큰 있으나 만료시간 없음"
 

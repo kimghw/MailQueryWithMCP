@@ -70,7 +70,7 @@
     },
     {
       "name": "start_authentication",
-      "enabled": false,
+      "enabled": true,
       "tool": "start_authentication",
       "arguments": {
         "user_id": "kimghw",

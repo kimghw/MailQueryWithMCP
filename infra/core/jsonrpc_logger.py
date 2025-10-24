@@ -6,7 +6,7 @@ JSON-RPC 요청/응답 로깅
 import json
 import time
 import functools
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, Optional, Callable
 from pathlib import Path
 
@@ -85,7 +85,7 @@ class JSONRPCLogger:
             로그 ID
         """
         try:
-            timestamp = datetime.now().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
             user_id = arguments.get("user_id")
             action = arguments.get("action")
 
