@@ -145,7 +145,7 @@ class AuthOrchestrator:
 
             # 새 세션 생성, generate session ID and state
             session_id = auth_generate_session_id(user_id)
-            state = auth_generate_state_token(user_id)  # user_id를 state에 인코딩
+            state = auth_generate_state_token(user_id)
             expires_at = auth_create_session_expiry(10)  # 10분
 
             # 계정별 OAuth 설정 가져오기
@@ -186,6 +186,9 @@ class AuthOrchestrator:
 
             # 메모리에 세션 저장
             self.auth_sessions[state] = session
+
+            # DB에도 세션 저장 (테스트 환경 대응 - 프로세스 재시작 시에도 세션 유지)
+            self._save_session_to_db(user_id, session)
 
             # 웹서버 시작 (아직 실행 중이 아닌 경우)
             if not self.web_server_manager.is_running:
@@ -483,6 +486,8 @@ class AuthOrchestrator:
             auth_log_session_activity(
                 session.session_id, "session_expired", {"user_id": session.user_id}
             )
+            # DB에서도 세션 삭제
+            self._clear_session_from_db(session.user_id)
             del self.auth_sessions[state]
 
     def _parse_delegated_permissions(
@@ -610,6 +615,109 @@ class AuthOrchestrator:
 
             traceback.print_exc()
             return None
+
+    def _save_session_to_db(self, user_id: str, session: AuthSession):
+        """
+        세션 정보를 DB에 저장합니다.
+
+        Args:
+            user_id: 사용자 ID
+            session: 세션 객체
+        """
+        try:
+            import json
+
+            session_data = {
+                "session_id": session.session_id,
+                "user_id": session.user_id,
+                "state": session.state,
+                "auth_url": session.auth_url,
+                "status": session.status.value,
+                "expires_at": session.expires_at.isoformat(),
+                "created_at": session.created_at.isoformat(),
+            }
+
+            self.db.execute_query(
+                """
+                UPDATE accounts
+                SET temp_auth_session = ?
+                WHERE user_id = ? AND is_active = 1
+                """,
+                (json.dumps(session_data), user_id),
+            )
+
+            logger.debug(f"세션 DB 저장 완료: user_id={user_id}, state={session.state[:10]}...")
+
+        except Exception as e:
+            logger.error(f"세션 DB 저장 실패: user_id={user_id}, error={str(e)}")
+
+    def _load_session_from_db(self, user_id: str) -> Optional[AuthSession]:
+        """
+        DB에서 세션 정보를 로드합니다.
+
+        Args:
+            user_id: 사용자 ID
+
+        Returns:
+            세션 객체 또는 None
+        """
+        try:
+            import json
+            from datetime import datetime
+
+            row = self.db.fetch_one(
+                """
+                SELECT temp_auth_session
+                FROM accounts
+                WHERE user_id = ? AND is_active = 1
+                """,
+                (user_id,),
+            )
+
+            if not row or not row["temp_auth_session"]:
+                return None
+
+            session_data = json.loads(row["temp_auth_session"])
+
+            # 세션 객체 재구성
+            session = AuthSession(
+                session_id=session_data["session_id"],
+                user_id=session_data["user_id"],
+                state=session_data["state"],
+                auth_url=session_data["auth_url"],
+                status=AuthState(session_data["status"]),
+                expires_at=datetime.fromisoformat(session_data["expires_at"]),
+            )
+            session.created_at = datetime.fromisoformat(session_data["created_at"])
+
+            logger.debug(f"세션 DB 로드 완료: user_id={user_id}, state={session.state[:10]}...")
+            return session
+
+        except Exception as e:
+            logger.error(f"세션 DB 로드 실패: user_id={user_id}, error={str(e)}")
+            return None
+
+    def _clear_session_from_db(self, user_id: str):
+        """
+        DB에서 세션 정보를 삭제합니다.
+
+        Args:
+            user_id: 사용자 ID
+        """
+        try:
+            self.db.execute_query(
+                """
+                UPDATE accounts
+                SET temp_auth_session = NULL
+                WHERE user_id = ? AND is_active = 1
+                """,
+                (user_id,),
+            )
+
+            logger.debug(f"세션 DB 삭제 완료: user_id={user_id}")
+
+        except Exception as e:
+            logger.error(f"세션 DB 삭제 실패: user_id={user_id}, error={str(e)}")
 
 
 # 전역 오케스트레이터 인스턴스

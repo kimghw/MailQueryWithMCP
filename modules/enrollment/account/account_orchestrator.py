@@ -391,7 +391,7 @@ class AccountOrchestrator:
                 logger.debug("환경변수에 계정 정보가 없거나 검증 실패")
                 return None
 
-            # 이미 등록된 계정인지 확인
+            # 이미 등록된 계정인지 확인 (user_id 기준)
             existing_account = self.account_get_by_user_id(account_data.user_id)
 
             if existing_account:
@@ -399,42 +399,143 @@ class AccountOrchestrator:
                     f"환경변수 계정이 이미 등록되어 있음: user_id={account_data.user_id}"
                 )
 
-                # 환경변수가 변경되었는지 확인 (redirect_uri 비교)
-                if existing_account.oauth_redirect_uri != account_data.oauth_redirect_uri:
-                    logger.warning(
-                        f"⚠️ redirect_uri가 변경되었습니다:\n"
-                        f"   기존: {existing_account.oauth_redirect_uri}\n"
-                        f"   신규: {account_data.oauth_redirect_uri}"
-                    )
-                    logger.info("환경변수 기반 계정 정보로 업데이트합니다...")
+                # 핵심 OAuth 식별자 비교 (email, tenant_id, client_id, client_secret)
+                # 이 중 하나라도 다르면 완전히 다른 계정으로 간주하여 새 계정 생성
+                oauth_identity_changed = (
+                    str(existing_account.email) != str(account_data.email) or
+                    existing_account.oauth_tenant_id != account_data.oauth_tenant_id or
+                    existing_account.oauth_client_id != account_data.oauth_client_id
+                )
 
-                    # 계정 업데이트
-                    update_data = AccountUpdate(
+                # client_secret은 암호화되어 있어서 직접 비교 불가
+                # 일단 다른 식별자가 다르면 새 계정으로 간주
+                if oauth_identity_changed:
+                    logger.warning(
+                        f"⚠️ OAuth 식별자가 변경되었습니다 - 새 계정으로 등록합니다:\n"
+                        f"   기존 email: {existing_account.email}\n"
+                        f"   신규 email: {account_data.email}\n"
+                        f"   기존 tenant_id: {existing_account.oauth_tenant_id}\n"
+                        f"   신규 tenant_id: {account_data.oauth_tenant_id}\n"
+                        f"   기존 client_id: {existing_account.oauth_client_id}\n"
+                        f"   신규 client_id: {account_data.oauth_client_id}"
+                    )
+
+                    # 기존 계정 비활성화 (선택적)
+                    logger.info(f"기존 계정 유지: user_id={existing_account.user_id}")
+
+                    # 새로운 user_id 생성 (타임스탬프 추가)
+                    import time
+                    new_user_id = f"{account_data.user_id}_{int(time.time())}"
+                    logger.info(f"새 user_id 생성: {new_user_id}")
+
+                    # 새 계정 데이터 생성
+                    from .account_schema import AccountCreate
+                    new_account_data = AccountCreate(
+                        user_id=new_user_id,
+                        user_name=account_data.user_name,
+                        email=account_data.email,
+                        enrollment_file_path="<ENV_AUTO_REGISTERED>",
+                        enrollment_file_hash="<ENV_AUTO_REGISTERED>",
                         oauth_client_id=account_data.oauth_client_id,
                         oauth_client_secret=account_data.oauth_client_secret,
                         oauth_tenant_id=account_data.oauth_tenant_id,
                         oauth_redirect_uri=account_data.oauth_redirect_uri,
+                        auth_type=account_data.auth_type,
                         delegated_permissions=account_data.delegated_permissions,
+                        status=account_data.status,
+                    )
+
+                    # 새 계정 등록
+                    new_account_id = self.repository.account_create_from_enrollment(new_account_data)
+                    new_account = self.repository.account_get_by_id(new_account_id)
+
+                    logger.info(
+                        f"✅ OAuth 식별자 변경으로 새 계정 생성 완료: user_id={new_user_id}, "
+                        f"account_id={new_account_id}"
+                    )
+                    return new_account
+
+                # 모든 설정 필드 변경 여부 확인
+                # 하나라도 다르면 업데이트 수행
+                changes = []
+
+                if existing_account.user_name != account_data.user_name:
+                    changes.append(
+                        f"user_name: {existing_account.user_name} → {account_data.user_name}"
+                    )
+                if existing_account.oauth_redirect_uri != account_data.oauth_redirect_uri:
+                    changes.append(
+                        f"redirect_uri: {existing_account.oauth_redirect_uri} → {account_data.oauth_redirect_uri}"
+                    )
+                if existing_account.delegated_permissions != account_data.delegated_permissions:
+                    changes.append(
+                        f"permissions: {existing_account.delegated_permissions} → {account_data.delegated_permissions}"
+                    )
+
+                # 변경사항이 있으면 업데이트
+                if changes:
+                    logger.warning(
+                        f"⚠️ 계정 설정이 변경되었습니다:\n   " + "\n   ".join(changes)
+                    )
+                    logger.info("환경변수 기반 계정 정보로 업데이트합니다...")
+
+                    # delegated_permissions scope 검증
+                    from ._scope_validator import validate_delegated_scope
+
+                    permissions_str = account_data.delegated_permissions
+                    if isinstance(account_data.delegated_permissions, list):
+                        permissions_str = ' '.join(account_data.delegated_permissions)
+
+                    is_valid, valid_scopes, invalid_scopes = validate_delegated_scope(permissions_str)
+
+                    if not is_valid:
+                        logger.warning(
+                            f"⚠️ 환경변수에 허용되지 않은 scope 발견: {invalid_scopes}\n"
+                            f"   허용된 scope만 사용합니다: {valid_scopes}"
+                        )
+
+                    # 계정 업데이트 (검증된 권한만 사용)
+                    update_data = AccountUpdate(
+                        user_name=account_data.user_name,
+                        oauth_client_id=account_data.oauth_client_id,
+                        oauth_client_secret=account_data.oauth_client_secret,
+                        oauth_tenant_id=account_data.oauth_tenant_id,
+                        oauth_redirect_uri=account_data.oauth_redirect_uri,
+                        delegated_permissions=valid_scopes,
                     )
 
                     # Repository를 통해 직접 업데이트
                     self.repository.account_update_by_id(existing_account.id, update_data)
 
-                    # YAML 파일도 업데이트
+                    # YAML 파일도 업데이트 (검증된 scope만 사용)
                     import yaml
+                    import traceback
                     yaml_path = existing_account.enrollment_file_path
                     if yaml_path and yaml_path != "<ENV_AUTO_REGISTERED>":
                         try:
                             with open(yaml_path, 'r') as f:
                                 yaml_data = yaml.safe_load(f)
 
-                            # redirect_uri 업데이트
+                            # 변경된 내용 업데이트 (검증된 권한만 저장)
                             yaml_data['oauth']['redirect_uri'] = account_data.oauth_redirect_uri
+                            yaml_data['oauth']['delegated_permissions'] = valid_scopes
+                            yaml_data['account']['name'] = account_data.user_name
+
+                            logger.warning(f"📝 YAML 파일 업데이트 시작:")
+                            logger.warning(f"   ├─ 파일 경로: {yaml_path}")
+                            logger.warning(f"   ├─ 호출 함수: account_register_from_env")
+                            logger.warning(f"   └─ 이유: 환경변수 설정 변경 감지")
+
+                            # 호출 스택 출력
+                            stack = traceback.extract_stack()
+                            logger.warning(f"📋 호출 스택 추적 (최근 5개):")
+                            for i, frame in enumerate(stack[-5:], 1):
+                                logger.warning(f"   [{i}] {frame.filename}:{frame.lineno} in {frame.name}")
 
                             with open(yaml_path, 'w') as f:
                                 yaml.safe_dump(yaml_data, f, allow_unicode=True, sort_keys=False)
 
-                            logger.info(f"✅ YAML 파일 업데이트 완료: {yaml_path}")
+                            logger.warning(f"✅ YAML 파일 업데이트 완료: {yaml_path}")
                         except Exception as e:
                             logger.warning(f"⚠️ YAML 파일 업데이트 실패: {e}")
 
@@ -443,8 +544,10 @@ class AccountOrchestrator:
                     logger.info(f"✅ 환경변수 기반 계정 업데이트 완료: user_id={account_data.user_id}")
                     return updated_account
 
+                # 변경사항이 없으면 기존 계정 반환
                 logger.debug(
-                    f"기존 계정 상태: status={existing_account.status}, "
+                    f"계정 설정 변경사항 없음: user_id={account_data.user_id}, "
+                    f"status={existing_account.status}, "
                     f"has_valid_token={existing_account.has_valid_token}"
                 )
                 return existing_account

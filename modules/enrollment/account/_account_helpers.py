@@ -123,6 +123,22 @@ class AccountFileHelpers:
                 logger.error("delegated_permissions는 리스트여야 합니다")
                 return False
 
+            # delegated_permissions scope 검증 및 필터링
+            from ._scope_validator import validate_delegated_scope, format_scopes_for_storage
+
+            permissions = data["oauth"]["delegated_permissions"]
+            permissions_str = ' '.join(permissions) if isinstance(permissions, list) else str(permissions)
+
+            is_valid, valid_scopes, invalid_scopes = validate_delegated_scope(permissions_str)
+
+            if invalid_scopes:
+                logger.warning(
+                    f"⚠️  YAML 파일에 허용되지 않은 scope 발견: {invalid_scopes}\n"
+                    f"   허용된 scope만 사용합니다: {valid_scopes}"
+                )
+                # 허용된 scope만 유지
+                data["oauth"]["delegated_permissions"] = valid_scopes
+
             logger.debug("enrollment 파일 구조 검증 성공")
             return True
 

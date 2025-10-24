@@ -29,6 +29,9 @@ CREATE TABLE IF NOT EXISTS accounts (
     refresh_token TEXT,
     token_expiry TIMESTAMP,
 
+    -- 임시 인증 세션 (JSON 형태: state, session_id, auth_url, expires_at 등)
+    temp_auth_session TEXT,
+
     -- 메타데이터
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     last_sync_time TIMESTAMP,

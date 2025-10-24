@@ -95,13 +95,20 @@ class AuthCallbackProcessor:
         state = callback_data.state
 
         # 세션 저장소에서 해당 세션 찾기
-        if not self.session_store or state not in self.session_store:
+        session = None
+        if self.session_store and state in self.session_store:
+            session = self.session_store[state]
+        else:
+            # 메모리에 없으면 DB에서 로드 (테스트 환경 대응)
+            logger.info(f"메모리에 세션 없음, DB에서 조회 시도: state={state[:10]}...")
+            session = self._load_session_from_db_by_state(state)
+
+        if not session:
             logger.warning(f"유효하지 않은 state: {state[:10]}...")
             return auth_generate_callback_error_html(
-                "invalid_request", "유효하지 않은 인증 요청입니다"
+                "invalid_request",
+                "유효하지 않은 인증 요청입니다. 세션이 만료되었거나 서버가 재시작되었을 수 있습니다. 인증을 다시 시작해주세요."
             )
-
-        session = self.session_store[state]
 
         try:
             # 세션 상태 업데이트
@@ -373,6 +380,67 @@ class AuthCallbackProcessor:
             )
             # 파싱 실패 시 기본 스코프 반환
             return ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+
+    def _load_session_from_db_by_state(self, state: str):
+        """
+        DB에서 state로 세션을 조회합니다.
+
+        Args:
+            state: OAuth state 토큰
+
+        Returns:
+            AuthSession 객체 또는 None
+        """
+        try:
+            import json
+            from datetime import datetime
+
+            db = get_database_manager()
+
+            # 모든 활성 계정의 temp_auth_session을 조회
+            rows = db.fetch_all(
+                """
+                SELECT user_id, temp_auth_session
+                FROM accounts
+                WHERE is_active = 1 AND temp_auth_session IS NOT NULL
+                """
+            )
+
+            for row in rows:
+                try:
+                    session_data = json.loads(row["temp_auth_session"])
+                    saved_state = session_data.get("state")
+
+                    # Azure AD가 state를 잘라서 반환하는 경우 대응 (부분 일치)
+                    state_match = (saved_state == state or
+                                   (saved_state and saved_state.startswith(state)))
+
+                    if state_match:
+                        # 세션 객체 재구성
+                        from .auth_schema import AuthSession, AuthState
+
+                        session = AuthSession(
+                            session_id=session_data["session_id"],
+                            user_id=session_data["user_id"],
+                            state=session_data["state"],
+                            auth_url=session_data["auth_url"],
+                            status=AuthState(session_data["status"]),
+                            expires_at=datetime.fromisoformat(session_data["expires_at"]),
+                        )
+                        session.created_at = datetime.fromisoformat(session_data["created_at"])
+
+                        logger.info(f"DB에서 세션 로드 성공: user_id={session.user_id}, state={state[:10]}...")
+                        return session
+                except Exception as e:
+                    logger.warning(f"세션 파싱 실패: {str(e)}")
+                    continue
+
+            logger.warning(f"DB에서 state에 해당하는 세션을 찾을 수 없음: {state[:10]}...")
+            return None
+
+        except Exception as e:
+            logger.error(f"DB에서 세션 조회 실패: state={state[:10]}..., error={str(e)}")
+            return None
 
 
 # 전역 인스턴스 (선택사항)

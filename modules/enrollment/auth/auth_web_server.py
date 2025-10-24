@@ -8,6 +8,8 @@ OAuth 2.0 인증 콜백을 처리하는 임시 웹서버입니다.
 """
 
 import json
+import socket
+import subprocess
 import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -117,6 +119,30 @@ class AuthWebServer:
         self.callback_processor.register_callback_handler(state, handler)
         logger.debug(f"콜백 핸들러 등록: state={state[:10]}...")
 
+    def _kill_port_if_in_use(self, port: int):
+        """포트를 사용 중인 프로세스를 종료합니다."""
+        try:
+            # lsof로 포트 사용 프로세스 확인
+            result = subprocess.run(
+                ["lsof", "-ti", f":{port}"],
+                capture_output=True,
+                text=True
+            )
+
+            if result.stdout.strip():
+                pids = result.stdout.strip().split('\n')
+                for pid in pids:
+                    try:
+                        logger.warning(f"⚠️  포트 {port}이(가) PID {pid}에 의해 사용 중입니다. 종료합니다...")
+                        subprocess.run(["kill", "-9", pid], check=True)
+                        logger.info(f"✅ PID {pid} 종료 완료")
+                    except subprocess.CalledProcessError as e:
+                        logger.error(f"❌ PID {pid} 종료 실패: {e}")
+        except FileNotFoundError:
+            logger.debug("lsof 명령어를 찾을 수 없습니다. 포트 확인을 건너뜁니다.")
+        except Exception as e:
+            logger.warning(f"포트 확인 중 오류: {e}")
+
     async def auth_web_server_start(self, port: int = 5000) -> str:
         """
         웹서버를 시작합니다.
@@ -130,9 +156,20 @@ class AuthWebServer:
         try:
             self.port = port
 
+            # 포트 사용 중인 프로세스 종료
+            self._kill_port_if_in_use(port)
+
+            # 소켓 정리 대기 (TIME_WAIT 해제)
+            import time
+            time.sleep(0.5)
+
             # HTTPServer 생성
             server_address = ("localhost", port)
             self.httpd = HTTPServer(server_address, CallbackHandler)
+
+            # 소켓 재사용 옵션 설정 (Address already in use 방지)
+            self.httpd.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+
             self.httpd.auth_server = self  # 핸들러에서 접근할 수 있도록 참조 추가
 
             # 별도 스레드에서 서버 실행

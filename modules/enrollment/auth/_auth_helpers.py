@@ -44,50 +44,54 @@ def auth_generate_state_token(user_id: Optional[str] = None) -> str:
     """
     CSRF 방지용 상태 토큰을 생성합니다.
 
+    Azure AD의 state 길이 제한(약 32자)으로 인해 user_id를 포함하지 않고
+    짧은 랜덤 토큰만 반환합니다. user_id는 세션 저장소에서 관리됩니다.
+
     Args:
-        user_id: 사용자 ID (선택사항, 제공 시 state에 인코딩됨)
+        user_id: 사용자 ID (하위 호환성을 위해 유지하지만 사용하지 않음)
 
     Returns:
-        상태 토큰
+        상태 토큰 (짧은 랜덤 문자열)
     """
-    random_token = secrets.token_urlsafe(32)
+    # Azure AD state 길이 제한
+    MAX_STATE_LENGTH = 32
 
-    # user_id가 제공되면 state에 인코딩
-    if user_id:
-        import base64
-        # user_id를 base64로 인코딩하고 random_token과 결합
-        encoded_user_id = base64.urlsafe_b64encode(user_id.encode()).decode()
-        state_token = f"{random_token}:{encoded_user_id}"
-        logger.debug(f"상태 토큰 생성 (user_id 포함): {state_token[:20]}...")
+    # 짧은 랜덤 토큰만 생성 (Azure AD state 길이 제한 대응)
+    # Azure AD가 state를 7자로 자르므로 처음부터 7자만 생성
+    random_token = secrets.token_hex(4)[:7]  # 4바이트 hex = 8자 → 앞 7자만 사용
+
+    # 검증 및 로깅
+    if len(random_token) > MAX_STATE_LENGTH:
+        logger.warning(
+            f"⚠️  생성된 state가 Azure AD 제한을 초과합니다: "
+            f"{len(random_token)}자 > {MAX_STATE_LENGTH}자"
+        )
     else:
-        state_token = random_token
-        logger.debug(f"상태 토큰 생성: {state_token[:10]}...")
+        logger.info(
+            f"✅ State 토큰 생성 완료: 길이={len(random_token)}자 "
+            f"(Azure AD 제한: {MAX_STATE_LENGTH}자 이하)"
+        )
 
-    return state_token
+    logger.debug(f"State 값: {random_token}")
+    return random_token
 
 
 def auth_decode_state_token(state: str) -> tuple[str, Optional[str]]:
     """
     상태 토큰에서 user_id를 디코딩합니다.
 
+    현재 버전에서는 state에 user_id를 포함하지 않으므로 state만 반환합니다.
+    user_id는 세션 저장소에서 조회해야 합니다.
+
     Args:
         state: 상태 토큰
 
     Returns:
-        (state, user_id) 튜플. user_id가 없으면 None
+        (state, None) 튜플. user_id는 항상 None
     """
-    try:
-        if ":" in state:
-            import base64
-            random_token, encoded_user_id = state.split(":", 1)
-            user_id = base64.urlsafe_b64decode(encoded_user_id).decode()
-            logger.debug(f"상태 토큰에서 user_id 디코딩: {user_id}")
-            return state, user_id
-        else:
-            return state, None
-    except Exception as e:
-        logger.warning(f"상태 토큰 디코딩 실패: {str(e)}")
-        return state, None
+    # 현재 버전에서는 state가 단순 랜덤 문자열이므로 그대로 반환
+    logger.debug(f"상태 토큰: {state[:10]}... (user_id는 세션 저장소에서 조회)")
+    return state, None
 
 
 def auth_validate_callback_url(callback_url: str, expected_redirect_uri: str) -> bool:

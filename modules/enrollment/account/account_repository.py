@@ -46,13 +46,32 @@ class AccountRepository:
             int: 생성된 계정 ID
         """
         try:
+            # Delegated scope 검증
+            from ._scope_validator import validate_delegated_scope
+
+            permissions_str = account_data.delegated_permissions
+            if isinstance(account_data.delegated_permissions, list):
+                permissions_str = ' '.join(account_data.delegated_permissions)
+
+            is_valid, valid_scopes, invalid_scopes = validate_delegated_scope(permissions_str)
+
+            if not is_valid:
+                logger.error(
+                    f"❌ 계정 생성 실패: 허용되지 않은 scope 발견\n"
+                    f"   User ID: {account_data.user_id}\n"
+                    f"   거부된 scope: {invalid_scopes}"
+                )
+                raise ValidationError(
+                    f"허용되지 않은 scope가 포함되어 있습니다: {invalid_scopes}"
+                )
+
             # 클라이언트 시크릿 암호화
             encrypted_secret = self.crypto.account_encrypt_sensitive_data(
                 account_data.oauth_client_secret
             )
 
-            # 권한 목록을 JSON 문자열로 변환
-            permissions_json = json.dumps(account_data.delegated_permissions)
+            # 검증된 권한 목록을 JSON 문자열로 변환
+            permissions_json = json.dumps(valid_scopes)
 
             query = """
                 INSERT INTO accounts (
@@ -194,7 +213,27 @@ class AccountRepository:
                 params.append(update_data.oauth_redirect_uri)
 
             if update_data.delegated_permissions is not None:
-                permissions_json = json.dumps(update_data.delegated_permissions)
+                # Delegated scope 검증
+                from ._scope_validator import validate_delegated_scope
+
+                permissions_str = update_data.delegated_permissions
+                if isinstance(update_data.delegated_permissions, list):
+                    permissions_str = ' '.join(update_data.delegated_permissions)
+
+                is_valid, valid_scopes, invalid_scopes = validate_delegated_scope(permissions_str)
+
+                if not is_valid:
+                    logger.error(
+                        f"❌ 계정 업데이트 실패: 허용되지 않은 scope 발견\n"
+                        f"   Account ID: {account_id}\n"
+                        f"   거부된 scope: {invalid_scopes}"
+                    )
+                    raise ValidationError(
+                        f"허용되지 않은 scope가 포함되어 있습니다: {invalid_scopes}"
+                    )
+
+                # 검증된 권한 목록만 저장
+                permissions_json = json.dumps(valid_scopes)
                 update_fields.append("delegated_permissions = ?")
                 params.append(permissions_json)
 

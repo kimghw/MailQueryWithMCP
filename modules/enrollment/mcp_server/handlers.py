@@ -4,6 +4,7 @@ This module provides MCP handlers for authentication and account management.
 Integrates both MCP tool definitions and business logic.
 """
 
+import json
 import os
 import yaml
 from datetime import datetime, timezone
@@ -256,6 +257,15 @@ class AuthAccountHandlers:
                 user_name = os.getenv("AUTO_REGISTER_USER_NAME") or (user_id if user_id else "")
                 oauth_redirect_uri = os.getenv("AUTO_REGISTER_OAUTH_REDIRECT_URI")
 
+                # Load delegated permissions from environment variable
+                delegated_permissions_env = os.getenv("AUTO_REGISTER_DELEGATED_PERMISSIONS")
+                if delegated_permissions_env:
+                    # Parse comma-separated permissions
+                    delegated_permissions = [p.strip() for p in delegated_permissions_env.split(",") if p.strip()]
+                else:
+                    # Use default permissions if not specified
+                    delegated_permissions = ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+
                 # Validate that all required env vars are set
                 missing_env_vars = []
                 if not user_id:
@@ -276,6 +286,7 @@ class AuthAccountHandlers:
 환경변수를 설정하거나 use_env_vars=false로 직접 파라미터를 전달하세요."""
 
                 logger.info(f"✅ 환경변수에서 계정 정보 로드: {user_id} ({email})")
+                logger.info(f"   - Permissions: {', '.join(delegated_permissions)}")
 
             else:
                 # Load from arguments
@@ -286,6 +297,12 @@ class AuthAccountHandlers:
                 oauth_tenant_id = arguments.get("oauth_tenant_id")
                 user_name = arguments.get("user_name") or (user_id if user_id else "")
                 oauth_redirect_uri = arguments.get("oauth_redirect_uri")
+
+                # Load delegated permissions from arguments
+                delegated_permissions = arguments.get("delegated_permissions")
+                if not delegated_permissions:
+                    # Use default permissions if not specified
+                    delegated_permissions = ["Mail.ReadWrite", "Mail.Send", "offline_access"]
 
                 # Validate required fields
                 missing_fields = []
@@ -308,6 +325,7 @@ class AuthAccountHandlers:
 2. use_env_vars=true로 설정하여 환경변수 사용"""
 
                 logger.info(f"✅ 파라미터로부터 계정 정보 로드: {user_id} ({email})")
+                logger.info(f"   - Permissions: {', '.join(delegated_permissions)}")
 
             # Set default redirect URI if not provided
             if not oauth_redirect_uri:
@@ -335,7 +353,21 @@ class AuthAccountHandlers:
 
             # Create enrollment file
             enrollment_file = self.enrollment_dir / f"{user_id}.yaml"
-            default_permissions = ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+
+            # Validate delegated_permissions scope before creating enrollment data
+            from modules.enrollment.account._scope_validator import validate_delegated_scope
+
+            permissions_str = delegated_permissions
+            if isinstance(delegated_permissions, list):
+                permissions_str = ' '.join(delegated_permissions)
+
+            is_valid, valid_scopes, invalid_scopes = validate_delegated_scope(permissions_str)
+
+            if not is_valid:
+                logger.warning(
+                    f"⚠️ 허용되지 않은 scope 발견: {invalid_scopes}\n"
+                    f"   허용된 scope만 사용합니다: {valid_scopes}"
+                )
 
             enrollment_data = {
                 "account": {
@@ -351,24 +383,48 @@ class AuthAccountHandlers:
                 "oauth": {
                     "auth_type": "Authorization Code Flow",
                     "redirect_uri": oauth_redirect_uri,
-                    "delegated_permissions": default_permissions
+                    "delegated_permissions": valid_scopes  # Use only validated scopes
                 }
             }
 
             # Save enrollment file
             self.enrollment_dir.mkdir(parents=True, exist_ok=True)
+
+            # 호출 스택 정보 가져오기
+            import traceback
+            import inspect
+
+            # 현재 함수 정보
+            current_frame = inspect.currentframe()
+            caller_frame = current_frame.f_back if current_frame else None
+            caller_function = caller_frame.f_code.co_name if caller_frame else "unknown"
+            caller_file = caller_frame.f_code.co_filename if caller_frame else "unknown"
+            caller_line = caller_frame.f_lineno if caller_frame else 0
+
+            logger.warning(f"📄 YAML 파일 생성 시작:")
+            logger.warning(f"   ├─ 파일 경로: {enrollment_file}")
+            logger.warning(f"   ├─ 생성 함수: _register_account")
+            logger.warning(f"   ├─ 호출자: {caller_function}")
+            logger.warning(f"   └─ 호출 위치: {caller_file}:{caller_line}")
+
+            # 호출 스택 출력
+            stack = traceback.extract_stack()
+            logger.warning(f"📋 호출 스택 추적 (최근 5개):")
+            for i, frame in enumerate(stack[-5:], 1):
+                logger.warning(f"   [{i}] {frame.filename}:{frame.lineno} in {frame.name}")
+
             with open(enrollment_file, 'w', encoding='utf-8') as f:
                 yaml.dump(enrollment_data, f, default_flow_style=False, allow_unicode=True)
 
-            logger.info(f"Enrollment file created: {enrollment_file}")
+            logger.warning(f"✅ YAML 파일 생성 완료: {enrollment_file}")
 
             # Encrypt client secret
             from modules.enrollment.account import AccountCryptoHelpers
             crypto_helper = AccountCryptoHelpers()
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 
-            # Permissions JSON
-            default_permissions_json = '["Mail.ReadWrite", "Mail.Send", "offline_access"]'
+            # Permissions JSON (use only validated scopes)
+            permissions_json = json.dumps(valid_scopes)
 
             # Prepare source information message
             if use_env_vars:
@@ -387,12 +443,12 @@ class AuthAccountHandlers:
                         oauth_client_id = ?, oauth_client_secret = ?,
                         oauth_tenant_id = ?, oauth_redirect_uri = ?,
                         enrollment_file_path = ?,
-                        delegated_permissions = COALESCE(delegated_permissions, ?),
+                        delegated_permissions = ?,
                         auth_type = COALESCE(auth_type, 'Authorization Code Flow'),
                         updated_at = ?
                     WHERE user_id = ?
                 """, (user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id,
-                      oauth_redirect_uri, str(enrollment_file), default_permissions_json, current_time, user_id))
+                      oauth_redirect_uri, str(enrollment_file), permissions_json, current_time, user_id))
 
                 logger.info(f"Account updated: {user_id}")
 
@@ -419,7 +475,7 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
                         status, is_active, created_at, updated_at
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'Authorization Code Flow', 'ACTIVE', 1, ?, ?)
                 """, (user_id, user_name, email, oauth_client_id, encrypted_secret, oauth_tenant_id,
-                      oauth_redirect_uri, str(enrollment_file), default_permissions_json, current_time, current_time))
+                      oauth_redirect_uri, str(enrollment_file), permissions_json, current_time, current_time))
 
                 logger.info(f"New account registered: {user_id}")
 
@@ -428,7 +484,7 @@ start_authentication 도구로 OAuth 인증을 진행하세요."""
 사용자 ID: {user_id}
 이메일: {email}
 Enrollment 파일: {enrollment_file}
-권한: Mail.ReadWrite, Mail.Send, offline_access
+권한: {', '.join(delegated_permissions)}
 상태: 새로 생성됨{source_info}
 
 다음 단계:
