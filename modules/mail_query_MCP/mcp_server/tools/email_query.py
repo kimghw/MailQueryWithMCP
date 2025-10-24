@@ -17,6 +17,7 @@ from modules.mail_query import (
 )
 from modules.mail_process import AttachmentDownloader, FileConverterOrchestrator, EmailSaver
 from modules.mail_process.client_filter import ClientFilter
+from modules.mail_process.client_filter.filters.keyword_filter import KeywordFilter as KeywordFilterLogic
 from modules.mail_query_MCP.mcp_server.prompts import get_format_email_results_prompt
 
 logger = get_logger(__name__)
@@ -253,7 +254,12 @@ class EmailQueryTool:
 
         # 1순위: 키워드 필터
         if keyword_filter:
-            messages = KeywordFilter.filter_by_keywords(messages, keyword_filter)
+            messages = KeywordFilterLogic.apply(
+                messages,
+                and_keywords=keyword_filter.and_keywords,
+                or_keywords=keyword_filter.or_keywords,
+                not_keywords=keyword_filter.not_keywords
+            )
 
         # Apply conversation filter
         if conversation_with:
