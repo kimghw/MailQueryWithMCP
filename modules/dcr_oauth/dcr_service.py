@@ -310,6 +310,14 @@ class DCRService:
             metadata["code_challenge"] = code_challenge
             metadata["code_challenge_method"] = code_challenge_method or "plain"
 
+        # Delete old authorization codes for this client (keep only the newest)
+        delete_query = """
+        DELETE FROM dcr_tokens
+        WHERE dcr_client_id = ?
+          AND dcr_token_type = 'authorization_code'
+        """
+        self._execute_query(delete_query, (dcr_client_id,))
+
         query = """
         INSERT INTO dcr_tokens (
             dcr_token_value, dcr_client_id, dcr_token_type, expires_at, dcr_status, metadata

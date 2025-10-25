@@ -630,6 +630,16 @@ class UnifiedMCPServer:
                         metadata["code_challenge"] = code_challenge
                         metadata["code_challenge_method"] = code_challenge_method
 
+                    # Delete old authorization codes for this client (keep only the newest)
+                    dcr_service._execute_query(
+                        """
+                        DELETE FROM dcr_tokens
+                        WHERE dcr_client_id = ?
+                          AND dcr_token_type = 'authorization_code'
+                        """,
+                        (client_id,)
+                    )
+
                     dcr_service._execute_query(
                         """
                         INSERT INTO dcr_tokens (

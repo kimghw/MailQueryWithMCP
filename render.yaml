@@ -7,113 +7,43 @@ services:
     startCommand: bash entrypoints/production/run_unified_http.sh --host 0.0.0.0 --port $PORT
     envVars:
       # ===========================
-      # Python & Build Tools
+      # 🔧 빌드 필수 환경변수
       # ===========================
       - key: PYTHON_VERSION
         value: "3.11.9"
       - key: UV_VERSION
         value: "0.7.12"
-
-      # ===========================
-      # 🔧 INFRA/CORE - 인프라 핵심 설정
-      # ===========================
-
-      # Database
-      - key: DATABASE_PATH
-        value: "./data/graphapi.db"
-
-      # Security
-      - key: ENCRYPTION_KEY
-        sync: false
-
-      # Logging
-      - key: LOG_LEVEL
-        value: "INFO"
-
-      # Network
-      - key: HTTP_TIMEOUT
-        value: "30"
-
-      # Token
-      - key: TOKEN_REFRESH_BUFFER_MINUTES
-        value: "10"
-
-      # Environment
       - key: ENVIRONMENT
         value: "production"
 
       # ===========================
-      # 🔐 DCR - Dynamic Client Registration (Claude Connector)
+      # 🔧 기본 설정 (선택사항)
       # ===========================
-
-      # OAuth 인증 활성화
+      - key: LOG_LEVEL
+        value: "INFO"
+      - key: DATABASE_PATH
+        value: "./data/graphapi.db"
       - key: ENABLE_OAUTH_AUTH
         value: "true"
 
-      # DCR을 위한 Azure AD 앱 정보 (계정별 설정이 없을 경우 기본값으로 사용)
-      - key: DCR_AZURE_CLIENT_ID
-        sync: false
-      - key: DCR_AZURE_CLIENT_SECRET
-        sync: false
-      - key: DCR_AZURE_TENANT_ID
-        sync: false
-      - key: DCR_OAUTH_REDIRECT_URI
-        sync: false
-      - key: DCR_OAUTH_SCOPE
-        sync: false
-
-      # 허용된 사용자 목록 (쉼표로 구분된 이메일, 비어있으면 모든 사용자 허용)
-      - key: DCR_ALLOWED_USERS
-        sync: false
-
       # ===========================
-      # 📩 MODULES/ACCOUNT - 계정 관리 모듈
+      # 🔐 민감 정보는 Render 대시보드에서 설정하세요:
       # ===========================
-
-      - key: ENROLLMENT_DIRECTORY
-        value: "./enrollment"
-
-      # 자동 계정 등록 (환경변수 기반)
-      - key: AUTO_REGISTER_USER_ID
-        sync: false
-      - key: AUTO_REGISTER_USER_NAME
-        sync: false
-      - key: AUTO_REGISTER_EMAIL
-        sync: false
-      - key: AUTO_REGISTER_OAUTH_CLIENT_ID
-        sync: false
-      - key: AUTO_REGISTER_OAUTH_CLIENT_SECRET
-        sync: false
-      - key: AUTO_REGISTER_OAUTH_TENANT_ID
-        sync: false
-      - key: AUTO_REGISTER_OAUTH_REDIRECT_URI
-        sync: false
-      - key: AUTO_REGISTER_DELEGATED_PERMISSIONS
-        value: "Mail.ReadWrite,Mail.Send,Notes.ReadWrite,Notes.Create,Files.Read,Files.ReadWrite,Files.ReadWrite.All,offline_access"
-
+      # - ENCRYPTION_KEY (필수)
+      # - DCR_AZURE_CLIENT_ID (필수)
+      # - DCR_AZURE_CLIENT_SECRET (필수)
+      # - DCR_AZURE_TENANT_ID (필수)
+      # - DCR_OAUTH_REDIRECT_URI (필수)
+      # - DCR_OAUTH_SCOPE (선택, 기본값 사용 가능)
+      # - DCR_ALLOWED_USERS (선택, 비어있으면 모든 사용자 허용)
+      #
+      # 자동 계정 등록 (선택사항):
+      # - AUTO_REGISTER_USER_ID
+      # - AUTO_REGISTER_USER_NAME
+      # - AUTO_REGISTER_EMAIL
+      # - AUTO_REGISTER_OAUTH_CLIENT_ID
+      # - AUTO_REGISTER_OAUTH_CLIENT_SECRET
+      # - AUTO_REGISTER_OAUTH_TENANT_ID
+      # - AUTO_REGISTER_OAUTH_REDIRECT_URI
       # ===========================
-      # ⚙️ MODULES/MAIL_PROCESS - 메일 처리 모듈
-      # ===========================
-
-      # Processing Limits
-      - key: MAX_KEYWORDS_PER_MAIL
-        value: "5"
-      - key: MAX_MAILS_PER_ACCOUNT
-        value: "200"
-      - key: MAIL_BATCH_SIZE
-        value: "100"
-
-      # Filtering Rules
-      - key: BLOCKED_DOMAINS
-        value: "noreply.com,no-reply.com,donotreply.com,notifications.com,alerts.com"
-      - key: BLOCKED_KEYWORDS
-        value: "스팸,광고,홍보,마케팅,unsubscribe,newsletter,promotion"
-      - key: BLOCKED_SENDER_PATTERNS
-        value: "noreply@,no-reply@,donotreply@,auto-reply@,block@"
-
-      # ===========================
-      # 💾 FILE STORAGE - 파일 저장 설정
-      # ===========================
-
-      # OneDrive 업로드 실패 시 로컬 저장
     healthCheckPath: /health

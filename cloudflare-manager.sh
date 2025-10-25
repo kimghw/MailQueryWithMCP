@@ -19,7 +19,8 @@ NC='\033[0m' # No Color
 TUNNEL_NAME="mailquery-mcp"
 CONFIG_FILE="cloudflare-tunnel-config.yml"
 SERVICE_FILE="cloudflared.service"
-UNIFIED_SERVER="entrypoints/production/unified_http_server.py"
+UNIFIED_SERVER_SCRIPT="entrypoints/production/run_unified_http.sh"
+UNIFIED_SERVER_PROCESS="unified_http_server.py"
 PROJECT_DIR="/home/kimghw/MailQueryWithMCP"
 LOG_DIR="$PROJECT_DIR/logs"
 UNIFIED_PID_FILE="/tmp/unified_server.pid"
@@ -243,9 +244,9 @@ check_unified_status() {
     fi
 
     # Double check with pgrep
-    if pgrep -f "$UNIFIED_SERVER" > /dev/null; then
+    if pgrep -f "$UNIFIED_SERVER_PROCESS" > /dev/null; then
         # Update PID file
-        pgrep -f "$UNIFIED_SERVER" | head -1 > "$UNIFIED_PID_FILE"
+        pgrep -f "$UNIFIED_SERVER_PROCESS" | head -1 > "$UNIFIED_PID_FILE"
         return 0  # Running
     fi
 
@@ -266,17 +267,9 @@ start_unified_server() {
 
     cd "$PROJECT_DIR"
 
-    # Check if virtual environment exists
-    if [ -d "$PROJECT_DIR/.venv" ]; then
-        print_info "Using virtual environment at $PROJECT_DIR/.venv"
-        # Use virtual environment Python
-        nohup "$PROJECT_DIR/.venv/bin/python" "$UNIFIED_SERVER" > "$LOG_DIR/unified_server.log" 2>&1 &
-    else
-        print_warning "No virtual environment found. Trying system Python..."
-        print_info "Consider creating one with: uv venv && uv pip install -e ."
-        # Fallback to system Python
-        nohup python3 "$UNIFIED_SERVER" > "$LOG_DIR/unified_server.log" 2>&1 &
-    fi
+    # Use the production startup script
+    print_info "Using production startup script: $UNIFIED_SERVER_SCRIPT"
+    nohup bash "$UNIFIED_SERVER_SCRIPT" > "$LOG_DIR/unified_server.log" 2>&1 &
 
     UNIFIED_PID=$!
     echo $UNIFIED_PID > "$UNIFIED_PID_FILE"
@@ -309,7 +302,7 @@ stop_unified_server() {
     fi
 
     # Backup kill by process name
-    pkill -f "$UNIFIED_SERVER" 2>/dev/null || true
+    pkill -f "$UNIFIED_SERVER_PROCESS" 2>/dev/null || true
 
     print_status "Unified HTTP server stopped"
 }
