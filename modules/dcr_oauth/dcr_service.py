@@ -204,12 +204,12 @@ class DCRService:
         )
 
         if existing_client:
-            # 기존 클라이언트 재사용
-            dcr_client_id = existing_client["dcr_client_id"]
+            # 기존 클라이언트 재사용 (tuple로 반환됨)
+            dcr_client_id = existing_client[0]  # dcr_client_id
             dcr_client_secret = self.crypto.account_decrypt_sensitive_data(
-                existing_client["dcr_client_secret"]
+                existing_client[1]  # dcr_client_secret
             )
-            issued_at = int(datetime.fromisoformat(existing_client["created_at"]).timestamp())
+            issued_at = int(datetime.fromisoformat(existing_client[2]).timestamp())  # created_at
 
             logger.info(f"♻️ Reusing existing DCR client: {dcr_client_id}")
         else:
