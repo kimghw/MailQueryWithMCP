@@ -598,6 +598,61 @@ class UnifiedMCPServer:
                         status_code=400,
                     )
 
+                # Check if we already have an active Bearer token for this client
+                import json
+                existing_token_query = """
+                SELECT dcr_token_value, azure_object_id
+                FROM dcr_tokens
+                WHERE dcr_client_id = ?
+                  AND dcr_token_type = 'Bearer'
+                  AND dcr_status = 'active'
+                  AND expires_at > CURRENT_TIMESTAMP
+                LIMIT 1
+                """
+                existing_token = dcr_service._fetch_one(existing_token_query, (client_id,))
+
+                if existing_token:
+                    # We have a valid token, create authorization code and redirect immediately
+                    import secrets
+                    from datetime import datetime, timedelta
+
+                    auth_code = secrets.token_urlsafe(32)
+                    code_expiry = datetime.now() + timedelta(minutes=10)
+
+                    # Store auth code with metadata for token exchange
+                    metadata = {
+                        "redirect_uri": redirect_uri,
+                        "state": state,
+                        "scope": scope,
+                        "skip_azure": True  # Mark that we're skipping Azure AD
+                    }
+                    if code_challenge:
+                        metadata["code_challenge"] = code_challenge
+                        metadata["code_challenge_method"] = code_challenge_method
+
+                    dcr_service._execute_query(
+                        """
+                        INSERT INTO dcr_tokens (
+                            dcr_token_value, dcr_client_id, dcr_token_type,
+                            azure_object_id, expires_at, dcr_status, metadata
+                        ) VALUES (?, ?, 'authorization_code', ?, ?, 'active', ?)
+                        """,
+                        (
+                            auth_code,
+                            client_id,
+                            existing_token[1],  # azure_object_id
+                            code_expiry,
+                            json.dumps(metadata)
+                        ),
+                    )
+
+                    # Redirect back to Claude with authorization code
+                    callback_url = f"{redirect_uri}?code={auth_code}&state={state}"
+                    logger.info(f"♻️ Reusing existing session for client {client_id}, redirecting with auth code")
+
+                    from starlette.responses import RedirectResponse
+                    return RedirectResponse(url=callback_url)
+
                 # Authorization code 생성 (Azure AD callback용, PKCE 지원)
                 auth_code = dcr_service.create_authorization_code(
                     dcr_client_id=client_id,
@@ -832,6 +887,9 @@ class UnifiedMCPServer:
                         status_code=401,
                     )
 
+                # Check if this is a skip_azure authorization (reusing existing session)
+                skip_azure = auth_data.get("skip_azure", False)
+
                 # azure_object_id로 Azure 토큰 조회
                 azure_object_id = auth_data.get("azure_object_id")
                 if not azure_object_id:
@@ -841,53 +899,73 @@ class UnifiedMCPServer:
                         status_code=400,
                     )
 
-                logger.info(f"🔍 Looking for Azure tokens for object_id: {azure_object_id}...")
-                azure_tokens = dcr_service.get_azure_tokens_by_object_id(azure_object_id)
-                if not azure_tokens:
-                    logger.error(f"❌ Azure token not found for object_id: {azure_object_id}")
-                    return JSONResponse(
-                        {"error": "invalid_grant", "error_description": "Azure token not found"},
-                        status_code=400,
-                    )
-                logger.info(f"✅ Azure token found for user: {azure_tokens.get('user_email')}")
+                if skip_azure:
+                    # Skipping Azure verification for existing session reuse
+                    logger.info(f"♻️ Skipping Azure token lookup (reusing existing session)")
+                    azure_tokens = {
+                        "access_token": "reused_session",  # Placeholder
+                        "expires_in": 3600,
+                        "user_email": "existing_session",
+                        "scope": auth_data.get("scope", "Mail.Read User.Read")
+                    }
+                else:
+                    logger.info(f"🔍 Looking for Azure tokens for object_id: {azure_object_id}...")
+                    azure_tokens = dcr_service.get_azure_tokens_by_object_id(azure_object_id)
+                    if not azure_tokens:
+                        logger.error(f"❌ Azure token not found for object_id: {azure_object_id}")
+                        return JSONResponse(
+                            {"error": "invalid_grant", "error_description": "Azure token not found"},
+                            status_code=400,
+                        )
+                    logger.info(f"✅ Azure token found for user: {azure_tokens.get('user_email')}")
 
                 azure_access_token = azure_tokens["access_token"]
                 azure_refresh_token = azure_tokens.get("refresh_token", "")
                 expires_in = azure_tokens.get("expires_in", 3600)
                 user_email = azure_tokens.get("user_email")
 
-                # DCR 토큰 생성 (dcr_tokens 테이블에 저장)
-                access_token = secrets.token_urlsafe(32)
-                refresh_token = secrets.token_urlsafe(32)
-                azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
+                # Check for existing active Bearer token first
+                existing_token_query = """
+                SELECT dcr_token_value, expires_at
+                FROM dcr_tokens
+                WHERE dcr_client_id = ?
+                  AND azure_object_id = ?
+                  AND dcr_token_type = 'Bearer'
+                  AND dcr_status = 'active'
+                  AND expires_at > CURRENT_TIMESTAMP
+                """
+                existing_token = dcr_service._fetch_one(existing_token_query, (client_id, azure_object_id))
 
-                # Azure 토큰은 이미 dcr_azure_tokens 테이블에 있으므로, DCR 토큰만 dcr_tokens에 저장 (azure_object_id 연결)
+                # Import crypto helper (needed for both cases)
                 from modules.enrollment.account import AccountCryptoHelpers
                 crypto = AccountCryptoHelpers()
 
-                # Delete existing Bearer token for this client + object_id + token_type (prevent duplicates)
-                dcr_service._execute_query(
-                    """
-                    DELETE FROM dcr_tokens
-                    WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_token_type = 'Bearer' AND dcr_status = 'active'
-                    """,
-                    (client_id, azure_object_id),
-                )
+                if existing_token:
+                    # Reuse existing token
+                    access_token = existing_token[0]
+                    refresh_token = secrets.token_urlsafe(32)  # Generate new refresh token
+                    logger.info(f"♻️ Reusing existing Bearer token for client: {client_id}, user: {azure_object_id}")
+                else:
+                    # Generate new tokens
+                    access_token = secrets.token_urlsafe(32)
+                    refresh_token = secrets.token_urlsafe(32)
+                    azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
 
-                # Store access token
-                dcr_service._execute_query(
-                    """
-                    INSERT INTO dcr_tokens (
-                        dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
-                    ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
-                    """,
-                    (
-                        crypto.account_encrypt_sensitive_data(access_token),
-                        client_id,
-                        azure_object_id,
-                        azure_token_expiry,
-                    ),
-                )
+                    # Store new access token (without encryption for Bearer token comparison)
+                    dcr_service._execute_query(
+                        """
+                        INSERT INTO dcr_tokens (
+                            dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
+                        ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
+                        """,
+                        (
+                            access_token,  # Store plaintext for Bearer token validation
+                            client_id,
+                            azure_object_id,
+                            azure_token_expiry,
+                        ),
+                    )
+                    logger.info(f"✨ Created new Bearer token for client: {client_id}, user: {azure_object_id}")
 
                 # Delete existing refresh token for this client + object_id + token_type (prevent duplicates)
                 dcr_service._execute_query(
@@ -907,7 +985,7 @@ class UnifiedMCPServer:
                     ) VALUES (?, ?, 'refresh', ?, ?, 'active')
                     """,
                     (
-                        crypto.account_encrypt_sensitive_data(refresh_token),
+                        refresh_token,  # Store plaintext for consistency
                         client_id,
                         azure_object_id,
                         refresh_token_expiry,

@@ -424,7 +424,18 @@ class DCRService:
             )
             logger.info(f"✅ Stored Azure token for object_id: {azure_object_id}, user: {user_email}")
 
-        # 2) dcr_tokens에 DCR access token 저장
+        # 2) 기존 active Bearer 토큰을 무효화 (같은 클라이언트 & 사용자)
+        invalidate_query = """
+        UPDATE dcr_tokens
+        SET dcr_status = 'revoked'
+        WHERE dcr_client_id = ?
+          AND azure_object_id = ?
+          AND dcr_token_type = 'Bearer'
+          AND dcr_status = 'active'
+        """
+        self._execute_query(invalidate_query, (dcr_client_id, azure_object_id))
+
+        # 3) dcr_tokens에 새 DCR access token 저장
         dcr_query = """
         INSERT INTO dcr_tokens (
             dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
@@ -441,10 +452,21 @@ class DCRService:
             ),
         )
 
-        logger.info(f"✅ Stored DCR token for client: {dcr_client_id}")
+        logger.info(f"✅ Stored DCR token for client: {dcr_client_id} (revoked old tokens)")
 
-        # 3) DCR refresh token 저장
+        # 4) DCR refresh token 저장
         if dcr_refresh_token:
+            # 기존 refresh 토큰 무효화
+            invalidate_refresh = """
+            UPDATE dcr_tokens
+            SET dcr_status = 'revoked'
+            WHERE dcr_client_id = ?
+              AND dcr_token_type = 'refresh'
+              AND dcr_status = 'active'
+            """
+            self._execute_query(invalidate_refresh, (dcr_client_id,))
+
+            # 새 refresh 토큰 저장
             refresh_expires = datetime.now(timezone.utc) + timedelta(days=30)
             refresh_query = """
             INSERT INTO dcr_tokens (
@@ -479,8 +501,8 @@ class DCRService:
             dcr_client_id, encrypted_token, dcr_expires_at, azure_object_id, encrypted_azure_token, azure_expires_at, scope, user_email = row
 
             try:
-                decrypted_token = self.crypto.account_decrypt_sensitive_data(encrypted_token)
-                if secrets.compare_digest(decrypted_token, token):
+                # Bearer tokens are now stored as plaintext
+                if secrets.compare_digest(encrypted_token, token):
                     if not encrypted_azure_token:
                         logger.warning(f"⚠️ DCR token found but no Azure token for object_id: {azure_object_id}")
                         return None
