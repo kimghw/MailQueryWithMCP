@@ -64,13 +64,8 @@ class HTTPStreamingOneNoteServer:
             "Access-Control-Expose-Headers": "Mcp-Session-Id",
         }
 
-        # Bearer token authentication (DCR support)
-        from modules.dcr_oauth import verify_bearer_token_middleware
-
-        auth_response = await verify_bearer_token_middleware(request)
-        if auth_response:
-            # Authentication failed, return error response
-            return auth_response
+        # Bearer token authentication handled by unified_http_server middleware
+        # request.state.azure_token is available if ENABLE_OAUTH_AUTH=true
 
         # Read and parse request
         try:
@@ -295,25 +290,18 @@ class HTTPStreamingOneNoteServer:
             )
 
         async def mcp_discovery_handler(request):
-            """MCP Server Discovery - /.well-known/mcp.json"""
-            # Build base URL from request
-            base_url = f"{request.url.scheme}://{request.url.netloc}"
-            path_prefix = request.scope.get("root_path", "")  # Get mount path if exists
+            """MCP Server Discovery - /.well-known/mcp.json
 
+            Note: OAuth is handled at the unified server level (root /.well-known/mcp.json)
+            Individual MCP servers no longer expose OAuth endpoints to prevent
+            Claude.ai from requesting separate authentication for each service.
+            """
             return JSONResponse(
                 {
                     "mcp_version": "1.0",
                     "name": "OneNote MCP Server",
                     "description": "OneNote notebooks, sections, and pages management service",
                     "version": "1.0.0",
-                    "oauth": {
-                        "authorization_endpoint": f"{base_url}{path_prefix}/oauth/authorize",
-                        "token_endpoint": f"{base_url}{path_prefix}/oauth/token",
-                        "registration_endpoint": f"{base_url}{path_prefix}/oauth/register",
-                        "scopes_supported": ["Notes.ReadWrite", "Notes.Create", "User.Read"],
-                        "grant_types_supported": ["authorization_code", "refresh_token"],
-                        "code_challenge_methods_supported": ["S256"]
-                    },
                     "capabilities": {
                         "tools": True,
                         "resources": False,

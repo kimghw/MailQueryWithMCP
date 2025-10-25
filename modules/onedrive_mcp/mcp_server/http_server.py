@@ -242,22 +242,17 @@ All MCP requests should be sent as POST to the root endpoint `/`.
 
         @app.get("/.well-known/mcp.json")
         async def mcp_discovery(request: Request):
-            """MCP Server Discovery"""
-            base_url = f"{request.url.scheme}://{request.url.netloc}"
+            """MCP Server Discovery
 
+            Note: OAuth is handled at the unified server level (root /.well-known/mcp.json)
+            Individual MCP servers no longer expose OAuth endpoints to prevent
+            Claude.ai from requesting separate authentication for each service.
+            """
             return {
                 "mcp_version": "1.0",
                 "name": "OneDrive MCP Server",
                 "description": "OneDrive file management service with read/write capabilities",
                 "version": "1.0.0",
-                "oauth": {
-                    "authorization_endpoint": f"{base_url}/oauth/authorize",
-                    "token_endpoint": f"{base_url}/oauth/token",
-                    "registration_endpoint": f"{base_url}/oauth/register",
-                    "scopes_supported": ["Files.Read", "Files.ReadWrite", "Files.ReadWrite.All", "User.Read"],
-                    "grant_types_supported": ["authorization_code", "refresh_token"],
-                    "code_challenge_methods_supported": ["S256"]
-                },
                 "capabilities": {
                     "tools": True,
                     "resources": False,

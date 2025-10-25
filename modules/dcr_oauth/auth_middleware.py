@@ -43,6 +43,11 @@ async def verify_bearer_token_middleware(request, call_next=None):
     if request.method == "OPTIONS":
         return None
 
+    # GET/HEAD 요청은 인증 제외 (MCP Discovery)
+    # Claude.ai가 초기에 토큰 없이 서버 정보를 확인함
+    if request.method in ["GET", "HEAD"]:
+        return None
+
     # Get Authorization header
     auth_header = request.headers.get("Authorization", "")
 

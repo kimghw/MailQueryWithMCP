@@ -205,6 +205,79 @@ class UnifiedMCPServer:
                 },
             )
 
+        # Unified MCP Discovery endpoint
+        async def unified_mcp_discovery_handler(request):
+            """Unified MCP Discovery - Single OAuth for all services"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
+            return JSONResponse(
+                {
+                    "mcp_version": "1.0",
+                    "name": "Unified Microsoft 365 MCP Services",
+                    "description": "Single OAuth authentication for all Microsoft 365 MCP services",
+                    "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": [
+                            "Mail.Read",
+                            "Mail.ReadWrite",
+                            "Notes.Read",
+                            "Notes.ReadWrite",
+                            "Files.Read",
+                            "Files.ReadWrite",
+                            "Chat.Read",
+                            "Chat.ReadWrite",
+                            "User.Read"
+                        ],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
+                    "services": [
+                        {
+                            "name": "Mail Query",
+                            "path": "/mail-query",
+                            "description": "Email attachment management and query",
+                            "scopes": ["Mail.Read", "Mail.ReadWrite", "User.Read"]
+                        },
+                        {
+                            "name": "OneNote",
+                            "path": "/onenote",
+                            "description": "OneNote notebook and page management",
+                            "scopes": ["Notes.Read", "Notes.ReadWrite", "User.Read"]
+                        },
+                        {
+                            "name": "OneDrive",
+                            "path": "/onedrive",
+                            "description": "OneDrive file management",
+                            "scopes": ["Files.Read", "Files.ReadWrite", "User.Read"]
+                        },
+                        {
+                            "name": "Teams",
+                            "path": "/teams",
+                            "description": "Microsoft Teams chat service",
+                            "scopes": ["Chat.Read", "Chat.ReadWrite", "User.Read"]
+                        },
+                        {
+                            "name": "Enrollment",
+                            "path": "/enrollment",
+                            "description": "Account management and authentication",
+                            "scopes": ["User.Read"]
+                        }
+                    ],
+                    "capabilities": {
+                        "tools": True,
+                        "resources": False,
+                        "prompts": False
+                    }
+                },
+                headers={
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+            )
+
         # OPTIONS handler for CORS
         async def options_handler(request):
             return Response(
@@ -1138,6 +1211,7 @@ class UnifiedMCPServer:
             # DCR OAuth endpoints (at root for Claude Connector compatibility)
             Route("/.well-known/oauth-authorization-server", endpoint=oauth_metadata_handler, methods=["GET"]),
             Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource_handler, methods=["GET"]),
+            Route("/.well-known/mcp.json", endpoint=unified_mcp_discovery_handler, methods=["GET"]),  # Unified MCP Discovery
             Route("/oauth/register", endpoint=dcr_register_handler, methods=["POST"]),
             Route("/oauth/authorize", endpoint=oauth_authorize_handler, methods=["GET"]),
             Route("/oauth/token", endpoint=oauth_token_handler, methods=["POST"]),

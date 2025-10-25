@@ -133,13 +133,8 @@ class HTTPStreamingMailAttachmentServer:
             "Access-Control-Expose-Headers": "Mcp-Session-Id",
         }
 
-        # Bearer token authentication (DCR support) - REQUIRED
-        from modules.dcr_oauth import verify_bearer_token_middleware
-
-        auth_response = await verify_bearer_token_middleware(request)
-        if auth_response:
-            # Authentication failed, return error response
-            return auth_response
+        # Bearer token authentication handled by unified_http_server middleware
+        # request.state.azure_token is available if ENABLE_OAUTH_AUTH=true
 
         # Read and parse request
         try:
@@ -650,25 +645,18 @@ class HTTPStreamingMailAttachmentServer:
             )
 
         async def mcp_discovery_handler(request):
-            """MCP Server Discovery - /.well-known/mcp.json"""
-            # Build base URL from request
-            base_url = f"{request.url.scheme}://{request.url.netloc}"
-            path_prefix = request.scope.get("root_path", "")  # Get mount path if exists
+            """MCP Server Discovery - /.well-known/mcp.json
 
+            Note: OAuth is handled at the unified server level (root /.well-known/mcp.json)
+            Individual MCP servers no longer expose OAuth endpoints to prevent
+            Claude.ai from requesting separate authentication for each service.
+            """
             return JSONResponse(
                 {
                     "mcp_version": "1.0",
                     "name": "Mail Query MCP Server",
                     "description": "Email attachment management and query service",
                     "version": "1.0.0",
-                    "oauth": {
-                        "authorization_endpoint": f"{base_url}{path_prefix}/oauth/authorize",
-                        "token_endpoint": f"{base_url}{path_prefix}/oauth/token",
-                        "registration_endpoint": f"{base_url}{path_prefix}/oauth/register",
-                        "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
-                        "grant_types_supported": ["authorization_code", "refresh_token"],
-                        "code_challenge_methods_supported": ["S256"]
-                    },
                     "capabilities": {
                         "tools": True,
                         "resources": False,
@@ -1061,24 +1049,14 @@ class HTTPStreamingMailAttachmentServer:
             Route("/steam", endpoint=options_handler, methods=["OPTIONS"]),
             Route("/health", endpoint=options_handler, methods=["OPTIONS"]),
             Route("/info", endpoint=options_handler, methods=["OPTIONS"]),
-            # MCP Discovery
-            Route("/.well-known/mcp.json", endpoint=mcp_discovery_handler, methods=["GET"]),
-            # OAuth discovery endpoints
-            Route("/.well-known/oauth-authorization-server", endpoint=oauth_authorization_server, methods=["GET"]),
-            Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource, methods=["GET"]),
-            Route("/.well-known/oauth-authorization-server/stream", endpoint=oauth_authorization_server, methods=["GET"]),
-            Route("/.well-known/oauth-protected-resource/stream", endpoint=oauth_protected_resource, methods=["GET"]),
-            Route("/.well-known/oauth-authorization-server/steam", endpoint=oauth_authorization_server, methods=["GET"]),
-            Route("/.well-known/oauth-protected-resource/steam", endpoint=oauth_protected_resource, methods=["GET"]),
-            # DCR endpoints
-            Route("/oauth/register", endpoint=dcr_register_handler, methods=["POST"]),
-            Route("/oauth/register", endpoint=options_handler, methods=["OPTIONS"]),
-            Route("/oauth/register/{client_id}", endpoint=dcr_client_handler, methods=["GET", "DELETE"]),
-            Route("/oauth/register/{client_id}", endpoint=options_handler, methods=["OPTIONS"]),
-            Route("/oauth/authorize", endpoint=oauth_authorize_handler, methods=["GET"]),
-            Route("/oauth/token", endpoint=oauth_token_handler, methods=["POST"]),
-            Route("/oauth/token", endpoint=options_handler, methods=["OPTIONS"]),
-            Route("/oauth/azure_callback", endpoint=oauth_azure_callback_handler, methods=["GET"]),
+            # MCP Discovery - REMOVED from Starlette, now handled by FastAPI wrapper
+            # This ensures FastAPI's OAuth-free discovery endpoint takes precedence
+            # OAuth endpoints removed - now handled by unified_http_server at root level
+            # All OAuth flows should go through:
+            #   - /.well-known/mcp.json (root level)
+            #   - /oauth/register (root level)
+            #   - /oauth/authorize (root level)
+            #   - /oauth/token (root level)
         ]
         
         return Starlette(routes=routes)
@@ -1163,10 +1141,29 @@ All MCP requests should be sent to the root endpoint `/` as POST requests.
             error: Optional[Dict[str, Any]] = Field(None, description="Error information")
             id: Optional[int] = Field(None, description="Request ID for correlation")
 
-        # Mount Starlette MCP app
-        fastapi_app.mount("/mcp", self.starlette_app)
+        # Define FastAPI routes BEFORE mounting Starlette
+        # (routes take precedence over mounted apps)
 
-        # Add documentation endpoints
+        @fastapi_app.get(
+            "/.well-known/mcp.json",
+            tags=["MCP Discovery"],
+            summary="MCP Server Discovery",
+            description="MCP discovery endpoint (OAuth handled at root level)"
+        )
+        async def mcp_discovery():
+            """MCP Server Discovery - OAuth handled by unified server"""
+            return {
+                "mcp_version": "1.0",
+                "name": "Mail Query MCP Server",
+                "description": "Email attachment management and query service",
+                "version": "1.0.0",
+                "capabilities": {
+                    "tools": True,
+                    "resources": False,
+                    "prompts": False
+                }
+            }
+
         @fastapi_app.post(
             "/",
             response_model=MCPResponse,
@@ -1225,6 +1222,10 @@ Send MCP (Model Context Protocol) requests using JSON-RPC 2.0 format.
                 "tools_count": 4,
                 "documentation": f"http://{self.host}:{self.port}/docs"
             }
+
+        # Mount Starlette MCP app AFTER defining routes
+        # (this ensures FastAPI routes take precedence)
+        fastapi_app.mount("/mcp", self.starlette_app)
 
         logger.info("📚 FastAPI wrapper created - OpenAPI available at /docs")
         return fastapi_app
