@@ -179,14 +179,9 @@ class DCRService:
             logger.error(f"❌ Failed to save Azure config to DB: {e}")
 
     async def register_client(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
-        """RFC 7591: 동적 클라이언트 등록"""
+        """RFC 7591: 동적 클라이언트 등록 (통합 클라이언트 재사용)"""
         if not all([self.azure_application_id, self.azure_client_secret]):
             raise ValueError("Azure AD configuration not available")
-
-        # DCR 클라이언트 ID/Secret 생성
-        dcr_client_id = f"dcr_{secrets.token_urlsafe(16)}"
-        dcr_client_secret = secrets.token_urlsafe(32)
-        issued_at = int(datetime.now(timezone.utc).timestamp())
 
         # 요청 데이터
         client_name = request_data.get("client_name", "Claude Connector")
@@ -194,28 +189,57 @@ class DCRService:
         grant_types = request_data.get("grant_types", ["authorization_code", "refresh_token"])
         scope = request_data.get("scope", "Mail.Read User.Read")
 
-        # dcr_clients 테이블에 저장
-        query = """
-        INSERT INTO dcr_clients (
-            dcr_client_id, dcr_client_secret, dcr_client_name,
-            dcr_redirect_uris, dcr_grant_types, dcr_requested_scope, azure_application_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        # 기존 클라이언트 확인 (같은 scope와 redirect_uri를 가진 클라이언트 재사용)
+        existing_query = """
+        SELECT dcr_client_id, dcr_client_secret, created_at
+        FROM dcr_clients
+        WHERE azure_application_id = ?
+        ORDER BY created_at DESC
+        LIMIT 1
         """
 
-        self._execute_query(
-            query,
-            (
-                dcr_client_id,
-                self.crypto.account_encrypt_sensitive_data(dcr_client_secret),
-                client_name,
-                json.dumps(redirect_uris),
-                json.dumps(grant_types),
-                scope,
-                self.azure_application_id,
-            ),
+        existing_client = self._fetch_one(
+            existing_query,
+            (self.azure_application_id,)
         )
 
-        logger.info(f"✅ DCR client registered: {dcr_client_id}")
+        if existing_client:
+            # 기존 클라이언트 재사용
+            dcr_client_id = existing_client["dcr_client_id"]
+            dcr_client_secret = self.crypto.account_decrypt_sensitive_data(
+                existing_client["dcr_client_secret"]
+            )
+            issued_at = int(datetime.fromisoformat(existing_client["created_at"]).timestamp())
+
+            logger.info(f"♻️ Reusing existing DCR client: {dcr_client_id}")
+        else:
+            # 새 클라이언트 생성
+            dcr_client_id = f"dcr_{secrets.token_urlsafe(16)}"
+            dcr_client_secret = secrets.token_urlsafe(32)
+            issued_at = int(datetime.now(timezone.utc).timestamp())
+
+            # dcr_clients 테이블에 저장
+            query = """
+            INSERT INTO dcr_clients (
+                dcr_client_id, dcr_client_secret, dcr_client_name,
+                dcr_redirect_uris, dcr_grant_types, dcr_requested_scope, azure_application_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+
+            self._execute_query(
+                query,
+                (
+                    dcr_client_id,
+                    self.crypto.account_encrypt_sensitive_data(dcr_client_secret),
+                    client_name,
+                    json.dumps(redirect_uris),
+                    json.dumps(grant_types),
+                    scope,
+                    self.azure_application_id,
+                ),
+            )
+
+            logger.info(f"✅ New DCR client registered: {dcr_client_id}")
 
         return {
             "client_id": dcr_client_id,
