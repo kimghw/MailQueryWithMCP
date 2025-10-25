@@ -644,30 +644,8 @@ class HTTPStreamingMailAttachmentServer:
                 },
             )
 
-        async def mcp_discovery_handler(request):
-            """MCP Server Discovery - /.well-known/mcp.json
-
-            Note: OAuth is handled at the unified server level (root /.well-known/mcp.json)
-            Individual MCP servers no longer expose OAuth endpoints to prevent
-            Claude.ai from requesting separate authentication for each service.
-            """
-            return JSONResponse(
-                {
-                    "mcp_version": "1.0",
-                    "name": "Mail Query MCP Server",
-                    "description": "Email attachment management and query service",
-                    "version": "1.0.0",
-                    "capabilities": {
-                        "tools": True,
-                        "resources": False,
-                        "prompts": False
-                    }
-                },
-                headers={
-                    "Access-Control-Allow-Origin": "*",
-                    "Content-Type": "application/json",
-                },
-            )
+        # MCP Discovery handler REMOVED - now handled by FastAPI wrapper only
+        # This prevents Starlette from overriding FastAPI's OAuth-free response
 
         # DCR endpoints
         async def dcr_register_handler(request):

@@ -341,8 +341,7 @@ class HTTPStreamingOneNoteServer:
             # Root endpoint
             Route("/", endpoint=root_handler, methods=["GET", "POST", "HEAD"]),
             Route("/", endpoint=options_handler, methods=["OPTIONS"]),
-            # MCP Discovery
-            Route("/.well-known/mcp.json", endpoint=mcp_discovery_handler, methods=["GET"]),
+            # MCP Discovery - REMOVED from Starlette (handled by FastAPI)
             # Health and info endpoints
             Route("/health", endpoint=health_check, methods=["GET"]),
             Route("/info", endpoint=server_info, methods=["GET"]),
@@ -446,6 +445,26 @@ Send MCP (Model Context Protocol) requests using JSON-RPC 2.0 format.
             starlette_request = Request(request.scope, request.receive)
             response = await self._handle_streaming_request(starlette_request)
             return response
+
+        @fastapi_app.get(
+            "/.well-known/mcp.json",
+            tags=["MCP Discovery"],
+            summary="MCP Server Discovery",
+            description="MCP discovery endpoint (OAuth handled at root level)"
+        )
+        async def mcp_discovery():
+            """MCP Server Discovery - OAuth handled by unified server"""
+            return {
+                "mcp_version": "1.0",
+                "name": "OneNote MCP Server",
+                "description": "OneNote notebooks, sections, and pages management service",
+                "version": "1.0.0",
+                "capabilities": {
+                    "tools": True,
+                    "resources": False,
+                    "prompts": False
+                }
+            }
 
         @fastapi_app.get(
             "/health",
