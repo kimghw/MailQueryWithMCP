@@ -409,13 +409,23 @@ class UnifiedMCPServer:
             )
 
         async def mail_query_mcp_discovery_handler(request):
-            """MCP Discovery for Mail Query Service - OAuth handled at root level"""
+            """MCP Discovery for Mail Query Service - Points to root OAuth endpoints"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
             return JSONResponse(
                 {
                     "mcp_version": "1.0",
                     "name": "Mail Query MCP Server",
                     "description": "Email attachment management and query service",
                     "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
                     "capabilities": {
                         "tools": True,
                         "resources": False,
@@ -429,13 +439,23 @@ class UnifiedMCPServer:
             )
 
         async def onenote_mcp_discovery_handler(request):
-            """MCP Discovery for OneNote Service - OAuth handled at root level"""
+            """MCP Discovery for OneNote Service - Points to root OAuth endpoints"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
             return JSONResponse(
                 {
                     "mcp_version": "1.0",
                     "name": "OneNote MCP Server",
                     "description": "OneNote notebooks, sections, and pages management service",
                     "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Notes.Read", "Notes.ReadWrite", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
                     "capabilities": {
                         "tools": True,
                         "resources": False,
@@ -449,13 +469,23 @@ class UnifiedMCPServer:
             )
 
         async def onedrive_mcp_discovery_handler(request):
-            """MCP Discovery for OneDrive Service - OAuth handled at root level"""
+            """MCP Discovery for OneDrive Service - Points to root OAuth endpoints"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
             return JSONResponse(
                 {
                     "mcp_version": "1.0",
                     "name": "OneDrive MCP Server",
                     "description": "OneDrive file management service with read/write capabilities",
                     "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Files.Read", "Files.ReadWrite", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
                     "capabilities": {
                         "tools": True,
                         "resources": False,
@@ -469,13 +499,23 @@ class UnifiedMCPServer:
             )
 
         async def teams_mcp_discovery_handler(request):
-            """MCP Discovery for Teams Chat Service - OAuth handled at root level"""
+            """MCP Discovery for Teams Chat Service - Points to root OAuth endpoints"""
+            base_url = f"{request.url.scheme}://{request.url.netloc}"
+
             return JSONResponse(
                 {
                     "mcp_version": "1.0",
                     "name": "Teams Chat MCP Server",
                     "description": "Microsoft Teams 1:1 and group chat service",
                     "version": "1.0.0",
+                    "oauth": {
+                        "authorization_endpoint": f"{base_url}/oauth/authorize",
+                        "token_endpoint": f"{base_url}/oauth/token",
+                        "registration_endpoint": f"{base_url}/oauth/register",
+                        "scopes_supported": ["Chat.Read", "Chat.ReadWrite", "User.Read"],
+                        "grant_types_supported": ["authorization_code", "refresh_token"],
+                        "code_challenge_methods_supported": ["S256"]
+                    },
                     "capabilities": {
                         "tools": True,
                         "resources": False,
