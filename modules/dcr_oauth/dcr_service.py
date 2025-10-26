@@ -296,7 +296,12 @@ class DCRService:
         code_challenge: Optional[str] = None,
         code_challenge_method: Optional[str] = None
     ) -> str:
-        """Authorization code 생성 (PKCE 지원)"""
+        """Authorization code 생성 (PKCE 지원)
+
+        Note: authorization_code는 사용자 로그인 후 리다이렉트 시 전달되는 일회성 코드입니다.
+        10분 후 만료되며, 토큰 교환 시 즉시 'expired' 상태로 변경됩니다.
+        임시 사용 후 즉시 폐기되므로 암호화하지 않습니다.
+        """
         code = secrets.token_urlsafe(32)
         expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
 
@@ -432,13 +437,16 @@ class DCRService:
             )
             logger.info(f"✅ Stored Azure token for object_id: {azure_object_id}, user: {user_email}")
 
-            # accounts 테이블 연동 (환경변수 기반)
+            # accounts 테이블 연동 (암호화된 토큰 전달)
+            encrypted_access = self.crypto.account_encrypt_sensitive_data(azure_access_token)
+            encrypted_refresh = self.crypto.account_encrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None
+
             self._sync_with_accounts_table(
                 azure_object_id=azure_object_id,
                 user_email=user_email,
                 user_name=user_name,
-                azure_access_token=azure_access_token,
-                azure_refresh_token=azure_refresh_token,
+                encrypted_access_token=encrypted_access,
+                encrypted_refresh_token=encrypted_refresh,
                 azure_expires_at=azure_expires_at
             )
 
@@ -516,15 +524,17 @@ class DCRService:
             return None
 
         for row in results:
-            dcr_client_id, encrypted_token, dcr_expires_at, azure_object_id, encrypted_azure_token, azure_expires_at, scope, user_email = row
+            dcr_client_id, encrypted_dcr_token, dcr_expires_at, azure_object_id, encrypted_azure_token, azure_expires_at, scope, user_email = row
 
             try:
-                # Bearer tokens are now stored as plaintext
-                if secrets.compare_digest(encrypted_token, token):
+                # DCR 토큰 복호화 후 비교
+                decrypted_dcr_token = self.crypto.account_decrypt_sensitive_data(encrypted_dcr_token)
+                if secrets.compare_digest(decrypted_dcr_token, token):
                     if not encrypted_azure_token:
                         logger.warning(f"⚠️ DCR token found but no Azure token for object_id: {azure_object_id}")
                         return None
 
+                    # Azure 토큰 복호화
                     azure_access_token = self.crypto.account_decrypt_sensitive_data(encrypted_azure_token)
                     return {
                         "dcr_client_id": dcr_client_id,
@@ -603,98 +613,78 @@ class DCRService:
         azure_object_id: str,
         user_email: Optional[str],
         user_name: Optional[str],
-        azure_access_token: str,
-        azure_refresh_token: Optional[str],
+        encrypted_access_token: str,
+        encrypted_refresh_token: Optional[str],
         azure_expires_at: datetime
     ):
-        """DCR 인증 완료 시 graphapi.db의 accounts 테이블과 연동"""
+        """DCR 인증 완료 시 graphapi.db의 accounts 테이블과 자동 연동 (암호화된 토큰 복사)"""
         try:
-            # 환경변수에서 연동할 계정 정보 가져오기
-            auto_user_id = os.getenv("AUTO_REGISTER_USER_ID")
-            auto_email = os.getenv("AUTO_REGISTER_EMAIL")
-
-            # 연동 대상 확인 (환경변수 이메일과 일치하는 경우만)
-            if not auto_email or not user_email:
-                logger.debug(f"No auto-register email configured or user email missing")
-                return
-
-            if user_email.lower() != auto_email.lower():
-                logger.debug(f"User email {user_email} does not match auto-register email {auto_email}")
+            # 이메일 필수 확인
+            if not user_email:
+                logger.warning(f"User email missing, cannot sync to accounts table")
                 return
 
             # graphapi.db 연결
             db_manager = get_database_manager()
 
-            # 사용자 확인 또는 생성
-            if auto_user_id:
-                # user_id로 계정 조회
-                existing = db_manager.fetch_one(
-                    "SELECT id, user_id, email FROM accounts WHERE user_id = ?",
-                    (auto_user_id,)
-                )
+            # user_id는 이메일의 로컬 파트 사용 (예: kimghw@krs.co.kr -> kimghw)
+            auto_user_id = user_email.split('@')[0] if '@' in user_email else user_email
 
-                if not existing:
-                    # 계정이 없으면 생성
-                    logger.info(f"Creating new account for user_id: {auto_user_id}")
+            # user_id로 계정 조회 (이메일로도 확인)
+            existing = db_manager.fetch_one(
+                "SELECT id, user_id, email FROM accounts WHERE user_id = ? OR email = ?",
+                (auto_user_id, user_email)
+            )
 
-                    # 환경변수에서 OAuth 정보 가져오기
-                    oauth_client_id = os.getenv("AUTO_REGISTER_OAUTH_CLIENT_ID") or self.azure_application_id
-                    oauth_tenant_id = os.getenv("AUTO_REGISTER_OAUTH_TENANT_ID") or self.azure_tenant_id
-                    oauth_redirect_uri = os.getenv("AUTO_REGISTER_OAUTH_REDIRECT_URI") or self.azure_redirect_uri
-                    oauth_client_secret = os.getenv("AUTO_REGISTER_OAUTH_CLIENT_SECRET") or self.azure_client_secret
-                    delegated_permissions = os.getenv("AUTO_REGISTER_DELEGATED_PERMISSIONS", "Mail.ReadWrite,Mail.Send,offline_access")
+            if not existing:
+                # 계정이 없으면 생성
+                logger.info(f"🆕 Creating new account for user_id: {auto_user_id}, email: {user_email}")
 
-                    # 계정 생성
-                    db_manager.execute_query("""
-                        INSERT INTO accounts (
-                            user_id, user_name, email,
-                            oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri,
-                            delegated_permissions, auth_type,
-                            access_token, refresh_token, token_expiry,
-                            status, is_active, created_at, updated_at, last_used_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Authorization Code Flow', ?, ?, ?, 'ACTIVE', 1, datetime('now'), datetime('now'), datetime('now'))
-                    """, (
-                        auto_user_id,
-                        user_name or os.getenv("AUTO_REGISTER_USER_NAME", auto_user_id),
-                        user_email,
-                        oauth_client_id,
-                        self.crypto.account_encrypt_sensitive_data(oauth_client_secret),
-                        oauth_tenant_id,
-                        oauth_redirect_uri,
-                        '["' + '", "'.join(delegated_permissions.split(',')) + '"]',
-                        self.crypto.account_encrypt_sensitive_data(azure_access_token),
-                        self.crypto.account_encrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None,
-                        azure_expires_at.isoformat() if azure_expires_at else None
-                    ))
-                    logger.info(f"✅ Created new account in graphapi.db for {auto_user_id}")
-                else:
-                    # 기존 계정 업데이트
-                    db_manager.execute_query("""
-                        UPDATE accounts
-                        SET access_token = ?, refresh_token = ?, token_expiry = ?,
-                            status = 'ACTIVE', last_used_at = datetime('now'), updated_at = datetime('now')
-                        WHERE user_id = ?
-                    """, (
-                        self.crypto.account_encrypt_sensitive_data(azure_access_token),
-                        self.crypto.account_encrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None,
-                        azure_expires_at.isoformat() if azure_expires_at else None,
-                        auto_user_id
-                    ))
-                    logger.info(f"✅ Updated account tokens in graphapi.db for {auto_user_id}")
+                # OAuth 정보: DCR 설정 사용
+                oauth_client_id = self.azure_application_id
+                oauth_tenant_id = self.azure_tenant_id
+                oauth_redirect_uri = self.azure_redirect_uri
+                oauth_client_secret = self.azure_client_secret
+                delegated_permissions = "Mail.ReadWrite,Mail.Send,offline_access"
+
+                # 계정 생성 (이미 암호화된 토큰 그대로 복사)
+                db_manager.execute_query("""
+                    INSERT INTO accounts (
+                        user_id, user_name, email,
+                        oauth_client_id, oauth_client_secret, oauth_tenant_id, oauth_redirect_uri,
+                        delegated_permissions, auth_type,
+                        access_token, refresh_token, token_expiry,
+                        status, is_active, created_at, updated_at, last_used_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Authorization Code Flow', ?, ?, ?, 'ACTIVE', 1, datetime('now'), datetime('now'), datetime('now'))
+                """, (
+                    auto_user_id,
+                    user_name or auto_user_id,
+                    user_email,
+                    oauth_client_id,
+                    self.crypto.account_encrypt_sensitive_data(oauth_client_secret),
+                    oauth_tenant_id,
+                    oauth_redirect_uri,
+                    '["' + '", "'.join(delegated_permissions.split(',')) + '"]',
+                    encrypted_access_token,  # 이미 암호화됨
+                    encrypted_refresh_token,  # 이미 암호화됨
+                    azure_expires_at.isoformat() if azure_expires_at else None
+                ))
+                logger.info(f"✅ Created new account in graphapi.db for {auto_user_id} ({user_email})")
             else:
-                # user_id가 없으면 이메일로만 업데이트 시도
+                # 기존 계정 업데이트 (이미 암호화된 토큰 그대로 복사)
+                existing_user_id = existing["user_id"]
                 db_manager.execute_query("""
                     UPDATE accounts
                     SET access_token = ?, refresh_token = ?, token_expiry = ?,
                         status = 'ACTIVE', last_used_at = datetime('now'), updated_at = datetime('now')
-                    WHERE email = ?
+                    WHERE user_id = ?
                 """, (
-                    self.crypto.account_encrypt_sensitive_data(azure_access_token),
-                    self.crypto.account_encrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None,
+                    encrypted_access_token,  # 이미 암호화됨
+                    encrypted_refresh_token,  # 이미 암호화됨
                     azure_expires_at.isoformat() if azure_expires_at else None,
-                    user_email
+                    existing_user_id
                 ))
-                logger.info(f"✅ Updated account tokens in graphapi.db for email: {user_email}")
+                logger.info(f"✅ Updated account tokens in graphapi.db for {existing_user_id} ({user_email})")
 
         except Exception as e:
             logger.error(f"Failed to sync with accounts table: {e}")
