@@ -38,6 +38,7 @@ from modules.teams_mcp.mcp_server.http_server import HTTPStreamingTeamsServer
 from modules.enrollment.auth import get_auth_orchestrator
 from modules.enrollment.auth.auth_callback_processor import AuthCallbackProcessor
 from infra.core.logger import get_logger
+from infra.utils.datetime_utils import utc_now, parse_iso_to_utc
 from modules.dcr_oauth import DCRService
 
 logger = get_logger(__name__)
@@ -614,10 +615,10 @@ class UnifiedMCPServer:
                 if existing_token:
                     # We have a valid token, create authorization code and redirect immediately
                     import secrets
-                    from datetime import datetime, timedelta
+                    from datetime import timedelta
 
                     auth_code = secrets.token_urlsafe(32)
-                    code_expiry = datetime.now() + timedelta(minutes=10)
+                    code_expiry = utc_now() + timedelta(minutes=10)
 
                     # Store auth code with metadata for token exchange
                     metadata = {
@@ -774,7 +775,8 @@ class UnifiedMCPServer:
                             continue
 
                         # Check expiration
-                        if datetime.fromisoformat(expires_at) < datetime.now():
+                        expiry_dt = parse_iso_to_utc(expires_at)
+                        if expiry_dt < utc_now():
                             logger.warning(f"Refresh token expired")
                             continue
 
@@ -804,7 +806,7 @@ class UnifiedMCPServer:
                     new_access_token = secrets.token_urlsafe(32)
                     new_refresh_token = secrets.token_urlsafe(32)
                     expires_in = azure_tokens.get("expires_in", 3600)
-                    token_expiry = datetime.now() + timedelta(seconds=expires_in)
+                    token_expiry = utc_now() + timedelta(seconds=expires_in)
 
                     # Delete existing Bearer token for this client + object_id + token_type (prevent duplicates)
                     dcr_service._execute_query(
@@ -835,7 +837,7 @@ class UnifiedMCPServer:
                     )
 
                     # Store new refresh token (30 days)
-                    refresh_expiry = datetime.now() + timedelta(days=30)
+                    refresh_expiry = utc_now() + timedelta(days=30)
                     dcr_service._execute_query(
                         """
                         INSERT INTO dcr_tokens (
@@ -959,7 +961,7 @@ class UnifiedMCPServer:
                     # Generate new tokens
                     access_token = secrets.token_urlsafe(32)
                     refresh_token = secrets.token_urlsafe(32)
-                    azure_token_expiry = datetime.now() + timedelta(seconds=expires_in)
+                    azure_token_expiry = utc_now() + timedelta(seconds=expires_in)
 
                     # Store new access token (without encryption for Bearer token comparison)
                     dcr_service._execute_query(
@@ -987,7 +989,7 @@ class UnifiedMCPServer:
                 )
 
                 # Store refresh token (30 days validity)
-                refresh_token_expiry = datetime.now() + timedelta(days=30)
+                refresh_token_expiry = utc_now() + timedelta(days=30)
                 dcr_service._execute_query(
                     """
                     INSERT INTO dcr_tokens (
@@ -1218,9 +1220,9 @@ class UnifiedMCPServer:
                 logger.info(f"💾 Saving Azure token to dcr_azure_tokens table for client: {client_id}")
 
                 # 토큰 만료 시간 계산
-                from datetime import datetime, timedelta
+                from datetime import timedelta
                 expires_in = azure_token_data.get("expires_in", 3600)
-                azure_expiry = datetime.now() + timedelta(seconds=expires_in)
+                azure_expiry = utc_now() + timedelta(seconds=expires_in)
 
                 # dcr_azure_tokens 테이블에 직접 저장 (INSERT OR REPLACE)
                 from modules.enrollment.account import AccountCryptoHelpers

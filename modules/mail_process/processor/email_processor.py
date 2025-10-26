@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import List, Dict, Any
 from datetime import datetime
 
+from infra.utils.datetime_utils import utc_now
 from .process_options import ProcessOptions, TempFileCleanupPolicy
 from .result import EmailProcessResult, AttachmentResult, BatchProcessResult
 from .handlers.email_saver import EmailSaver
@@ -59,7 +60,7 @@ class EmailProcessor:
         email_id = self._get_field(email_data, 'id', 'unknown')
         subject = self._get_field(email_data, 'subject', 'No Subject')
         sender_info = self._extract_sender_info(email_data)
-        received_time = self._get_field(email_data, 'received_date_time', datetime.now())
+        received_time = self._get_field(email_data, 'received_date_time', utc_now())
 
         # 결과 객체 초기화
         result = EmailProcessResult(
@@ -175,7 +176,7 @@ class EmailProcessor:
 
         # 폴더명 생성
         if not isinstance(received_time, datetime):
-            received_time = datetime.now()
+            received_time = utc_now()
 
         folder_name = self.options.subfolder_format.format(
             subject=sanitize_filename(self._get_field(email_data, 'subject', 'NoSubject')[:50]),

@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from infra.core.logger import get_logger
+from infra.utils.datetime_utils import utc_now_iso
 from modules.onedrive_mcp.handlers import OneDriveHandlers
 
 logger = get_logger(__name__)
@@ -218,7 +219,7 @@ All MCP requests should be sent as POST to the root endpoint `/`.
                 "status": "healthy",
                 "server": "onedrive-mcp-server",
                 "version": "1.0.0",
-                "timestamp": datetime.now().isoformat(),
+                "timestamp": utc_now_iso(),
             }
 
         @app.get("/info")
@@ -276,7 +277,7 @@ All MCP requests should be sent as POST to the root endpoint `/`.
         self.sessions[session_id] = {
             "initialized": True,
             "protocol_version": protocol_version,
-            "created_at": datetime.now().isoformat(),
+            "created_at": utc_now_iso(),
         }
 
         logger.info(f"✅ Session created: {session_id}")

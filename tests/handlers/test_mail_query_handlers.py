@@ -9,13 +9,14 @@ Mail Query 모듈 핸들러 직접 테스트
 import sys
 import os
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import timedelta
 
 # 프로젝트 루트를 Python path에 추가
 project_root = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from modules.mail_query_MCP.mcp_server.handlers import MCPHandlers
+from infra.utils.datetime_utils import utc_now
 
 
 def print_test_result(test_name: str, passed: bool, details: str = ""):
@@ -71,9 +72,9 @@ def test_query_email():
     try:
         handler = MCPHandlers()
 
-        # 최근 3일간 메일 조회
-        start_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
-        end_date = datetime.now().strftime("%Y-%m-%d")
+        # 최근 3일간 메일 조회 (UTC 기준)
+        start_date = (utc_now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        end_date = utc_now().strftime("%Y-%m-%d")
 
         result = handler.query_email(
             user_id="kimghw",
@@ -100,9 +101,9 @@ def test_attachment_manager():
     try:
         handler = MCPHandlers()
 
-        # 최근 3일간 PDF 첨부파일 검색
-        start_date = (datetime.now() - timedelta(days=3)).strftime("%Y-%m-%d")
-        end_date = datetime.now().strftime("%Y-%m-%d")
+        # 최근 3일간 PDF 첨부파일 검색 (UTC 기준)
+        start_date = (utc_now() - timedelta(days=3)).strftime("%Y-%m-%d")
+        end_date = utc_now().strftime("%Y-%m-%d")
 
         result = handler.attachmentManager(
             user_id="kimghw",

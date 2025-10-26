@@ -200,8 +200,9 @@ class EmailSaver:
             lines.append("")
 
             # 기본 정보
+            from infra.utils.datetime_utils import utc_now
             subject = self._get_field(email_data, 'subject', 'No Subject')
-            received_time = self._get_field(email_data, 'received_date_time', datetime.now())
+            received_time = self._get_field(email_data, 'received_date_time', utc_now())
 
             lines.append(f"Subject: {subject}")
             lines.append(f"From: {sender_info['name']} <{sender_info['email']}>")

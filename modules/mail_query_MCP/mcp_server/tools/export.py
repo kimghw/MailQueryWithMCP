@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List
+from infra.utils.datetime_utils import to_local_filename, format_for_display, utc_now
 
 logger = logging.getLogger(__name__)
 
@@ -38,8 +39,8 @@ class ExportTool:
         csv_dir = self.exports_dir / user_id
         csv_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Generate filename with timestamp (UTC)
+        timestamp = to_local_filename()
         csv_file = csv_dir / f"email_metadata_{timestamp}.csv"
 
         # Write CSV
@@ -88,8 +89,8 @@ class ExportTool:
         json_dir = self.exports_dir / user_id
         json_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Generate filename with timestamp (UTC)
+        timestamp = to_local_filename()
         json_file = json_dir / f"email_metadata_{timestamp}.json"
 
         # Write JSON
@@ -116,8 +117,8 @@ class ExportTool:
         summary_dir = self.exports_dir / user_id / "summaries"
         summary_dir.mkdir(parents=True, exist_ok=True)
 
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Generate filename with timestamp (UTC)
+        timestamp = to_local_filename()
 
         if format == "markdown":
             return self._export_markdown_summary(emails, summary_dir, timestamp)
@@ -133,7 +134,7 @@ class ExportTool:
 
         with open(md_file, 'w', encoding='utf-8') as f:
             f.write(f"# Email Summary\n\n")
-            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
+            f.write(f"Generated: {format_for_display(utc_now())}\n\n")
             f.write(f"Total emails: {len(emails)}\n\n")
 
             f.write("## Email List\n\n")
@@ -177,7 +178,7 @@ class ExportTool:
 <body>
 """)
             f.write(f"<h1>Email Summary</h1>\n")
-            f.write(f"<p>Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>\n")
+            f.write(f"<p>Generated: {format_for_display(utc_now())}</p>\n")
             f.write(f"<p>Total emails: {len(emails)}</p>\n\n")
 
             for i, email in enumerate(emails, 1):
@@ -210,7 +211,7 @@ class ExportTool:
         with open(txt_file, 'w', encoding='utf-8') as f:
             f.write("EMAIL SUMMARY\n")
             f.write("=" * 60 + "\n\n")
-            f.write(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"Generated: {format_for_display(utc_now())}\n")
             f.write(f"Total emails: {len(emails)}\n\n")
 
             for i, email in enumerate(emails, 1):

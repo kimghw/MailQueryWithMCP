@@ -3,7 +3,6 @@
 
 import os
 import sqlite3
-from datetime import datetime
 from pathlib import Path
 import sys
 
@@ -11,6 +10,7 @@ import sys
 sys.path.insert(0, str(Path(__file__).parent))
 
 from infra.core.database import get_database_manager
+from infra.utils.datetime_utils import utc_now_iso
 from modules.enrollment.account import AccountCryptoHelpers
 
 def check_databases():
@@ -103,12 +103,12 @@ def test_sync_simulation():
 
     dcr_service = DCRService()
 
-    # 테스트용 더미 데이터
+    # 테스트용 더미 데이터 (UTC 기준)
     test_email = os.getenv("AUTO_REGISTER_EMAIL", "kimghw@krs.co.kr")
     test_user_name = os.getenv("AUTO_REGISTER_USER_NAME", "Kim Geohwa")
-    test_access_token = "test_access_token_" + datetime.now().isoformat()
-    test_refresh_token = "test_refresh_token_" + datetime.now().isoformat()
-    test_expires_at = datetime.now()
+    test_access_token = "test_access_token_" + utc_now_iso()
+    test_refresh_token = "test_refresh_token_" + utc_now_iso()
+    test_expires_at = utc_now_iso()
 
     print(f"테스트 이메일: {test_email}")
     print(f"테스트 사용자: {test_user_name}")

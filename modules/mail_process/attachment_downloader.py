@@ -7,6 +7,8 @@ from typing import Optional, Dict, Any, Literal
 from pathlib import Path
 from datetime import datetime
 
+from infra.utils.datetime_utils import utc_now
+
 logger = logging.getLogger(__name__)
 
 # Storage mode type
@@ -246,11 +248,9 @@ class AttachmentDownloader:
             # 메일제목_날짜_보낸사람 형식의 폴더명 생성
             folder_name = None
             if email_date and sender_email:
-                from datetime import datetime
-                
                 # 날짜 객체 확인
                 if not isinstance(email_date, datetime):
-                    email_date = datetime.now()
+                    email_date = utc_now()
                 
                 date_str = email_date.strftime("%Y%m%d_%H%M%S")  # 시분초 추가
                 # 전체 이메일 주소 사용
@@ -276,11 +276,9 @@ class AttachmentDownloader:
 
             # OneDrive 업로드 시도 (storage_mode == "onedrive"인 경우)
             if self.storage_mode == "onedrive" and hasattr(self, 'onedrive_handler') and email_date:
-                from datetime import datetime
-
                 # 날짜 객체 확인
                 if not isinstance(email_date, datetime):
-                    email_date = datetime.now()
+                    email_date = utc_now()
 
                 # OneDrive 경로 설정 - 메일제목_날짜_보낸사람 형식
                 date_str = email_date.strftime("%Y%m%d")
