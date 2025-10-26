@@ -26,24 +26,5 @@ services:
       - key: ENABLE_OAUTH_AUTH
         value: "true"
 
-      # ===========================
-      # 🔐 민감 정보는 Render 대시보드에서 설정하세요:
-      # ===========================
-      # - ENCRYPTION_KEY (필수)
-      # - DCR_AZURE_CLIENT_ID (필수)
-      # - DCR_AZURE_CLIENT_SECRET (필수)
-      # - DCR_AZURE_TENANT_ID (필수)
-      # - DCR_OAUTH_REDIRECT_URI (필수)
-      # - DCR_OAUTH_SCOPE (선택, 기본값 사용 가능)
-      # - DCR_ALLOWED_USERS (선택, 비어있으면 모든 사용자 허용)
-      #
-      # 자동 계정 등록 (선택사항):
-      # - AUTO_REGISTER_USER_ID
-      # - AUTO_REGISTER_USER_NAME
-      # - AUTO_REGISTER_EMAIL
-      # - AUTO_REGISTER_OAUTH_CLIENT_ID
-      # - AUTO_REGISTER_OAUTH_CLIENT_SECRET
-      # - AUTO_REGISTER_OAUTH_TENANT_ID
-      # - AUTO_REGISTER_OAUTH_REDIRECT_URI
-      # ===========================
+
     healthCheckPath: /health
