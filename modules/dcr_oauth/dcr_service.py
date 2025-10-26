@@ -509,13 +509,13 @@ class DCRService:
             )
 
     def verify_bearer_token(self, token: str) -> Optional[Dict[str, Any]]:
-        """Bearer 토큰 검증 및 Azure 토큰 반환"""
+        """DCR Bearer 토큰 검증 (Azure 토큰 조회 없음)"""
         query = """
-        SELECT d.dcr_client_id, d.dcr_token_value, d.expires_at, d.azure_object_id,
-               a.access_token, a.expires_at, a.scope, a.user_email
-        FROM dcr_tokens d
-        LEFT JOIN dcr_azure_tokens a ON d.azure_object_id = a.object_id
-        WHERE d.dcr_token_type = 'Bearer' AND d.dcr_status = 'active' AND d.expires_at > CURRENT_TIMESTAMP
+        SELECT dcr_client_id, dcr_token_value, azure_object_id
+        FROM dcr_tokens
+        WHERE dcr_token_type = 'Bearer'
+          AND dcr_status = 'active'
+          AND expires_at > CURRENT_TIMESTAMP
         """
 
         results = self._fetch_all(query)
@@ -524,25 +524,15 @@ class DCRService:
             return None
 
         for row in results:
-            dcr_client_id, encrypted_dcr_token, dcr_expires_at, azure_object_id, encrypted_azure_token, azure_expires_at, scope, user_email = row
+            dcr_client_id, encrypted_dcr_token, azure_object_id = row
 
             try:
                 # DCR 토큰 복호화 후 비교
                 decrypted_dcr_token = self.crypto.account_decrypt_sensitive_data(encrypted_dcr_token)
                 if secrets.compare_digest(decrypted_dcr_token, token):
-                    if not encrypted_azure_token:
-                        logger.warning(f"⚠️ DCR token found but no Azure token for object_id: {azure_object_id}")
-                        return None
-
-                    # Azure 토큰 복호화
-                    azure_access_token = self.crypto.account_decrypt_sensitive_data(encrypted_azure_token)
                     return {
                         "dcr_client_id": dcr_client_id,
                         "azure_object_id": azure_object_id,
-                        "azure_access_token": azure_access_token,
-                        "azure_expires_at": azure_expires_at,
-                        "scope": scope,
-                        "user_email": user_email,
                     }
             except Exception as e:
                 logger.error(f"Token decryption error: {e}")
