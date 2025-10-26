@@ -7,7 +7,7 @@ from pathlib import Path
 import sys
 
 # 프로젝트 루트를 Python 경로에 추가
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from infra.core.database import get_database_manager
 from infra.utils.datetime_utils import utc_now_iso
@@ -23,7 +23,7 @@ def check_databases():
 
     accounts = db_manager.fetch_all("""
         SELECT user_id, email, access_token IS NOT NULL as has_token,
-               token_expiry, status, last_used_at
+               token_expiry, status, updated_at
         FROM accounts
         WHERE user_id = ? OR email = ?
     """, (os.getenv("AUTO_REGISTER_USER_ID", ""), os.getenv("AUTO_REGISTER_EMAIL", "")))
@@ -35,7 +35,7 @@ def check_databases():
             print(f"    Token: {'있음' if account[2] else '없음'}")
             print(f"    Expiry: {account[3]}")
             print(f"    Status: {account[4]}")
-            print(f"    Last Used: {account[5]}")
+            print(f"    Updated At: {account[5]}")
     else:
         print("  계정 없음")
 
@@ -130,7 +130,7 @@ def test_sync_simulation():
         db_manager = get_database_manager()
         result = db_manager.fetch_one("""
             SELECT user_id, email, access_token IS NOT NULL as has_token,
-                   token_expiry, status, last_used_at
+                   token_expiry, status, updated_at
             FROM accounts
             WHERE user_id = ? OR email = ?
         """, (os.getenv("AUTO_REGISTER_USER_ID", ""), test_email))
@@ -141,7 +141,7 @@ def test_sync_simulation():
             print(f"    Token 저장됨: {'예' if result[2] else '아니오'}")
             print(f"    Token Expiry: {result[3]}")
             print(f"    Status: {result[4]}")
-            print(f"    Last Used: {result[5]}")
+            print(f"    Updated At: {result[5]}")
         else:
             print("  계정이 생성되지 않음")
 

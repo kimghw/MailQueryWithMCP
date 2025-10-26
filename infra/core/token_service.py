@@ -8,7 +8,10 @@ OAuth 클라이언트와 함께 작동하여 안전한 토큰 라이프사이클
 import asyncio
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from modules.enrollment.account import AccountCryptoHelpers
 
 from .config import get_config
 from .database import get_database_manager
@@ -35,6 +38,9 @@ class TokenService:
         self.config = get_config()
         self.db = get_database_manager()
         self.oauth_client = get_oauth_client()
+        # Lazy import to avoid circular dependency
+        from modules.enrollment.account import AccountCryptoHelpers
+        self.crypto = AccountCryptoHelpers()
 
     async def store_tokens(
         self, user_id: str, token_info: Dict[str, Any], user_name: Optional[str] = None
@@ -101,11 +107,15 @@ class TokenService:
                 status = "INACTIVE"
                 logger.error(f"❌ access_token을 받지 못했습니다 - user_id={user_id}")
 
+            # 토큰 암호화
+            encrypted_access_token = self.crypto.account_encrypt_sensitive_data(access_token) if access_token else None
+            encrypted_refresh_token = self.crypto.account_encrypt_sensitive_data(refresh_token) if refresh_token else None
+
             account_data = {
                 "user_id": user_id,
                 "user_name": user_name or user_id,
-                "access_token": access_token,
-                "refresh_token": refresh_token,
+                "access_token": encrypted_access_token,
+                "refresh_token": encrypted_refresh_token,
                 "token_expiry": expiry_time,
                 "status": status,
                 "is_active": True,
@@ -195,15 +205,24 @@ class TokenService:
                     await self.update_account_status(user_id, "ACTIVE")
                     logger.debug(f"유효한 액세스 토큰 반환: user_id={user_id}")
                     auth_logger.log_authentication(user_id, "VALID", "token still valid")
-                    return account["access_token"]
+
+                    # 토큰 복호화
+                    encrypted_token = account["access_token"]
+                    if encrypted_token:
+                        decrypted_token = self.crypto.account_decrypt_sensitive_data(encrypted_token)
+                        return decrypted_token
+                    return None
 
             # 토큰이 만료된 경우 갱신 시도
-            refresh_token = account["refresh_token"]
-            if not refresh_token:
+            encrypted_refresh_token = account["refresh_token"]
+            if not encrypted_refresh_token:
                 logger.warning(f"리프레시 토큰이 없음: user_id={user_id}")
                 auth_logger.log_authentication(user_id, "INACTIVE", "no refresh token")
                 await self.update_account_status(user_id, "INACTIVE")
                 return None
+
+            # refresh_token 복호화
+            refresh_token = self.crypto.account_decrypt_sensitive_data(encrypted_refresh_token)
 
             # 계정별 OAuth 설정 확인
             oauth_client_id = account["oauth_client_id"]
@@ -219,11 +238,8 @@ class TokenService:
                 return None
 
             # 암호화된 client_secret 복호화
-            from .config import get_config
-
-            config = get_config()
             try:
-                decrypted_secret = config.decrypt_data(oauth_client_secret)
+                decrypted_secret = self.crypto.account_decrypt_sensitive_data(oauth_client_secret)
             except Exception as e:
                 logger.error(
                     f"OAuth 클라이언트 시크릿 복호화 실패: user_id={user_id}, error={str(e)}"
@@ -349,6 +365,10 @@ class TokenService:
                 logger.warning(f"갱신할 토큰이 없음: user_id={user_id}")
                 return False
 
+            # refresh_token 복호화
+            encrypted_refresh_token = account["refresh_token"]
+            refresh_token = self.crypto.account_decrypt_sensitive_data(encrypted_refresh_token)
+
             # 계정별 OAuth 설정 확인
             oauth_client_id = account["oauth_client_id"]
             oauth_client_secret = account["oauth_client_secret"]
@@ -358,7 +378,7 @@ class TokenService:
             if oauth_client_id and oauth_client_secret:
                 # 암호화된 client_secret 복호화
                 try:
-                    decrypted_secret = self.config.decrypt_data(oauth_client_secret)
+                    decrypted_secret = self.crypto.account_decrypt_sensitive_data(oauth_client_secret)
                 except Exception as e:
                     logger.error(
                         f"OAuth 클라이언트 시크릿 복호화 실패: user_id={user_id}, error={str(e)}"
@@ -367,7 +387,7 @@ class TokenService:
 
                 logger.info(f"계정별 설정으로 강제 토큰 갱신: user_id={user_id}")
                 new_token_info = await self.oauth_client.refresh_access_token(
-                    account["refresh_token"],
+                    refresh_token,
                     client_id=oauth_client_id,
                     client_secret=decrypted_secret,
                     tenant_id=oauth_tenant_id,
@@ -379,7 +399,7 @@ class TokenService:
 
                 logger.info(f"공통 설정으로 강제 토큰 갱신: user_id={user_id}")
                 new_token_info = await self.oauth_client.refresh_access_token(
-                    account["refresh_token"]
+                    refresh_token
                 )
 
             await self.store_tokens(
@@ -786,9 +806,12 @@ class TokenService:
                         "message": "계정별 OAuth 설정이 필요합니다. 재인증이 필요합니다.",
                     }
 
+                # refresh_token 복호화
+                decrypted_refresh_token = self.crypto.account_decrypt_sensitive_data(refresh_token)
+
                 # 암호화된 client_secret 복호화
                 try:
-                    decrypted_secret = self.config.decrypt_data(oauth_client_secret)
+                    decrypted_secret = self.crypto.account_decrypt_sensitive_data(oauth_client_secret)
                 except Exception as e:
                     logger.error(
                         f"OAuth 클라이언트 시크릿 복호화 실패: user_id={user_id}, error={str(e)}"
@@ -804,7 +827,7 @@ class TokenService:
                 # 계정별 설정으로 토큰 갱신
                 logger.info(f"계정별 OAuth 설정으로 토큰 갱신 시도: user_id={user_id}")
                 new_token_info = await self.oauth_client.refresh_access_token(
-                    refresh_token,
+                    decrypted_refresh_token,
                     client_id=oauth_client_id,
                     client_secret=decrypted_secret,
                     tenant_id=oauth_tenant_id,

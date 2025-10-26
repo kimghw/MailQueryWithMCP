@@ -246,24 +246,6 @@ class Config:
         """임의의 환경 변수 값을 가져오기"""
         return os.getenv(key, default)
 
-    def encrypt_data(self, data: str) -> str:
-        """데이터를 암호화합니다."""
-        try:
-            fernet = Fernet(self.encryption_key.encode())
-            encrypted_data = fernet.encrypt(data.encode())
-            return encrypted_data.decode()
-        except Exception as e:
-            raise ConfigurationError(f"데이터 암호화 실패: {str(e)}")
-
-    def decrypt_data(self, encrypted_data: str) -> str:
-        """암호화된 데이터를 복호화합니다."""
-        try:
-            fernet = Fernet(self.encryption_key.encode())
-            decrypted_data = fernet.decrypt(encrypted_data.encode())
-            return decrypted_data.decode()
-        except Exception as e:
-            raise ConfigurationError(f"데이터 복호화 실패: {str(e)}")
-
     # Mail Processor 설정
     @property
     def max_keywords_per_mail(self) -> int:

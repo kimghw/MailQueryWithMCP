@@ -953,8 +953,9 @@ class UnifiedMCPServer:
                 crypto = AccountCryptoHelpers()
 
                 if existing_token:
-                    # Reuse existing token
-                    access_token = existing_token[0]
+                    # Reuse existing token (decrypt it first)
+                    encrypted_access_token = existing_token[0]
+                    access_token = crypto.account_decrypt_sensitive_data(encrypted_access_token)
                     refresh_token = secrets.token_urlsafe(32)  # Generate new refresh token
                     logger.info(f"♻️ Reusing existing Bearer token for client: {client_id}, user: {azure_object_id}")
                 else:
@@ -963,7 +964,7 @@ class UnifiedMCPServer:
                     refresh_token = secrets.token_urlsafe(32)
                     azure_token_expiry = utc_now() + timedelta(seconds=expires_in)
 
-                    # Store new access token (without encryption for Bearer token comparison)
+                    # Store new access token (encrypted for security)
                     dcr_service._execute_query(
                         """
                         INSERT INTO dcr_tokens (
@@ -971,7 +972,7 @@ class UnifiedMCPServer:
                         ) VALUES (?, ?, 'Bearer', ?, ?, 'active')
                         """,
                         (
-                            access_token,  # Store plaintext for Bearer token validation
+                            crypto.account_encrypt_sensitive_data(access_token),  # Store encrypted for security
                             client_id,
                             azure_object_id,
                             azure_token_expiry,
@@ -997,7 +998,7 @@ class UnifiedMCPServer:
                     ) VALUES (?, ?, 'refresh', ?, ?, 'active')
                     """,
                     (
-                        refresh_token,  # Store plaintext for consistency
+                        crypto.account_encrypt_sensitive_data(refresh_token),  # Store encrypted for security
                         client_id,
                         azure_object_id,
                         refresh_token_expiry,
