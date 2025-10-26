@@ -153,6 +153,9 @@ class TokenService:
                     f"새 계정 생성: user_id={user_id}, account_id={account_id}, status=INACTIVE"
                 )
 
+            # WAL 체크포인트 실행하여 메인 DB 파일 생성 보장
+            self.db.checkpoint()
+
             return account_id
 
         except Exception as e:

@@ -59,6 +59,9 @@ class DatabaseManager:
                         # 스키마 초기화
                         self._initialize_schema()
 
+                        # WAL 체크포인트 실행 (메인 DB 파일 생성 보장)
+                        self.checkpoint()
+
                     except sqlite3.Error as e:
                         raise ConnectionError(
                             f"데이터베이스 연결 실패: {str(e)}",
@@ -372,11 +375,26 @@ class DatabaseManager:
                 details={"where_clause": where_clause},
             ) from e
 
+    def checkpoint(self) -> None:
+        """WAL 모드에서 체크포인트를 실행하여 변경사항을 메인 DB 파일에 반영"""
+        try:
+            connection = self._get_connection()
+            # TRUNCATE 모드로 체크포인트 실행 (WAL 파일 초기화)
+            connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            logger.debug("WAL 체크포인트 실행 완료")
+        except sqlite3.Error as e:
+            logger.warning(f"WAL 체크포인트 실행 중 오류 (무시됨): {str(e)}")
+
     def close(self) -> None:
         """데이터베이스 연결을 종료합니다."""
         if self._connection:
             with self._lock:
                 if self._connection:
+                    # 종료 전 체크포인트 실행
+                    try:
+                        self._connection.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+                    except:
+                        pass  # 체크포인트 실패 무시
                     self._connection.close()
                     self._connection = None
                     logger.info("데이터베이스 연결 종료됨")

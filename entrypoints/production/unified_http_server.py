@@ -569,7 +569,19 @@ class UnifiedMCPServer:
                 params = dict(request.query_params)
                 client_id = params.get("client_id")
                 redirect_uri = params.get("redirect_uri")
-                scope = params.get("scope", "Mail.Read User.Read")
+                # DCR_OAUTH_SCOPE 환경변수 사용, offline_access 포함 보장
+                default_scope = os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite")
+                requested_scope = params.get("scope", "")
+
+                # offline_access가 없으면 추가
+                if requested_scope and "offline_access" not in requested_scope:
+                    scope = f"offline_access {requested_scope}"
+                elif requested_scope:
+                    scope = requested_scope
+                else:
+                    scope = default_scope
+
+                logger.info(f"📋 OAuth scope: {scope}")
                 state = params.get("state")
                 response_type = params.get("response_type", "code")
                 # PKCE parameters (RFC 7636)
@@ -1153,7 +1165,7 @@ class UnifiedMCPServer:
                         "code": azure_code,
                         "redirect_uri": client.get("azure_redirect_uri"),
                         "grant_type": "authorization_code",
-                        "scope": scope or "https://graph.microsoft.com/.default"
+                        "scope": scope or os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite")
                     }
 
                     response = await http_client.post(token_url, data=token_data)
@@ -1250,6 +1262,21 @@ class UnifiedMCPServer:
                     ),
                 )
                 logger.info(f"✅ Azure token saved for object_id: {azure_object_id}, user: {user_email}")
+
+                # graphapi.db의 accounts 테이블과 동기화 (환경변수로 제어)
+                enable_account_sync = os.getenv("ENABLE_DCR_ACCOUNT_SYNC", "true").lower() == "true"
+                if enable_account_sync:
+                    logger.info(f"🔄 Syncing account to graphapi.db (ENABLE_DCR_ACCOUNT_SYNC=true)")
+                    dcr_service._sync_with_accounts_table(
+                        azure_object_id=azure_object_id,
+                        user_email=user_email,
+                        user_name=user_name,
+                        encrypted_access_token=crypto.account_encrypt_sensitive_data(azure_token_data.get("access_token")),
+                        encrypted_refresh_token=crypto.account_encrypt_sensitive_data(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token") else None,
+                        azure_expires_at=azure_expiry
+                    )
+                else:
+                    logger.info(f"⏭️  Skipping account sync to graphapi.db (ENABLE_DCR_ACCOUNT_SYNC=false)")
 
                 # authorization code에 azure_object_id 업데이트 (토큰 교환 시 사용)
                 if azure_object_id:

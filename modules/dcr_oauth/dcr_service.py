@@ -614,7 +614,7 @@ class DCRService:
                 logger.warning(f"User email missing, cannot sync to accounts table")
                 return
 
-            # graphapi.db 연결
+            # graphapi.db 연결 (get_database_manager가 자동으로 DB와 테이블 생성)
             db_manager = get_database_manager()
 
             # user_id는 이메일의 로컬 파트 사용 (예: kimghw@krs.co.kr -> kimghw)
