@@ -54,10 +54,12 @@ def get_default_user_id() -> Optional[str]:
         valid_accounts = []
 
         for row in rows:
-            user_id = row['user_id']
-            token_expiry = row['token_expiry']
-            access_token = row['access_token']
-            last_used_at = row.get('last_used_at')
+            # Convert sqlite3.Row to dict for .get() method
+            row_dict = dict(row)
+            user_id = row_dict['user_id']
+            token_expiry = row_dict['token_expiry']
+            access_token = row_dict['access_token']
+            last_used_at = row_dict.get('last_used_at')
 
             # access_token과 token_expiry가 모두 있고, 만료되지 않은 경우
             if access_token and token_expiry:

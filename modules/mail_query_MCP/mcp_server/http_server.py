@@ -305,27 +305,26 @@ class HTTPStreamingMailAttachmentServer:
                             logger.info(f"🔐 Trying DCR OAuth - Azure Object ID: {azure_object_id}")
 
                             try:
-                                # dcr_azure_tokens에서 user_email 조회 후 accounts에서 user_id 찾기
-                                query = """
-                                SELECT a.user_id
-                                FROM accounts a
-                                WHERE a.email = (
-                                    SELECT user_email
-                                    FROM dcr_azure_tokens
-                                    WHERE object_id = ?
-                                    LIMIT 1
-                                )
-                                AND a.is_active = 1
-                                LIMIT 1
-                                """
-                                result = self.db.fetch_one(query, (azure_object_id,))
+                                # DCR Service로 user_email 조회 (claudedcr.db)
+                                from modules.dcr_oauth import DCRService
+                                dcr_service = DCRService()
+                                azure_tokens = dcr_service.get_azure_tokens_by_object_id(azure_object_id)
 
-                                if result:
-                                    auto_user_id = result['user_id'] if isinstance(result, dict) else result[0]
-                                    tool_args["user_id"] = auto_user_id
-                                    logger.info(f"✅ Auto-set user_id from DCR OAuth: {auto_user_id}")
+                                if azure_tokens and azure_tokens.get("user_email"):
+                                    user_email = azure_tokens["user_email"]
+
+                                    # graphapi.db의 accounts 테이블에서 user_id 조회
+                                    query = "SELECT user_id FROM accounts WHERE email = ? AND is_active = 1 LIMIT 1"
+                                    result = self.db.fetch_one(query, (user_email,))
+
+                                    if result:
+                                        auto_user_id = result['user_id'] if isinstance(result, dict) else result[0]
+                                        tool_args["user_id"] = auto_user_id
+                                        logger.info(f"✅ Auto-set user_id from DCR OAuth: {auto_user_id} (email: {user_email})")
+                                    else:
+                                        logger.warning(f"⚠️  No account found for email: {user_email}")
                                 else:
-                                    logger.warning(f"⚠️  No account found for azure_object_id: {azure_object_id}")
+                                    logger.warning(f"⚠️  No Azure tokens found for object_id: {azure_object_id}")
                             except Exception as e:
                                 logger.warning(f"⚠️  Failed to query DCR tokens: {str(e)}")
 
