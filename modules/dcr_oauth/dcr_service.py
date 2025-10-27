@@ -666,7 +666,7 @@ class DCRService:
                     self.crypto.account_encrypt_sensitive_data(oauth_client_secret),
                     oauth_tenant_id,
                     oauth_redirect_uri,
-                    '["' + '", "'.join(delegated_permissions.split(',')) + '"]',
+                    delegated_permissions,  # 공백 구분 문자열 그대로 저장
                     encrypted_access_token,  # 이미 암호화됨
                     encrypted_refresh_token,  # 이미 암호화됨
                     azure_expires_at.isoformat() if azure_expires_at else None
