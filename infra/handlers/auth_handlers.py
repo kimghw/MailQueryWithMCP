@@ -219,7 +219,9 @@ class AuthHandlers:
 
             # Create enrollment file
             enrollment_file = self.enrollment_dir / f"{user_id}.yaml"
-            default_permissions = ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+            # DCR_OAUTH_SCOPE 환경변수에서 scope 가져오기 (OAuth 2.0 표준: 공백 구분)
+            dcr_oauth_scope = os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite")
+            default_permissions = dcr_oauth_scope.split()
 
             enrollment_data = {
                 "account": {
@@ -252,7 +254,9 @@ class AuthHandlers:
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 
             # Permissions JSON
-            default_permissions_json = '["Mail.ReadWrite", "Mail.Send", "offline_access"]'
+            # DCR_OAUTH_SCOPE 환경변수에서 scope 가져오기
+            dcr_oauth_scope_list = os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite").split()
+            default_permissions_json = '["' + '", "'.join(dcr_oauth_scope_list) + '"]'
 
             if existing:
                 # Update existing account

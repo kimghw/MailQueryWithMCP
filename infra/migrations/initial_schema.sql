@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS accounts (
     -- 메타데이터
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     last_sync_time TIMESTAMP,
+    last_used_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

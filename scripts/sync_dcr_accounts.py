@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import os
 import sqlite3
 from datetime import datetime, timezone
 from modules.enrollment.account import AccountCryptoHelpers
@@ -73,7 +74,10 @@ def sync_dcr_accounts():
                 'oauth_client_secret': crypto.account_encrypt_sensitive_data(token['client_secret']),
                 'oauth_tenant_id': token['tenant_id'],
                 'oauth_redirect_uri': token['redirect_uri'],
-                'delegated_permissions': '["Mail.ReadWrite", "Mail.Send", "offline_access"]',
+                # DCR_OAUTH_SCOPE 환경변수에서 scope 가져오기
+                'delegated_permissions': '["' + '", "'.join(
+                    os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite").split()
+                ) + '"]',
                 'auth_type': 'Authorization Code Flow',
                 'access_token': token['access_token'],  # Already encrypted
                 'refresh_token': token['refresh_token'],  # Already encrypted

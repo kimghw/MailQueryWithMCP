@@ -635,7 +635,11 @@ class DCRService:
                 oauth_tenant_id = self.azure_tenant_id
                 oauth_redirect_uri = self.azure_redirect_uri
                 oauth_client_secret = self.azure_client_secret
-                delegated_permissions = "Mail.ReadWrite,Mail.Send,offline_access"
+
+                # DCR_OAUTH_SCOPE 환경변수에서 scope 가져오기 (OAuth 2.0 표준: 공백 구분)
+                dcr_oauth_scope = os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite")
+                # DB 저장용으로 쉼표 구분 형식으로 변환
+                delegated_permissions = ",".join(dcr_oauth_scope.split())
 
                 # 계정 생성 (이미 암호화된 토큰 그대로 복사)
                 db_manager.execute_query("""

@@ -1,6 +1,7 @@
 """Account and Authentication Tools for MCP Server"""
 
 import asyncio
+import os
 import yaml
 from datetime import datetime, timezone
 from pathlib import Path
@@ -81,7 +82,9 @@ class AccountManagementTool:
 
             # Create enrollment file first
             enrollment_file = self.enrollment_dir / f"{user_id}.yaml"
-            default_permissions = ["Mail.ReadWrite", "Mail.Send", "offline_access"]
+            # DCR_OAUTH_SCOPE 환경변수에서 scope 가져오기 (OAuth 2.0 표준: 공백 구분)
+            dcr_oauth_scope = os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite")
+            default_permissions = dcr_oauth_scope.split()
 
             enrollment_data = {
                 "account": {
@@ -114,7 +117,9 @@ class AccountManagementTool:
             encrypted_secret = crypto_helper.account_encrypt_sensitive_data(oauth_client_secret)
 
             # Convert permissions list to JSON string
-            default_permissions_json = '["Mail.ReadWrite", "Mail.Send", "offline_access"]'
+            # DCR_OAUTH_SCOPE 환경변수에서 scope 가져오기
+            dcr_oauth_scope_list = os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite").split()
+            default_permissions_json = '["' + '", "'.join(dcr_oauth_scope_list) + '"]'
 
             if existing:
                 # Update existing account with enrollment file path and permissions
@@ -201,13 +206,9 @@ start_authentication 툴로 OAuth 인증을 진행하세요."""
             import os
             default_redirect = "https://mailquerywithmcp.onrender.com/auth/callback" if os.getenv("RENDER") else "http://localhost:5000/auth/callback"
             oauth_redirect_uri = arguments.get("oauth_redirect_uri", default_redirect)
-            delegated_permissions = arguments.get("delegated_permissions", [
-                "Mail.ReadWrite",
-                "Mail.Send",
-                "offline_access",
-                "Files.ReadWrite.All",
-                "Sites.ReadWrite.All"
-            ])
+            # DCR_OAUTH_SCOPE 환경변수에서 기본 scope 가져오기
+            default_scope = os.getenv("DCR_OAUTH_SCOPE", "offline_access User.Read Mail.ReadWrite")
+            delegated_permissions = arguments.get("delegated_permissions", default_scope.split())
 
             # Validate all input data
             validation_data = {
