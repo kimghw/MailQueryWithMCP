@@ -38,10 +38,12 @@ from modules.teams_mcp.mcp_server.http_server import HTTPStreamingTeamsServer
 from modules.enrollment.auth import get_auth_orchestrator
 from modules.enrollment.auth.auth_callback_processor import AuthCallbackProcessor
 from infra.core.logger import get_logger
+from infra.core.config import get_config
 from infra.utils.datetime_utils import utc_now, parse_iso_to_utc
 from modules.dcr_oauth import DCRService
 
 logger = get_logger(__name__)
+config = get_config()
 
 
 class UnifiedMCPServer:
@@ -240,31 +242,31 @@ class UnifiedMCPServer:
                             "name": "Mail Query",
                             "path": "/mail-query",
                             "description": "Email attachment management and query",
-                            "scopes": ["Mail.Read", "Mail.ReadWrite", "User.Read"]
+                            "scopes": config.dcr_oauth_scopes
                         },
                         {
                             "name": "OneNote",
                             "path": "/onenote",
                             "description": "OneNote notebook and page management",
-                            "scopes": ["Notes.Read", "Notes.ReadWrite", "User.Read"]
+                            "scopes": config.dcr_oauth_scopes
                         },
                         {
                             "name": "OneDrive",
                             "path": "/onedrive",
                             "description": "OneDrive file management",
-                            "scopes": ["Files.Read", "Files.ReadWrite", "User.Read"]
+                            "scopes": config.dcr_oauth_scopes
                         },
                         {
                             "name": "Teams",
                             "path": "/teams",
                             "description": "Microsoft Teams chat service",
-                            "scopes": ["Chat.Read", "Chat.ReadWrite", "User.Read"]
+                            "scopes": config.dcr_oauth_scopes
                         },
                         {
                             "name": "Enrollment",
                             "path": "/enrollment",
                             "description": "Account management and authentication",
-                            "scopes": ["User.Read"]
+                            "scopes": config.dcr_oauth_scopes
                         }
                     ],
                     "capabilities": {
@@ -350,7 +352,7 @@ class UnifiedMCPServer:
                     "response_types_supported": ["code"],
                     "grant_types_supported": ["authorization_code", "refresh_token"],
                     "token_endpoint_auth_methods_supported": ["client_secret_post", "client_secret_basic"],
-                    "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                    "scopes_supported": config.dcr_oauth_scopes,
                     "code_challenge_methods_supported": ["S256", "plain"],
                     "pkce_required": False,  # PKCE is optional but supported
                 },
@@ -393,7 +395,7 @@ class UnifiedMCPServer:
                         "authorization_endpoint": f"{base_url}/oauth/authorize",
                         "token_endpoint": f"{base_url}/oauth/token",
                         "registration_endpoint": f"{base_url}/oauth/register",
-                        "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                        "scopes_supported": config.dcr_oauth_scopes,
                         "grant_types_supported": ["authorization_code", "refresh_token"],
                         "code_challenge_methods_supported": ["S256"]
                     },
@@ -423,7 +425,7 @@ class UnifiedMCPServer:
                         "authorization_endpoint": f"{base_url}/oauth/authorize",
                         "token_endpoint": f"{base_url}/oauth/token",
                         "registration_endpoint": f"{base_url}/oauth/register",
-                        "scopes_supported": ["Mail.Read", "Mail.ReadWrite", "User.Read"],
+                        "scopes_supported": config.dcr_oauth_scopes,
                         "grant_types_supported": ["authorization_code", "refresh_token"],
                         "code_challenge_methods_supported": ["S256"]
                     },

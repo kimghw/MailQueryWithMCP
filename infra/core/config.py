@@ -159,6 +159,21 @@ class Config:
         scopes = os.getenv("AZURE_SCOPES", "User.Read Mail.Read offline_access")
         return [scope.strip() for scope in scopes.split()]
 
+    @property
+    def dcr_oauth_scope(self) -> str:
+        """DCR OAuth scope (공백으로 구분된 문자열)"""
+        return os.getenv(
+            "DCR_OAUTH_SCOPE",
+            "offline_access User.Read Mail.Read Mail.ReadWrite Mail.Send "
+            "Files.Read Files.ReadWrite Calendars.Read Calendars.ReadWrite "
+            "Chat.Read Chat.ReadWrite Notes.Read Notes.ReadWrite Notes.Create"
+        )
+
+    @property
+    def dcr_oauth_scopes(self) -> List[str]:
+        """DCR OAuth scope 리스트"""
+        return [scope.strip() for scope in self.dcr_oauth_scope.split() if scope.strip()]
+
     # OAuth 리다이렉트 설정
     @property
     def oauth_redirect_port(self) -> int:
