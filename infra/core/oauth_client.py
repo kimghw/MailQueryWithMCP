@@ -270,6 +270,7 @@ class OAuthClient:
         client_id: Optional[str] = None,
         client_secret: Optional[str] = None,
         tenant_id: Optional[str] = None,
+        scopes: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """
         리프레시 토큰을 사용하여 새로운 액세스 토큰을 발급받습니다.
@@ -280,10 +281,19 @@ class OAuthClient:
             client_id: 계정별 클라이언트 ID (선택사항)
             client_secret: 계정별 클라이언트 시크릿 (선택사항)
             tenant_id: 계정별 테넌트 ID (선택사항)
+            scopes: 사용자별 권한 스코프 리스트 (선택사항)
 
         Returns:
             새로운 토큰 정보 딕셔너리
         """
+        # 스코프 결정: 사용자별 스코프가 제공되면 사용, 없으면 기본값 사용
+        if scopes:
+            scope_string = " ".join(scopes)
+            logger.info(f"사용자별 스코프 사용: {scope_string}")
+        else:
+            scope_string = " ".join(self.config.azure_scopes)
+            logger.info(f"기본 스코프 사용: {scope_string}")
+
         # 계정별 설정이 제공된 경우 사용, 없으면 공통 설정 사용
         if client_id and client_secret:
             # 계정별 설정으로 토큰 갱신
@@ -295,11 +305,11 @@ class OAuthClient:
                 "client_secret": client_secret,
                 "refresh_token": refresh_token,
                 "grant_type": "refresh_token",
-                "scope": " ".join(self.config.azure_scopes),
+                "scope": scope_string,
             }
 
             logger.info(
-                f"계정별 설정으로 토큰 갱신: client_id={client_id[:8]}..., tenant_id={tenant_id}"
+                f"계정별 설정으로 토큰 갱신: client_id={client_id[:8]}..., tenant_id={tenant_id}, scopes={scopes}"
             )
         else:
             # 공통 설정으로 토큰 갱신 (기존 방식)
@@ -313,7 +323,7 @@ class OAuthClient:
                 "client_secret": self.config.azure_client_secret,
                 "refresh_token": refresh_token,
                 "grant_type": "refresh_token",
-                "scope": " ".join(self.config.azure_scopes),
+                "scope": scope_string,
             }
 
             logger.info("공통 설정으로 토큰 갱신")

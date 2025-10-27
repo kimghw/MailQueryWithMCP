@@ -7,7 +7,7 @@
       "enabled": true,
       "tool": "teams_list_chats",
       "arguments": {
-        "user_id": "kimghw"
+        "user_id": "ejlee"
       },
       "expect": {
         "contains": [
@@ -23,7 +23,7 @@
       "enabled": true,
       "tool": "teams_get_chat_messages",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "chat_id": "48:notes",
         "limit": 10
       },
@@ -38,7 +38,7 @@
       "enabled": true,
       "tool": "teams_get_chat_messages",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "chat_id": "48:notes",
         "limit": 50
       },
@@ -53,7 +53,7 @@
       "enabled": true,
       "tool": "teams_send_chat_message",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "chat_id": "48:notes",
         "content": "Hello from JSON-RPC test!",
         "prefix": "[claude]"
@@ -70,7 +70,7 @@
       "enabled": true,
       "tool": "teams_send_chat_message",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "chat_id": "48:notes",
         "content": "Test message with custom prefix",
         "prefix": "[test]"

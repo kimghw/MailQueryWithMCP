@@ -47,11 +47,11 @@ class AuthHandlers:
                     "properties": {
                         "user_id": {
                             "type": "string",
-                            "description": "User ID (e.g., 'kimghw')"
+                            "description": "User ID (e.g., 'ejlee', 'yhjoe', 'kimghw')"
                         },
                         "email": {
                             "type": "string",
-                            "description": "Email address (e.g., 'kimghw@krs.co.kr')"
+                            "description": "Email address (e.g., 'ejlee@company.com', 'yhjoe@krs.co.kr')"
                         },
                         "user_name": {
                             "type": "string",

@@ -177,13 +177,13 @@ class TokenService:
             유효한 액세스 토큰 또는 None
         """
         try:
-            # 계정 정보 조회 (OAuth 설정 포함)
+            # 계정 정보 조회 (OAuth 설정 및 delegated_permissions 포함)
             account = self.db.fetch_one(
                 """
-                SELECT id, user_id, user_name, access_token, refresh_token, 
-                       token_expiry, is_active, status, oauth_client_id, 
-                       oauth_client_secret, oauth_tenant_id
-                FROM accounts 
+                SELECT id, user_id, user_name, access_token, refresh_token,
+                       token_expiry, is_active, status, oauth_client_id,
+                       oauth_client_secret, oauth_tenant_id, delegated_permissions
+                FROM accounts
                 WHERE user_id = ? AND is_active = 1
                 """,
                 (user_id,),
@@ -250,12 +250,24 @@ class TokenService:
                 await self.update_account_status(user_id, "REAUTH_REQUIRED")
                 return None
 
+            # 사용자별 delegated_permissions 파싱
+            delegated_permissions = account.get("delegated_permissions")
+            user_scopes = None
+            if delegated_permissions:
+                # _scope_validator 모듈의 parse_scopes_from_storage 함수 사용
+                from modules.enrollment.account._scope_validator import parse_scopes_from_storage
+                user_scopes = parse_scopes_from_storage(delegated_permissions)
+                logger.info(f"사용자별 delegated_permissions 사용: user_id={user_id}, scopes={user_scopes}")
+            else:
+                logger.info(f"사용자별 delegated_permissions 없음, 기본값 사용: user_id={user_id}")
+
             logger.info(f"계정별 설정으로 토큰 갱신 시도: user_id={user_id}")
             new_token_info = await self.oauth_client.refresh_access_token(
                 refresh_token,
                 client_id=oauth_client_id,
                 client_secret=decrypted_secret,
                 tenant_id=oauth_tenant_id,
+                scopes=user_scopes,
             )
 
             # 갱신된 토큰 저장
@@ -356,9 +368,9 @@ class TokenService:
         try:
             account = self.db.fetch_one(
                 """
-                SELECT refresh_token, user_name, oauth_client_id, 
-                       oauth_client_secret, oauth_tenant_id
-                FROM accounts 
+                SELECT refresh_token, user_name, oauth_client_id,
+                       oauth_client_secret, oauth_tenant_id, delegated_permissions
+                FROM accounts
                 WHERE user_id = ? AND is_active = 1
                 """,
                 (user_id,),
@@ -388,12 +400,23 @@ class TokenService:
                     )
                     raise AuthenticationError("OAuth 설정 복호화에 실패했습니다.")
 
+                # 사용자별 delegated_permissions 파싱
+                delegated_permissions = account.get("delegated_permissions")
+                user_scopes = None
+                if delegated_permissions:
+                    from modules.enrollment.account._scope_validator import parse_scopes_from_storage
+                    user_scopes = parse_scopes_from_storage(delegated_permissions)
+                    logger.info(f"사용자별 delegated_permissions 사용: user_id={user_id}, scopes={user_scopes}")
+                else:
+                    logger.info(f"사용자별 delegated_permissions 없음, 기본값 사용: user_id={user_id}")
+
                 logger.info(f"계정별 설정으로 강제 토큰 갱신: user_id={user_id}")
                 new_token_info = await self.oauth_client.refresh_access_token(
                     refresh_token,
                     client_id=oauth_client_id,
                     client_secret=decrypted_secret,
                     tenant_id=oauth_tenant_id,
+                    scopes=user_scopes,
                 )
             else:
                 # 공통 설정 사용
@@ -698,12 +721,13 @@ class TokenService:
             인증 상태 정보
         """
         try:
-            # 계정 정보 조회 (OAuth 설정 포함)
+            # 계정 정보 조회 (OAuth 설정 및 delegated_permissions 포함)
             account = self.db.fetch_one(
                 """
-                SELECT id, user_id, user_name, access_token, refresh_token, token_expiry, 
-                       status, is_active, created_at, oauth_client_id, oauth_client_secret, oauth_tenant_id
-                FROM accounts 
+                SELECT id, user_id, user_name, access_token, refresh_token, token_expiry,
+                       status, is_active, created_at, oauth_client_id, oauth_client_secret,
+                       oauth_tenant_id, delegated_permissions
+                FROM accounts
                 WHERE user_id = ?
                 """,
                 (user_id,),
@@ -827,6 +851,16 @@ class TokenService:
                         "message": "OAuth 설정 복호화에 실패했습니다. 재인증이 필요합니다.",
                     }
 
+                # 사용자별 delegated_permissions 파싱
+                delegated_permissions = account.get("delegated_permissions")
+                user_scopes = None
+                if delegated_permissions:
+                    from modules.enrollment.account._scope_validator import parse_scopes_from_storage
+                    user_scopes = parse_scopes_from_storage(delegated_permissions)
+                    logger.info(f"사용자별 delegated_permissions 사용: user_id={user_id}, scopes={user_scopes}")
+                else:
+                    logger.info(f"사용자별 delegated_permissions 없음, 기본값 사용: user_id={user_id}")
+
                 # 계정별 설정으로 토큰 갱신
                 logger.info(f"계정별 OAuth 설정으로 토큰 갱신 시도: user_id={user_id}")
                 new_token_info = await self.oauth_client.refresh_access_token(
@@ -834,6 +868,7 @@ class TokenService:
                     client_id=oauth_client_id,
                     client_secret=decrypted_secret,
                     tenant_id=oauth_tenant_id,
+                    scopes=user_scopes,
                 )
 
                 # refresh_token이 유효한 경우 - 상태를 ACTIVE로 업데이트

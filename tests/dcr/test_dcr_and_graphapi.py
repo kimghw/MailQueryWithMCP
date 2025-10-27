@@ -37,7 +37,7 @@ async def test_dcr_tokens():
         WHERE user_email = ?
         ORDER BY created_at DESC
         LIMIT 1
-    """, (os.getenv("AUTO_REGISTER_EMAIL", "kimghw@krs.co.kr"),))
+    """, (os.getenv("AUTO_REGISTER_EMAIL", "testuser@example.com"),))
 
     result = cursor.fetchone()
     conn.close()
@@ -74,7 +74,7 @@ async def test_accounts_table():
     db_manager = get_database_manager()
     crypto = AccountCryptoHelpers()
 
-    user_id = os.getenv("AUTO_REGISTER_USER_ID", "kimghw")
+    user_id = os.getenv("AUTO_REGISTER_USER_ID", "testuser")
 
     account = db_manager.fetch_one("""
         SELECT user_id, email, access_token, refresh_token, token_expiry,
@@ -129,7 +129,7 @@ async def test_graphapi_call():
         import requests
 
         # 사용자 ID 설정
-        user_id = os.getenv("AUTO_REGISTER_USER_ID", "kimghw")
+        user_id = os.getenv("AUTO_REGISTER_USER_ID", "testuser")
 
         print(f"테스트 사용자: {user_id}")
 
@@ -276,7 +276,7 @@ async def test_sync_status():
             WHERE user_email = ?
             ORDER BY created_at DESC
             LIMIT 1
-        """, (os.getenv("AUTO_REGISTER_EMAIL", "kimghw@krs.co.kr"),))
+        """, (os.getenv("AUTO_REGISTER_EMAIL", "testuser@example.com"),))
 
         result = cursor.fetchone()
         if result:
@@ -299,7 +299,7 @@ async def test_sync_status():
         SELECT access_token, token_expiry
         FROM accounts
         WHERE user_id = ?
-    """, (os.getenv("AUTO_REGISTER_USER_ID", "kimghw"),))
+    """, (os.getenv("AUTO_REGISTER_USER_ID", "testuser"),))
 
     account_token_info = None
     if account and account[0]:

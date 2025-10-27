@@ -36,7 +36,7 @@ def test_token_encryption():
     crypto = AccountCryptoHelpers()
 
     # 1. accounts 테이블에서 토큰 조회
-    test_user_id = os.getenv("AUTO_REGISTER_USER_ID", "kimghw")
+    test_user_id = os.getenv("AUTO_REGISTER_USER_ID", "testuser")
 
     query = """
         SELECT user_id, email, access_token, refresh_token,

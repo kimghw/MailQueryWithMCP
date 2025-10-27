@@ -27,7 +27,7 @@
       "enabled": true,
       "tool": "query_email",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "use_recent_account": false,
         "days_back": 3,
         "max_mails": 300,
@@ -59,7 +59,7 @@
       "enabled": true,
       "tool": "query_email",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "use_recent_account": false,
         "days_back": 30,
         "max_mails": 300,
@@ -123,7 +123,7 @@
       "enabled": true,
       "tool": "query_email",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "use_recent_account": false,
         "days_back": 7,
         "max_mails": 300,
@@ -157,7 +157,7 @@
       "enabled": true,
       "tool": "attachmentManager",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "start_date": "2025-10-18",
         "end_date": "2025-10-20",
         "filename_keywords": ["pdf"],
@@ -177,7 +177,7 @@
       "enabled": true,
       "tool": "attachmentManager",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "start_date": "2025-10-01",
         "end_date": "2025-10-20",
         "filename_keywords": ["디지털트윈", "pdf", "xlsx"],
@@ -197,7 +197,7 @@
       "enabled": true,
       "tool": "attachmentManager",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "ejlee",
         "start_date": "2025-09-01",
         "end_date": "2025-10-18",
         "filename_keywords": ["운항설계영역"],

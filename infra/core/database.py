@@ -31,10 +31,28 @@ class DatabaseManager:
 
     def _get_connection(self) -> sqlite3.Connection:
         """데이터베이스 연결을 반환 (레이지 초기화)"""
+        # DB 파일이 삭제된 경우를 감지하여 재초기화
+        if self._connection is not None:
+            # 기존 연결이 있더라도 DB 파일이 없으면 재생성
+            db_path = Path(self.config.database_path)
+            if not db_path.exists():
+                logger.warning(f"데이터베이스 파일이 삭제됨. 재생성 시작: {db_path}")
+                # 기존 연결 종료
+                try:
+                    self._connection.close()
+                except:
+                    pass
+                self._connection = None
+                self._initialized = False  # 스키마 재초기화 필요
+
         if self._connection is None:
             with self._lock:
                 if self._connection is None:
                     try:
+                        # DB 디렉토리 생성 (없는 경우)
+                        db_path = Path(self.config.database_path)
+                        db_path.parent.mkdir(parents=True, exist_ok=True)
+
                         # SQLite 연결 생성
                         self._connection = sqlite3.connect(
                             self.config.database_path,
@@ -72,9 +90,8 @@ class DatabaseManager:
 
     def _initialize_schema(self) -> None:
         """데이터베이스 스키마를 초기화"""
-        if self._initialized:
-            return
-
+        # DB 파일이 새로 생성된 경우 무조건 스키마 초기화
+        # (self._initialized가 False이거나 accounts 테이블이 없는 경우)
         try:
             # 테이블 존재 여부 확인
             cursor = self._connection.cursor()

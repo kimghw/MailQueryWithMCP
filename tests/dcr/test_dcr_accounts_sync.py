@@ -104,7 +104,7 @@ def test_sync_simulation():
     dcr_service = DCRService()
 
     # 테스트용 더미 데이터 (UTC 기준)
-    test_email = os.getenv("AUTO_REGISTER_EMAIL", "kimghw@krs.co.kr")
+    test_email = os.getenv("AUTO_REGISTER_EMAIL", "testuser@example.com")
     test_user_name = os.getenv("AUTO_REGISTER_USER_NAME", "Kim Geohwa")
     test_access_token = "test_access_token_" + utc_now_iso()
     test_refresh_token = "test_refresh_token_" + utc_now_iso()

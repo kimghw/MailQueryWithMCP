@@ -103,7 +103,7 @@ class AttachmentFilterHandlers:
                     "properties": {
                         "user_id": {
                             "type": "string",
-                            "description": "User ID (e.g., 'kimghw')"
+                            "description": "User ID (e.g., 'ejlee', 'yhjoe', 'kimghw')"
                         },
                         "start_date": {
                             "type": "string",

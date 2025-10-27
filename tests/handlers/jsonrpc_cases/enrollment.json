@@ -60,7 +60,7 @@
       "enabled": true,
       "tool": "get_account_status",
       "arguments": {
-        "user_id": "kimghw"
+        "user_id": "yhjoe"
       },
       "expect": {
         "contains": [
@@ -73,7 +73,7 @@
       "enabled": true,
       "tool": "start_authentication",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "use_auto_select": false
       },
       "expect": {

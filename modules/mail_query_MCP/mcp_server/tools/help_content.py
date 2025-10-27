@@ -20,7 +20,7 @@ def get_query_email_help() -> str:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✅ 필수 파라미터 (4개):
-  • user_id: 조회할 사용자 ID (예: "kimghw")
+  • user_id: 조회할 사용자 ID (예: "ejlee", "yhjoe", "kimghw")
   • start_date: 시작 날짜 (YYYY-MM-DD 형식)
   • end_date: 종료 날짜 (YYYY-MM-DD 형식)
   • include_body: 본문 포함 여부 (true/false)
@@ -30,7 +30,7 @@ def get_query_email_help() -> str:
 
 📝 예제 1: 최소한의 파라미터로 조회 (본문 포함)
 {
-  "user_id": "kimghw",
+  "user_id": "ejlee",
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
   "include_body": true,
@@ -49,7 +49,7 @@ def get_query_email_help() -> str:
 
 📝 예제 1-2: 최소한의 파라미터로 조회 (본문 제외)
 {
-  "user_id": "kimghw",
+  "user_id": "yhjoe",
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
   "include_body": false,
@@ -77,7 +77,7 @@ def get_query_email_help() -> str:
 
 📝 예제 2: 최근 7일간 최대 50개 메일 조회
 {
-  "user_id": "kimghw",
+  "user_id": "yhjoe",
   "include_body": true,
   "start_date": "2025-10-10",
   "end_date": "2025-10-17",
@@ -90,7 +90,7 @@ def get_query_email_help() -> str:
 
 📝 예제 3: days_back 사용 (start_date보다 낮은 우선순위)
 {
-  "user_id": "kimghw",
+  "user_id": "ejlee",
   "days_back": 7,
   "start_date": "2025-10-10",
   "end_date": "2025-10-17",
@@ -117,7 +117,7 @@ def get_query_email_help() -> str:
 
 📝 예제 4: 제목만 조회 (본문 제외)
 {
-  "user_id": "kimghw",
+  "user_id": "yhjoe",
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
   "include_body": false,
@@ -135,7 +135,7 @@ def get_query_email_help() -> str:
 
 📝 예제 5: 첨부파일 포함 전체 조회
 {
-  "user_id": "kimghw",
+  "user_id": "ejlee",
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
   "include_body": true,
@@ -169,7 +169,7 @@ def get_query_email_help() -> str:
 
 📝 예제 6: 특정 발신자의 메일만 조회
 {
-  "user_id": "kimghw",
+  "user_id": "yhjoe",
   "include_body": true,
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
@@ -186,7 +186,7 @@ def get_query_email_help() -> str:
 
 📝 예제 7: 특정 수신자에게 보낸 메일만 조회
 {
-  "user_id": "kimghw",
+  "user_id": "ejlee",
   "include_body": true,
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
@@ -221,7 +221,7 @@ def get_query_email_help() -> str:
 
 📝 예제 9: 제목 필터
 {
-  "user_id": "kimghw",
+  "user_id": "yhjoe",
   "include_body": true,
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
@@ -238,7 +238,7 @@ def get_query_email_help() -> str:
 
 📝 예제 10: 간단한 키워드 검색
 {
-  "user_id": "kimghw",
+  "user_id": "ejlee",
   "include_body": true,
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
@@ -273,7 +273,7 @@ def get_query_email_help() -> str:
 
 📝 예제 12: 고급 키워드 검색 (OR + NOT 조건)
 {
-  "user_id": "kimghw",
+  "user_id": "yhjoe",
   "include_body": true,
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
@@ -298,7 +298,7 @@ def get_query_email_help() -> str:
 
 📝 예제 13: 기본 옵션 + 조회 옵션 + 필터 조합
 {
-  "user_id": "kimghw",
+  "user_id": "ejlee",
   "start_date": "2025-10-01",
   "end_date": "2025-10-17",
   "max_mails": 100,
@@ -356,8 +356,8 @@ TOOL_HELP = {
         "usage": """
 기본 사용법:
   register_account(
-    user_id="kimghw",
-    email="kimghw@krs.co.kr",
+    user_id="ejlee",
+    email="ejlee@company.com",
     oauth_client_id="12345678-1234-1234-1234-123456789012",
     oauth_client_secret="your-secret-here",
     oauth_tenant_id="87654321-4321-4321-4321-210987654321"
@@ -379,14 +379,14 @@ TOOL_HELP = {
                 "type": "string",
                 "required": True,
                 "description": "사용자 ID (3-50자, 영숫자로 시작)",
-                "example": "kimghw",
+                "example": "yhjoe",
                 "validation": "3-50자, 영숫자/점/하이픈/언더스코어만 허용"
             },
             "email": {
                 "type": "string",
                 "required": True,
                 "description": "이메일 주소",
-                "example": "kimghw@krs.co.kr",
+                "example": "yhjoe@krs.co.kr",
                 "validation": "유효한 이메일 형식 (user@domain.com)"
             },
             "oauth_client_id": {

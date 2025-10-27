@@ -8,7 +8,7 @@
       "tool": "manage_sections_and_pages",
       "arguments": {
         "action": "create_section",
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "notebook_id": "1-test-notebook",
         "section_name": "Test Section",
         "section_id": "",
@@ -24,7 +24,7 @@
       "tool": "manage_sections_and_pages",
       "arguments": {
         "action": "list_sections",
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "notebook_id": "",
         "section_name": "",
         "section_id": "",
@@ -40,7 +40,7 @@
       "tool": "manage_sections_and_pages",
       "arguments": {
         "action": "list_pages",
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "notebook_id": "",
         "section_name": "",
         "section_id": "1-test-section",
@@ -56,7 +56,7 @@
       "tool": "manage_page_content",
       "arguments": {
         "action": "get",
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "page_id": "1-your-page-id",
         "section_id": "",
         "title": "",
@@ -72,7 +72,7 @@
       "tool": "manage_page_content",
       "arguments": {
         "action": "create",
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "page_id": "",
         "section_id": "1-your-section-id",
         "title": "My Test Page",
@@ -88,7 +88,7 @@
       "tool": "manage_page_content",
       "arguments": {
         "action": "delete",
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "page_id": "1-your-page-id",
         "section_id": "",
         "title": "",
@@ -103,7 +103,7 @@
       "enabled": false,
       "tool": "edit_page",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "page_id": "1-your-page-id",
         "content": "<h1>Updated</h1><p>Content updated</p>"
       },
@@ -116,7 +116,7 @@
       "enabled": true,
       "tool": "db_onenote_update",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "section_id": "1-test-section",
         "section_name": "Test Section",
         "notebook_id": "1-test-notebook",
@@ -133,7 +133,7 @@
       "enabled": true,
       "tool": "db_onenote_update",
       "arguments": {
-        "user_id": "kimghw",
+        "user_id": "yhjoe",
         "section_id": "1-test-section",
         "section_name": "",
         "notebook_id": "",
