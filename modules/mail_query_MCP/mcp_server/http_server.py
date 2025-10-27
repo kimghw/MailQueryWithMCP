@@ -279,11 +279,66 @@ class HTTPStreamingMailAttachmentServer:
             # Call tool
             tool_name = params.get("name")
             tool_args = params.get("arguments", {})
-            
+
             logger.info(f"🔧 [MCP Server] Received tools/call request")
             logger.info(f"  • Tool: {tool_name}")
-            logger.info(f"  • Arguments: {json.dumps(tool_args, indent=2, ensure_ascii=False)}")
-            
+            logger.info(f"  • Arguments (before auto-extraction): {json.dumps(tool_args, indent=2, ensure_ascii=False)}")
+
+            # 📧 user_id 자동 설정 (null이면 accounts 테이블 → DCR 순서로 조회)
+            if not tool_args.get("user_id") and not tool_args.get("use_recent_account"):
+                logger.info("🔍 user_id not provided, attempting auto-detection...")
+
+                # 1순위: accounts 테이블에서 조회 (get_default_user_id)
+                try:
+                    from .handlers import get_default_user_id
+                    auto_user_id = get_default_user_id()
+
+                    if auto_user_id:
+                        tool_args["user_id"] = auto_user_id
+                        logger.info(f"✅ Auto-set user_id from accounts table: {auto_user_id}")
+                    else:
+                        logger.info("ℹ️  No active account found in accounts table")
+
+                        # 2순위: DCR OAuth에서 조회
+                        if hasattr(request.state, 'azure_object_id') and request.state.azure_object_id:
+                            azure_object_id = request.state.azure_object_id
+                            logger.info(f"🔐 Trying DCR OAuth - Azure Object ID: {azure_object_id}")
+
+                            try:
+                                # dcr_azure_tokens에서 user_email 조회 후 accounts에서 user_id 찾기
+                                query = """
+                                SELECT a.user_id
+                                FROM accounts a
+                                WHERE a.email = (
+                                    SELECT user_email
+                                    FROM dcr_azure_tokens
+                                    WHERE object_id = ?
+                                    LIMIT 1
+                                )
+                                AND a.is_active = 1
+                                LIMIT 1
+                                """
+                                result = self.db.fetch_one(query, (azure_object_id,))
+
+                                if result:
+                                    auto_user_id = result['user_id'] if isinstance(result, dict) else result[0]
+                                    tool_args["user_id"] = auto_user_id
+                                    logger.info(f"✅ Auto-set user_id from DCR OAuth: {auto_user_id}")
+                                else:
+                                    logger.warning(f"⚠️  No account found for azure_object_id: {azure_object_id}")
+                            except Exception as e:
+                                logger.warning(f"⚠️  Failed to query DCR tokens: {str(e)}")
+
+                except Exception as e:
+                    logger.warning(f"⚠️  Failed to auto-detect user_id: {str(e)}")
+            else:
+                if tool_args.get("user_id"):
+                    logger.info(f"ℹ️  user_id explicitly provided: {tool_args['user_id']}")
+                if tool_args.get("use_recent_account"):
+                    logger.info(f"ℹ️  use_recent_account=true, will use recent account logic")
+
+            logger.info(f"  • Arguments (after auto-extraction): {json.dumps(tool_args, indent=2, ensure_ascii=False)}")
+
             try:
                 results = await self.handlers.handle_call_tool(tool_name, tool_args)
                 

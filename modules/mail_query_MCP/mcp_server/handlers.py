@@ -166,7 +166,7 @@ class MCPHandlers(AttachmentFilterHandlers, CalendarHandlers):
                     "properties": {
                         "user_id": {
                             "type": "string",
-                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr). Required if use_recent_account is false.",
+                            "description": "User ID to query - email prefix without @domain (e.g., 'kimghw' for kimghw@krs.co.kr). IMPORTANT: This field is OPTIONAL and will be automatically detected from the authenticated user if not provided. Only explicitly provide this field when you want to query a DIFFERENT user's mailbox than the currently authenticated user.",
                         },
                         "use_recent_account": {
                             "type": "boolean",
