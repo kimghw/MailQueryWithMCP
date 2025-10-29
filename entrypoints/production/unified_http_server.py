@@ -804,10 +804,10 @@ class UnifiedMCPServer:
                             status_code=400,
                         )
 
-                    azure_object_id, _ = found_token
+                    azure_object_id, refresh_expires_at = found_token
                     logger.info(f"✅ Refresh token verified for object_id: {azure_object_id}")
 
-                    # Get Azure tokens
+                    # Get Azure tokens (조회만, 재발행 없음)
                     azure_tokens = dcr_service.get_azure_tokens_by_object_id(azure_object_id)
                     if not azure_tokens:
                         logger.error(f"❌ Azure token not found")
@@ -816,9 +816,8 @@ class UnifiedMCPServer:
                             status_code=400,
                         )
 
-                    # Generate new tokens
+                    # Generate new DCR access token
                     new_access_token = secrets.token_urlsafe(32)
-                    new_refresh_token = secrets.token_urlsafe(32)
                     expires_in = azure_tokens.get("expires_in", 3600)
                     token_expiry = utc_now() + timedelta(seconds=expires_in)
 
@@ -841,36 +840,17 @@ class UnifiedMCPServer:
                         (crypto.account_encrypt_sensitive_data(new_access_token), client_id, azure_object_id, token_expiry),
                     )
 
-                    # Delete existing refresh token for this client + object_id + token_type (prevent duplicates)
-                    dcr_service._execute_query(
-                        """
-                        DELETE FROM dcr_tokens
-                        WHERE dcr_client_id = ? AND azure_object_id = ? AND dcr_token_type = 'refresh' AND dcr_status = 'active'
-                        """,
-                        (client_id, azure_object_id),
-                    )
+                    # Reuse existing refresh token (이미 검증된 유효한 토큰 재사용)
+                    logger.info(f"♻️ Reusing existing refresh token (expires: {refresh_expires_at})")
 
-                    # Store new refresh token (30 days)
-                    refresh_expiry = utc_now() + timedelta(days=30)
-                    dcr_service._execute_query(
-                        """
-                        INSERT INTO dcr_tokens (
-                            dcr_token_value, dcr_client_id, dcr_token_type, azure_object_id, expires_at, dcr_status
-                        ) VALUES (?, ?, 'refresh', ?, ?, 'active')
-                        """,
-                        (crypto.account_encrypt_sensitive_data(new_refresh_token), client_id, azure_object_id, refresh_expiry),
-                    )
-
-                    logger.info(f"🗑️ Deleted old tokens for client: {client_id}")
-
-                    logger.info(f"✅ New tokens issued via refresh_token grant")
+                    logger.info(f"✅ New access token issued via refresh_token grant (refresh token reused)")
 
                     return JSONResponse(
                         {
                             "access_token": new_access_token,
                             "token_type": "Bearer",
                             "expires_in": expires_in,
-                            "refresh_token": new_refresh_token,
+                            "refresh_token": refresh_token_value,  # Reuse existing refresh token
                             "scope": azure_tokens.get("scope", ""),
                         },
                         headers={

@@ -1,0 +1,5 @@
+[x] dcr 서버에서 bearer 재발급 시 Azure의 refresh 토큰 재발행 요청 제거
+    - unified_http_server.py의 refresh_token grant 수정 완료
+    - DCR Bearer 토큰 재발급 시 Azure 토큰 정보 완전히 독립
+    - expires_in을 Azure에서 가져오지 않고 DCR 자체 설정(3600초) 사용
+    - scope만 dcr_azure_tokens에서 조회 (Azure API 호출 없음)

@@ -1,6 +1,0 @@
-# Reference 문서들 (외부 API 가이드라인으로 필요시에만 참조)
-/home/kimghw/IACSGRAPH/infra/references/
-uv.lock
-/home/kimghw/IACSGRAPH/script/ignore_script
-enrollment
-/home/kimghw/IACSGRAPH/modules/auth/references/graphapi_delegated_auth.md
