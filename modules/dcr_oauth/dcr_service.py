@@ -14,6 +14,14 @@ from typing import Dict, Optional, Any, Tuple
 from infra.core.database import get_database_manager
 from infra.core.logger import get_logger
 from modules.enrollment.account import AccountCryptoHelpers
+from . import db_utils
+from .azure_config import (
+    ensure_dcr_schema as _ensure_dcr_schema_helper,
+    load_azure_config as _load_azure_config_helper,
+    save_azure_config_to_db as _save_azure_config_helper,
+    revoke_active_dcr_tokens_on_config_change as _revoke_tokens_helper,
+)
+from .pkce import verify_pkce as _verify_pkce_helper
 
 logger = get_logger(__name__)
 
@@ -57,234 +65,33 @@ class DCRService:
         else:
             logger.warning("⚠️ DCR access allowed for ALL Azure users")
 
-    def _execute_query(self, query: str, params: tuple = ()):
-        """SQL 쿼리 실행 헬퍼"""
-        import sqlite3
-        conn = sqlite3.connect(self.db_path)
-        try:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            conn.commit()
-            return cursor.lastrowid
-        finally:
-            conn.close()
+    def _execute_query(self, query: str, params: tuple = ()): 
+        """SQL 쿼리 실행 헬퍼 (위임)"""
+        return db_utils.execute_query(self.db_path, query, params)
 
-    def _fetch_one(self, query: str, params: tuple = ()):
-        """단일 행 조회 헬퍼"""
-        import sqlite3
-        conn = sqlite3.connect(self.db_path)
-        try:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            return cursor.fetchone()
-        finally:
-            conn.close()
+    def _fetch_one(self, query: str, params: tuple = ()): 
+        """단일 행 조회 헬퍼 (위임)"""
+        return db_utils.fetch_one(self.db_path, query, params)
 
-    def _fetch_all(self, query: str, params: tuple = ()):
-        """여러 행 조회 헬퍼"""
-        import sqlite3
-        conn = sqlite3.connect(self.db_path)
-        try:
-            cursor = conn.cursor()
-            cursor.execute(query, params)
-            return cursor.fetchall()
-        finally:
-            conn.close()
+    def _fetch_all(self, query: str, params: tuple = ()): 
+        """여러 행 조회 헬퍼 (위임)"""
+        return db_utils.fetch_all(self.db_path, query, params)
 
     def _load_azure_config(self):
-        """dcr_azure_auth 테이블 또는 환경변수에서 Azure 설정 로드
-
-        동작 변경 사항:
-        - 서버 재시작 시, dcr_azure_auth 값이 있더라도 환경변수(DCR_*)가 설정되어 있으면 테이블 값을 최신 환경변수로 갱신
-        - dcr_azure_auth 값이 변경되면 dcr_tokens의 Bearer/refresh 토큰을 모두 revoke 처리하여 재인증 유도
-        """
-        # 1순위: dcr_azure_auth 테이블
-        query = "SELECT application_id, client_secret, tenant_id, redirect_uri FROM dcr_azure_auth LIMIT 1"
-        result = self._fetch_one(query)
-
-        # 환경변수(있을 경우)에 의한 오버라이드 후보값
-        env_app_id = os.getenv("DCR_AZURE_CLIENT_ID")
-        env_secret = os.getenv("DCR_AZURE_CLIENT_SECRET")
-        env_tenant = os.getenv("DCR_AZURE_TENANT_ID", "common")
-        env_redirect = os.getenv("DCR_OAUTH_REDIRECT_URI")
-
-        if result:
-            # 현재 DB 설정을 우선 로드
-            current_app_id = result[0]
-            current_secret = self.crypto.account_decrypt_sensitive_data(result[1]) if result[1] else None
-            current_tenant = result[2] or "common"
-            current_redirect = result[3]
-
-            self.azure_application_id = current_app_id
-            self.azure_client_secret = current_secret
-            self.azure_tenant_id = current_tenant
-            self.azure_redirect_uri = current_redirect
-
-            # 환경변수가 존재하면, DB 값과 비교하여 변경점이 있으면 업데이트 + 토큰 무효화
-            # 최소 조건: app_id와 secret이 모두 제공되어야 안전하게 갱신
-            if env_app_id and env_secret:
-                def _norm(v: Optional[str]) -> str:
-                    return (v or "").strip()
-
-                changes = []
-                if _norm(env_app_id) != _norm(current_app_id):
-                    changes.append("application_id")
-                if _norm(env_secret) != _norm(current_secret):
-                    changes.append("client_secret")
-                # tenant/redirect는 env가 제공될 때에만 비교/반영
-                if env_tenant is not None and _norm(env_tenant) != _norm(current_tenant):
-                    changes.append("tenant_id")
-                if env_redirect is not None and _norm(env_redirect) != _norm(current_redirect):
-                    changes.append("redirect_uri")
-
-                if changes:
-                    try:
-                        # 동적 UPDATE 쿼리 구성
-                        set_clauses = []
-                        params = []
-
-                        # application_id 변경 가능 (PK이지만 SQLite FK 미강제일 수 있음)
-                        set_clauses.append("application_id = ?")
-                        params.append(env_app_id)
-
-                        set_clauses.append("client_secret = ?")
-                        params.append(self.crypto.account_encrypt_sensitive_data(env_secret))
-
-                        # tenant_id, redirect_uri는 env가 있을 때만 반영
-                        if env_tenant is not None:
-                            set_clauses.append("tenant_id = ?")
-                            params.append(env_tenant)
-                        if env_redirect is not None:
-                            set_clauses.append("redirect_uri = ?")
-                            params.append(env_redirect)
-
-                        update_sql = f"UPDATE dcr_azure_auth SET {', '.join(set_clauses)} WHERE application_id = ?"
-                        params.append(current_app_id)
-                        self._execute_query(update_sql, tuple(params))
-
-                        # 인메모리 설정도 즉시 반영
-                        self.azure_application_id = env_app_id
-                        self.azure_client_secret = env_secret
-                        self.azure_tenant_id = env_tenant if env_tenant is not None else current_tenant
-                        self.azure_redirect_uri = env_redirect if env_redirect is not None else current_redirect
-
-                        # 토큰 무효화 (Bearer/refresh)
-                        self._revoke_active_dcr_tokens_on_config_change()
-                        logger.info(
-                            f"♻️ Updated dcr_azure_auth from environment and revoked active DCR tokens (changed: {', '.join(changes)})"
-                        )
-                    except Exception as e:
-                        logger.error(f"❌ Failed to update dcr_azure_auth from environment: {e}")
-                else:
-                    logger.info(f"✅ Loaded Azure config from dcr_azure_auth: {self.azure_application_id}")
-            else:
-                # 환경변수 미지정 시에는 DB 값 그대로 사용
-                logger.info(f"✅ Loaded Azure config from dcr_azure_auth: {self.azure_application_id}")
-        else:
-            # 2순위: 환경변수 (DCR_ 접두사만 사용). 없으면 경고만 출력
-            self.azure_application_id = env_app_id
-            self.azure_client_secret = env_secret
-            self.azure_tenant_id = env_tenant
-            self.azure_redirect_uri = env_redirect
-
-            if self.azure_application_id and self.azure_client_secret:
-                # 환경변수에서 읽은 경우 DB에 저장
-                logger.info(f"✅ Loaded Azure config from environment: {self.azure_application_id}")
-                self._save_azure_config_to_db()
-            else:
-                logger.warning("⚠️ No Azure config found. DCR will not work.")
+        """dcr_azure_auth 테이블 또는 환경변수에서 Azure 설정 로드 (위임)"""
+        _load_azure_config_helper(self)
 
     def _revoke_active_dcr_tokens_on_config_change(self):
-        """Azure 설정 변경 시 활성화된 DCR Bearer/refresh 토큰을 revoke 처리"""
-        try:
-            count_row = self._fetch_one(
-                """
-                SELECT COUNT(*) FROM dcr_tokens
-                WHERE dcr_status = 'active'
-                  AND dcr_token_type IN ('Bearer', 'refresh')
-                """
-            )
-            active_count = int(count_row[0]) if count_row and count_row[0] is not None else 0
-
-            self._execute_query(
-                """
-                UPDATE dcr_tokens
-                SET dcr_status = 'revoked'
-                WHERE dcr_status = 'active'
-                  AND dcr_token_type IN ('Bearer', 'refresh')
-                """
-            )
-            logger.info(f"🔒 Revoked {active_count} active DCR tokens due to Azure config change")
-        except Exception as e:
-            logger.error(f"❌ Failed to revoke DCR tokens on config change: {e}")
+        """Azure 설정 변경 시 활성화된 DCR Bearer/refresh 토큰을 revoke 처리 (위임)"""
+        _revoke_tokens_helper(self)
 
     def _ensure_dcr_schema(self):
-        """DCR V3 스키마 초기화"""
-        import sqlite3
-        from infra.core.config import get_config
-
-        try:
-            config = get_config()
-            conn = sqlite3.connect(config.dcr_database_path)
-
-            # 스키마 파일 읽기
-            schema_path = os.path.join(os.path.dirname(__file__), "migrations/dcr_schema_v3.sql")
-            with open(schema_path, 'r') as f:
-                schema_sql = f.read()
-
-            conn.executescript(schema_sql)
-            conn.commit()
-            conn.close()
-            logger.info("✅ DCR V3 schema initialized")
-        except Exception as e:
-            logger.error(f"❌ DCR V3 schema initialization failed: {e}")
-            raise
+        """DCR V3 스키마 초기화 (위임)"""
+        _ensure_dcr_schema_helper(self)
 
     def _save_azure_config_to_db(self):
-        """환경변수에서 읽은 Azure 설정을 DB에 저장"""
-        if not all([self.azure_application_id, self.azure_client_secret]):
-            return
-
-        try:
-            # 기존 데이터 확인
-            query = "SELECT application_id FROM dcr_azure_auth WHERE application_id = ?"
-            existing = self._fetch_one(query, (self.azure_application_id,))
-
-            if existing:
-                # 업데이트
-                update_query = """
-                UPDATE dcr_azure_auth
-                SET client_secret = ?, tenant_id = ?, redirect_uri = ?
-                WHERE application_id = ?
-                """
-                self._execute_query(
-                    update_query,
-                    (
-                        self.crypto.account_encrypt_sensitive_data(self.azure_client_secret),
-                        self.azure_tenant_id,
-                        self.azure_redirect_uri,
-                        self.azure_application_id,
-                    ),
-                )
-                logger.info(f"✅ Updated Azure config in dcr_azure_auth: {self.azure_application_id}")
-            else:
-                # 신규 삽입
-                insert_query = """
-                INSERT INTO dcr_azure_auth (application_id, client_secret, tenant_id, redirect_uri)
-                VALUES (?, ?, ?, ?)
-                """
-                self._execute_query(
-                    insert_query,
-                    (
-                        self.azure_application_id,
-                        self.crypto.account_encrypt_sensitive_data(self.azure_client_secret),
-                        self.azure_tenant_id,
-                        self.azure_redirect_uri,
-                    ),
-                )
-                logger.info(f"✅ Saved Azure config to dcr_azure_auth: {self.azure_application_id}")
-        except Exception as e:
-            logger.error(f"❌ Failed to save Azure config to DB: {e}")
+        """환경변수에서 읽은 Azure 설정을 DB에 저장 (위임)"""
+        _save_azure_config_helper(self)
 
     async def register_client(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
         """RFC 7591: 동적 클라이언트 등록 (통합 클라이언트 재사용)"""
@@ -799,12 +606,5 @@ class DCRService:
 
     # PKCE Helper Methods
     def _verify_pkce(self, code_verifier: str, code_challenge: str, method: str = "plain") -> bool:
-        """PKCE 검증"""
-        if method == "plain":
-            return secrets.compare_digest(code_verifier, code_challenge)
-        elif method == "S256":
-            digest = hashlib.sha256(code_verifier.encode('utf-8')).digest()
-            calculated_challenge = base64.urlsafe_b64encode(digest).decode('utf-8').rstrip('=')
-            return secrets.compare_digest(calculated_challenge, code_challenge)
-        else:
-            return False
+        """PKCE 검증 (위임)"""
+        return _verify_pkce_helper(code_verifier, code_challenge, method)
