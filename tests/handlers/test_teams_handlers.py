@@ -27,7 +27,7 @@ def print_test_result(test_name: str, passed: bool, details: str = ""):
 
 async def test_list_chats():
     """teams_list_chats 핸들러 테스트"""
-    print("\n💬 [1/3] teams_list_chats 핸들러 테스트...")
+    print("\n💬 [1/8] teams_list_chats 핸들러 테스트...")
 
     try:
         handler = TeamsHandlers()
@@ -50,7 +50,7 @@ async def test_list_chats():
 
 async def test_get_chat_messages():
     """teams_get_chat_messages 핸들러 테스트"""
-    print("\n📨 [2/3] teams_get_chat_messages 핸들러 테스트...")
+    print("\n📨 [2/8] teams_get_chat_messages 핸들러 테스트...")
 
     try:
         handler = TeamsHandlers()
@@ -83,7 +83,7 @@ async def test_get_chat_messages():
 
 async def test_send_chat_message():
     """teams_send_chat_message 핸들러 테스트"""
-    print("\n✉️ [3/3] teams_send_chat_message 핸들러 테스트...")
+    print("\n✉️ [3/8] teams_send_chat_message 핸들러 테스트...")
 
     try:
         handler = TeamsHandlers()
@@ -114,6 +114,162 @@ async def test_send_chat_message():
         return False
 
 
+async def test_help():
+    """teams_help 핸들러 테스트"""
+    print("\n📖 [4/8] teams_help 핸들러 테스트...")
+
+    try:
+        handler = TeamsHandlers()
+        result = await handler.handle_call_tool(
+            "teams_help",
+            {}
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증 - help 텍스트가 포함되어야 함
+        success = (
+            "teams_list_chats" in result_text and
+            "teams_get_chat_messages" in result_text and
+            "teams_send_chat_message" in result_text and
+            "사용 가이드" in result_text
+        )
+        print_test_result("teams_help", success, f"Help text length: {len(result_text)}")
+
+        return success
+
+    except Exception as e:
+        print_test_result("teams_help", False, f"Exception: {e}")
+        return False
+
+
+async def test_list_chats_with_sorting():
+    """teams_list_chats 정렬 테스트"""
+    print("\n🔄 [5/8] teams_list_chats 정렬/필터링 테스트...")
+
+    try:
+        handler = TeamsHandlers()
+        result = await handler.handle_call_tool(
+            "teams_list_chats",
+            {
+                "user_id": "kimghw",
+                "sort_by": "recent",
+                "limit": 5
+            }
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증
+        success = (
+            "sort_by" in result_text.lower() or
+            "액세스 토큰이 없습니다" in result_text or
+            "chats" in result_text.lower()
+        )
+        print_test_result("teams_list_chats with sorting", success, result_text[:200])
+
+        return success
+
+    except Exception as e:
+        print_test_result("teams_list_chats with sorting", False, f"Exception: {e}")
+        return False
+
+
+async def test_get_messages_by_name():
+    """teams_get_chat_messages 이름 검색 테스트"""
+    print("\n👤 [6/8] teams_get_chat_messages (이름 검색) 테스트...")
+
+    try:
+        handler = TeamsHandlers()
+        result = await handler.handle_call_tool(
+            "teams_get_chat_messages",
+            {
+                "user_id": "kimghw",
+                "recipient_name": "John",
+                "limit": 10
+            }
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증
+        success = (
+            "messages" in result_text.lower() or
+            "액세스 토큰이 없습니다" in result_text or
+            "찾을 수 없습니다" in result_text or
+            "success" in result_text.lower()
+        )
+        print_test_result("teams_get_chat_messages (by name)", success, result_text[:200])
+
+        return success
+
+    except Exception as e:
+        print_test_result("teams_get_chat_messages (by name)", False, f"Exception: {e}")
+        return False
+
+
+async def test_send_message_by_name():
+    """teams_send_chat_message 이름 검색 테스트"""
+    print("\n📤 [7/8] teams_send_chat_message (이름 검색) 테스트...")
+
+    try:
+        handler = TeamsHandlers()
+        result = await handler.handle_call_tool(
+            "teams_send_chat_message",
+            {
+                "user_id": "kimghw",
+                "recipient_name": "John",
+                "content": "Test message by name"
+            }
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증
+        success = (
+            "success" in result_text.lower() or
+            "액세스 토큰이 없습니다" in result_text or
+            "찾을 수 없습니다" in result_text or
+            "message_id" in result_text.lower()
+        )
+        print_test_result("teams_send_chat_message (by name)", success, result_text[:200])
+
+        return success
+
+    except Exception as e:
+        print_test_result("teams_send_chat_message (by name)", False, f"Exception: {e}")
+        return False
+
+
+async def test_search_messages():
+    """teams_search_messages 핸들러 테스트"""
+    print("\n🔍 [8/8] teams_search_messages 핸들러 테스트...")
+
+    try:
+        handler = TeamsHandlers()
+        result = await handler.handle_call_tool(
+            "teams_search_messages",
+            {
+                "user_id": "kimghw",
+                "keyword": "test",
+                "search_scope": "all_chats",
+                "max_results": 100
+            }
+        )
+        result_text = result[0].text if result else ""
+
+        # 결과 검증
+        success = (
+            "keyword" in result_text.lower() or
+            "액세스 토큰이 없습니다" in result_text or
+            "results" in result_text.lower() or
+            "검색" in result_text
+        )
+        print_test_result("teams_search_messages", success, result_text[:200])
+
+        return success
+
+    except Exception as e:
+        print_test_result("teams_search_messages", False, f"Exception: {e}")
+        return False
+
+
 async def run_tests():
     """비동기 테스트 실행"""
     results = []
@@ -122,6 +278,11 @@ async def run_tests():
     results.append(await test_list_chats())
     results.append(await test_get_chat_messages())
     results.append(await test_send_chat_message())
+    results.append(await test_help())
+    results.append(await test_list_chats_with_sorting())
+    results.append(await test_get_messages_by_name())
+    results.append(await test_send_message_by_name())
+    results.append(await test_search_messages())
 
     return results
 

@@ -108,6 +108,9 @@ class DatabaseManager:
                 self._initialized = True
                 logger.debug("기존 데이터베이스 스키마 확인됨")
 
+            # 추가 마이그레이션 실행 (teams_chats 테이블 등)
+            self._run_migrations()
+
         except sqlite3.Error as e:
             raise DatabaseError(
                 f"스키마 초기화 실패: {str(e)}", operation="initialize_schema"
@@ -141,6 +144,44 @@ class DatabaseManager:
             raise DatabaseError(
                 f"스키마 실행 실패: {str(e)}", operation="execute_schema"
             ) from e
+
+    def _run_migrations(self) -> None:
+        """추가 마이그레이션 스크립트를 실행 (멱등성 보장)"""
+        migrations_dir = Path(__file__).parent.parent / "migrations"
+
+        # 실행할 마이그레이션 파일 목록 (initial_schema.sql 제외)
+        migration_files = [
+            "teams_schema.sql",
+            # 향후 추가 마이그레이션 파일을 여기에 추가
+        ]
+
+        for migration_file in migration_files:
+            migration_path = migrations_dir / migration_file
+
+            # 파일이 없으면 건너뛰기
+            if not migration_path.exists():
+                logger.debug(f"마이그레이션 파일 없음 (건너뛰기): {migration_file}")
+                continue
+
+            try:
+                with open(migration_path, "r", encoding="utf-8") as f:
+                    migration_sql = f.read()
+
+                # 스크립트를 세미콜론으로 분리하여 각각 실행
+                statements = [
+                    stmt.strip() for stmt in migration_sql.split(";") if stmt.strip()
+                ]
+
+                for statement in statements:
+                    # CREATE TABLE IF NOT EXISTS 패턴이므로 멱등성 보장
+                    self._connection.execute(statement)
+
+                self._connection.commit()
+                logger.info(f"✅ 마이그레이션 완료: {migration_file} ({len(statements)}개 구문)")
+
+            except sqlite3.Error as e:
+                logger.error(f"❌ 마이그레이션 실패: {migration_file} - {str(e)}")
+                # 마이그레이션 실패는 로그만 남기고 계속 진행 (IF NOT EXISTS로 멱등성 보장)
 
     @contextmanager
     def get_cursor(self):

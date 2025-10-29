@@ -34,6 +34,189 @@ class TeamsHandlers:
         logger.info("✅ TeamsHandlers initialized")
 
     # ========================================================================
+    # Helper: Get help text
+    # ========================================================================
+
+    def _get_help_text(self) -> str:
+        """Teams MCP 도구 사용법 안내"""
+        return """
+# Teams MCP 도구 사용 가이드
+
+## 📋 사용 가능한 도구
+
+### 1. teams_list_chats
+**설명**: 사용자의 1:1 및 그룹 채팅 목록을 조회합니다.
+
+**파라미터**:
+- `user_id` (필수): 사용자 ID
+
+**예제**:
+```json
+{
+  "user_id": "user123"
+}
+```
+
+**응답 예시**:
+```json
+{
+  "success": true,
+  "chats": [
+    {
+      "id": "19:abc123...",
+      "chatType": "oneOnOne",
+      "topic": "John Doe",
+      "lastMessagePreview": "안녕하세요",
+      "lastUpdateDateTime": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+### 2. teams_get_chat_messages
+**설명**: 채팅의 메시지 목록을 조회합니다.
+
+**파라미터**:
+- `user_id` (필수): 사용자 ID
+- `chat_id` (선택): 채팅 ID (기본값: "48:notes" - 나의 Notes 채팅)
+- `limit` (선택): 조회할 메시지 수 (기본값: 50)
+
+**예제 1 - 특정 채팅 조회**:
+```json
+{
+  "user_id": "user123",
+  "chat_id": "19:abc123...",
+  "limit": 30
+}
+```
+
+**예제 2 - 나의 Notes 조회** (chat_id 생략):
+```json
+{
+  "user_id": "user123",
+  "limit": 20
+}
+```
+
+**응답 예시**:
+```json
+{
+  "success": true,
+  "messages": [
+    {
+      "id": "1234567890",
+      "from": {
+        "user": {
+          "displayName": "Jane Smith"
+        }
+      },
+      "body": {
+        "content": "회의 시간 확인 부탁드립니다."
+      },
+      "createdDateTime": "2025-01-15T10:30:00Z"
+    }
+  ],
+  "count": 1
+}
+```
+
+---
+
+### 3. teams_send_chat_message
+**설명**: 채팅에 메시지를 전송합니다.
+
+**파라미터**:
+- `user_id` (필수): 사용자 ID
+- `content` (필수): 메시지 내용
+- `chat_id` (선택): 채팅 ID (기본값: "48:notes" - 나의 Notes 채팅)
+- `prefix` (선택): 메시지 프리픽스 (기본값: "[claude]")
+
+**예제 1 - 특정 채팅에 전송**:
+```json
+{
+  "user_id": "user123",
+  "chat_id": "19:abc123...",
+  "content": "회의는 오후 2시입니다.",
+  "prefix": "[Bot]"
+}
+```
+
+**예제 2 - 나의 Notes에 메모** (chat_id 생략):
+```json
+{
+  "user_id": "user123",
+  "content": "오늘 할 일: 보고서 작성",
+  "prefix": ""
+}
+```
+
+**응답 예시**:
+```json
+{
+  "success": true,
+  "message_id": "1234567890",
+  "data": {
+    "id": "1234567890",
+    "createdDateTime": "2025-01-15T10:35:00Z"
+  }
+}
+```
+
+---
+
+## 🎯 주요 사용 시나리오
+
+### 시나리오 1: 특정 사용자와의 최근 대화 확인
+1. `teams_list_chats`로 채팅 목록 조회
+2. 목록에서 원하는 사용자의 `chat_id` 확인
+3. `teams_get_chat_messages`로 해당 채팅의 메시지 조회
+
+### 시나리오 2: 메시지 전송
+1. `teams_list_chats`로 채팅 목록 조회
+2. 목록에서 메시지를 보낼 채팅의 `chat_id` 확인
+3. `teams_send_chat_message`로 메시지 전송
+
+### 시나리오 3: 개인 메모 (Notes) 사용
+- `chat_id`를 생략하면 자동으로 나의 Notes(48:notes) 사용
+- 별도 채팅 조회 없이 바로 메모 작성 가능
+
+---
+
+## ⚠️ 주의사항
+
+1. **user_id 필수**: 모든 도구는 `user_id`가 필요합니다.
+2. **chat_id 형식**: Teams 채팅 ID는 보통 `19:` 또는 `48:`로 시작합니다.
+3. **Notes 채팅**: `48:notes`는 본인만 볼 수 있는 특수 채팅입니다.
+4. **메시지 제한**: `limit`은 최대 50개까지 권장됩니다.
+5. **권한 필요**: Chat.ReadWrite 권한이 필요합니다.
+
+---
+
+## 🔍 오류 처리
+
+**오류 응답 예시**:
+```json
+{
+  "success": false,
+  "message": "액세스 토큰이 없습니다",
+  "status_code": 401
+}
+```
+
+**일반적인 오류**:
+- `401 Unauthorized`: 토큰 만료 또는 권한 부족
+- `404 Not Found`: 잘못된 chat_id
+- `400 Bad Request`: 잘못된 파라미터
+
+---
+
+📌 **Tip**: 처음 사용 시 `teams_list_chats`로 사용 가능한 채팅 목록을 먼저 확인하세요!
+"""
+
+    # ========================================================================
     # MCP Protocol: list_tools
     # ========================================================================
 
@@ -44,14 +227,37 @@ class TeamsHandlers:
         # Define Teams Chat-specific tools (1:1 and group chats)
         teams_tools = [
             Tool(
+                name="teams_help",
+                description="Teams MCP 도구 사용법 및 예제를 안내합니다.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {},
+                    "required": []
+                }
+            ),
+            Tool(
                 name="teams_list_chats",
-                description="사용자의 1:1 및 그룹 채팅 목록을 조회합니다.",
+                description="사용자의 1:1 및 그룹 채팅 목록을 조회합니다. 정렬, 필터링, 개수 제한 가능.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "user_id": {
                             "type": "string",
                             "description": "사용자 ID"
+                        },
+                        "sort_by": {
+                            "type": "string",
+                            "description": "정렬 방식: 'recent' (최근순), 'name' (이름순), 'type' (타입순)",
+                            "enum": ["recent", "name", "type"],
+                            "default": "recent"
+                        },
+                        "limit": {
+                            "type": "integer",
+                            "description": "최대 조회 개수 (전체 조회: null 또는 생략)"
+                        },
+                        "filter_by_name": {
+                            "type": "string",
+                            "description": "이름으로 필터링 (부분 일치)"
                         }
                     },
                     "required": ["user_id"]
@@ -59,7 +265,7 @@ class TeamsHandlers:
             ),
             Tool(
                 name="teams_get_chat_messages",
-                description="채팅의 메시지 목록을 조회합니다. chat_id를 지정하지 않으면 본인의 Notes 채팅(48:notes)을 조회합니다.",
+                description="채팅의 메시지 목록을 조회합니다. chat_id, recipient_name 둘 다 없으면 최근 대화 또는 Notes(48:notes)를 조회합니다.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -69,8 +275,11 @@ class TeamsHandlers:
                         },
                         "chat_id": {
                             "type": "string",
-                            "description": "채팅 ID (기본값: 48:notes - 나의 Notes 채팅)",
-                            "default": "48:notes"
+                            "description": "채팅 ID (선택사항)"
+                        },
+                        "recipient_name": {
+                            "type": "string",
+                            "description": "상대방 이름 (chat_id가 없을 때 사용)"
                         },
                         "limit": {
                             "type": "integer",
@@ -83,7 +292,7 @@ class TeamsHandlers:
             ),
             Tool(
                 name="teams_send_chat_message",
-                description="채팅에 메시지를 전송합니다. chat_id를 지정하지 않으면 본인의 Notes 채팅(48:notes)으로 전송합니다.",
+                description="채팅에 메시지를 전송합니다. chat_id, recipient_name 둘 다 없으면 최근 대화 또는 Notes(48:notes)로 전송합니다.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -91,14 +300,17 @@ class TeamsHandlers:
                             "type": "string",
                             "description": "사용자 ID"
                         },
-                        "chat_id": {
-                            "type": "string",
-                            "description": "채팅 ID (기본값: 48:notes - 나의 Notes 채팅)",
-                            "default": "48:notes"
-                        },
                         "content": {
                             "type": "string",
                             "description": "메시지 내용"
+                        },
+                        "chat_id": {
+                            "type": "string",
+                            "description": "채팅 ID (선택사항)"
+                        },
+                        "recipient_name": {
+                            "type": "string",
+                            "description": "상대방 이름 (chat_id가 없을 때 사용)"
                         },
                         "prefix": {
                             "type": "string",
@@ -107,6 +319,44 @@ class TeamsHandlers:
                         }
                     },
                     "required": ["user_id", "content"]
+                }
+            ),
+            Tool(
+                name="teams_search_messages",
+                description="메시지를 키워드로 검색합니다. 특정 채팅방 또는 전체 채팅방 검색 가능.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {
+                            "type": "string",
+                            "description": "사용자 ID"
+                        },
+                        "keyword": {
+                            "type": "string",
+                            "description": "검색 키워드"
+                        },
+                        "search_scope": {
+                            "type": "string",
+                            "description": "검색 범위: 'current_chat' (특정 채팅) 또는 'all_chats' (전체)",
+                            "enum": ["current_chat", "all_chats"],
+                            "default": "all_chats"
+                        },
+                        "chat_id": {
+                            "type": "string",
+                            "description": "채팅 ID (search_scope='current_chat'일 때 필수)"
+                        },
+                        "page_size": {
+                            "type": "integer",
+                            "description": "페이지 크기 (기본 50)",
+                            "default": 50
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "최대 결과 수 (기본 500)",
+                            "default": 500
+                        }
+                    },
+                    "required": ["user_id", "keyword"]
                 }
             ),
         ]
@@ -125,10 +375,18 @@ class TeamsHandlers:
         logger.info(f"🔨 [MCP Handler] call_tool({name}) with args: {arguments}")
 
         try:
+            # Handle Teams Help
+            if name == "teams_help":
+                help_text = self._get_help_text()
+                return [TextContent(type="text", text=help_text)]
+
             # Handle Teams Chat-specific tools
-            if name == "teams_list_chats":
+            elif name == "teams_list_chats":
                 user_id = arguments.get("user_id")
-                result = await self.teams_handler.list_chats(user_id)
+                sort_by = arguments.get("sort_by", "recent")
+                limit = arguments.get("limit")
+                filter_by_name = arguments.get("filter_by_name")
+                result = await self.teams_handler.list_chats(user_id, sort_by, limit, filter_by_name)
 
                 # 사용자 친화적인 출력 포맷
                 if result.get("success") and result.get("chats"):
@@ -157,10 +415,11 @@ class TeamsHandlers:
 
             elif name == "teams_get_chat_messages":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id", "48:notes")
+                chat_id = arguments.get("chat_id")
+                recipient_name = arguments.get("recipient_name")
                 limit = arguments.get("limit", 50)
 
-                result = await self.teams_handler.get_chat_messages(user_id, chat_id, limit)
+                result = await self.teams_handler.get_chat_messages(user_id, chat_id, recipient_name, limit)
 
                 # 사용자 친화적인 출력 포맷
                 if result.get("success") and result.get("messages"):
@@ -187,11 +446,43 @@ class TeamsHandlers:
 
             elif name == "teams_send_chat_message":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id", "48:notes")
                 content = arguments.get("content")
+                chat_id = arguments.get("chat_id")
+                recipient_name = arguments.get("recipient_name")
                 prefix = arguments.get("prefix", "[claude]")
 
-                result = await self.teams_handler.send_chat_message(user_id, chat_id, content, prefix)
+                result = await self.teams_handler.send_chat_message(user_id, content, chat_id, recipient_name, prefix)
+                return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+
+            elif name == "teams_search_messages":
+                user_id = arguments.get("user_id")
+                keyword = arguments.get("keyword")
+                search_scope = arguments.get("search_scope", "all_chats")
+                chat_id = arguments.get("chat_id")
+                page_size = arguments.get("page_size", 50)
+                max_results = arguments.get("max_results", 500)
+
+                result = await self.teams_handler.search_messages(
+                    user_id, keyword, search_scope, chat_id, page_size, max_results
+                )
+
+                # 사용자 친화적인 출력 포맷
+                if result.get("success") and result.get("results"):
+                    results = result["results"]
+                    output_lines = [f"🔍 키워드 '{keyword}' 검색 결과: {len(results)}개\n"]
+                    for idx, item in enumerate(results[:20], 1):  # 처음 20개만 상세 출력
+                        output_lines.append(f"{idx}. [{item.get('created', '')}] {item.get('from', '')}")
+                        if search_scope == "all_chats":
+                            output_lines.append(f"   채팅: {item.get('chat_topic', '')}")
+                        output_lines.append(f"   내용: {item.get('content', '')}...")
+                        output_lines.append("")
+
+                    if len(results) > 20:
+                        output_lines.append(f"... 외 {len(results) - 20}개 결과 더 있음\n")
+
+                    formatted_output = "\n".join(output_lines) + "\n" + json.dumps(result, indent=2, ensure_ascii=False)
+                    return [TextContent(type="text", text=formatted_output)]
+
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             else:
@@ -224,22 +515,44 @@ class TeamsHandlers:
         HTTP API용 헬퍼: call_tool 결과를 dict로 반환
         """
         try:
-            if name == "teams_list_chats":
+            if name == "teams_help":
+                return {
+                    "success": True,
+                    "help_text": self._get_help_text()
+                }
+
+            elif name == "teams_list_chats":
                 user_id = arguments.get("user_id")
-                return await self.teams_handler.list_chats(user_id)
+                sort_by = arguments.get("sort_by", "recent")
+                limit = arguments.get("limit")
+                filter_by_name = arguments.get("filter_by_name")
+                return await self.teams_handler.list_chats(user_id, sort_by, limit, filter_by_name)
 
             elif name == "teams_get_chat_messages":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id", "48:notes")
+                chat_id = arguments.get("chat_id")
+                recipient_name = arguments.get("recipient_name")
                 limit = arguments.get("limit", 50)
-                return await self.teams_handler.get_chat_messages(user_id, chat_id, limit)
+                return await self.teams_handler.get_chat_messages(user_id, chat_id, recipient_name, limit)
 
             elif name == "teams_send_chat_message":
                 user_id = arguments.get("user_id")
-                chat_id = arguments.get("chat_id", "48:notes")
                 content = arguments.get("content")
+                chat_id = arguments.get("chat_id")
+                recipient_name = arguments.get("recipient_name")
                 prefix = arguments.get("prefix", "[claude]")
-                return await self.teams_handler.send_chat_message(user_id, chat_id, content, prefix)
+                return await self.teams_handler.send_chat_message(user_id, content, chat_id, recipient_name, prefix)
+
+            elif name == "teams_search_messages":
+                user_id = arguments.get("user_id")
+                keyword = arguments.get("keyword")
+                search_scope = arguments.get("search_scope", "all_chats")
+                chat_id = arguments.get("chat_id")
+                page_size = arguments.get("page_size", 50)
+                max_results = arguments.get("max_results", 500)
+                return await self.teams_handler.search_messages(
+                    user_id, keyword, search_scope, chat_id, page_size, max_results
+                )
 
             else:
                 raise ValueError(f"알 수 없는 도구: {name}")

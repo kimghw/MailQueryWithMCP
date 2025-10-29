@@ -1,13 +1,17 @@
 """
 Teams Graph API Handler
-Microsoft Graph API를 사용한 Teams 작업 처리
+Microsoft Graph API를 사용한 Teams 작업 처리 (통합 핸들러)
 """
 
-import httpx
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 from infra.core.logger import get_logger
-from infra.core.database import get_database_manager
 from infra.core.token_service import TokenService
+
+# 서브 모듈 import
+from .teams_db_manager import TeamsDBManager
+from .teams_chats import TeamsChats
+from .teams_messages import TeamsMessages
+from .teams_search import TeamsSearch
 
 logger = get_logger(__name__)
 
@@ -19,12 +23,17 @@ SPECIAL_CHAT_IDS = {
 
 
 class TeamsHandler:
-    """Teams Graph API 작업 처리 핸들러"""
+    """Teams Graph API 작업 처리 핸들러 (메인)"""
 
     def __init__(self):
-        self.db = get_database_manager()
         self.token_service = TokenService()
         self.graph_base_url = "https://graph.microsoft.com/v1.0"
+
+        # 서브 모듈 초기화
+        self.db_manager = TeamsDBManager()
+        self.chats_manager = TeamsChats(self.graph_base_url)
+        self.messages_manager = TeamsMessages(self.graph_base_url)
+        self.search_manager = TeamsSearch(self.graph_base_url)
 
     async def _get_access_token(self, user_id: str) -> Optional[str]:
         """
@@ -43,12 +52,25 @@ class TeamsHandler:
             logger.error(f"❌ 토큰 조회 실패: {str(e)}")
             return None
 
-    async def list_chats(self, user_id: str) -> Dict[str, Any]:
+    # ========================================================================
+    # 채팅 목록 관련
+    # ========================================================================
+
+    async def list_chats(
+        self,
+        user_id: str,
+        sort_by: str = "recent",
+        limit: Optional[int] = None,
+        filter_by_name: Optional[str] = None
+    ) -> Dict[str, Any]:
         """
         사용자의 채팅 목록 조회 (1:1 및 그룹 채팅)
 
         Args:
             user_id: 사용자 ID
+            sort_by: 정렬 방식 ("recent", "name", "type") - 기본값: "recent"
+            limit: 최대 조회 개수 (None이면 전체)
+            filter_by_name: 이름 필터 (Optional)
 
         Returns:
             채팅 목록
@@ -58,138 +80,162 @@ class TeamsHandler:
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
 
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
+            # 채팅 목록 조회
+            result = await self.chats_manager.list_chats(
+                access_token, sort_by, limit, filter_by_name
+            )
 
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.graph_base_url}/me/chats",
-                    headers=headers,
-                    timeout=30.0
-                )
+            # 성공 시 DB 동기화
+            if result.get("success") and result.get("chats"):
+                await self.db_manager.sync_chats_to_db(user_id, result["chats"])
 
-                if response.status_code == 200:
-                    data = response.json()
-                    chats = data.get("value", [])
-                    logger.info(f"✅ 채팅 {len(chats)}개 조회 성공")
-                    return {
-                        "success": True,
-                        "chats": chats,
-                        "count": len(chats)
-                    }
-                else:
-                    error_msg = f"채팅 목록 조회 실패: {response.status_code}"
-                    logger.error(error_msg)
-                    return {"success": False, "message": error_msg, "status_code": response.status_code}
+            return result
 
         except Exception as e:
             logger.error(f"❌ 채팅 목록 조회 오류: {str(e)}", exc_info=True)
             return {"success": False, "message": f"오류 발생: {str(e)}"}
 
-    async def get_chat_messages(self, user_id: str, chat_id: str, limit: int = 50) -> Dict[str, Any]:
+    # ========================================================================
+    # 메시지 조회/전송
+    # ========================================================================
+
+    async def get_chat_messages(
+        self,
+        user_id: str,
+        chat_id: Optional[str] = None,
+        recipient_name: Optional[str] = None,
+        limit: int = 50
+    ) -> Dict[str, Any]:
         """
         채팅의 메시지 목록 조회
 
         Args:
             user_id: 사용자 ID
-            chat_id: 채팅 ID
+            chat_id: 채팅 ID (Optional)
+            recipient_name: 상대방 이름 (chat_id가 없을 때 사용)
             limit: 조회할 메시지 수 (기본 50)
 
         Returns:
             메시지 목록
         """
         try:
+            # chat_id 결정
+            if not chat_id:
+                if recipient_name:
+                    # 이름으로 검색
+                    chat_id = await self.db_manager.find_chat_by_name(user_id, recipient_name)
+                    if not chat_id:
+                        return {"success": False, "message": f"'{recipient_name}' 사용자를 찾을 수 없습니다"}
+                else:
+                    # 최근 대화 사용
+                    chat_id = await self.db_manager.get_recent_chat_id(user_id)
+                    if not chat_id:
+                        # 기본값으로 Notes 사용
+                        chat_id = "48:notes"
+                        logger.info("ℹ️ chat_id 없음, 기본값 48:notes 사용")
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
 
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
-
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"{self.graph_base_url}/chats/{chat_id}/messages?$top={limit}",
-                    headers=headers,
-                    timeout=30.0
-                )
-
-                if response.status_code == 200:
-                    data = response.json()
-                    messages = data.get("value", [])
-                    logger.info(f"✅ 메시지 {len(messages)}개 조회 성공")
-                    return {
-                        "success": True,
-                        "messages": messages,
-                        "count": len(messages)
-                    }
-                else:
-                    error_msg = f"메시지 조회 실패: {response.status_code}"
-                    logger.error(error_msg)
-                    return {"success": False, "message": error_msg, "status_code": response.status_code}
+            return await self.messages_manager.get_chat_messages(access_token, chat_id, limit)
 
         except Exception as e:
             logger.error(f"❌ 메시지 조회 오류: {str(e)}", exc_info=True)
             return {"success": False, "message": f"오류 발생: {str(e)}"}
 
-    async def send_chat_message(self, user_id: str, chat_id: str, content: str, prefix: str = "[claude]") -> Dict[str, Any]:
+    async def send_chat_message(
+        self,
+        user_id: str,
+        content: str,
+        chat_id: Optional[str] = None,
+        recipient_name: Optional[str] = None,
+        prefix: str = "[claude]"
+    ) -> Dict[str, Any]:
         """
         채팅에 메시지 전송
 
         Args:
             user_id: 사용자 ID
-            chat_id: 채팅 ID
             content: 메시지 내용
+            chat_id: 채팅 ID (Optional)
+            recipient_name: 상대방 이름 (chat_id가 없을 때 사용)
             prefix: 메시지 앞에 붙을 프리픽스 (기본값: '[claude]')
 
         Returns:
             전송 결과
         """
         try:
+            # chat_id 결정
+            if not chat_id:
+                if recipient_name:
+                    # 이름으로 검색
+                    chat_id = await self.db_manager.find_chat_by_name(user_id, recipient_name)
+                    if not chat_id:
+                        return {"success": False, "message": f"'{recipient_name}' 사용자를 찾을 수 없습니다"}
+                else:
+                    # 최근 대화 사용
+                    chat_id = await self.db_manager.get_recent_chat_id(user_id)
+                    if not chat_id:
+                        # 기본값으로 Notes 사용
+                        chat_id = "48:notes"
+                        logger.info("ℹ️ chat_id 없음, 기본값 48:notes 사용")
+
             access_token = await self._get_access_token(user_id)
             if not access_token:
                 return {"success": False, "message": "액세스 토큰이 없습니다"}
 
-            headers = {
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json"
-            }
+            # 메시지 전송
+            result = await self.messages_manager.send_chat_message(
+                access_token, chat_id, content, prefix
+            )
 
-            # 메시지 페이로드 (프리픽스 추가)
-            payload = {
-                "body": {
-                    "content": f"{prefix} {content}" if prefix else content
-                }
-            }
+            # 성공 시 DB 업데이트
+            if result.get("success"):
+                await self.db_manager.update_last_sent_at(user_id, chat_id)
 
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    f"{self.graph_base_url}/chats/{chat_id}/messages",
-                    headers=headers,
-                    json=payload,
-                    timeout=30.0
-                )
-
-                if response.status_code == 201:
-                    data = response.json()
-                    message_id = data.get("id")
-                    logger.info(f"✅ 메시지 전송 성공: {message_id}")
-                    return {
-                        "success": True,
-                        "message_id": message_id,
-                        "data": data
-                    }
-                else:
-                    error_msg = f"메시지 전송 실패: {response.status_code}"
-                    logger.error(f"{error_msg} - {response.text}")
-                    return {"success": False, "message": error_msg, "status_code": response.status_code}
+            return result
 
         except Exception as e:
             logger.error(f"❌ 메시지 전송 오류: {str(e)}", exc_info=True)
             return {"success": False, "message": f"오류 발생: {str(e)}"}
 
+    # ========================================================================
+    # 메시지 검색
+    # ========================================================================
 
+    async def search_messages(
+        self,
+        user_id: str,
+        keyword: str,
+        search_scope: str = "current_chat",
+        chat_id: Optional[str] = None,
+        page_size: int = 50,
+        max_results: int = 500
+    ) -> Dict[str, Any]:
+        """
+        메시지 키워드 검색
 
+        Args:
+            user_id: 사용자 ID
+            keyword: 검색 키워드
+            search_scope: 검색 범위 ("current_chat" 또는 "all_chats")
+            chat_id: 채팅 ID (search_scope="current_chat"일 때 필수)
+            page_size: 페이지 크기 (기본 50)
+            max_results: 최대 결과 수 (기본 500)
+
+        Returns:
+            검색 결과
+        """
+        try:
+            access_token = await self._get_access_token(user_id)
+            if not access_token:
+                return {"success": False, "message": "액세스 토큰이 없습니다"}
+
+            return await self.search_manager.search_messages(
+                access_token, keyword, search_scope, chat_id, page_size, max_results
+            )
+
+        except Exception as e:
+            logger.error(f"❌ 메시지 검색 오류: {str(e)}", exc_info=True)
+            return {"success": False, "message": f"오류 발생: {str(e)}"}
