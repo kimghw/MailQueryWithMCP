@@ -1228,54 +1228,29 @@ class UnifiedMCPServer:
                     else:
                         logger.warning("⚠️ Could not fetch user info from Microsoft Graph")
 
-                # Azure 토큰을 dcr_azure_tokens 테이블에 저장 (V3 스키마)
-                logger.info(f"💾 Saving Azure token to dcr_azure_tokens table for client: {client_id}")
+                # Azure 토큰 저장 및 accounts 동기화 (중앙 처리)
+                logger.info(f"💾 Saving Azure token and syncing accounts for client: {client_id}")
 
                 # 토큰 만료 시간 계산
                 from datetime import timedelta
                 expires_in = azure_token_data.get("expires_in", 3600)
                 azure_expiry = utc_now() + timedelta(seconds=expires_in)
 
-                # dcr_azure_tokens 테이블에 직접 저장 (INSERT OR REPLACE)
-                from modules.enrollment.account import AccountCryptoHelpers
-                crypto = AccountCryptoHelpers()
-
-                # Azure 토큰을 object_id 기준으로 저장 (여러 DCR 클라이언트가 공유)
-                azure_insert_query = """
-                INSERT OR REPLACE INTO dcr_azure_tokens (
-                    object_id, application_id, access_token, refresh_token, expires_at,
-                    scope, user_email, user_name, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-                """
-                dcr_service._execute_query(
-                    azure_insert_query,
-                    (
-                        azure_object_id,
-                        client["azure_application_id"],
-                        crypto.account_encrypt_sensitive_data(azure_token_data.get("access_token")),
-                        crypto.account_encrypt_sensitive_data(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token") else None,
-                        azure_expiry,
-                        scope,
-                        user_email,
-                        user_name,
-                    ),
-                )
-                logger.info(f"✅ Azure token saved for object_id: {azure_object_id}, user: {user_email}")
-
-                # graphapi.db의 accounts 테이블과 동기화 (환경변수로 제어)
                 enable_account_sync = os.getenv("ENABLE_DCR_ACCOUNT_SYNC", "true").lower() == "true"
+                dcr_service.save_azure_tokens_and_sync(
+                    azure_object_id=azure_object_id,
+                    azure_access_token=azure_token_data.get("access_token"),
+                    azure_refresh_token=azure_token_data.get("refresh_token") or None,
+                    scope=scope,
+                    user_email=user_email,
+                    user_name=user_name,
+                    azure_expires_at=azure_expiry,
+                    sync_accounts=enable_account_sync,
+                )
                 if enable_account_sync:
-                    logger.info(f"🔄 Syncing account to graphapi.db (ENABLE_DCR_ACCOUNT_SYNC=true)")
-                    dcr_service._sync_with_accounts_table(
-                        azure_object_id=azure_object_id,
-                        user_email=user_email,
-                        user_name=user_name,
-                        encrypted_access_token=crypto.account_encrypt_sensitive_data(azure_token_data.get("access_token")),
-                        encrypted_refresh_token=crypto.account_encrypt_sensitive_data(azure_token_data.get("refresh_token", "")) if azure_token_data.get("refresh_token") else None,
-                        azure_expires_at=azure_expiry
-                    )
+                    logger.info(f"✅ Azure token saved and accounts synced for object_id: {azure_object_id}")
                 else:
-                    logger.info(f"⏭️  Skipping account sync to graphapi.db (ENABLE_DCR_ACCOUNT_SYNC=false)")
+                    logger.info(f"✅ Azure token saved (account sync disabled) for object_id: {azure_object_id}")
 
                 # authorization code에 azure_object_id 업데이트 (토큰 교환 시 사용)
                 if azure_object_id:

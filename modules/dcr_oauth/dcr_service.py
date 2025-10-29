@@ -167,6 +167,65 @@ class DCRService:
             "scope": scope,
         }
 
+    def save_azure_tokens_and_sync(
+        self,
+        *,
+        azure_object_id: str,
+        azure_access_token: str,
+        azure_refresh_token: Optional[str],
+        scope: str,
+        user_email: Optional[str],
+        user_name: Optional[str],
+        azure_expires_at: datetime,
+        sync_accounts: bool = True,
+    ) -> None:
+        """Persist Azure tokens to dcr_azure_tokens and sync to accounts table.
+
+        This centralizes the path for saving Azure tokens so any caller
+        (e.g., OAuth callback) can ensure graphapi accounts are updated.
+        """
+        if not azure_object_id:
+            raise ValueError("azure_object_id is required")
+
+        # Store in dcr_azure_tokens (encrypted)
+        azure_query = """
+            INSERT OR REPLACE INTO dcr_azure_tokens (
+                object_id, application_id, access_token, refresh_token, expires_at,
+                scope, user_email, user_name, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        """
+        self._execute_query(
+            azure_query,
+            (
+                azure_object_id,
+                self.azure_application_id,
+                self.crypto.account_encrypt_sensitive_data(azure_access_token),
+                self.crypto.account_encrypt_sensitive_data(azure_refresh_token) if azure_refresh_token else None,
+                azure_expires_at,
+                scope,
+                user_email,
+                user_name,
+            ),
+        )
+
+        if sync_accounts:
+            # Sync to accounts table using encrypted values
+            encrypted_access = self.crypto.account_encrypt_sensitive_data(azure_access_token)
+            encrypted_refresh = (
+                self.crypto.account_encrypt_sensitive_data(azure_refresh_token)
+                if azure_refresh_token
+                else None
+            )
+
+            self._sync_with_accounts_table(
+                azure_object_id=azure_object_id,
+                user_email=user_email,
+                user_name=user_name,
+                encrypted_access_token=encrypted_access,
+                encrypted_refresh_token=encrypted_refresh,
+                azure_expires_at=azure_expires_at,
+            )
+
     def get_client(self, dcr_client_id: str) -> Optional[Dict[str, Any]]:
         """DCR 클라이언트 정보 조회"""
         query = """
