@@ -3,3 +3,7 @@
     - DCR Bearer 토큰 재발급 시 Azure 토큰 정보 완전히 독립
     - expires_in을 Azure에서 가져오지 않고 DCR 자체 설정(3600초) 사용
     - scope만 dcr_azure_tokens에서 조회 (Azure API 호출 없음)
+
+    높음 – entrypoints/production/unified_http_server.py:793-801 & modules/dcr_oauth/dcr_service.py:561-571: Bearer 갱신 시 expires_in을 Azure access 토큰의 남은 수명에서 가져옵니다. Azure 토큰이 이미 만료된 상태에서 갱신하면 expires_in <= 0이 되어 새 Bearer 토큰이 즉시 만료됩니다. DCR 전용 TTL(예: 3600초)을 사용하도록 분리해야 합니다.
+높음 – entrypoints/production/unified_http_server.py:759-790: 리프레시 플로우가 기존 DCR refresh 토큰을 재사용하면서 expires_at은 갱신하지 않습니다. 원래 30일이 지나면 토큰이 만료로 처리되어 더 이상 갱신할 수 없습니다. 성공 시 만료 시간을 연장하거나 새 refresh 토큰을 발급해야 합니다.
+중간 – entrypoints/production/unified_http_server.py:808-816: 갱신 과정에서 Azure API 호출이 전혀 없어 Azure refresh 토큰이 갱신되지 않습니다. Microsoft refresh 토큰은 슬라이딩 윈도우 정책을 사용하므로 장기적으로 무효화될 가능성이 있습니다. 갱신 시점에 Azure 토큰 갱신을 수행하거나 백그라운드 작업으로 회전시키는 방안을 검토해야 합니다.

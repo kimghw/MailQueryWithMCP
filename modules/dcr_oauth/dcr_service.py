@@ -45,6 +45,13 @@ class DCRService:
         allowed_users_str = os.getenv("DCR_ALLOWED_USERS", "").strip()
         self.allowed_users = [email.strip().lower() for email in allowed_users_str.split(",") if email.strip()] if allowed_users_str else []
 
+        # DCR Bearer 토큰 TTL (초)
+        ttl_seconds = int(self.config.dcr_access_token_ttl_seconds)
+        if ttl_seconds <= 0:
+            logger.warning("⚠️ DCR_ACCESS_TOKEN_TTL_SECONDS가 0 이하입니다. 기본값 3600초를 사용합니다.")
+            ttl_seconds = 3600
+        self.dcr_bearer_ttl_seconds = ttl_seconds
+
         if self.allowed_users:
             logger.info(f"✅ DCR access restricted to {len(self.allowed_users)} users")
         else:
@@ -85,23 +92,100 @@ class DCRService:
             conn.close()
 
     def _load_azure_config(self):
-        """dcr_azure_auth 테이블 또는 환경변수에서 Azure 설정 로드"""
+        """dcr_azure_auth 테이블 또는 환경변수에서 Azure 설정 로드
+
+        동작 변경 사항:
+        - 서버 재시작 시, dcr_azure_auth 값이 있더라도 환경변수(DCR_*)가 설정되어 있으면 테이블 값을 최신 환경변수로 갱신
+        - dcr_azure_auth 값이 변경되면 dcr_tokens의 Bearer/refresh 토큰을 모두 revoke 처리하여 재인증 유도
+        """
         # 1순위: dcr_azure_auth 테이블
         query = "SELECT application_id, client_secret, tenant_id, redirect_uri FROM dcr_azure_auth LIMIT 1"
         result = self._fetch_one(query)
 
+        # 환경변수(있을 경우)에 의한 오버라이드 후보값
+        env_app_id = os.getenv("DCR_AZURE_CLIENT_ID")
+        env_secret = os.getenv("DCR_AZURE_CLIENT_SECRET")
+        env_tenant = os.getenv("DCR_AZURE_TENANT_ID", "common")
+        env_redirect = os.getenv("DCR_OAUTH_REDIRECT_URI")
+
         if result:
-            self.azure_application_id = result[0]
-            self.azure_client_secret = self.crypto.account_decrypt_sensitive_data(result[1])
-            self.azure_tenant_id = result[2] or "common"
-            self.azure_redirect_uri = result[3]
-            logger.info(f"✅ Loaded Azure config from dcr_azure_auth: {self.azure_application_id}")
+            # 현재 DB 설정을 우선 로드
+            current_app_id = result[0]
+            current_secret = self.crypto.account_decrypt_sensitive_data(result[1]) if result[1] else None
+            current_tenant = result[2] or "common"
+            current_redirect = result[3]
+
+            self.azure_application_id = current_app_id
+            self.azure_client_secret = current_secret
+            self.azure_tenant_id = current_tenant
+            self.azure_redirect_uri = current_redirect
+
+            # 환경변수가 존재하면, DB 값과 비교하여 변경점이 있으면 업데이트 + 토큰 무효화
+            # 최소 조건: app_id와 secret이 모두 제공되어야 안전하게 갱신
+            if env_app_id and env_secret:
+                def _norm(v: Optional[str]) -> str:
+                    return (v or "").strip()
+
+                changes = []
+                if _norm(env_app_id) != _norm(current_app_id):
+                    changes.append("application_id")
+                if _norm(env_secret) != _norm(current_secret):
+                    changes.append("client_secret")
+                # tenant/redirect는 env가 제공될 때에만 비교/반영
+                if env_tenant is not None and _norm(env_tenant) != _norm(current_tenant):
+                    changes.append("tenant_id")
+                if env_redirect is not None and _norm(env_redirect) != _norm(current_redirect):
+                    changes.append("redirect_uri")
+
+                if changes:
+                    try:
+                        # 동적 UPDATE 쿼리 구성
+                        set_clauses = []
+                        params = []
+
+                        # application_id 변경 가능 (PK이지만 SQLite FK 미강제일 수 있음)
+                        set_clauses.append("application_id = ?")
+                        params.append(env_app_id)
+
+                        set_clauses.append("client_secret = ?")
+                        params.append(self.crypto.account_encrypt_sensitive_data(env_secret))
+
+                        # tenant_id, redirect_uri는 env가 있을 때만 반영
+                        if env_tenant is not None:
+                            set_clauses.append("tenant_id = ?")
+                            params.append(env_tenant)
+                        if env_redirect is not None:
+                            set_clauses.append("redirect_uri = ?")
+                            params.append(env_redirect)
+
+                        update_sql = f"UPDATE dcr_azure_auth SET {', '.join(set_clauses)} WHERE application_id = ?"
+                        params.append(current_app_id)
+                        self._execute_query(update_sql, tuple(params))
+
+                        # 인메모리 설정도 즉시 반영
+                        self.azure_application_id = env_app_id
+                        self.azure_client_secret = env_secret
+                        self.azure_tenant_id = env_tenant if env_tenant is not None else current_tenant
+                        self.azure_redirect_uri = env_redirect if env_redirect is not None else current_redirect
+
+                        # 토큰 무효화 (Bearer/refresh)
+                        self._revoke_active_dcr_tokens_on_config_change()
+                        logger.info(
+                            f"♻️ Updated dcr_azure_auth from environment and revoked active DCR tokens (changed: {', '.join(changes)})"
+                        )
+                    except Exception as e:
+                        logger.error(f"❌ Failed to update dcr_azure_auth from environment: {e}")
+                else:
+                    logger.info(f"✅ Loaded Azure config from dcr_azure_auth: {self.azure_application_id}")
+            else:
+                # 환경변수 미지정 시에는 DB 값 그대로 사용
+                logger.info(f"✅ Loaded Azure config from dcr_azure_auth: {self.azure_application_id}")
         else:
-            # 2순위: 환경변수 (DCR_ 접두사만 사용)
-            self.azure_application_id = os.getenv("DCR_AZURE_CLIENT_ID")
-            self.azure_client_secret = os.getenv("DCR_AZURE_CLIENT_SECRET")
-            self.azure_tenant_id = os.getenv("DCR_AZURE_TENANT_ID", "common")
-            self.azure_redirect_uri = os.getenv("DCR_OAUTH_REDIRECT_URI")
+            # 2순위: 환경변수 (DCR_ 접두사만 사용). 없으면 경고만 출력
+            self.azure_application_id = env_app_id
+            self.azure_client_secret = env_secret
+            self.azure_tenant_id = env_tenant
+            self.azure_redirect_uri = env_redirect
 
             if self.azure_application_id and self.azure_client_secret:
                 # 환경변수에서 읽은 경우 DB에 저장
@@ -109,6 +193,30 @@ class DCRService:
                 self._save_azure_config_to_db()
             else:
                 logger.warning("⚠️ No Azure config found. DCR will not work.")
+
+    def _revoke_active_dcr_tokens_on_config_change(self):
+        """Azure 설정 변경 시 활성화된 DCR Bearer/refresh 토큰을 revoke 처리"""
+        try:
+            count_row = self._fetch_one(
+                """
+                SELECT COUNT(*) FROM dcr_tokens
+                WHERE dcr_status = 'active'
+                  AND dcr_token_type IN ('Bearer', 'refresh')
+                """
+            )
+            active_count = int(count_row[0]) if count_row and count_row[0] is not None else 0
+
+            self._execute_query(
+                """
+                UPDATE dcr_tokens
+                SET dcr_status = 'revoked'
+                WHERE dcr_status = 'active'
+                  AND dcr_token_type IN ('Bearer', 'refresh')
+                """
+            )
+            logger.info(f"🔒 Revoked {active_count} active DCR tokens due to Azure config change")
+        except Exception as e:
+            logger.error(f"❌ Failed to revoke DCR tokens on config change: {e}")
 
     def _ensure_dcr_schema(self):
         """DCR V3 스키마 초기화"""
@@ -560,18 +668,15 @@ class DCRService:
             expiry_dt = datetime.fromisoformat(expires_at)
             if expiry_dt.tzinfo is None:
                 expiry_dt = expiry_dt.replace(tzinfo=timezone.utc)
-            expires_in = int((expiry_dt - datetime.now(timezone.utc)).total_seconds())
-            if expires_in < 0:
-                expires_in = 0
         else:
-            expires_in = 3600
+            expiry_dt = None
 
         return {
             "access_token": self.crypto.account_decrypt_sensitive_data(access_token),
             "refresh_token": self.crypto.account_decrypt_sensitive_data(refresh_token) if refresh_token else None,
             "scope": scope,
-            "expires_in": expires_in,
             "user_email": user_email,
+            "azure_expires_at": expiry_dt,
         }
 
     def update_auth_code_with_object_id(self, auth_code: str, azure_object_id: str):

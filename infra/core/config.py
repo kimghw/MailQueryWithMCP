@@ -174,6 +174,11 @@ class Config:
         """DCR OAuth scope 리스트"""
         return [scope.strip() for scope in self.dcr_oauth_scope.split() if scope.strip()]
 
+    @property
+    def dcr_access_token_ttl_seconds(self) -> int:
+        """DCR Bearer 토큰 기본 TTL(초)"""
+        return int(os.getenv("DCR_ACCESS_TOKEN_TTL_SECONDS", "3600"))
+
     # OAuth 리다이렉트 설정
     @property
     def oauth_redirect_port(self) -> int:

@@ -81,6 +81,14 @@ class UnifiedMCPServer:
         # Initialize DCR schema (환경변수 → DB 저장은 DCRService.__init__에서 자동 처리)
         self._ensure_dcr_schema_only()
 
+        # Ensure DCR Azure config is synced from env at startup
+        try:
+            logger.info("🔧 Syncing DCR Azure config from environment on startup...")
+            _ = DCRService()
+            logger.info("✅ DCR Azure config sync completed")
+        except Exception as e:
+            logger.warning(f"⚠️ DCR Azure config sync skipped due to error: {e}")
+
         # Create unified Starlette app
         self.app = self._create_unified_app()
 
@@ -818,7 +826,7 @@ class UnifiedMCPServer:
 
                     # Generate new DCR access token
                     new_access_token = secrets.token_urlsafe(32)
-                    expires_in = azure_tokens.get("expires_in", 3600)
+                    expires_in = dcr_service.dcr_bearer_ttl_seconds
                     token_expiry = utc_now() + timedelta(seconds=expires_in)
 
                     # Delete existing Bearer token for this client + object_id + token_type (prevent duplicates)
@@ -912,7 +920,8 @@ class UnifiedMCPServer:
                         "access_token": "reused_session",  # Placeholder
                         "expires_in": 3600,
                         "user_email": "existing_session",
-                        "scope": auth_data.get("scope", "Mail.Read User.Read")
+                        "scope": auth_data.get("scope", "Mail.Read User.Read"),
+                        "azure_expires_at": None,
                     }
                 else:
                     logger.info(f"🔍 Looking for Azure tokens for object_id: {azure_object_id}...")
@@ -927,7 +936,7 @@ class UnifiedMCPServer:
 
                 azure_access_token = azure_tokens["access_token"]
                 azure_refresh_token = azure_tokens.get("refresh_token", "")
-                expires_in = azure_tokens.get("expires_in", 3600)
+                dcr_expires_in = dcr_service.dcr_bearer_ttl_seconds
                 user_email = azure_tokens.get("user_email")
 
                 # Check for existing active Bearer token first
@@ -952,11 +961,19 @@ class UnifiedMCPServer:
                     access_token = crypto.account_decrypt_sensitive_data(encrypted_access_token)
                     refresh_token = secrets.token_urlsafe(32)  # Generate new refresh token
                     logger.info(f"♻️ Reusing existing Bearer token for client: {client_id}, user: {azure_object_id}")
+                    existing_expiry_str = existing_token[1]
+                    try:
+                        existing_expiry_dt = parse_iso_to_utc(existing_expiry_str)
+                        expires_in = max(int((existing_expiry_dt - utc_now()).total_seconds()), 0)
+                    except Exception:
+                        logger.warning("⚠️ Failed to parse existing Bearer expiry. Returning 0 seconds remaining.")
+                        expires_in = 0
                 else:
                     # Generate new tokens
                     access_token = secrets.token_urlsafe(32)
                     refresh_token = secrets.token_urlsafe(32)
-                    azure_token_expiry = utc_now() + timedelta(seconds=expires_in)
+                    token_expiry = utc_now() + timedelta(seconds=dcr_expires_in)
+                    expires_in = dcr_expires_in
 
                     # Store new access token (encrypted for security)
                     dcr_service._execute_query(
@@ -969,7 +986,7 @@ class UnifiedMCPServer:
                             crypto.account_encrypt_sensitive_data(access_token),  # Store encrypted for security
                             client_id,
                             azure_object_id,
-                            azure_token_expiry,
+                            token_expiry,
                         ),
                     )
                     logger.info(f"✨ Created new Bearer token for client: {client_id}, user: {azure_object_id}")
