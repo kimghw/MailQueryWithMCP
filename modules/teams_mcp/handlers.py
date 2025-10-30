@@ -465,16 +465,27 @@ class TeamsHandlers:
                     # 한글 이름이 없는 채팅 목록 추가
                     if chats_without_korean:
                         output_lines.append("\n" + "="*50)
-                        output_lines.append(f"📝 한글 이름이 없는 채팅 ({len(chats_without_korean)}개)\n")
+                        output_lines.append(f"📝 한글 이름이 없는 채팅 ({len(chats_without_korean)}개)")
+                        output_lines.append("="*50)
+                        output_lines.append("")
+
                         for idx, item in enumerate(chats_without_korean, 1):
-                            output_lines.append(f"{idx}. {item['topic']}")
+                            output_lines.append(f"{idx}. 영문 이름: '{item['topic']}'")
                             output_lines.append(f"   chat_id: {item['chat_id']}")
+                            output_lines.append(f"   → teams_save_korean_name(user_id=..., topic_en=\"{item['topic']}\", topic_kr=\"한글이름\")")
                             output_lines.append("")
 
                         # 강조 메시지 추가
                         output_lines.append("="*50)
-                        output_lines.append("⚠️  중요! 한글 이름이 없는 채팅방은 한글을 등록해줘! ⚠️")
+                        output_lines.append("⚠️  중요! 위 영문 이름들을 한글로 해석해서 등록해줘! ⚠️")
                         output_lines.append("💡 등록되지 않은 한글 이름을 등록하겠습니다")
+                        output_lines.append("")
+                        output_lines.append("사용 예시:")
+                        output_lines.append("teams_save_korean_name(")
+                        output_lines.append("  user_id=\"...\",")
+                        output_lines.append(f"  topic_en=\"{chats_without_korean[0]['topic']}\",")
+                        output_lines.append("  topic_kr=\"에이에프알 팀 채팅방\"  # 영문을 한글로 해석")
+                        output_lines.append(")")
                         output_lines.append("="*50)
                         output_lines.append("")
 
