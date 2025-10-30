@@ -221,6 +221,62 @@ class TeamsDBManager:
         except Exception as e:
             logger.warning(f"⚠️ DB 업데이트 실패 (무시): {str(e)}")
 
+    async def save_korean_names_batch(self, user_id: str,
+                                      names: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        여러 채팅의 한글 이름을 한 번에 저장
+
+        Args:
+            user_id: 사용자 ID
+            names: [{"topic_en": "영문", "topic_kr": "한글"}, ...] 형식의 리스트
+
+        Returns:
+            {"success": True, "saved": 3, "failed": 1, "results": [...]}
+        """
+        try:
+            results = []
+            saved_count = 0
+            failed_count = 0
+
+            for item in names:
+                topic_en = item.get("topic_en", "")
+                topic_kr = item.get("topic_kr", "")
+
+                if not topic_en or not topic_kr:
+                    results.append({
+                        "topic_en": topic_en,
+                        "topic_kr": topic_kr,
+                        "success": False,
+                        "message": "topic_en과 topic_kr이 모두 필요합니다"
+                    })
+                    failed_count += 1
+                    continue
+
+                # 단일 저장 호출
+                result = await self.save_korean_name(user_id, None, topic_en, topic_kr)
+                results.append({
+                    "topic_en": topic_en,
+                    "topic_kr": topic_kr,
+                    **result
+                })
+
+                if result.get("success"):
+                    saved_count += 1
+                else:
+                    failed_count += 1
+
+            return {
+                "success": True,
+                "saved": saved_count,
+                "failed": failed_count,
+                "total": len(names),
+                "results": results
+            }
+
+        except Exception as e:
+            logger.error(f"❌ 배치 저장 오류: {str(e)}", exc_info=True)
+            return {"success": False, "message": f"오류 발생: {str(e)}"}
+
     async def save_korean_name(self, user_id: str, chat_id: Optional[str] = None,
                                  topic_en: Optional[str] = None, topic_kr: str = "") -> Dict[str, Any]:
         """

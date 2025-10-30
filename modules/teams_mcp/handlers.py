@@ -361,7 +361,7 @@ class TeamsHandlers:
             ),
             Tool(
                 name="teams_save_korean_name",
-                description="채팅방의 한글 이름을 DB에 저장합니다. teams_list_chats에서 한글 이름이 없는 채팅이 발견되면 이 도구를 사용해 영문 이름을 한글로 해석하여 등록합니다. chat_id 또는 영문 이름(topic_en)으로 채팅을 찾아 topic_kr에 한글 이름을 저장합니다. 예: 'John Doe' → '김철수', 'Project Team' → '프로젝트팀'",
+                description="채팅방의 한글 이름을 DB에 저장합니다. 단일 저장 또는 배치 저장 가능. 배치 저장 시 names 파라미터에 리스트를 전달하면 한 번에 여러 개를 저장할 수 있습니다.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -369,20 +369,32 @@ class TeamsHandlers:
                             "type": "string",
                             "description": "사용자 ID"
                         },
+                        "names": {
+                            "type": "array",
+                            "description": "배치 저장용 - [{'topic_en': '영문', 'topic_kr': '한글'}, ...] 형식의 리스트",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "topic_en": {"type": "string"},
+                                    "topic_kr": {"type": "string"}
+                                },
+                                "required": ["topic_en", "topic_kr"]
+                            }
+                        },
                         "topic_kr": {
                             "type": "string",
-                            "description": "한글 이름 (저장할 값) - 영문 이름을 한글로 해석한 값"
+                            "description": "단일 저장용 - 한글 이름"
                         },
                         "chat_id": {
                             "type": "string",
-                            "description": "채팅 ID (선택) - teams_list_chats 출력의 chat_id 사용"
+                            "description": "단일 저장용 - 채팅 ID"
                         },
                         "topic_en": {
                             "type": "string",
-                            "description": "영문 이름 (선택) - chat_id가 없을 때 이 이름으로 검색"
+                            "description": "단일 저장용 - 영문 이름"
                         }
                     },
-                    "required": ["user_id", "topic_kr"]
+                    "required": ["user_id"]
                 }
             ),
         ]
@@ -490,8 +502,17 @@ class TeamsHandlers:
                         output_lines.append("⚠️  중요! 위 영문 이름들을 한글로 해석해서 등록해줘! ⚠️")
                         output_lines.append("💡 등록되지 않은 한글 이름을 등록하겠습니다")
                         output_lines.append("")
-                        output_lines.append("예시: teams_save_korean_name(")
-                        output_lines.append(f"  user_id=\"...\", topic_en=\"{chats_without_korean[0]['name']}\", topic_kr=\"한글이름\"")
+                        output_lines.append("📝 배치 저장 예시 (한 번에 여러 개):")
+                        output_lines.append("teams_save_korean_name(")
+                        output_lines.append("  user_id=\"...\",")
+                        output_lines.append("  names=[")
+                        # 처음 3개만 예시로 표시
+                        for idx, item in enumerate(chats_without_korean[:3], 1):
+                            comma = "," if idx < min(3, len(chats_without_korean)) else ""
+                            output_lines.append(f"    {{\"topic_en\": \"{item['name']}\", \"topic_kr\": \"한글이름{idx}\"}}{comma}")
+                        if len(chats_without_korean) > 3:
+                            output_lines.append("    # ... 나머지도 추가")
+                        output_lines.append("  ]")
                         output_lines.append(")")
                         output_lines.append("="*50)
                         output_lines.append("")
@@ -575,11 +596,26 @@ class TeamsHandlers:
 
             elif name == "teams_save_korean_name":
                 user_id = arguments.get("user_id")
-                topic_kr = arguments.get("topic_kr")
-                chat_id = arguments.get("chat_id")
-                topic_en = arguments.get("topic_en")
+                names = arguments.get("names")  # 배치 저장용
 
-                result = await self.teams_handler.save_korean_name(user_id, topic_kr, chat_id, topic_en)
+                # 배치 저장
+                if names:
+                    result = await self.teams_handler.save_korean_names_batch(user_id, names)
+                    # 사용자 친화적인 출력
+                    if result.get("success"):
+                        output_lines = [f"✅ 배치 저장 완료: {result.get('saved')}개 성공, {result.get('failed')}개 실패\n"]
+                        for item in result.get("results", []):
+                            status = "✅" if item.get("success") else "❌"
+                            output_lines.append(f"{status} {item.get('topic_en')} → {item.get('topic_kr')}")
+                        formatted_output = "\n".join(output_lines) + "\n\n" + json.dumps(result, indent=2, ensure_ascii=False)
+                        return [TextContent(type="text", text=formatted_output)]
+                else:
+                    # 단일 저장
+                    topic_kr = arguments.get("topic_kr")
+                    chat_id = arguments.get("chat_id")
+                    topic_en = arguments.get("topic_en")
+                    result = await self.teams_handler.save_korean_name(user_id, topic_kr, chat_id, topic_en)
+
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             else:
@@ -653,10 +689,17 @@ class TeamsHandlers:
 
             elif name == "teams_save_korean_name":
                 user_id = arguments.get("user_id")
-                topic_kr = arguments.get("topic_kr")
-                chat_id = arguments.get("chat_id")
-                topic_en = arguments.get("topic_en")
-                return await self.teams_handler.save_korean_name(user_id, topic_kr, chat_id, topic_en)
+                names = arguments.get("names")
+
+                if names:
+                    # 배치 저장
+                    return await self.teams_handler.save_korean_names_batch(user_id, names)
+                else:
+                    # 단일 저장
+                    topic_kr = arguments.get("topic_kr")
+                    chat_id = arguments.get("chat_id")
+                    topic_en = arguments.get("topic_en")
+                    return await self.teams_handler.save_korean_name(user_id, topic_kr, chat_id, topic_en)
 
             else:
                 raise ValueError(f"알 수 없는 도구: {name}")

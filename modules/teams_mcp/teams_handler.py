@@ -3,7 +3,7 @@ Teams Graph API Handler
 Microsoft Graph API를 사용한 Teams 작업 처리 (통합 핸들러)
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 from infra.core.logger import get_logger
 from infra.core.token_service import TokenService
 
@@ -345,4 +345,26 @@ class TeamsHandler:
 
         except Exception as e:
             logger.error(f"❌ 한글 이름 저장 오류: {str(e)}", exc_info=True)
+            return {"success": False, "message": f"오류 발생: {str(e)}"}
+
+    async def save_korean_names_batch(
+        self,
+        user_id: str,
+        names: List[Dict[str, str]]
+    ) -> Dict[str, Any]:
+        """
+        여러 채팅의 한글 이름을 한 번에 저장
+
+        Args:
+            user_id: 사용자 ID
+            names: [{"topic_en": "영문", "topic_kr": "한글"}, ...] 형식의 리스트
+
+        Returns:
+            배치 저장 결과
+        """
+        try:
+            return await self.db_manager.save_korean_names_batch(user_id, names)
+
+        except Exception as e:
+            logger.error(f"❌ 배치 저장 오류: {str(e)}", exc_info=True)
             return {"success": False, "message": f"오류 발생: {str(e)}"}
