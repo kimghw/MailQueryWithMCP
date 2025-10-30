@@ -237,7 +237,7 @@ class TeamsHandlers:
             ),
             Tool(
                 name="teams_list_chats",
-                description="사용자의 1:1 및 그룹 채팅 목록을 조회합니다. 정렬, 필터링, 개수 제한 가능.",
+                description="사용자의 1:1 및 그룹 채팅 목록을 조회합니다. 정렬, 필터링, 개수 제한 가능. **중요**: 출력에서 한글 이름(topic_kr)이 없는 채팅이 표시되면, 반드시 영문 이름을 참고하여 한글 이름으로 해석한 후 teams_save_korean_name 도구를 사용해 등록해야 합니다.",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -361,7 +361,7 @@ class TeamsHandlers:
             ),
             Tool(
                 name="teams_save_korean_name",
-                description="채팅방의 한글 이름을 저장합니다. chat_id 또는 영문 이름(topic_en)으로 채팅을 찾아 한글 이름을 저장합니다.",
+                description="채팅방의 한글 이름을 DB에 저장합니다. teams_list_chats에서 한글 이름이 없는 채팅이 발견되면 이 도구를 사용해 영문 이름을 한글로 해석하여 등록합니다. chat_id 또는 영문 이름(topic_en)으로 채팅을 찾아 topic_kr에 한글 이름을 저장합니다. 예: 'John Doe' → '김철수', 'Project Team' → '프로젝트팀'",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -371,15 +371,15 @@ class TeamsHandlers:
                         },
                         "topic_kr": {
                             "type": "string",
-                            "description": "한글 이름 (저장할 값)"
+                            "description": "한글 이름 (저장할 값) - 영문 이름을 한글로 해석한 값"
                         },
                         "chat_id": {
                             "type": "string",
-                            "description": "채팅 ID (선택)"
+                            "description": "채팅 ID (선택) - teams_list_chats 출력의 chat_id 사용"
                         },
                         "topic_en": {
                             "type": "string",
-                            "description": "영문 이름 (chat_id가 없을 때 검색용)"
+                            "description": "영문 이름 (선택) - chat_id가 없을 때 이 이름으로 검색"
                         }
                     },
                     "required": ["user_id", "topic_kr"]
