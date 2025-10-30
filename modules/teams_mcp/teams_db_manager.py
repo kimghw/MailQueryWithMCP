@@ -20,7 +20,7 @@ class TeamsDBManager:
 
     async def find_chat_by_name(self, user_id: str, recipient_name: str) -> Optional[str]:
         """
-        사용자 이름으로 chat_id 검색
+        사용자 이름으로 chat_id 검색 (활성/비활성 모두 검색, 활성 우선)
 
         Args:
             user_id: 사용자 ID
@@ -31,17 +31,19 @@ class TeamsDBManager:
         """
         try:
             # DB에서 이름으로 검색 (대소문자 무시)
+            # is_active 조건 제거하되, 활성 채팅을 우선 순위로 정렬
             result = self.db.execute_query(
                 """
                 SELECT chat_id FROM teams_chats
                 WHERE user_id = ?
-                AND is_active = TRUE
                 AND (
                     LOWER(peer_user_name) LIKE LOWER(?)
                     OR LOWER(topic) LIKE LOWER(?)
                     OR LOWER(topic_kr) LIKE LOWER(?)
                 )
-                ORDER BY last_message_time DESC
+                ORDER BY
+                    is_active DESC,
+                    last_message_time DESC
                 LIMIT 1
                 """,
                 (user_id, f"%{recipient_name}%", f"%{recipient_name}%", f"%{recipient_name}%"),
