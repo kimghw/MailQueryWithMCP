@@ -469,10 +469,17 @@ class TeamsHandlers:
                         output_lines.append("="*50)
                         output_lines.append("")
 
+                        # 영문 이름만 간단히 나열
+                        output_lines.append("🔤 영문 이름 목록:")
                         for idx, item in enumerate(chats_without_korean, 1):
-                            output_lines.append(f"{idx}. 영문 이름: '{item['topic']}'")
+                            output_lines.append(f"  {idx}. {item['topic']}")
+                        output_lines.append("")
+
+                        # 상세 정보
+                        output_lines.append("📋 상세 정보:")
+                        for idx, item in enumerate(chats_without_korean, 1):
+                            output_lines.append(f"{idx}. 영문: {item['topic']}")
                             output_lines.append(f"   chat_id: {item['chat_id']}")
-                            output_lines.append(f"   → teams_save_korean_name(user_id=..., topic_en=\"{item['topic']}\", topic_kr=\"한글이름\")")
                             output_lines.append("")
 
                         # 강조 메시지 추가
@@ -480,11 +487,8 @@ class TeamsHandlers:
                         output_lines.append("⚠️  중요! 위 영문 이름들을 한글로 해석해서 등록해줘! ⚠️")
                         output_lines.append("💡 등록되지 않은 한글 이름을 등록하겠습니다")
                         output_lines.append("")
-                        output_lines.append("사용 예시:")
-                        output_lines.append("teams_save_korean_name(")
-                        output_lines.append("  user_id=\"...\",")
-                        output_lines.append(f"  topic_en=\"{chats_without_korean[0]['topic']}\",")
-                        output_lines.append("  topic_kr=\"에이에프알 팀 채팅방\"  # 영문을 한글로 해석")
+                        output_lines.append("예시: teams_save_korean_name(")
+                        output_lines.append(f"  user_id=\"...\", topic_en=\"{chats_without_korean[0]['topic']}\", topic_kr=\"한글이름\"")
                         output_lines.append(")")
                         output_lines.append("="*50)
                         output_lines.append("")
