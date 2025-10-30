@@ -48,8 +48,8 @@ class HTTPStreamingTeamsServer:
             "Connection": "keep-alive",
             "Access-Control-Allow-Origin": "*",
             "Access-Control-Allow-Methods": "POST, OPTIONS, DELETE",
-            "Access-Control-Allow-Headers": "Content-Type, Authorization, Mcp-Session-Id, MCP-Protocol-Version",
-            "Access-Control-Expose-Headers": "Mcp-Session-Id",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization, MCP-Session-Id, MCP-Protocol-Version",
+            "Access-Control-Expose-Headers": "MCP-Session-Id",
         }
 
         # Bearer token authentication handled by unified_http_server middleware
@@ -134,9 +134,9 @@ class HTTPStreamingTeamsServer:
 
             # Add session header
             headers = base_headers.copy()
-            headers["Mcp-Session-Id"] = session_id
+            headers["MCP-Session-Id"] = session_id
             headers["MCP-Protocol-Version"] = requested_version
-            headers["Access-Control-Expose-Headers"] = "Mcp-Session-Id, MCP-Protocol-Version"
+            headers["Access-Control-Expose-Headers"] = "MCP-Session-Id, MCP-Protocol-Version"
 
             response = {
                 "jsonrpc": "2.0",
@@ -326,8 +326,8 @@ Send MCP (Model Context Protocol) requests using JSON-RPC 2.0 format.
                 headers={
                     "Access-Control-Allow-Origin": "*",
                     "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
-                    "Access-Control-Allow-Headers": "Content-Type, Mcp-Session-Id, Authorization, MCP-Protocol-Version",
-                    "Access-Control-Expose-Headers": "Mcp-Session-Id",
+                    "Access-Control-Allow-Headers": "Content-Type, MCP-Session-Id, Authorization, MCP-Protocol-Version",
+                    "Access-Control-Expose-Headers": "MCP-Session-Id",
                     "Access-Control-Max-Age": "3600",
                 },
             )
@@ -360,7 +360,7 @@ Send MCP (Model Context Protocol) requests using JSON-RPC 2.0 format.
                 "version": "1.0.0",
                 "protocol": "mcp",
                 "transport": "http",
-                "tools_count": 3,
+                "tools_count": 5,
                 "documentation": f"http://{self.host}:{self.port}/docs"
             }
 

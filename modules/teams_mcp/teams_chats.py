@@ -53,12 +53,15 @@ class TeamsChats:
                     chats = data.get("value", [])
                     logger.info(f"✅ 채팅 {len(chats)}개 조회 성공")
 
-                    # 필터링 (이름)
+                    # 필터링 (이름) - topic None 방어
                     if filter_by_name:
-                        chats = [
-                            chat for chat in chats
-                            if filter_by_name.lower() in chat.get("topic", "").lower()
-                        ]
+                        needle = (filter_by_name or "").lower()
+                        filtered = []
+                        for chat in chats:
+                            topic_value = (chat.get("topic") or "").lower()
+                            if needle in topic_value:
+                                filtered.append(chat)
+                        chats = filtered
 
                     # 정렬
                     if sort_by == "recent":
@@ -68,7 +71,7 @@ class TeamsChats:
                         )
                     elif sort_by == "name":
                         chats.sort(
-                            key=lambda x: x.get("topic", "").lower()
+                            key=lambda x: (x.get("topic") or "").lower()
                         )
                     elif sort_by == "type":
                         chats.sort(
@@ -94,4 +97,41 @@ class TeamsChats:
 
         except Exception as e:
             logger.error(f"❌ 채팅 목록 조회 오류: {str(e)}", exc_info=True)
+            return {"success": False, "message": f"오류 발생: {str(e)}"}
+
+    async def get_chat_members(self, access_token: str, chat_id: str) -> Dict[str, Any]:
+        """
+        특정 채팅의 멤버 목록 조회
+
+        Args:
+            access_token: Graph API 액세스 토큰
+            chat_id: 채팅 ID
+
+        Returns:
+            { success, members | message, status_code }
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.graph_base_url}/chats/{chat_id}/members",
+                    headers=headers,
+                    timeout=30.0
+                )
+
+                if response.status_code == 200:
+                    data = response.json()
+                    members = data.get("value", [])
+                    return {"success": True, "members": members, "count": len(members)}
+                else:
+                    error_msg = f"멤버 조회 실패: {response.status_code}"
+                    logger.error(error_msg)
+                    return {"success": False, "message": error_msg, "status_code": response.status_code}
+
+        except Exception as e:
+            logger.error(f"❌ 멤버 조회 오류: {str(e)}", exc_info=True)
             return {"success": False, "message": f"오류 발생: {str(e)}"}

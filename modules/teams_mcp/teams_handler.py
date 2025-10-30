@@ -35,6 +35,84 @@ class TeamsHandler:
         self.messages_manager = TeamsMessages(self.graph_base_url)
         self.search_manager = TeamsSearch(self.graph_base_url)
 
+    async def _resolve_chat_id(
+        self,
+        user_id: str,
+        chat_id: Optional[str] = None,
+        recipient_name: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        chat_id 결정 로직(이름 검색 포함). 필요 시 DB 동기화(단일 채팅 UPSERT).
+
+        우선순위:
+        1) 입력 chat_id
+        2) recipient_name → DB 조회
+        3) recipient_name → Graph에서 멤버 검색 후 DB UPSERT
+        4) 최근 대화
+        5) Notes 기본값(48:notes)
+        """
+        try:
+            if chat_id:
+                return chat_id
+
+            # 이름 기반: DB 먼저
+            if recipient_name:
+                found = await self.db_manager.find_chat_by_name(user_id, recipient_name)
+                if found:
+                    return found
+
+                # DB에 없으면 Graph에서 조회 후 멤버 검색
+                access_token = await self._get_access_token(user_id)
+                if not access_token:
+                    return None
+
+                chats_result = await self.chats_manager.list_chats(access_token)
+                if not chats_result.get("success"):
+                    return None
+
+                chats = chats_result.get("chats", [])
+                needle = (recipient_name or "").lower()
+
+                # topic에서 먼저 매칭 시도
+                for c in chats:
+                    topic_val = (c.get("topic") or "").lower()
+                    if needle and needle in topic_val:
+                        # DB에 단일 UPSERT
+                        await self.db_manager.upsert_chat(user_id, c, [])
+                        return c.get("id")
+
+                # 멤버 목록을 조회하며 매칭
+                for c in chats:
+                    cid = c.get("id")
+                    members_result = await self.chats_manager.get_chat_members(access_token, cid)
+                    if not members_result.get("success"):
+                        continue
+                    members = members_result.get("members", [])
+                    matched = False
+                    for m in members:
+                        display_name = (m.get("displayName") or "").lower()
+                        email = (m.get("email") or m.get("mail") or m.get("userPrincipalName") or "").lower()
+                        if needle in display_name or (email and needle in email):
+                            matched = True
+                            break
+                    if matched:
+                        # DB에 단일 UPSERT(멤버 포함)
+                        await self.db_manager.upsert_chat(user_id, c, members)
+                        return cid
+
+            # 최근 대화
+            recent_id = await self.db_manager.get_recent_chat_id(user_id)
+            if recent_id:
+                return recent_id
+
+            # 기본 Notes
+            logger.info("ℹ️ chat_id 없음, 기본값 48:notes 사용")
+            return "48:notes"
+
+        except Exception as e:
+            logger.error(f"❌ chat_id 결정 오류: {str(e)}", exc_info=True)
+            return None
+
     async def _get_access_token(self, user_id: str) -> Optional[str]:
         """
         사용자 ID로 유효한 액세스 토큰 조회 (자동 갱신 포함)
@@ -85,9 +163,22 @@ class TeamsHandler:
                 access_token, sort_by, limit, filter_by_name
             )
 
-            # 성공 시 DB 동기화
+            # 성공 시 DB 동기화 및 한글 이름 추가
             if result.get("success") and result.get("chats"):
                 await self.db_manager.sync_chats_to_db(user_id, result["chats"])
+
+                # DB에서 한글 이름 가져와서 각 채팅에 추가
+                chats = result["chats"]
+                for chat in chats:
+                    chat_id = chat.get("id")
+                    if chat_id:
+                        db_result = self.db_manager.db.execute_query(
+                            "SELECT topic_kr FROM teams_chats WHERE user_id = ? AND chat_id = ?",
+                            (user_id, chat_id),
+                            fetch_result=True
+                        )
+                        if db_result and len(db_result) > 0 and db_result[0][0]:
+                            chat["topic_kr"] = db_result[0][0]
 
             return result
 
@@ -119,20 +210,10 @@ class TeamsHandler:
             메시지 목록
         """
         try:
-            # chat_id 결정
+            # chat_id 결정 (이름 검색 포함)
+            chat_id = await self._resolve_chat_id(user_id, chat_id, recipient_name)
             if not chat_id:
-                if recipient_name:
-                    # 이름으로 검색
-                    chat_id = await self.db_manager.find_chat_by_name(user_id, recipient_name)
-                    if not chat_id:
-                        return {"success": False, "message": f"'{recipient_name}' 사용자를 찾을 수 없습니다"}
-                else:
-                    # 최근 대화 사용
-                    chat_id = await self.db_manager.get_recent_chat_id(user_id)
-                    if not chat_id:
-                        # 기본값으로 Notes 사용
-                        chat_id = "48:notes"
-                        logger.info("ℹ️ chat_id 없음, 기본값 48:notes 사용")
+                return {"success": False, "message": "chat_id를 결정할 수 없습니다"}
 
             access_token = await self._get_access_token(user_id)
             if not access_token:
@@ -166,20 +247,10 @@ class TeamsHandler:
             전송 결과
         """
         try:
-            # chat_id 결정
+            # chat_id 결정 (이름 검색 포함)
+            chat_id = await self._resolve_chat_id(user_id, chat_id, recipient_name)
             if not chat_id:
-                if recipient_name:
-                    # 이름으로 검색
-                    chat_id = await self.db_manager.find_chat_by_name(user_id, recipient_name)
-                    if not chat_id:
-                        return {"success": False, "message": f"'{recipient_name}' 사용자를 찾을 수 없습니다"}
-                else:
-                    # 최근 대화 사용
-                    chat_id = await self.db_manager.get_recent_chat_id(user_id)
-                    if not chat_id:
-                        # 기본값으로 Notes 사용
-                        chat_id = "48:notes"
-                        logger.info("ℹ️ chat_id 없음, 기본값 48:notes 사용")
+                return {"success": False, "message": "chat_id를 결정할 수 없습니다"}
 
             access_token = await self._get_access_token(user_id)
             if not access_token:
@@ -238,4 +309,34 @@ class TeamsHandler:
 
         except Exception as e:
             logger.error(f"❌ 메시지 검색 오류: {str(e)}", exc_info=True)
+            return {"success": False, "message": f"오류 발생: {str(e)}"}
+
+    # ========================================================================
+    # 한글 이름 저장
+    # ========================================================================
+
+    async def save_korean_name(
+        self,
+        user_id: str,
+        topic_kr: str,
+        chat_id: Optional[str] = None,
+        topic_en: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        채팅의 한글 이름을 저장
+
+        Args:
+            user_id: 사용자 ID
+            topic_kr: 한글 이름
+            chat_id: 채팅 ID (선택)
+            topic_en: 영문 이름 (선택, chat_id가 없을 때 검색용)
+
+        Returns:
+            저장 결과
+        """
+        try:
+            return await self.db_manager.save_korean_name(user_id, chat_id, topic_en, topic_kr)
+
+        except Exception as e:
+            logger.error(f"❌ 한글 이름 저장 오류: {str(e)}", exc_info=True)
             return {"success": False, "message": f"오류 발생: {str(e)}"}

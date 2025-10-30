@@ -359,6 +359,32 @@ class TeamsHandlers:
                     "required": ["user_id", "keyword"]
                 }
             ),
+            Tool(
+                name="teams_save_korean_name",
+                description="채팅방의 한글 이름을 저장합니다. chat_id 또는 영문 이름(topic_en)으로 채팅을 찾아 한글 이름을 저장합니다.",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "user_id": {
+                            "type": "string",
+                            "description": "사용자 ID"
+                        },
+                        "topic_kr": {
+                            "type": "string",
+                            "description": "한글 이름 (저장할 값)"
+                        },
+                        "chat_id": {
+                            "type": "string",
+                            "description": "채팅 ID (선택)"
+                        },
+                        "topic_en": {
+                            "type": "string",
+                            "description": "영문 이름 (chat_id가 없을 때 검색용)"
+                        }
+                    },
+                    "required": ["user_id", "topic_kr"]
+                }
+            ),
         ]
 
         # Return Teams tools only
@@ -396,14 +422,21 @@ class TeamsHandlers:
                         chat_type = chat.get("chatType", "unknown")
                         chat_id = chat.get("id")
                         topic = chat.get("topic", "(제목 없음)")
+                        topic_kr = chat.get("topic_kr")  # DB에서 가져온 한글 이름
+
+                        # 한글 이름이 있으면 함께 표시
+                        if topic_kr:
+                            display_name = f"{topic} → {topic_kr}"
+                        else:
+                            display_name = topic
 
                         # chatType에 따라 표시
                         if chat_type == "oneOnOne":
-                            output_lines.append(f"• [1:1] {topic}")
+                            output_lines.append(f"• [1:1] {display_name}")
                         elif chat_type == "group":
-                            output_lines.append(f"• [그룹] {topic}")
+                            output_lines.append(f"• [그룹] {display_name}")
                         else:
-                            output_lines.append(f"• [{chat_type}] {topic}")
+                            output_lines.append(f"• [{chat_type}] {display_name}")
 
                         output_lines.append(f"  ID: {chat_id}")
                         output_lines.append("")
@@ -485,6 +518,15 @@ class TeamsHandlers:
 
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
+            elif name == "teams_save_korean_name":
+                user_id = arguments.get("user_id")
+                topic_kr = arguments.get("topic_kr")
+                chat_id = arguments.get("chat_id")
+                topic_en = arguments.get("topic_en")
+
+                result = await self.teams_handler.save_korean_name(user_id, topic_kr, chat_id, topic_en)
+                return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
+
             else:
                 error_msg = f"알 수 없는 도구: {name}"
                 logger.error(error_msg)
@@ -553,6 +595,13 @@ class TeamsHandlers:
                 return await self.teams_handler.search_messages(
                     user_id, keyword, search_scope, chat_id, page_size, max_results
                 )
+
+            elif name == "teams_save_korean_name":
+                user_id = arguments.get("user_id")
+                topic_kr = arguments.get("topic_kr")
+                chat_id = arguments.get("chat_id")
+                topic_en = arguments.get("topic_en")
+                return await self.teams_handler.save_korean_name(user_id, topic_kr, chat_id, topic_en)
 
             else:
                 raise ValueError(f"알 수 없는 도구: {name}")
