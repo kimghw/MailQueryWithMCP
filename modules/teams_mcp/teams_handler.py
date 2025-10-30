@@ -167,18 +167,24 @@ class TeamsHandler:
             if result.get("success") and result.get("chats"):
                 await self.db_manager.sync_chats_to_db(user_id, result["chats"])
 
-                # DB에서 한글 이름 가져와서 각 채팅에 추가
+                # DB에서 한글/상대 이름을 가져와 각 채팅에 주입
                 chats = result["chats"]
                 for chat in chats:
                     chat_id = chat.get("id")
                     if chat_id:
                         db_result = self.db_manager.db.execute_query(
-                            "SELECT topic_kr FROM teams_chats WHERE user_id = ? AND chat_id = ?",
+                            "SELECT topic_kr, peer_user_name, peer_user_email FROM teams_chats WHERE user_id = ? AND chat_id = ?",
                             (user_id, chat_id),
                             fetch_result=True
                         )
-                        if db_result and len(db_result) > 0 and db_result[0][0]:
-                            chat["topic_kr"] = db_result[0][0]
+                        if db_result and len(db_result) > 0:
+                            topic_kr_val, peer_name_val, peer_email_val = db_result[0]
+                            if topic_kr_val:
+                                chat["topic_kr"] = topic_kr_val
+                            if peer_name_val:
+                                chat["peer_user_name"] = peer_name_val
+                            if peer_email_val:
+                                chat["peer_user_email"] = peer_email_val
 
             return result
 

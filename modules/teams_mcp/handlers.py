@@ -432,21 +432,24 @@ class TeamsHandlers:
                         chat_type = chat.get("chatType", "unknown")
                         chat_id = chat.get("id")
                         topic_raw = chat.get("topic")
-                        topic = topic_raw if topic_raw else "(제목 없음)"
+                        peer_name = chat.get("peer_user_name")
+                        # 표시용 원본 이름: topic이 없으면 1:1의 상대 이름 사용
+                        source_name = topic_raw or peer_name
+                        topic_display = source_name if source_name else "(제목 없음)"
                         topic_kr = chat.get("topic_kr")  # DB에서 가져온 한글 이름
 
-                        # 한글 이름이 있고 영문 이름과 다른 경우에만 표시
-                        has_korean_name = topic_kr and topic_kr != topic_raw
+                        # 한글 이름이 있고 원본 이름과 다른 경우에만 표시
+                        has_korean_name = topic_kr and topic_kr != (source_name or "")
 
                         if has_korean_name:
-                            display_name = f"{topic} → {topic_kr}"
+                            display_name = f"{topic_display} → {topic_kr}"
                         else:
-                            display_name = topic
+                            display_name = topic_display
                             # 한글 이름이 없는 경우 수집
-                            # 조건: topic이 있고, 한글이 포함되지 않은 순수 영문/기호 이름만
-                            if topic_raw and not has_korean_chars(topic_raw):
+                            # 조건: 표시 이름이 있고, 한글이 포함되지 않은 경우(영문/기호)
+                            if source_name and not has_korean_chars(source_name):
                                 chats_without_korean.append({
-                                    "topic": topic,
+                                    "name": topic_display,
                                     "chat_id": chat_id,
                                     "chat_type": chat_type
                                 })
@@ -472,13 +475,13 @@ class TeamsHandlers:
                         # 영문 이름만 간단히 나열
                         output_lines.append("🔤 영문 이름 목록:")
                         for idx, item in enumerate(chats_without_korean, 1):
-                            output_lines.append(f"  {idx}. {item['topic']}")
+                            output_lines.append(f"  {idx}. {item['name']}")
                         output_lines.append("")
 
                         # 상세 정보
                         output_lines.append("📋 상세 정보:")
                         for idx, item in enumerate(chats_without_korean, 1):
-                            output_lines.append(f"{idx}. 영문: {item['topic']}")
+                            output_lines.append(f"{idx}. 영문: {item['name']}")
                             output_lines.append(f"   chat_id: {item['chat_id']}")
                             output_lines.append("")
 
@@ -488,7 +491,7 @@ class TeamsHandlers:
                         output_lines.append("💡 등록되지 않은 한글 이름을 등록하겠습니다")
                         output_lines.append("")
                         output_lines.append("예시: teams_save_korean_name(")
-                        output_lines.append(f"  user_id=\"...\", topic_en=\"{chats_without_korean[0]['topic']}\", topic_kr=\"한글이름\"")
+                        output_lines.append(f"  user_id=\"...\", topic_en=\"{chats_without_korean[0]['name']}\", topic_kr=\"한글이름\"")
                         output_lines.append(")")
                         output_lines.append("="*50)
                         output_lines.append("")

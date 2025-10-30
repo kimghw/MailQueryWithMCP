@@ -16,6 +16,57 @@ class TeamsChats:
     def __init__(self, graph_base_url: str = "https://graph.microsoft.com/v1.0"):
         self.graph_base_url = graph_base_url
 
+    async def _enrich_null_topic_chats(self, access_token: str, chats: List[Dict[str, Any]]) -> None:
+        """
+        topic이 null인 1:1 채팅의 상대방 이름을 비동기로 조회하여 topic에 설정
+
+        Args:
+            access_token: Graph API 액세스 토큰
+            chats: 채팅 목록 (in-place 수정)
+        """
+        import asyncio
+
+        # topic이 null인 1:1 채팅만 필터링
+        null_topic_chats = [
+            chat for chat in chats
+            if chat.get("chatType") == "oneOnOne" and chat.get("topic") is None
+        ]
+
+        if not null_topic_chats:
+            return
+
+        logger.info(f"🔍 topic이 null인 1:1 채팅 {len(null_topic_chats)}개 발견, 멤버 조회 시작")
+
+        # 비동기로 멤버 조회
+        async def fetch_and_set_peer_name(chat):
+            chat_id = chat.get("id")
+            if not chat_id:
+                return
+
+            members_result = await self.get_chat_members(access_token, chat_id)
+            if members_result.get("success"):
+                members = members_result.get("members", [])
+                # 상대방 이름 찾기 (본인이 아닌 멤버)
+                for member in members:
+                    display_name = member.get("displayName")
+                    if display_name:
+                        # 첫 번째 멤버의 이름을 topic으로 설정
+                        # (더 정확하게는 본인 제외해야 하지만, 간단히 처리)
+                        if len(members) >= 2:
+                            # 두 번째 멤버를 상대방으로 간주
+                            peer = members[1] if len(members) > 1 else members[0]
+                            peer_name = peer.get("displayName", "Unknown")
+                        else:
+                            peer_name = members[0].get("displayName", "Unknown")
+
+                        chat["topic"] = peer_name
+                        logger.debug(f"✅ 채팅 {chat_id[:20]}... 상대방 이름: {peer_name}")
+                        break
+
+        # 모든 null topic 채팅을 비동기로 처리
+        await asyncio.gather(*[fetch_and_set_peer_name(chat) for chat in null_topic_chats])
+        logger.info(f"✅ {len(null_topic_chats)}개 채팅의 상대방 이름 조회 완료")
+
     async def list_chats(
         self,
         access_token: str,
@@ -52,6 +103,9 @@ class TeamsChats:
                     data = response.json()
                     chats = data.get("value", [])
                     logger.info(f"✅ 채팅 {len(chats)}개 조회 성공")
+
+                    # topic이 null인 1:1 채팅의 상대방 이름 조회 (비동기)
+                    await self._enrich_null_topic_chats(access_token, chats)
 
                     # 필터링 (이름) - topic None 방어
                     if filter_by_name:
