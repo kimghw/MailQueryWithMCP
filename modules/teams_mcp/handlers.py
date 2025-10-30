@@ -467,6 +467,7 @@ class TeamsHandlers:
                         # 강조 메시지 추가
                         output_lines.append("="*50)
                         output_lines.append("⚠️  중요! 한글 이름이 없는 채팅방은 한글을 등록해줘! ⚠️")
+                        output_lines.append("💡 등록되지 않은 한글 이름을 등록하겠습니다")
                         output_lines.append("="*50)
                         output_lines.append("")
 
