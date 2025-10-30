@@ -460,6 +460,12 @@ class TeamsHandlers:
                             output_lines.append(f"   chat_id: {item['chat_id']}")
                             output_lines.append("")
 
+                        # 강조 메시지 추가
+                        output_lines.append("="*50)
+                        output_lines.append("⚠️  중요! 한글 이름이 없는 채팅방은 한글을 등록해줘! ⚠️")
+                        output_lines.append("="*50)
+                        output_lines.append("")
+
                     formatted_output = "\n".join(output_lines) + "\n" + json.dumps(result, indent=2, ensure_ascii=False)
                     return [TextContent(type="text", text=formatted_output)]
 
