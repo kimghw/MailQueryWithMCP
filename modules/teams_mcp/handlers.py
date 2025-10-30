@@ -422,6 +422,12 @@ class TeamsHandlers:
                     # 한글 이름이 없는 채팅 수집
                     chats_without_korean = []
 
+                    # 한글 포함 여부 체크 함수
+                    def has_korean_chars(text):
+                        if not text:
+                            return False
+                        return any('\uac00' <= char <= '\ud7a3' for char in text)
+
                     for chat in chats:
                         chat_type = chat.get("chatType", "unknown")
                         chat_id = chat.get("id")
@@ -430,14 +436,15 @@ class TeamsHandlers:
                         topic_kr = chat.get("topic_kr")  # DB에서 가져온 한글 이름
 
                         # 한글 이름이 있고 영문 이름과 다른 경우에만 표시
-                        has_korean = topic_kr and topic_kr != topic_raw
+                        has_korean_name = topic_kr and topic_kr != topic_raw
 
-                        if has_korean:
+                        if has_korean_name:
                             display_name = f"{topic} → {topic_kr}"
                         else:
                             display_name = topic
-                            # 한글 이름이 없는 경우 수집 (topic이 실제로 있는 경우만)
-                            if topic_raw:
+                            # 한글 이름이 없는 경우 수집
+                            # 조건: topic이 있고, 한글이 포함되지 않은 순수 영문/기호 이름만
+                            if topic_raw and not has_korean_chars(topic_raw):
                                 chats_without_korean.append({
                                     "topic": topic,
                                     "chat_id": chat_id,
