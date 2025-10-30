@@ -39,11 +39,12 @@ class TeamsDBManager:
                 AND (
                     LOWER(peer_user_name) LIKE LOWER(?)
                     OR LOWER(topic) LIKE LOWER(?)
+                    OR LOWER(topic_kr) LIKE LOWER(?)
                 )
                 ORDER BY last_message_time DESC
                 LIMIT 1
                 """,
-                (user_id, f"%{recipient_name}%", f"%{recipient_name}%"),
+                (user_id, f"%{recipient_name}%", f"%{recipient_name}%", f"%{recipient_name}%"),
                 fetch_result=True
             )
 
@@ -129,6 +130,12 @@ class TeamsDBManager:
                 logger.info(f"🗑️ 채팅 비활성화: {chat_id}")
 
             # 각 채팅 정보를 DB에 UPSERT
+            def _contains_hangul(text: str) -> bool:
+                try:
+                    return any("\uac00" <= ch <= "\ud7a3" for ch in text)
+                except Exception:
+                    return False
+
             for chat in chats:
                 chat_id = chat.get("id")
                 chat_type = chat.get("chatType", "unknown")
@@ -149,6 +156,15 @@ class TeamsDBManager:
                     peer_user_name = peer_member.get("displayName", "")
                     peer_user_email = peer_member.get("email", "")
 
+                # 한글 이름(topic_kr) 추정
+                topic_kr = None
+                if chat_type == "oneOnOne" and peer_user_name:
+                    if _contains_hangul(peer_user_name):
+                        topic_kr = peer_user_name
+                if not topic_kr and topic:
+                    if _contains_hangul(topic):
+                        topic_kr = topic
+
                 # 마지막 메시지 정보
                 last_message_preview = chat.get("lastMessagePreview", {}).get("body", {}).get("content", "")
                 last_message_time = chat.get("lastUpdatedDateTime", "")
@@ -157,14 +173,15 @@ class TeamsDBManager:
                 self.db.execute_query(
                     """
                     INSERT INTO teams_chats (
-                        user_id, chat_id, chat_type, topic,
+                        user_id, chat_id, chat_type, topic, topic_kr,
                         member_count, members_json, peer_user_name, peer_user_email,
                         last_message_preview, last_message_time,
                         created_at, updated_at, last_sync_at, is_active
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
                     ON CONFLICT(user_id, chat_id) DO UPDATE SET
                         chat_type = excluded.chat_type,
                         topic = excluded.topic,
+                        topic_kr = excluded.topic_kr,
                         member_count = excluded.member_count,
                         members_json = excluded.members_json,
                         peer_user_name = excluded.peer_user_name,
@@ -176,7 +193,7 @@ class TeamsDBManager:
                         is_active = TRUE
                     """,
                     (
-                        user_id, chat_id, chat_type, topic,
+                        user_id, chat_id, chat_type, topic, topic_kr,
                         member_count, members_json, peer_user_name, peer_user_email,
                         last_message_preview, last_message_time,
                         datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), datetime.utcnow().isoformat()
@@ -303,6 +320,21 @@ class TeamsDBManager:
                     or ""
                 )
 
+            # 한글 이름(topic_kr) 추정
+            def _contains_hangul(text: str) -> bool:
+                try:
+                    return any("\uac00" <= ch <= "\ud7a3" for ch in text)
+                except Exception:
+                    return False
+
+            topic_kr = None
+            if chat_type == "oneOnOne" and peer_user_name:
+                if _contains_hangul(peer_user_name):
+                    topic_kr = peer_user_name
+            if not topic_kr and topic:
+                if _contains_hangul(topic):
+                    topic_kr = topic
+
             last_message_preview = (
                 chat.get("lastMessagePreview", {}).get("body", {}).get("content", "")
             )
@@ -311,14 +343,15 @@ class TeamsDBManager:
             self.db.execute_query(
                 """
                 INSERT INTO teams_chats (
-                    user_id, chat_id, chat_type, topic,
+                    user_id, chat_id, chat_type, topic, topic_kr,
                     member_count, members_json, peer_user_name, peer_user_email,
                     last_message_preview, last_message_time,
                     created_at, updated_at, last_sync_at, is_active
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, TRUE)
                 ON CONFLICT(user_id, chat_id) DO UPDATE SET
                     chat_type = excluded.chat_type,
                     topic = excluded.topic,
+                    topic_kr = excluded.topic_kr,
                     member_count = excluded.member_count,
                     members_json = excluded.members_json,
                     peer_user_name = excluded.peer_user_name,
@@ -330,7 +363,7 @@ class TeamsDBManager:
                     is_active = TRUE
                 """,
                 (
-                    user_id, chat_id, chat_type, topic,
+                    user_id, chat_id, chat_type, topic, topic_kr,
                     member_count, members_json, peer_user_name, peer_user_email,
                     last_message_preview, last_message_time,
                     datetime.utcnow().isoformat(), datetime.utcnow().isoformat(), datetime.utcnow().isoformat()

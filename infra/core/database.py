@@ -152,6 +152,7 @@ class DatabaseManager:
         # 실행할 마이그레이션 파일 목록 (initial_schema.sql 제외)
         migration_files = [
             "teams_schema.sql",
+            "teams_add_topic_kr.sql",
             # 향후 추가 마이그레이션 파일을 여기에 추가
         ]
 
@@ -173,8 +174,16 @@ class DatabaseManager:
                 ]
 
                 for statement in statements:
-                    # CREATE TABLE IF NOT EXISTS 패턴이므로 멱등성 보장
-                    self._connection.execute(statement)
+                    stmt = statement.strip()
+                    # ALTER TABLE로 컬럼 추가 시 이미 존재하면 건너뛰기 (SQLite는 IF NOT EXISTS 미지원)
+                    if stmt.upper().startswith("ALTER TABLE TEAMS_CHATS ADD COLUMN TOPIC_KR"):
+                        # 컬럼 존재 여부 확인
+                        cols = [c["name"].lower() for c in self.get_table_info("teams_chats")]
+                        if "topic_kr" in cols:
+                            logger.info("마이그레이션 건너뜀: teams_chats.topic_kr 이미 존재")
+                            continue
+                    # CREATE TABLE/INDEX IF NOT EXISTS는 멱등성
+                    self._connection.execute(stmt)
 
                 self._connection.commit()
                 logger.info(f"✅ 마이그레이션 완료: {migration_file} ({len(statements)}개 구문)")

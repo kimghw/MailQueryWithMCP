@@ -418,6 +418,10 @@ class TeamsHandlers:
                 if result.get("success") and result.get("chats"):
                     chats = result["chats"]
                     output_lines = [f"💬 총 {len(chats)}개 채팅 조회됨\n"]
+
+                    # 한글 이름이 없는 채팅 수집
+                    chats_without_korean = []
+
                     for chat in chats:
                         chat_type = chat.get("chatType", "unknown")
                         chat_id = chat.get("id")
@@ -429,6 +433,12 @@ class TeamsHandlers:
                             display_name = f"{topic} → {topic_kr}"
                         else:
                             display_name = topic
+                            # 한글 이름이 없는 경우 수집
+                            chats_without_korean.append({
+                                "topic": topic,
+                                "chat_id": chat_id,
+                                "chat_type": chat_type
+                            })
 
                         # chatType에 따라 표시
                         if chat_type == "oneOnOne":
@@ -440,6 +450,15 @@ class TeamsHandlers:
 
                         output_lines.append(f"  ID: {chat_id}")
                         output_lines.append("")
+
+                    # 한글 이름이 없는 채팅 목록 추가
+                    if chats_without_korean:
+                        output_lines.append("\n" + "="*50)
+                        output_lines.append(f"📝 한글 이름이 없는 채팅 ({len(chats_without_korean)}개)\n")
+                        for idx, item in enumerate(chats_without_korean, 1):
+                            output_lines.append(f"{idx}. {item['topic']}")
+                            output_lines.append(f"   chat_id: {item['chat_id']}")
+                            output_lines.append("")
 
                     formatted_output = "\n".join(output_lines) + "\n" + json.dumps(result, indent=2, ensure_ascii=False)
                     return [TextContent(type="text", text=formatted_output)]
