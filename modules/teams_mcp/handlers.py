@@ -425,20 +425,24 @@ class TeamsHandlers:
                     for chat in chats:
                         chat_type = chat.get("chatType", "unknown")
                         chat_id = chat.get("id")
-                        topic = chat.get("topic", "(제목 없음)")
+                        topic_raw = chat.get("topic")
+                        topic = topic_raw if topic_raw else "(제목 없음)"
                         topic_kr = chat.get("topic_kr")  # DB에서 가져온 한글 이름
 
-                        # 한글 이름이 있으면 함께 표시
-                        if topic_kr:
+                        # 한글 이름이 있고 영문 이름과 다른 경우에만 표시
+                        has_korean = topic_kr and topic_kr != topic_raw
+
+                        if has_korean:
                             display_name = f"{topic} → {topic_kr}"
                         else:
                             display_name = topic
-                            # 한글 이름이 없는 경우 수집
-                            chats_without_korean.append({
-                                "topic": topic,
-                                "chat_id": chat_id,
-                                "chat_type": chat_type
-                            })
+                            # 한글 이름이 없는 경우 수집 (topic이 실제로 있는 경우만)
+                            if topic_raw:
+                                chats_without_korean.append({
+                                    "topic": topic,
+                                    "chat_id": chat_id,
+                                    "chat_type": chat_type
+                                })
 
                         # chatType에 따라 표시
                         if chat_type == "oneOnOne":
