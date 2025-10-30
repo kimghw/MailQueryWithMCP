@@ -16,6 +16,42 @@ class TeamsChats:
     def __init__(self, graph_base_url: str = "https://graph.microsoft.com/v1.0"):
         self.graph_base_url = graph_base_url
 
+    async def _get_my_user_id(self, access_token: str) -> Optional[str]:
+        """
+        현재 사용자의 userId 조회
+
+        Args:
+            access_token: Graph API 액세스 토큰
+
+        Returns:
+            userId (Azure AD Object ID)
+        """
+        try:
+            headers = {
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json"
+            }
+
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{self.graph_base_url}/me",
+                    headers=headers,
+                    timeout=10.0
+                )
+
+                if response.status_code == 200:
+                    user_data = response.json()
+                    user_id = user_data.get("id")
+                    logger.debug(f"✅ 내 userId 조회 성공: {user_id}")
+                    return user_id
+                else:
+                    logger.warning(f"⚠️ /me 조회 실패: {response.status_code}")
+                    return None
+
+        except Exception as e:
+            logger.error(f"❌ /me 조회 중 오류: {e}")
+            return None
+
     async def _enrich_null_topic_chats(self, access_token: str, chats: List[Dict[str, Any]]) -> None:
         """
         topic이 null인 1:1 채팅의 상대방 이름을 비동기로 조회하여 topic에 설정
@@ -37,6 +73,11 @@ class TeamsChats:
 
         logger.info(f"🔍 topic이 null인 1:1 채팅 {len(null_topic_chats)}개 발견, 멤버 조회 시작")
 
+        # 내 userId 조회 (본인 제외를 위해)
+        my_user_id = await self._get_my_user_id(access_token)
+        if not my_user_id:
+            logger.warning("⚠️ 내 userId를 조회할 수 없어 상대방 필터링이 정확하지 않을 수 있습니다")
+
         # 비동기로 멤버 조회
         async def fetch_and_set_peer_name(chat):
             chat_id = chat.get("id")
@@ -46,22 +87,31 @@ class TeamsChats:
             members_result = await self.get_chat_members(access_token, chat_id)
             if members_result.get("success"):
                 members = members_result.get("members", [])
-                # 상대방 이름 찾기 (본인이 아닌 멤버)
-                for member in members:
-                    display_name = member.get("displayName")
-                    if display_name:
-                        # 첫 번째 멤버의 이름을 topic으로 설정
-                        # (더 정확하게는 본인 제외해야 하지만, 간단히 처리)
-                        if len(members) >= 2:
-                            # 두 번째 멤버를 상대방으로 간주
-                            peer = members[1] if len(members) > 1 else members[0]
-                            peer_name = peer.get("displayName", "Unknown")
-                        else:
-                            peer_name = members[0].get("displayName", "Unknown")
 
-                        chat["topic"] = peer_name
-                        logger.debug(f"✅ 채팅 {chat_id[:20]}... 상대방 이름: {peer_name}")
+                # 본인이 아닌 멤버 찾기
+                peer_name = None
+                for member in members:
+                    member_user_id = member.get("userId")
+                    display_name = member.get("displayName")
+
+                    # 본인 제외
+                    if my_user_id and member_user_id == my_user_id:
+                        logger.debug(f"  본인 제외: {display_name} ({member_user_id})")
+                        continue
+
+                    # 상대방 찾음
+                    if display_name:
+                        peer_name = display_name
+                        logger.debug(f"✅ 채팅 {chat_id[:20]}... 상대방: {peer_name} ({member_user_id})")
                         break
+
+                if peer_name:
+                    chat["topic"] = peer_name
+                else:
+                    # 본인 제외 후 상대방을 찾지 못한 경우, 첫 번째 멤버 사용
+                    if members:
+                        chat["topic"] = members[0].get("displayName", "Unknown")
+                        logger.warning(f"⚠️ 채팅 {chat_id[:20]}... 상대방을 찾지 못해 첫 번째 멤버 사용")
 
         # 모든 null topic 채팅을 비동기로 처리
         await asyncio.gather(*[fetch_and_set_peer_name(chat) for chat in null_topic_chats])
