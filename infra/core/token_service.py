@@ -251,7 +251,9 @@ class TokenService:
                 return None
 
             # 사용자별 delegated_permissions 파싱
-            delegated_permissions = account.get("delegated_permissions")
+            # sqlite3.Row 객체를 dict로 변환
+            account_dict = dict(account)
+            delegated_permissions = account_dict.get("delegated_permissions")
             user_scopes = None
             if delegated_permissions:
                 # _scope_validator 모듈의 parse_scopes_from_storage 함수 사용
@@ -401,7 +403,9 @@ class TokenService:
                     raise AuthenticationError("OAuth 설정 복호화에 실패했습니다.")
 
                 # 사용자별 delegated_permissions 파싱
-                delegated_permissions = account.get("delegated_permissions")
+                # sqlite3.Row 객체를 dict로 변환
+                account_dict2 = dict(account)
+                delegated_permissions = account_dict2.get("delegated_permissions")
                 user_scopes = None
                 if delegated_permissions:
                     from modules.enrollment.account._scope_validator import parse_scopes_from_storage
