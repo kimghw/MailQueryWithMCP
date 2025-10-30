@@ -328,7 +328,7 @@ class MCPHandlers(AttachmentFilterHandlers, CalendarHandlers):
 
         return mail_query_tools
     
-    async def handle_call_tool(self, name: str, arguments: Dict[str, Any]) -> List[TextContent]:
+    async def handle_call_tool(self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None) -> List[TextContent]:
         """Handle tool calls"""
         logger.info(f"🛠️ [MCP Handler] call_tool() called with tool: {name}")
         logger.info(f"📝 [MCP Handler] Raw arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
@@ -336,6 +336,16 @@ class MCPHandlers(AttachmentFilterHandlers, CalendarHandlers):
         # Preprocess arguments
         arguments = preprocess_arguments(arguments)
         logger.info(f"🔄 [MCP Handler] Preprocessed arguments: {json.dumps(arguments, indent=2, ensure_ascii=False)}")
+
+        # 인증된 user_id 적용 (보안)
+        if authenticated_user_id:
+            param_user_id = arguments.get("user_id")
+            if param_user_id and param_user_id != authenticated_user_id:
+                logger.warning(
+                    f"⚠️ 보안: 인증된 user_id({authenticated_user_id})와 "
+                    f"파라미터 user_id({param_user_id})가 다름. 인증된 user_id 사용."
+                )
+            arguments["user_id"] = authenticated_user_id
 
         try:
             # AttachmentFilterHandlers 툴 체크

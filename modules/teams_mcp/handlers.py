@@ -4,7 +4,7 @@ MCP 프로토콜 핸들러 레이어 - HTTP/stdio 공통 로직
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from mcp.types import Tool, TextContent
 
 from infra.core.logger import get_logger
@@ -292,13 +292,13 @@ class TeamsHandlers:
             ),
             Tool(
                 name="teams_send_chat_message",
-                description="채팅에 메시지를 전송합니다. chat_id, recipient_name 둘 다 없으면 최근 대화 또는 Notes(48:notes)로 전송합니다.",
+                description="채팅에 메시지를 전송합니다. user_id, chat_id, recipient_name을 모두 생략하면 자동으로 48:notes(나에게 보내기)로 전송됩니다. '나에게', '내게' 등 자신에게 보내는 요청이거나, 상대방이 명시되지 않은 경우 모든 파라미터를 생략하세요.",
                 inputSchema={
                     "type": "object",
                     "properties": {
                         "user_id": {
                             "type": "string",
-                            "description": "사용자 ID"
+                            "description": "사용자 ID (선택사항). 지정하지 않으면 기본 사용자 사용."
                         },
                         "content": {
                             "type": "string",
@@ -306,11 +306,11 @@ class TeamsHandlers:
                         },
                         "chat_id": {
                             "type": "string",
-                            "description": "채팅 ID (선택사항)"
+                            "description": "채팅 ID (선택사항). 명시하지 않으면 48:notes(나에게 보내기)를 사용합니다."
                         },
                         "recipient_name": {
                             "type": "string",
-                            "description": "상대방 이름 (chat_id가 없을 때 사용)"
+                            "description": "상대방 이름 (선택사항). 특정 상대방에게 보낼 때만 지정. 명시하지 않으면 48:notes(나에게 보내기)를 사용합니다."
                         },
                         "prefix": {
                             "type": "string",
@@ -318,7 +318,7 @@ class TeamsHandlers:
                             "default": "[claude]"
                         }
                     },
-                    "required": ["user_id", "content"]
+                    "required": ["content"]
                 }
             ),
             Tool(
@@ -407,7 +407,7 @@ class TeamsHandlers:
     # ========================================================================
 
     async def handle_call_tool(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None
     ) -> List[TextContent]:
         """Handle MCP tool calls (Teams Chat only)"""
         logger.info(f"🔨 [MCP Handler] call_tool({name}) with args: {arguments}")
@@ -420,7 +420,10 @@ class TeamsHandlers:
 
             # Handle Teams Chat-specific tools
             elif name == "teams_list_chats":
-                user_id = arguments.get("user_id")
+                # 인증된 user_id 사용 (보안)
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
+
                 sort_by = arguments.get("sort_by", "recent")
                 limit = arguments.get("limit")
                 filter_by_name = arguments.get("filter_by_name")
@@ -523,7 +526,10 @@ class TeamsHandlers:
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "teams_get_chat_messages":
-                user_id = arguments.get("user_id")
+                # 인증된 user_id 사용 (보안)
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
+
                 chat_id = arguments.get("chat_id")
                 recipient_name = arguments.get("recipient_name")
                 limit = arguments.get("limit", 50)
@@ -554,7 +560,31 @@ class TeamsHandlers:
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "teams_send_chat_message":
-                user_id = arguments.get("user_id")
+                # 1순위: 인증된 user_id (보안)
+                # 2순위: 파라미터로 전달된 user_id
+                # 3순위: DB에서 첫 번째 user_id 조회
+                user_id = authenticated_user_id or arguments.get("user_id")
+
+                if not user_id:
+                    # user_id가 없으면 teams_chats에서 첫 번째 user_id 조회
+                    from infra.core.database import get_database_manager
+                    db = get_database_manager()
+                    result_query = db.execute_query(
+                        "SELECT DISTINCT user_id FROM teams_chats LIMIT 1",
+                        fetch_result=True
+                    )
+                    if result_query and len(result_query) > 0:
+                        user_id = result_query[0][0]
+                    else:
+                        # DB에 없으면 환경변수 사용
+                        import os
+                        user_id = os.getenv("AUTO_REGISTER_USER_ID", "kimghw")
+
+                # 보안 검증: 파라미터 user_id가 인증된 user_id와 다르면 경고
+                param_user_id = arguments.get("user_id")
+                if authenticated_user_id and param_user_id and param_user_id != authenticated_user_id:
+                    logger.warning(f"⚠️ 보안: 인증된 user_id({authenticated_user_id})와 파라미터 user_id({param_user_id})가 다름. 인증된 user_id 사용.")
+
                 content = arguments.get("content")
                 chat_id = arguments.get("chat_id")
                 recipient_name = arguments.get("recipient_name")
@@ -564,7 +594,10 @@ class TeamsHandlers:
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "teams_search_messages":
-                user_id = arguments.get("user_id")
+                # 인증된 user_id 사용 (보안)
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
+
                 keyword = arguments.get("keyword")
                 search_scope = arguments.get("search_scope", "all_chats")
                 chat_id = arguments.get("chat_id")
@@ -595,7 +628,10 @@ class TeamsHandlers:
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "teams_save_korean_name":
-                user_id = arguments.get("user_id")
+                # 인증된 user_id 사용 (보안)
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
+
                 names = arguments.get("names")  # 배치 저장용
 
                 # 배치 저장
@@ -642,7 +678,7 @@ class TeamsHandlers:
     # ========================================================================
 
     async def call_tool_as_dict(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         HTTP API용 헬퍼: call_tool 결과를 dict로 반환
@@ -655,21 +691,25 @@ class TeamsHandlers:
                 }
 
             elif name == "teams_list_chats":
-                user_id = arguments.get("user_id")
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
                 sort_by = arguments.get("sort_by", "recent")
                 limit = arguments.get("limit")
                 filter_by_name = arguments.get("filter_by_name")
                 return await self.teams_handler.list_chats(user_id, sort_by, limit, filter_by_name)
 
             elif name == "teams_get_chat_messages":
-                user_id = arguments.get("user_id")
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
                 chat_id = arguments.get("chat_id")
                 recipient_name = arguments.get("recipient_name")
                 limit = arguments.get("limit", 50)
                 return await self.teams_handler.get_chat_messages(user_id, chat_id, recipient_name, limit)
 
             elif name == "teams_send_chat_message":
-                user_id = arguments.get("user_id")
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
+
                 content = arguments.get("content")
                 chat_id = arguments.get("chat_id")
                 recipient_name = arguments.get("recipient_name")
@@ -677,7 +717,8 @@ class TeamsHandlers:
                 return await self.teams_handler.send_chat_message(user_id, content, chat_id, recipient_name, prefix)
 
             elif name == "teams_search_messages":
-                user_id = arguments.get("user_id")
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
                 keyword = arguments.get("keyword")
                 search_scope = arguments.get("search_scope", "all_chats")
                 chat_id = arguments.get("chat_id")
@@ -688,7 +729,8 @@ class TeamsHandlers:
                 )
 
             elif name == "teams_save_korean_name":
-                user_id = arguments.get("user_id")
+                from infra.core.auth_helpers import get_authenticated_user_id
+                user_id = get_authenticated_user_id(arguments, authenticated_user_id)
                 names = arguments.get("names")
 
                 if names:

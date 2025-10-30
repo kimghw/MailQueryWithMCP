@@ -186,10 +186,20 @@ class TeamsChats:
                     if limit and limit > 0:
                         chats = chats[:limit]
 
+                    # 필요한 필드만 추출 (불필요한 raw 데이터 제거)
+                    # lastUpdatedDateTime, lastMessagePreview는 DB에 저장되므로 제외
+                    simplified_chats = []
+                    for chat in chats:
+                        simplified_chats.append({
+                            "id": chat.get("id"),
+                            "chatType": chat.get("chatType"),
+                            "topic": chat.get("topic"),
+                        })
+
                     return {
                         "success": True,
-                        "chats": chats,
-                        "count": len(chats),
+                        "chats": simplified_chats,
+                        "count": len(simplified_chats),
                         "sort_by": sort_by,
                         "limit": limit,
                         "filter": filter_by_name

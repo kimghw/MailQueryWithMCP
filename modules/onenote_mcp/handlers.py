@@ -4,7 +4,7 @@ MCP 프로토콜 핸들러 레이어 - HTTP/stdio 공통 로직
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from mcp.types import Tool, TextContent
 
 from infra.core.logger import get_logger
@@ -183,8 +183,13 @@ class OneNoteHandlers:
     # MCP Protocol: call_tool
     # ========================================================================
 
+    def _get_authenticated_user_id(self, arguments: Dict[str, Any], authenticated_user_id: Optional[str]) -> str:
+        """인증된 user_id를 반환합니다 (공통 헬퍼 래퍼)"""
+        from infra.core.auth_helpers import get_authenticated_user_id
+        return get_authenticated_user_id(arguments, authenticated_user_id)
+
     async def handle_call_tool(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None
     ) -> List[TextContent]:
         """Handle MCP tool calls (OneNote only)"""
         logger.info(f"🔨 [MCP Handler] call_tool({name}) with args: {arguments}")
@@ -193,7 +198,7 @@ class OneNoteHandlers:
             # Handle OneNote-specific tools
             if name == "manage_sections_and_pages":
                 action = arguments.get("action")
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
 
                 if action == "create_section":
                     notebook_id = arguments.get("notebook_id")
@@ -330,7 +335,7 @@ class OneNoteHandlers:
 
             elif name == "manage_page_content":
                 action = arguments.get("action")
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
 
                 if action == "get":
                     page_id = arguments.get("page_id")
@@ -439,7 +444,7 @@ class OneNoteHandlers:
                 return [TextContent(type="text", text=response.model_dump_json(indent=2))]
 
             elif name == "db_onenote_update":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 section_id = arguments.get("section_id")
                 section_name = arguments.get("section_name")
                 notebook_id = arguments.get("notebook_id")
@@ -512,7 +517,7 @@ class OneNoteHandlers:
     # ========================================================================
 
     async def call_tool_as_dict(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         HTTP API용 헬퍼: call_tool 결과를 dict로 반환
@@ -521,7 +526,7 @@ class OneNoteHandlers:
             # Handle OneNote-specific tools
             if name == "manage_sections_and_pages":
                 action = arguments.get("action")
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
 
                 if action == "create_section":
                     notebook_id = arguments.get("notebook_id")
@@ -605,7 +610,7 @@ class OneNoteHandlers:
 
             elif name == "manage_page_content":
                 action = arguments.get("action")
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
 
                 if action == "get":
                     page_id = arguments.get("page_id")
@@ -642,7 +647,7 @@ class OneNoteHandlers:
                 return result
 
             elif name == "db_onenote_update":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 section_id = arguments.get("section_id")
                 section_name = arguments.get("section_name")
                 notebook_id = arguments.get("notebook_id")

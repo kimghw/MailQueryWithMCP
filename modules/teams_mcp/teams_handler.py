@@ -48,8 +48,7 @@ class TeamsHandler:
         1) 입력 chat_id
         2) recipient_name → DB 조회
         3) recipient_name → Graph에서 멤버 검색 후 DB UPSERT
-        4) 최근 대화
-        5) Notes 기본값(48:notes)
+        4) Notes 기본값(48:notes) - chat_id와 recipient_name 둘 다 없으면 무조건 Notes
         """
         try:
             if chat_id:
@@ -100,13 +99,8 @@ class TeamsHandler:
                         await self.db_manager.upsert_chat(user_id, c, members)
                         return cid
 
-            # 최근 대화
-            recent_id = await self.db_manager.get_recent_chat_id(user_id)
-            if recent_id:
-                return recent_id
-
-            # 기본 Notes
-            logger.info("ℹ️ chat_id 없음, 기본값 48:notes 사용")
+            # chat_id와 recipient_name 둘 다 없으면 무조건 Notes(48:notes)
+            logger.info("ℹ️ chat_id/recipient_name 없음, 기본값 48:notes 사용")
             return "48:notes"
 
         except Exception as e:
@@ -151,7 +145,7 @@ class TeamsHandler:
             filter_by_name: 이름 필터 (Optional)
 
         Returns:
-            채팅 목록
+            채팅 목록 (최근 대화 5개 + 전체 목록)
         """
         try:
             access_token = await self._get_access_token(user_id)
@@ -163,7 +157,7 @@ class TeamsHandler:
                 access_token, sort_by, limit, filter_by_name
             )
 
-            # 성공 시 DB 동기화 및 한글 이름 추가
+            # 성공 시 DB 동기화
             if result.get("success") and result.get("chats"):
                 await self.db_manager.sync_chats_to_db(user_id, result["chats"])
 
@@ -185,6 +179,38 @@ class TeamsHandler:
                                 chat["peer_user_name"] = peer_name_val
                             if peer_email_val:
                                 chat["peer_user_email"] = peer_email_val
+
+                # DB에서 최근 대화 5개 조회 (topic + 시간)
+                recent_chats_result = self.db_manager.db.execute_query(
+                    """
+                    SELECT
+                        chat_id,
+                        COALESCE(topic_kr, topic, peer_user_name) as display_name,
+                        CASE
+                            WHEN last_sent_at IS NOT NULL THEN last_sent_at
+                            WHEN last_received_at IS NOT NULL THEN last_received_at
+                            WHEN last_message_time IS NOT NULL THEN last_message_time
+                            ELSE created_at
+                        END as recent_time
+                    FROM teams_chats
+                    WHERE user_id = ? AND is_active = TRUE
+                    ORDER BY recent_time DESC
+                    LIMIT 5
+                    """,
+                    (user_id,),
+                    fetch_result=True
+                )
+
+                recent_chats = []
+                if recent_chats_result:
+                    for row in recent_chats_result:
+                        recent_chats.append({
+                            "chat_id": row[0],
+                            "topic": row[1],
+                            "last_activity": row[2]
+                        })
+
+                result["recent_chats"] = recent_chats
 
             return result
 

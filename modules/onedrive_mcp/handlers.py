@@ -4,7 +4,7 @@ MCP 프로토콜 핸들러 레이어 - HTTP/stdio 공통 로직
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from mcp.types import Tool, TextContent
 
 from infra.core.logger import get_logger
@@ -156,8 +156,13 @@ class OneDriveHandlers:
     # MCP Protocol: call_tool
     # ========================================================================
 
+    def _get_authenticated_user_id(self, arguments: Dict[str, Any], authenticated_user_id: Optional[str]) -> str:
+        """인증된 user_id를 반환합니다 (공통 헬퍼 래퍼)"""
+        from infra.core.auth_helpers import get_authenticated_user_id
+        return get_authenticated_user_id(arguments, authenticated_user_id)
+
     async def handle_call_tool(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None
     ) -> List[TextContent]:
         """Handle MCP tool calls (OneDrive only)"""
         logger.info(f"🔨 [MCP Handler] call_tool({name}) with args: {arguments}")
@@ -165,7 +170,7 @@ class OneDriveHandlers:
         try:
             # Handle OneDrive-specific tools
             if name == "list_files":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 folder_path = arguments.get("folder_path")
                 search = arguments.get("search")
 
@@ -195,14 +200,14 @@ class OneDriveHandlers:
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "read_file":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 file_path = arguments.get("file_path")
 
                 result = await self.onedrive_handler.read_file(user_id, file_path)
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "write_file":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 file_path = arguments.get("file_path")
                 content = arguments.get("content")
                 overwrite = arguments.get("overwrite", True)
@@ -211,14 +216,14 @@ class OneDriveHandlers:
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "delete_file":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 file_path = arguments.get("file_path")
 
                 result = await self.onedrive_handler.delete_file(user_id, file_path)
                 return [TextContent(type="text", text=json.dumps(result, indent=2, ensure_ascii=False))]
 
             elif name == "create_folder":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 folder_path = arguments.get("folder_path")
                 parent_path = arguments.get("parent_path")
 
@@ -249,7 +254,7 @@ class OneDriveHandlers:
     # ========================================================================
 
     async def call_tool_as_dict(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         HTTP API용 헬퍼: call_tool 결과를 dict로 반환
@@ -257,20 +262,20 @@ class OneDriveHandlers:
         try:
             # Handle OneDrive-specific tools
             if name == "list_files":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 folder_path = arguments.get("folder_path")
                 search = arguments.get("search")
                 result = await self.onedrive_handler.list_files(user_id, folder_path, search)
                 return result
 
             elif name == "read_file":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 file_path = arguments.get("file_path")
                 result = await self.onedrive_handler.read_file(user_id, file_path)
                 return result
 
             elif name == "write_file":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 file_path = arguments.get("file_path")
                 content = arguments.get("content")
                 overwrite = arguments.get("overwrite", True)
@@ -278,13 +283,13 @@ class OneDriveHandlers:
                 return result
 
             elif name == "delete_file":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 file_path = arguments.get("file_path")
                 result = await self.onedrive_handler.delete_file(user_id, file_path)
                 return result
 
             elif name == "create_folder":
-                user_id = arguments.get("user_id")
+                user_id = self._get_authenticated_user_id(arguments, authenticated_user_id)
                 folder_path = arguments.get("folder_path")
                 parent_path = arguments.get("parent_path")
                 result = await self.onedrive_handler.create_folder(user_id, folder_path, parent_path)

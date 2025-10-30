@@ -4,7 +4,7 @@ MCP 프로토콜 핸들러 레이어 - HTTP/stdio 공통 로직
 """
 
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from mcp.types import Tool, TextContent, Prompt, PromptArgument, PromptMessage
 
 from infra.core.logger import get_logger
@@ -132,12 +132,31 @@ class IACSHandlers:
     # ========================================================================
 
     async def handle_call_tool(
-        self, name: str, arguments: Dict[str, Any]
+        self, name: str, arguments: Dict[str, Any], authenticated_user_id: Optional[str] = None
     ) -> List[TextContent]:
         """Handle MCP tool calls"""
         logger.info(f"🔨 [MCP Handler] call_tool({name}) with args: {arguments}")
 
         try:
+            # 인증 기반 user_id 강제 적용 (검색 계열 툴에만 해당)
+            if name in ("search_agenda", "search_responses"):
+                from infra.core.auth_helpers import get_authenticated_user_id
+                provided_user = arguments.get("kr_panel_member")
+                # kr_panel_member를 user_id로 간주하여 공통 헬퍼 적용
+                resolved_user = get_authenticated_user_id(
+                    {"user_id": provided_user} if provided_user else {},
+                    authenticated_user_id,
+                )
+
+                # 보안 검증 로깅: 파라미터와 인증 불일치
+                if authenticated_user_id and provided_user and provided_user != authenticated_user_id:
+                    logger.warning(
+                        f"⚠️ 보안: 인증된 user_id({authenticated_user_id})와 파라미터 kr_panel_member({provided_user})가 다름. 인증된 user_id 사용."
+                    )
+
+                if resolved_user:
+                    arguments["kr_panel_member"] = resolved_user
+
             # Handle IACS tools
             if name == "insert_info":
                 request = InsertInfoRequest(**arguments)

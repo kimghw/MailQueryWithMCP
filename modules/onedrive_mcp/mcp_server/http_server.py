@@ -174,7 +174,7 @@ All MCP requests should be sent as POST to the root endpoint `/`.
                 elif method == "tools/list":
                     result = await self._handle_tools_list()
                 elif method == "tools/call":
-                    result = await self._handle_tools_call(params)
+                    result = await self._handle_tools_call(request, params)
                 elif method == "prompts/list":
                     result = {"prompts": []}
                 elif method == "resources/list":
@@ -318,7 +318,7 @@ All MCP requests should be sent as POST to the root endpoint `/`.
 
         return {"tools": tools_data}
 
-    async def _handle_tools_call(self, params: Dict[str, Any]) -> Dict[str, Any]:
+    async def _handle_tools_call(self, request, params: Dict[str, Any]) -> Dict[str, Any]:
         """Handle tools/call method"""
         tool_name = params.get("name")
         tool_args = params.get("arguments", {})
@@ -326,8 +326,13 @@ All MCP requests should be sent as POST to the root endpoint `/`.
         logger.info(f"🔧 Calling tool: {tool_name}")
         logger.info(f"   Arguments: {tool_args}")
 
+        # Extract authenticated user_id from request.state (set by auth middleware)
+        authenticated_user_id = getattr(request.state, "user_id", None)
+        if authenticated_user_id:
+            logger.info(f"  • Authenticated user_id: {authenticated_user_id}")
+
         # Call handler
-        results = await self.handlers.handle_call_tool(tool_name, tool_args)
+        results = await self.handlers.handle_call_tool(tool_name, tool_args, authenticated_user_id)
 
         # Convert TextContent to dict
         content_data = [content.model_dump() for content in results]
