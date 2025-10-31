@@ -621,13 +621,54 @@ class UnifiedMCPServer:
                 client = dcr_service.get_client(client_id)
 
                 if not client:
-                    return JSONResponse(
-                        {"error": "invalid_client", "error_description": "Client not found"},
-                        status_code=401,
-                    )
+                    # 클라이언트가 없으면 자동 등록 시도
+                    logger.warning(f"⚠️ Client not found: {client_id}, attempting auto-registration")
+
+                    # redirect_uri를 기반으로 플랫폼 식별 및 자동 등록
+                    try:
+                        # 플랫폼별 기본 이름 설정
+                        if "claude.ai" in redirect_uri:
+                            client_name = "Claude AI Connector"
+                        elif "chatgpt.com" in redirect_uri:
+                            client_name = "ChatGPT Connector"
+                        else:
+                            client_name = "MCP Connector"
+
+                        # 자동 등록 수행
+                        registration_result = await dcr_service.register_client({
+                            "client_name": client_name,
+                            "redirect_uris": [redirect_uri],
+                            "grant_types": ["authorization_code", "refresh_token"],
+                            "scope": scope
+                        })
+
+                        logger.info(f"✅ Auto-registered new client: {registration_result['client_id']}")
+
+                        # OAuth 표준에 따라 redirect_uri로 에러와 새 credential 전달
+                        from starlette.responses import RedirectResponse
+                        error_params = {
+                            "error": "client_registration_required",
+                            "error_description": "Client not found. New client registered.",
+                            "new_client_id": registration_result['client_id'],
+                            "new_client_secret": registration_result['client_secret'],
+                        }
+                        if state:
+                            error_params["state"] = state
+
+                        redirect_url = f"{redirect_uri}?{urllib.parse.urlencode(error_params)}"
+                        logger.info(f"🔄 Redirecting to {redirect_uri} with new credentials")
+
+                        return RedirectResponse(url=redirect_url, status_code=302)
+                    except Exception as e:
+                        logger.error(f"❌ Auto-registration failed: {e}")
+                        return JSONResponse(
+                            {"error": "invalid_client", "error_description": f"Client not found and auto-registration failed: {str(e)}"},
+                            status_code=401,
+                        )
 
                 # Redirect URI 검증
                 if redirect_uri not in client["dcr_redirect_uris"]:
+                    logger.warning(f"⚠️ Invalid redirect_uri: {redirect_uri} not in {client['dcr_redirect_uris']}")
                     return JSONResponse(
                         {"error": "invalid_request", "error_description": "Invalid redirect_uri"},
                         status_code=400,
