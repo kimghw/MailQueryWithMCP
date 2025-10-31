@@ -71,6 +71,18 @@ class UnifiedMCPServer:
         logger.info("👥 Initializing Teams MCP Server...")
         self.teams_server = HTTPStreamingTeamsServer(host=host, port=port)
 
+        # Initialize OpenAI-compatible handler
+        logger.info("🤖 Initializing OpenAI Compatible Handler...")
+        from modules.openai_wrapper import OpenAICompatibleHandler
+        self.openai_handler = OpenAICompatibleHandler(
+            mcp_servers={
+                "teams": self.teams_server,
+                "mail-query": self.mail_query_server,
+                "onenote": self.onenote_server,
+                "onedrive": self.onedrive_server,
+            }
+        )
+
         # Initialize Auth Callback Processor for OAuth callback handling
         logger.info("🔐 Initializing Auth Callback Processor for OAuth callbacks...")
         self.callback_processor = AuthCallbackProcessor()
@@ -745,6 +757,23 @@ class UnifiedMCPServer:
                 grant_type = form_data.get("grant_type")
                 client_id = form_data.get("client_id")
                 client_secret = form_data.get("client_secret")
+                code_verifier = form_data.get("code_verifier")  # PKCE
+
+                # HTTP Basic Auth 지원 (client_id:client_secret를 Authorization 헤더로 전송)
+                if not client_id:
+                    auth_header = request.headers.get("Authorization", "")
+                    if auth_header.startswith("Basic "):
+                        import base64
+                        try:
+                            decoded = base64.b64decode(auth_header[6:]).decode("utf-8")
+                            if ":" in decoded:
+                                client_id, client_secret = decoded.split(":", 1)
+                                logger.info(f"📝 Client credentials from HTTP Basic Auth")
+                        except Exception as e:
+                            logger.warning(f"⚠️ Failed to decode Basic Auth: {e}")
+
+                # Debug log
+                logger.info(f"📝 Token request - grant_type: {grant_type}, client_id: {client_id}, has_secret: {bool(client_secret)}, has_verifier: {bool(code_verifier)}")
 
                 if grant_type not in ["authorization_code", "refresh_token"]:
                     return JSONResponse(
@@ -754,11 +783,30 @@ class UnifiedMCPServer:
 
                 # 클라이언트 인증
                 dcr_service = DCRService()
-                if not dcr_service.verify_client_credentials(client_id, client_secret):
-                    return JSONResponse(
-                        {"error": "invalid_client"},
-                        status_code=401,
+
+                # PKCE: code_verifier가 있으면 Public Client (client_secret 불필요)
+                # Confidential Client: client_secret 필수
+                if code_verifier:
+                    # Public Client with PKCE
+                    logger.info(f"🔐 PKCE authentication for client: {client_id}")
+                    # client_id만 존재하면 OK (PKCE는 나중에 code_verifier로 검증)
+                    client_exists = dcr_service._fetch_one(
+                        "SELECT dcr_client_id FROM dcr_clients WHERE dcr_client_id = ?",
+                        (client_id,)
                     )
+                    if not client_exists:
+                        return JSONResponse(
+                            {"error": "invalid_client"},
+                            status_code=401,
+                        )
+                else:
+                    # Confidential Client (client_secret 필수)
+                    logger.info(f"🔐 Client credentials authentication for client: {client_id}")
+                    if not dcr_service.verify_client_credentials(client_id, client_secret):
+                        return JSONResponse(
+                            {"error": "invalid_client"},
+                            status_code=401,
+                        )
 
                 # === Grant Type: refresh_token ===
                 if grant_type == "refresh_token":
@@ -870,7 +918,7 @@ class UnifiedMCPServer:
                 # === Grant Type: authorization_code ===
                 code = form_data.get("code")
                 redirect_uri = form_data.get("redirect_uri")
-                code_verifier = form_data.get("code_verifier")
+                # code_verifier already extracted above
 
                 # Authorization code 검증 (DCR auth_code, PKCE 지원)
                 logger.info(f"🔍 Verifying authorization code: {code[:20]}...")
@@ -1293,6 +1341,56 @@ class UnifiedMCPServer:
                     status_code=500,
                 )
 
+        # OpenAI-compatible endpoints
+        async def openai_chat_completions(request):
+            """Handle /v1/chat/completions"""
+            try:
+                from modules.openai_wrapper.schemas import ChatCompletionRequest
+                body_bytes = await request.body()
+                body_dict = json.loads(body_bytes)
+                body = ChatCompletionRequest(**body_dict)
+
+                response = await self.openai_handler.handle_chat_completions(request, body)
+                return JSONResponse(
+                    response.model_dump(exclude_none=True),
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "POST, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    },
+                )
+            except Exception as e:
+                logger.error(f"❌ OpenAI chat completions error: {str(e)}", exc_info=True)
+                return JSONResponse(
+                    {
+                        "error": {
+                            "message": str(e),
+                            "type": "internal_error",
+                            "code": "internal_error",
+                        }
+                    },
+                    status_code=500,
+                )
+
+        async def openai_list_models(request):
+            """Handle /v1/models"""
+            try:
+                response = await self.openai_handler.handle_list_models()
+                return JSONResponse(
+                    response.model_dump(),
+                    headers={
+                        "Access-Control-Allow-Origin": "*",
+                        "Access-Control-Allow-Methods": "GET, OPTIONS",
+                        "Access-Control-Allow-Headers": "Content-Type, Authorization",
+                    },
+                )
+            except Exception as e:
+                logger.error(f"❌ OpenAI models error: {str(e)}", exc_info=True)
+                return JSONResponse(
+                    {"error": {"message": str(e), "type": "internal_error"}},
+                    status_code=500,
+                )
+
         # Create routes
         routes = [
             # Unified endpoints
@@ -1300,6 +1398,9 @@ class UnifiedMCPServer:
             Route("/info", endpoint=unified_info, methods=["GET"]),
             Route("/", endpoint=root_handler, methods=["GET", "HEAD"]),
             Route("/", endpoint=options_handler, methods=["OPTIONS"]),
+            # OpenAI-compatible API endpoints
+            Route("/v1/chat/completions", endpoint=openai_chat_completions, methods=["POST"]),
+            Route("/v1/models", endpoint=openai_list_models, methods=["GET"]),
             # DCR OAuth endpoints (at root for Claude Connector compatibility)
             Route("/.well-known/oauth-authorization-server", endpoint=oauth_metadata_handler, methods=["GET"]),
             Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource_handler, methods=["GET"]),
