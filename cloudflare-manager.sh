@@ -323,6 +323,8 @@ start_quick_tunnel_background() {
             URL=$(grep -o "https://.*\.trycloudflare\.com" "$QUICK_LOG_FILE" 2>/dev/null | tail -1)
             if [ -n "$URL" ]; then
                 print_status "접속 URL: $URL"
+                # Update .env redirect URIs even if already running
+                update_env_redirect_uris "$URL"
             fi
             return 0
         fi
@@ -354,6 +356,10 @@ start_quick_tunnel_background() {
             echo "접속 URL: ${GREEN}$URL${NC}"
             echo "==================================="
             echo ""
+
+            # Update .env redirect URIs
+            update_env_redirect_uris "$URL"
+
             print_info "로그 확인: tail -f $QUICK_LOG_FILE"
             return 0
         fi
@@ -362,6 +368,43 @@ start_quick_tunnel_background() {
     print_error "Quick Tunnel 시작 실패"
     print_info "로그 확인: cat $QUICK_LOG_FILE"
     return 1
+}
+
+# Update .env redirect URIs with tunnel URL
+update_env_redirect_uris() {
+    local TUNNEL_URL=$1
+    local ENV_FILE="$PROJECT_DIR/.env"
+
+    if [ ! -f "$ENV_FILE" ]; then
+        print_warning ".env 파일이 없습니다"
+        return 1
+    fi
+
+    print_info ".env 파일의 Redirect URIs 업데이트 중..."
+
+    # Update DCR_OAUTH_REDIRECT_URI
+    if grep -q "^DCR_OAUTH_REDIRECT_URI=" "$ENV_FILE"; then
+        sed -i "s|^DCR_OAUTH_REDIRECT_URI=.*|DCR_OAUTH_REDIRECT_URI=$TUNNEL_URL/oauth/azure_callback|" "$ENV_FILE"
+        print_status "DCR_OAUTH_REDIRECT_URI 업데이트됨"
+    else
+        echo "DCR_OAUTH_REDIRECT_URI=$TUNNEL_URL/oauth/azure_callback" >> "$ENV_FILE"
+        print_status "DCR_OAUTH_REDIRECT_URI 추가됨"
+    fi
+
+    # Update AUTO_REGISTER_OAUTH_REDIRECT_URI
+    if grep -q "^AUTO_REGISTER_OAUTH_REDIRECT_URI=" "$ENV_FILE"; then
+        sed -i "s|^AUTO_REGISTER_OAUTH_REDIRECT_URI=.*|AUTO_REGISTER_OAUTH_REDIRECT_URI=$TUNNEL_URL/enrollment/callback|" "$ENV_FILE"
+        print_status "AUTO_REGISTER_OAUTH_REDIRECT_URI 업데이트됨"
+    else
+        echo "AUTO_REGISTER_OAUTH_REDIRECT_URI=$TUNNEL_URL/enrollment/callback" >> "$ENV_FILE"
+        print_status "AUTO_REGISTER_OAUTH_REDIRECT_URI 추가됨"
+    fi
+
+    echo ""
+    echo "  ${GREEN}✓${NC} DCR_OAUTH_REDIRECT_URI=$TUNNEL_URL/oauth/azure_callback"
+    echo "  ${GREEN}✓${NC} AUTO_REGISTER_OAUTH_REDIRECT_URI=$TUNNEL_URL/enrollment/callback"
+    echo ""
+    print_warning "서버를 재시작하여 변경사항을 적용하세요"
 }
 
 # Stop Quick Tunnel
@@ -456,6 +499,10 @@ interactive_menu() {
             echo "│   • Mail Query:  $TUNNEL_URL/mail-query/"
             echo "│   • Enrollment:  $TUNNEL_URL/enrollment/"
             echo "│   • OneNote:     $TUNNEL_URL/onenote/"
+            echo "│"
+            echo "│ OAuth Redirect URIs:"
+            echo "│   • Enrollment:  $TUNNEL_URL/enrollment/callback"
+            echo "│   • Azure DCR:   $TUNNEL_URL/oauth/azure_callback"
             echo "│"
             echo "│ Health Check:"
             echo "│   $TUNNEL_URL/health"
@@ -703,6 +750,10 @@ detailed_status() {
             echo "    Mail Query:  $TUNNEL_URL/mail-query/"
             echo "    Enrollment:  $TUNNEL_URL/enrollment/"
             echo "    OneNote:     $TUNNEL_URL/onenote/"
+            echo ""
+            echo "  ${BLUE}OAuth Redirect URIs:${NC}"
+            echo "    Enrollment:  $TUNNEL_URL/enrollment/callback"
+            echo "    Azure DCR:   $TUNNEL_URL/oauth/azure_callback"
             echo ""
             echo "  ${BLUE}Health Check:${NC}"
             echo "    $TUNNEL_URL/health"
