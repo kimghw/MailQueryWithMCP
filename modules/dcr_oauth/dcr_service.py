@@ -94,39 +94,46 @@ class DCRService:
         _save_azure_config_helper(self)
 
     async def register_client(self, request_data: Dict[str, Any]) -> Dict[str, Any]:
-        """RFC 7591: 동적 클라이언트 등록 (통합 클라이언트 재사용)"""
+        """RFC 7591: 동적 클라이언트 등록 (플랫폼별 독립 클라이언트)"""
         if not all([self.azure_application_id, self.azure_client_secret]):
             raise ValueError("Azure AD configuration not available")
 
         # 요청 데이터
-        client_name = request_data.get("client_name", "Claude Connector")
-        redirect_uris = request_data.get("redirect_uris", ["https://claude.ai/api/mcp/auth_callback"])
+        client_name = request_data.get("client_name", "MCP Connector")
+        redirect_uris = request_data.get("redirect_uris", [])
         grant_types = request_data.get("grant_types", ["authorization_code", "refresh_token"])
         scope = request_data.get("scope", "Mail.Read User.Read")
 
-        # 기존 클라이언트 확인 (같은 scope와 redirect_uri를 가진 클라이언트 재사용)
+        # redirect_uri가 없으면 에러
+        if not redirect_uris:
+            raise ValueError("redirect_uris is required")
+
+        # 첫 번째 redirect_uri를 기준으로 기존 클라이언트 확인 (플랫폼별 구분)
+        primary_redirect_uri = redirect_uris[0] if isinstance(redirect_uris, list) else redirect_uris
+
         existing_query = """
         SELECT dcr_client_id, dcr_client_secret, created_at
         FROM dcr_clients
         WHERE azure_application_id = ?
+          AND json_extract(dcr_redirect_uris, '$[0]') = ?
         ORDER BY created_at DESC
         LIMIT 1
         """
 
         existing_client = self._fetch_one(
             existing_query,
-            (self.azure_application_id,)
+            (self.azure_application_id, primary_redirect_uri)
         )
 
         if existing_client:
-            # 기존 클라이언트 재사용 (tuple로 반환됨)
-            dcr_client_id = existing_client[0]  # dcr_client_id
+            # 기존 플랫폼 클라이언트 재사용
+            dcr_client_id = existing_client[0]
             dcr_client_secret = self.crypto.account_decrypt_sensitive_data(
-                existing_client[1]  # dcr_client_secret
+                existing_client[1]
             )
-            issued_at = int(datetime.fromisoformat(existing_client[2]).timestamp())  # created_at
+            issued_at = int(datetime.fromisoformat(existing_client[2]).timestamp())
 
-            logger.info(f"♻️ Reusing existing DCR client: {dcr_client_id}")
+            logger.info(f"♻️ Reusing existing DCR client for {primary_redirect_uri}: {dcr_client_id}")
         else:
             # 새 클라이언트 생성
             dcr_client_id = f"dcr_{secrets.token_urlsafe(16)}"
